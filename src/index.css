@@ -1,0 +1,264 @@
+:root {
+  --gold: #c9a84c;
+  --gold-light: #e8c870;
+  --gold-dark: #9a7a2e;
+  --bg: #0a0a0a;
+  --bg2: #111111;
+  --bg3: #1a1a1a;
+  --bg4: #222222;
+  --surface: #161616;
+  --border: #2a2a2a;
+  --border-gold: rgba(201,168,76,0.3);
+  --text: #f5f0e8;
+  --text2: #a0998a;
+  --text3: #6b6459;
+  --white: #ffffff;
+  --red: #c0392b;
+  --green: #27ae60;
+  --font-display: 'Cormorant Garamond', serif;
+  --font-body: 'Montserrat', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+
+::selection { background: rgba(201,168,76,0.3); color: var(--gold-light); }
+
+a { color: inherit; text-decoration: none; }
+
+button { cursor: pointer; border: none; background: none; font-family: var(--font-body); }
+
+input, textarea, select {
+  font-family: var(--font-body);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-size: 13px;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(201,168,76,0.1);
+}
+
+select option { background: var(--bg3); }
+
+.gold-text {
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold-light), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gold-btn {
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold), var(--gold-light));
+  color: var(--bg);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gold-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.4s;
+}
+
+.gold-btn:hover::after { left: 100%; }
+.gold-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(201,168,76,0.4); }
+.gold-btn:active { transform: translateY(0); }
+
+.outline-btn {
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 13px 32px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.outline-btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 0; height: 100%;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+  transition: width 0.3s;
+  z-index: -1;
+}
+
+.outline-btn:hover::before { width: 100%; }
+.outline-btn:hover { color: var(--bg); }
+
+.label-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 2px;
+}
+
+.label-new { background: rgba(201,168,76,0.15); color: var(--gold); border: 1px solid var(--border-gold); }
+.label-best { background: rgba(192,57,43,0.15); color: #e74c3c; border: 1px solid rgba(192,57,43,0.3); }
+.label-featured { background: rgba(39,174,96,0.15); color: #2ecc71; border: 1px solid rgba(39,174,96,0.3); }
+.label-limited { background: rgba(155,89,182,0.15); color: #9b59b6; border: 1px solid rgba(155,89,182,0.3); }
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.4); }
+  50% { box-shadow: 0 0 0 12px rgba(201,168,76,0); }
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold-light), var(--gold-dark));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s linear infinite;
+}
+
+.card-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.status-pending { color: #f39c12; background: rgba(243,156,18,0.1); }
+.status-confirmed { color: #3498db; background: rgba(52,152,219,0.1); }
+.status-processing { color: #9b59b6; background: rgba(155,89,182,0.1); }
+.status-shipped { color: var(--gold); background: rgba(201,168,76,0.1); }
+.status-delivered { color: #27ae60; background: rgba(39,174,96,0.1); }
+.status-cancelled { color: var(--red); background: rgba(192,57,43,0.1); }
+
+.status-pill {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* ─── ✨ تحديث الهوية البصرية الشاملة للإشعار (أسود الملكي × ذهبي ميتاليك) ─── */
+.toast, 
+[class*="toast"], 
+[class*="notification"], 
+.react-hot-toast,
+div[role="status"] {
+  background-color: #111111 !important;
+  color: #ffffff !important;
+  border: 1px solid #c9a84c !important;
+  border-radius: 4px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(201, 168, 76, 0.2) !important;
+}
+
+[class*="success"],
+[class*="toast"] svg,
+[class*="toast"] button,
+.toast-icon,
+div[role="status"] svg {
+  color: #c9a84c !important;
+  fill: transparent !important;
+}
+
+.badge-discount,
+[class*="discount"] {
+  background-color: #111111 !important;
+  color: #c9a84c !important;
+  border: 1px solid #c9a84c !important;
+}
+
+/* ─── 📱 أحدث إصلاحات للتنظيم والتجاوب على الموبايل (Responsive Media Queries) ─── */
+@media (max-width: 768px) {
+  /* 1. إجبار تقسيمات الصفحات (الجريد) تنزل تحت بعض بمرونة */
+  .cart-grid, .checkout-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+    padding: 0px 4px !important;
+  }
+
+  /* 2. تصغير العناوين الضخمة في الموبايل عشان متعملش زحمة */
+  h1, [style*="fontSize: 40"], [style*="fontSize: 48"] {
+    font-size: 28px !important;
+    letter-spacing: 1px !important;
+    margin-bottom: 24px !important;
+  }
+  
+  h2, [style*="fontSize: 34"] {
+    font-size: 24px !important;
+  }
+
+  /* 3. فك الخانات المزدوجة (الاسم والتليفون) ونزولها تحت بعض */
+  .checkout-grid div[style*="display: 'grid'"],
+  .checkout-grid div[style*="display:grid"] {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* 4. إلغاء الـ Sticky لملخص الطلب لسهولة التصفح الرأسي */
+  div[style*="position: 'sticky'"], 
+  div[style*="position:sticky"] {
+    position: static !important;
+  }
+
+  /* 5. ضبط حواف وهوامش البادينج في الكروت للموبايل */
+  .checkout-grid > div {
+    padding: 20px 16px !important;
+  }
+
+  /* 6. تحسين الأزرار للمس المريح باليد */
+  .gold-btn, .outline-btn {
+    padding: 12px 24px !important;
+    font-size: 11px !important;
+    width: 100% !important; /* ملء العرض تلقائياً */
+    text-align: center;
+  }
+}
