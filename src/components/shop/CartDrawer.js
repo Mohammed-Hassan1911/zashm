@@ -35,7 +35,7 @@ export default function CartDrawer() {
                 onMouseLeave={e => e.target.style.color = 'var(--text2)'}><X size={20} /></button>
             </div>
 
-            {/* Items */}
+                        {/* Items */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
               {cart.length === 0 ? (
                 <motion.div
@@ -58,32 +58,45 @@ export default function CartDrawer() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
-                      style={{ display: 'flex', gap: 14, marginBottom: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 2 }}
+                      style={{ display: 'flex', gap: 14, marginBottom: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 2, alignItems: 'center' }}
                     >
                       <img src={item.product.images[0]} alt={item.product.name}
                         style={{ width: 80, height: 100, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 500, marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.product.name}</p>
-                        <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 8 }}>{item.size} · {item.color}</p>
-                        <p style={{ color: 'var(--gold)', fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
-                          EGP {(((item.product?.salePrice || item.product?.price) ?? 0) * (item.qty ?? 0)).toLocaleString()}
-                        </p>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border)', borderRadius: 2 }}>
+                      
+                      {/* تفاصيل المنتج مع حماية المساحة المتاحة */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: 100, justifyContent: 'space-between' }}>
+                        <div>
+                          <p style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.product.name}</p>
+                          <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 4 }}>{item.size} · {item.color}</p>
+                          <p style={{ color: 'var(--gold)', fontSize: 14, fontWeight: 600, margin: 0 }}>
+                            EGP {(((item.product?.salePrice || item.product?.price) ?? 0) * (item.qty ?? 0)).toLocaleString()}
+                          </p>
+                        </div>
+                        
+                        {/* 🎯 السطر السفلي: توزيع ذكي يمنع التقاطع نهائياً */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8, marginTop: 'auto' }}>
+                          
+                          {/* كاونتر الكمية */}
+                          <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2, background: 'rgba(0,0,0,0.1)', flexShrink: 0 }}>
                             <button onClick={() => item.qty > 1 ? updateCartQty(item.key, item.qty - 1) : removeFromCart(item.key)}
-                              style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Minus size={12} />
+                              style={{ width: 28, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                              <Minus size={11} />
                             </button>
-                            <span style={{ fontSize: 13, minWidth: 16, textAlign: 'center' }}>{item.qty}</span>
+                            <span style={{ fontSize: 12, minWidth: 20, textAlign: 'center', color: 'var(--text)' }}>{item.qty}</span>
                             <button onClick={() => updateCartQty(item.key, item.qty + 1)}
-                              style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Plus size={12} />
+                              style={{ width: 28, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                              <Plus size={11} />
                             </button>
                           </div>
+
+                          {/* زر الحذف مستقل وفي أقصى اليمين */}
                           <button onClick={() => removeFromCart(item.key)}
-                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
-                            onMouseEnter={e => e.target.style.color = 'var(--red)'}
-                            onMouseLeave={e => e.target.style.color = 'var(--text3)'}><Trash2 size={14} /></button>
+                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}>
+                            <Trash2 size={14} />
+                          </button>
+
                         </div>
                       </div>
                     </motion.div>
