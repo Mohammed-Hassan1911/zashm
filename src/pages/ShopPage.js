@@ -168,33 +168,39 @@ export default function ShopPage() {
         </div>
 
         {/* FILTER PANEL */}
-        {filterOpen && (
-          <div style={{ padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
+{filterOpen && (
+  <div style={{ padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
 
-            {/* LABELS */}
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {LABELS.map(l => (
-                <button
-                  key={l}
-                  onClick={() => setLabelFilter(l)}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: 11,
-                    border: '1px solid var(--border)',
-                    background: labelFilter === l ? 'var(--gold)' : 'transparent',
-                    color: labelFilter === l ? 'var(--bg)' : 'var(--text2)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
+    {/* LABELS */}
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      {LABELS.map(l => (
+        <button
+          key={l}
+          onClick={() => setLabelFilter(l)}
+          style={{
+            // 🎯 زيادة الـ padding الرأسي والأفقي ليعطي مساحة فخمة للنص
+            padding: '10px 16px', 
+            fontSize: 11,
+            letterSpacing: '1px', // زيادة المسافة بين الحروف لتليق ببراند Luxury
+            textTransform: 'uppercase', // تأكيد الحروف الكبيرة
+            lineHeight: 1, // 🎯 تضمن توطين النص بالملي رأسياً
+            border: '1px solid var(--border)',
+            background: labelFilter === l ? 'var(--gold)' : 'transparent',
+            color: labelFilter === l ? 'var(--bg)' : 'var(--text2)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease', // حركة ناعمة عند الضغط
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
 
-            
-
-          </div>
-        )}
+  </div>
+)}
 
         {/* PRODUCTS */}
         <div style={{ paddingBottom: 80 }}>

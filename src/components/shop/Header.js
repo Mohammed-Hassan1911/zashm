@@ -15,6 +15,7 @@ export default function Header() {
 
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // SAFE COUNT
   const cartCount = (cart || []).reduce(
@@ -23,9 +24,19 @@ export default function Header() {
   );
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 40);
-    window.addEventListener('scroll', handler);
-    return () => window.removeEventListener('scroll', handler);
+    const handleScroll = () => setScrolled(window.scrollY > 40);
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    
+    // التشغيل المبدئي
+    handleScroll();
+    handleResize();
+
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const nav = [
@@ -42,7 +53,7 @@ export default function Header() {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 0,
+    padding: isMobile ? '4px' : 0, // زيادة مساحة اللمس على الموبايل
     position: 'relative',
     transition: 'transform 0.3s ease',
   };
@@ -50,25 +61,20 @@ export default function Header() {
   // استايل مشترك للعداد (الباج) باللون الجولد
   const badgeStyle = {
     position: 'absolute',
-    top: -6,
-    right: -8,
-    minWidth: 16,
-    height: 16,
-    padding: '0 4px',
-
-    background: '#D4AF37', // العداد باللون الجولد
-    color: '#000000',      // الرقم باللون الأسود ليكون واضحاً جداً
-
-    fontSize: 10,
+    top: isMobile ? -4 : -6,
+    right: isMobile ? -4 : -8,
+    minWidth: 15,
+    height: 15,
+    padding: '0 3px',
+    background: '#D4AF37',
+    color: '#000000',
+    fontSize: 9,
     fontWeight: 700,
-
     borderRadius: '999px',
-
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-
-    border: '1.5px solid #000000', // حد أسود ليفصل العداد الجولد عن الأيقونة الجولد
+    border: '1.5px solid #000000',
     boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
     lineHeight: 1,
   };
@@ -86,71 +92,92 @@ export default function Header() {
           backdropFilter: scrolled ? 'blur(20px)' : 'none',
           borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent',
           transition: 'all 0.4s ease',
-          padding: '0 24px',
+          padding: isMobile ? '0 16px' : '0 24px', // تقليل البادينج على الموبايل
         }}
       >
         <div
           style={{
             maxWidth: 1400,
             margin: '0 auto',
-            height: 70,
-            display: 'grid',
-            gridTemplateColumns: '1fr auto 1fr',
+            height: isMobile ? 60 : 70, // هيدر أنحف وأشيك على الموبايل
+            display: 'flex',
             alignItems: 'center',
+            justifyContent: 'between',
           }}
         >
-
           {/* LOGO (ZASHM) */}
           <motion.button
             onClick={() => setPage('home')}
             style={{
-              justifySelf: 'start',
               fontFamily: 'var(--font-display)',
-              fontSize: 26,
+              fontSize: isMobile ? 20 : 26, // تصغير حجم اللوجو قليلاً ليناسب الشاشة
               fontWeight: 600,
-              letterSpacing: 8,
+              letterSpacing: isMobile ? 4 : 8, // تقليل المسافات بين الحروف على الموبايل
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: '#D4AF37', 
+              color: '#D4AF37',
+              padding: 0,
+              marginRight: 'auto', // يدفع باقي العناصر لليمين في الفليكس
             }}
             whileHover={{ scale: 1.02 }}
           >
             ZASHM
           </motion.button>
 
-          {/* NAV */}
-          <nav style={{ display: 'flex', gap: 40, justifySelf: 'center' }}>
-            {nav.map((item) => (
-              <motion.button
-                key={item.name}
-                onClick={() => setPage(item.page)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  letterSpacing: 2.5,
-                  textTransform: 'uppercase',
-                  color: 'var(--text2)',
-                }}
-                whileHover={{ color: '#D4AF37' }}
-              >
-                {item.name}
-              </motion.button>
-            ))}
-          </nav>
+          {/* NAV (يختفي على الموبايل تماماً لمنع الزحمة) */}
+          {!isMobile && (
+            <nav style={{ display: 'flex', gap: 40, margin: '0 auto' }}>
+              {nav.map((item) => (
+                <motion.button
+                  key={item.name}
+                  onClick={() => setPage(item.page)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    letterSpacing: 2.5,
+                    textTransform: 'uppercase',
+                    color: 'var(--text2)',
+                  }}
+                  whileHover={{ color: '#D4AF37' }}
+                >
+                  {item.name}
+                </motion.button>
+              ))}
+            </nav>
+          )}
 
           {/* ACTIONS */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 20,
-              justifySelf: 'end',
+              gap: isMobile ? 12 : 20, // مسافات متناسقة وآمنة للمس على الآيفون
+              marginLeft: isMobile ? '0' : 'auto',
             }}
           >
+            {/* زر SHOP يظهر ككلمة أنيقة فقط على الموبايل لسهولة التنقل */}
+            {isMobile && (
+              <motion.button
+                onClick={() => setPage('shop')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  color: '#D4AF37',
+                  marginRight: 4,
+                }}
+              >
+                Shop
+              </motion.button>
+            )}
 
             {/* SEARCH */}
             <motion.button 
@@ -158,7 +185,7 @@ export default function Header() {
               style={iconButtonStyle}
               whileHover={{ scale: 1.1 }}
             >
-              <Search size={20} />
+              <Search size={isMobile ? 18 : 20} />
             </motion.button>
 
             {/* WISHLIST */}
@@ -167,8 +194,7 @@ export default function Header() {
               style={iconButtonStyle}
               whileHover={{ scale: 1.1 }}
             >
-              <Heart size={20} />
-
+              <Heart size={isMobile ? 18 : 20} />
               {(wishlist?.length > 0) && (
                 <span style={badgeStyle}>
                   {wishlist.length}
@@ -182,8 +208,7 @@ export default function Header() {
               style={iconButtonStyle}
               whileHover={{ scale: 1.1 }}
             >
-              <ShoppingBag size={20} />
-
+              <ShoppingBag size={isMobile ? 18 : 20} />
               {cartCount > 0 && (
                 <span style={badgeStyle}>
                   {cartCount}
@@ -201,9 +226,9 @@ export default function Header() {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              style={{ borderTop: '1px solid var(--border)' }}
+              style={{ borderTop: '1px solid var(--border)', overflow: 'hidden' }}
             >
-              <div style={{ maxWidth: 600, margin: '0 auto', padding: 16 }}>
+              <div style={{ maxWidth: 600, margin: '0 auto', padding: isMobile ? 12 : 16 }}>
                 <input
                   value={searchQuery}
                   onChange={(e) => {
@@ -217,13 +242,14 @@ export default function Header() {
                     border: '1px solid var(--border)',
                     background: 'var(--bg3)',
                     color: 'var(--text)',
+                    borderRadius: 4,
+                    fontSize: 14,
                   }}
                 />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-
       </motion.header>
     </>
   );

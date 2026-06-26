@@ -392,11 +392,16 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
         </AnimatePresence>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="checkout-grid">
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 22 }}>Delivery Information</h3>
             
             {/* 📐 السطر الأول: الاسم بالكامل + رقم الهاتف الأساسي */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // تحول تلقائي لسطرين لو المساحة ضيقة
+              gap: 14, 
+              marginBottom: 14 
+            }}>
               <div>
                 <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Full Name *</label>
                 <input 
@@ -421,10 +426,26 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
               </div>
             </div>
 
-            {/* 📐 السطر الثاني المطور: إضافة الرقم البديل الاختياري بجانب حقل البريد الإلكتروني لتناسق مثالي في الـ Layout */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-              <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Alternative Phone (Optional)</label>
+            {/* 📐 السطر الثاني المطور: إضافة الـ flex و الـ minHeight لتوحيد محاذاة الحقول بالملي */}
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // تضمن التجاوب الكامل على الموبايل
+              gap: 14, 
+              marginBottom: 14,
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <label style={{ 
+                  display:'flex', 
+                  alignItems: 'center',
+                  fontSize:10, 
+                  letterSpacing:1.5, 
+                  color:'var(--text3)', 
+                  marginBottom:6, 
+                  textTransform:'uppercase',
+                  minHeight: 30 // 🎯 حجز مساحة ثابتة للـ label عشان لو أخد سطرين الحقل ما ينزلش لتحت
+                }}>
+                  Alternative Phone (Optional)
+                </label>
                 <input 
                   type="tel" 
                   value={form.phoneAlt ?? ''} 
@@ -434,8 +455,20 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
                 />
                 {errors.phoneAlt && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.phoneAlt}</p>}
               </div>
-              <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Email Address</label>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <label style={{ 
+                  display:'flex', 
+                  alignItems: 'center',
+                  fontSize:10, 
+                  letterSpacing:1.5, 
+                  color:'var(--text3)', 
+                  marginBottom:6, 
+                  textTransform:'uppercase',
+                  minHeight: 30 // 🎯 نفس المساحة الثابتة للحفاظ على استقامة الحقول
+                }}>
+                  Email Address
+                </label>
                 <input 
                   value={form.email ?? ''} 
                   onChange={e => update('email', e.target.value)} 
@@ -446,6 +479,8 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
               </div>
             </div>
 
+            {/* 📐 السطر الثالث: العنوان بالتفصيل */}
+            {/* ... باقي الكود بتاعك زي ما هو تماماً ... */}
             {/* 📐 السطر الثالث: العنوان بالتفصيل */}
             <div style={{ marginBottom: 14 }}>
               <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Street Address *</label>
