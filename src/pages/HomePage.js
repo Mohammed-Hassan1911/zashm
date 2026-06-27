@@ -68,16 +68,21 @@ export default function HomePage() {
 
           <motion.p
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.8 }}
-            style={{ fontSize: 12, color: 'rgba(245,240,232,0.55)', maxWidth: 480, margin: '0 auto 44px', letterSpacing: 3, lineHeight: 1.9, textTransform: 'uppercase' }}
+            style={{ fontSize: 13, color: 'rgba(245,240,232,0.65)', maxWidth: 480, margin: '0 auto 44px', letterSpacing: 3.5, lineHeight: 1.9, textTransform: 'uppercase' }}
           >Tailored for the discerning gentleman</motion.p>
 
+          {/* 🎯 تم تعديل هنا: مسح الزر الإضافي وتوسيط الـ Button الأساسي بأناقة ومساحة أكبر */}
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.4, duration: 0.7 }}
-            style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}
+            style={{ display: 'flex', justifyContent: 'center' }}
           >
-            <button className="gold-btn" onClick={() => setPage('shop')}>Explore Collection</button>
-            <button className="outline-btn" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }}
-              onClick={() => { setFilterCategory('All'); setPage('shop'); }}>The Wardrobe</button>
+            <button 
+              className="gold-btn" 
+              onClick={() => setPage('shop')}
+              style={{ padding: '14px 42px', fontSize: 12, letterSpacing: 2 }} // زيادة مساحة الزرار الفاخر لإعطائه هيبة الـ Hero Center
+            >
+              Explore Collection
+            </button>
           </motion.div>
         </motion.div>
 

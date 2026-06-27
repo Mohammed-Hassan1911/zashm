@@ -768,31 +768,45 @@ function ProductsPanel({ canEdit }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [page, setPage] = useState(1);
-  const [form, setForm] = useState({ name:'',category:'',price:'',salePrice:'',stock:'',sizes:'S,M,L,XL',colors:'Black,White',label:'New Arrival',description:'',sku:'',images:[],active:true, variantStock:{} });
+  
+  // 🎯 الـ State المبدئية تبدأ بنص فارغ ليتطابق مع خيار None تلقائياً
+  const [form, setForm] = useState({ 
+    name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
+    label:'', description:'', sku:'', images:[], active:true, variantStock:{} 
+  });
   const [formErrors, setFormErrors] = useState({});
   const PER_PAGE = 16;
 
   const filtered = products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.includes(search) || p.category.toLowerCase().includes(search.toLowerCase()));
   const paginated = paginate(filtered, page, PER_PAGE);
 
-  const update = (k, v) => { setForm(f => ({ ...f, [k]: v })); setFormErrors(e => ({ ...e, [k]: null })); };
+  const update = (k, v) => { 
+    setForm(f => ({ ...f, [k]: v })); 
+    setFormErrors(e => ({ ...e, [k]: null })); 
+  };
 
+  // 🎯 فتح حقل منتج جديد ليقف دائمًا على None
   const openNew = () => {
     setEditing(null);
-    setForm({ name:'',category:'',price:'',salePrice:'',stock:'',sizes:'S,M,L,XL',colors:'Black,White',label:'New Arrival',description:'',sku:'',images:[],active:true, variantStock:{} });
+    setForm({ 
+      name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
+      label:'', // None كقيمة مبدئية
+      description:'', sku:'', images:[], active:true, variantStock:{} 
+    });
     setFormErrors({});
     setShowForm(true);
   };
 
+  // 🎯 قراءة الـ label بدقة عند تعديل المنتج الحالي وثباته
   const openEdit = (p) => {
     setEditing(p);
     setForm({ 
       ...p, 
-      salePrice: p.salePrice||'', 
-      sizes: Array.isArray(p.sizes) ? p.sizes.join(',') : (p.sizes||''), 
-      colors: Array.isArray(p.colors) ? p.colors.join(',') : (p.colors||''),
+      salePrice: p.salePrice || '', 
+      sizes: Array.isArray(p.sizes) ? p.sizes.join(',') : (p.sizes || ''), 
+      colors: Array.isArray(p.colors) ? p.colors.join(',') : (p.colors || ''),
       variantStock: p.variantStock || {},
-      label: p.label || ''
+      label: p.label || '' // يثبت على القيمة القادمة من قاعدة البيانات أو نص فارغ (None)
     });
     setFormErrors({});
     setShowForm(true);
@@ -801,6 +815,11 @@ function ProductsPanel({ canEdit }) {
   const handleSave = async () => {
     if (!form.name || form.name.trim() === '') {
       toast.error('⚠️ عذراً، يرجى إدخال اسم المنتج أولاً قبل الحفظ.');
+      return;
+    }
+
+    if (!form.category || form.category.trim() === '') {
+      toast.error('⚠️ عذراً، يرجى اختيار أو كتابة القسم (Category) أولاً.');
       return;
     }
 
@@ -832,9 +851,13 @@ function ProductsPanel({ canEdit }) {
       return sum;
     }, 0);
 
+    // 🎯 هنا الإصلاح: نأخذ القيمة المحددة في الفورم مباشرةً وبدون تحويلها لنص فارغ إجباري
+    const finalLabel = typeof form.label === 'string' ? form.label.trim() : "";
+    const finalSizeGuide = form.sizeGuide || null;
+
     const productData = {
       name: form.name.trim(),
-      category: form.category || '',
+      category: form.category.trim(), 
       sku: form.sku || null,
       tags: form.tags || null,
       description: form.description || '',
@@ -846,8 +869,8 @@ function ProductsPanel({ canEdit }) {
       colors: cleanColors,     
       variantStock: finalVariantStock, 
       images: form.images,     
-      sizeGuide: form.sizeGuide || null,
-      label: form.label && form.label !== "" ? form.label : null
+      sizeGuide: finalSizeGuide, 
+      label: finalLabel          
     };
 
     try {
@@ -858,6 +881,11 @@ function ProductsPanel({ canEdit }) {
         await addProduct(productData);
         toast.success('تم إضافة المنتج الجديد للمتجر بنجاح! 🚀');
       }
+      
+      if (form._isAddingNewCat) {
+        update('_isAddingNewCat', false);
+      }
+      
       setShowForm(false);
     } catch (err) {
       console.error("❌ [HandleSave Error]:", err);
@@ -911,7 +939,7 @@ function ProductsPanel({ canEdit }) {
         </div>
       )}
 
-      {/* Product Grid - تم تقليص المساحة الدنيا لتصبح عمودين ممتازين على شاشات الموبايل الصغيرة */}
+      {/* Product Grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:12 }}>
         {paginated.items.map(p => (
           <motion.div key={p.id} initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }}
@@ -921,7 +949,6 @@ function ProductsPanel({ canEdit }) {
                 style={{ accentColor:'var(--gold)', width:16, height:16 }} />
             </div>
             
-            {/* لتسهيل التفاعل في الموبايل، تم جعل أزرار التعديل والحذف ظاهرة بشكل مصغر دائم في الموبايل أو عند الهوفر على الكمبيوتر */}
             <div style={{ position:'relative', aspectRatio:'3/4', overflow:'hidden' }} className="product-card-img-wrapper">
               <img src={p.images?.[0]} alt={p.name} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
               {p.stock <= 5 && (
@@ -954,7 +981,7 @@ function ProductsPanel({ canEdit }) {
       {/* Pagination */}
       {paginated.totalPages > 1 && (
         <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:24 }}>
-          <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasPrev}
+          <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasNext}
             style={{ padding:'6px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:12, opacity: paginated.hasPrev ? 1 : 0.4 }}>← Prev</button>
           <span style={{ padding:'6px 8px', fontSize:12, color:'var(--text2)' }}>{page} / {paginated.totalPages}</span>
           <button onClick={() => setPage(p => Math.min(paginated.totalPages,p+1))} disabled={!paginated.hasNext}
@@ -962,7 +989,7 @@ function ProductsPanel({ canEdit }) {
         </div>
       )}
 
-      {/* Product Form Modal - تم تحديث المودال ليدعم العرض الكامل التلقائي في الموبايل بمرونة */}
+      {/* Product Form Modal */}
       <AnimatePresence>
         {showForm && (
           <>
@@ -990,8 +1017,57 @@ function ProductsPanel({ canEdit }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 12 }}>
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Category *</label>
-                    <input type="text" required value={form.category || ''} onChange={e => update('category', e.target.value)} placeholder="e.g., T-Shirts" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
+                    {form._isAddingNewCat ? (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input 
+                          type="text" 
+                          required 
+                          value={form.category || ''} 
+                          onChange={e => update('category', e.target.value)} 
+                          placeholder="Write new category name..." 
+                          style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} 
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            update('_isAddingNewCat', false);
+                            update('category', '');
+                          }}
+                          style={{ padding: '0 12px', background: 'none', border: '1px solid var(--border)', color: 'var(--text3)', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        required
+                        value={form.category || ''}
+                        onChange={e => {
+                          if (e.target.value === '___NEW_CAT___') {
+                            update('_isAddingNewCat', true);
+                            update('category', '');
+                          } else {
+                            update('category', e.target.value);
+                          }
+                        }}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: form.category ? 'var(--text)' : 'var(--text3)', cursor: 'pointer', height: '37px' }}
+                      >
+                        <option value="">Select a category</option>
+                        {(() => {
+                          const availableCats = Array.isArray(products) 
+                            ? [...new Set(products.map(p => p.category).filter(Boolean))]
+                            : [];
+                          return availableCats.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ));
+                        })()}
+                        <option value="___NEW_CAT___" style={{ color: 'var(--gold)', fontWeight: '600' }}>
+                          ➕ + Add New Category
+                        </option>
+                      </select>
+                    )}
                   </div>
+
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Tags / Collection</label>
                     <input type="text" value={form.tags || ''} onChange={e => update('tags', e.target.value)} placeholder="Summer26, Cotton" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
@@ -1012,7 +1088,7 @@ function ProductsPanel({ canEdit }) {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: form.salePrice && form.price && Number(form.salePrice) > Number(form.price) ? 6 : 12 }}>
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Price (EGP) *</label>
                     <input type="number" required min="0" value={form.price || ''} onChange={e => update('price', Number(e.target.value) || 0)} placeholder="700" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
@@ -1022,6 +1098,12 @@ function ProductsPanel({ canEdit }) {
                     <input type="number" min="0" value={form.salePrice || ''} onChange={e => update('salePrice', e.target.value ? Number(e.target.value) : null)} placeholder="500" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
                   </div>
                 </div>
+
+                {form.salePrice && form.price && Number(form.salePrice) > Number(form.price) && (
+                  <p style={{ color: '#ef4444', fontSize: 11, marginTop: 0, marginBottom: 12, direction: 'rtl', textAlign: 'right' }}>
+                    * سعر الخصم لا يمكن أن يكون أكبر من السعر الأصلي.
+                  </p>
+                )}
                 
                 <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12, marginTop:12 }}>
                   <div>
@@ -1103,12 +1185,26 @@ function ProductsPanel({ canEdit }) {
                 </div>
 
                 <div style={{ marginTop:14, display:'flex', alignItems:'center', gap:8 }}>
-                  <input type="checkbox" id="active-toggle" checked={form.active} onChange={e => update('active', e.target.checked)} style={{ accentColor:'var(--gold)' }} />
+                  <input type="checkbox" id="active-toggle" checked={form.active} onChange={e => update('active', e.checked)} style={{ accentColor:'var(--gold)' }} />
                   <label htmlFor="active-toggle" style={{ fontSize:12, color:'var(--text2)', cursor:'pointer' }}>Active (visible in store)</label>
                 </div>
               </div>
               <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:8, flexShrink:0 }}>
-                <button className="gold-btn" style={{ flex:1 }} onClick={handleSave}>
+                <button 
+                  className="gold-btn" 
+                  style={{ 
+                    flex:1,
+                    opacity: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 0.4 : 1,
+                    cursor: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 'not-allowed' : 'pointer'
+                  }} 
+                  onClick={() => {
+                    if (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) {
+                      toast.error('عذراً، لا يمكن أن يكون سعر الخصم أكبر من السعر الأصلي');
+                      return;
+                    }
+                    handleSave();
+                  }}
+                >
                   {editing ? 'Save' : 'Create'}
                 </button>          
                 <button className="outline-btn" onClick={() => setShowForm(false)}>Cancel</button>
@@ -1117,7 +1213,8 @@ function ProductsPanel({ canEdit }) {
           </>
         )}
       </AnimatePresence>
-      
+
+      {/* باقي الأكواد والنوافذ الأخرى كما هي... */}      
       {/* CSV Import Modal */}
       <AnimatePresence>
         {showForm === false && showImport && (
@@ -1132,7 +1229,7 @@ function ProductsPanel({ canEdit }) {
         )}
       </AnimatePresence>
 
-      {/* نافذة تأكيد الحذف الفاخرة */}
+      {/* نافذة تأكيد الحذف */}
       <AnimatePresence>
         {productToDelete && (
           <>
@@ -1377,8 +1474,8 @@ function AnalyticsPanel() {
               <XAxis dataKey="m" tick={{ fontSize:10 }} />
               <YAxis tick={{ fontSize:10 }} />
               <Tooltip contentStyle={{ background: '#1e1e1e', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }} />
-              <Bar dataKey="revenue" fill="var(--gold)" />
-              <Bar dataKey="customers" fill="rgba(201,168,76,0.25)" />
+              <Bar dataKey="revenue" fill="#D4AF37" />
+              <Bar dataKey="customers" fill="#C5A028" /> {/* درجة أغمق قليلاً للتفريق بين العمودين إذا كانا متجاورين */} {/* درجة أغمق قليلاً للتفريق بين العمودين إذا كانا متجاورين */}
             </BarChart>
           </ResponsiveContainer>
         </div>
