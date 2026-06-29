@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit, Shield, Eye, Users, Key } from 'lucide-react';
+import { Plus, Trash2, Edit, Shield, Eye, EyeOff, Users, Key } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 
 const ROLE_CONFIG = {
@@ -16,6 +16,12 @@ export default function UsersPanel() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
+  // State للتحكم في رؤية كلمة المرور
+  const [showPassword, setShowPassword] = useState(false);
+
+  // State للتحكم في مودال الحذف المخصص
+  const [userToDelete, setUserToDelete] = useState(null);
 
   const update = (k, v) => { 
     setForm(f => ({ ...f, [k]: v })); 
@@ -42,6 +48,7 @@ export default function UsersPanel() {
       role: user.role || 'support'
     });
     setErrors({});
+    setShowPassword(false); // إعادة تعيين حالة الرؤية عند التعديل
     setShowForm(true); 
   };
 
@@ -67,11 +74,26 @@ export default function UsersPanel() {
       setShowForm(false);
       setEditingId(null);
       setForm({ name: '', email: '', password: '', role: 'support' });
+      setShowPassword(false);
     } catch (err) {
       console.error("Error saving user:", err);
       if (typeof window.toast === 'function') window.toast('⚠️ حدث خطأ أثناء حفظ بيانات العضو.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // دالة الحذف النهائية من داخل المودال الجديد
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      await deleteUser(userToDelete.id);
+      if (typeof window.toast === 'function') window.toast('تم حذف العضو بنجاح 🗑️');
+    } catch (err) {
+      console.error(err);
+      if (typeof window.toast === 'function') window.toast('⚠️ حدث خطأ أثناء الحذف');
+    } finally {
+      setUserToDelete(null);
     }
   };
 
@@ -84,7 +106,7 @@ export default function UsersPanel() {
           <p style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 4 }}>{storedUsers.length} team members</p>
         </div>
         <button className="gold-btn" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px' }}
-          onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', email: '', password: '', role: 'support' }); setErrors({}); }}>
+          onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', email: '', password: '', role: 'support' }); setErrors({}); setShowPassword(false); }}>
           <Plus size={14} /> Add User
         </button>
       </div>
@@ -149,7 +171,6 @@ export default function UsersPanel() {
                   </td>
                   <td style={{ padding: '14px 16px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {/* تصفية وتنظيف زر الـ Edit بالكامل لمنع أي كراش نهائياً */}
                       <button 
                         onClick={() => handleEdit(user)}
                         style={{ 
@@ -168,7 +189,8 @@ export default function UsersPanel() {
                         Edit
                       </button>
                       {!isMe && (
-                        <button onClick={() => { if(window.confirm('Are you sure you want to remove this user?')) deleteUser(user.id); }}
+                        <button 
+                          onClick={() => setUserToDelete(user)} 
                           style={{ padding: '5px 10px', background: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.2)', borderRadius: 4, color: 'var(--red)', cursor: 'pointer', fontSize: 11 }}>
                           Remove
                         </button>
@@ -226,26 +248,26 @@ export default function UsersPanel() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowForm(false)}
+              onClick={() => { setShowForm(false); setShowPassword(false); }}
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000 }}
             />
 
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               style={{
                 position: 'fixed',
-                top: '5vh',
-                left: '50%',
-                transform: 'translateX(-50%)',
+                top: 0,
+                right: 0,
+                bottom: 0,
                 width: 440,
-                maxWidth: '90vw',
-                maxHeight: '90vh',
+                maxWidth: '100%',
+                height: '100%',
                 overflowY: 'auto',
                 background: 'var(--bg2)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
+                borderLeft: '1px solid var(--border)',
                 padding: 32,
                 zIndex: 2001,
                 boxSizing: 'border-box'
@@ -311,19 +333,40 @@ export default function UsersPanel() {
                   <label style={{ fontSize: 11, color: 'var(--text3)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
                     Password
                   </label>
-                  <input
-                    type="password"
-                    value={form.password}
-                    onChange={e => update('password', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      borderRadius: 6,
-                      border: `1px solid ${errors.password ? 'var(--red)' : 'var(--border)'}`,
-                      outline: 'none'
-                    }}
-                    placeholder={editingId ? "Leave blank to keep current password" : "Min 6 characters"}
-                  />
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={form.password}
+                      onChange={e => update('password', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        paddingRight: '40px', // مسافة للأيقونة
+                        borderRadius: 6,
+                        border: `1px solid ${errors.password ? 'var(--red)' : 'var(--border)'}`,
+                        outline: 'none'
+                      }}
+                      placeholder={editingId ? "Leave blank to keep current password" : "Min 6 characters"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--text3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0
+                      }}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                   {errors.password && (
                     <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 3 }}>
                       {errors.password}
@@ -336,11 +379,127 @@ export default function UsersPanel() {
                 <button className="gold-btn" style={{ flex: 1 }} onClick={handleSave}>
                   {loading ? 'Saving...' : editingId ? 'Save Changes' : 'Add User'}
                 </button>
-                <button className="outline-btn" onClick={() => setShowForm(false)}>
+                <button className="outline-btn" onClick={() => { setShowForm(false); setShowPassword(false); }}>
                   Cancel
                 </button>
               </div>
             </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* المودال المخصص الفخم الجديد لتأكيد الحذف */}
+      <AnimatePresence>
+        {userToDelete && (
+          <>
+            {/* الخلفية المظلمة الشفافة */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setUserToDelete(null)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.75)',
+                backdropFilter: 'blur(4px)',
+                zIndex: 3000
+              }}
+            />
+
+            {/* صندوق المودال في المنتصف */}
+            <div style={{
+              position: 'fixed',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 3001,
+              pointerEvents: 'none'
+            }}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                transition={{ type: 'spring', duration: 0.3 }}
+                style={{
+                  pointerEvents: 'auto',
+                  background: '#111111',
+                  border: '1px solid rgba(201, 168, 76, 0.2)',
+                  borderRadius: 12,
+                  width: 460,
+                  maxWidth: '90%',
+                  padding: '32px 24px',
+                  textAlign: 'center',
+                  boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+                }}
+              >
+                {/* أيقونة الحذف الدائرية الذهبية الفخمة */}
+                <div style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: '50%',
+                  border: '1px solid var(--gold)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px',
+                  background: 'rgba(201, 168, 76, 0.05)'
+                }}>
+                  <Trash2 size={22} color="var(--gold)" />
+                </div>
+
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#ffffff', marginBottom: 12 }}>
+                  تأكيد الحذف النهائي
+                </h3>
+                
+                <p style={{ fontSize: 13, color: '#b3b3b3', lineHeight: 1.6, marginBottom: 24 }}>
+                  هل أنت متأكد من حذف عضو الفريق <span style={{ color: 'var(--gold)', fontWeight: 600 }}>"{userToDelete.name}"</span>؟ هذا الإجراء سيؤدي إلى إزالة صلاحياته نهائياً.
+                </p>
+
+                {/* أزرار الحذف والإلغاء المخصصة */}
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                  <button
+                    onClick={confirmDeleteUser}
+                    style={{
+                      flex: 1,
+                      padding: '11px 20px',
+                      background: 'var(--gold)',
+                      border: 'none',
+                      borderRadius: 6,
+                      color: '#111111',
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      transition: 'opacity 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                  >
+                    حذف
+                  </button>
+                  <button
+                    onClick={() => setUserToDelete(null)}
+                    style={{
+                      flex: 1,
+                      padding: '11px 20px',
+                      background: 'transparent',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: 6,
+                      color: '#ffffff',
+                      fontWeight: 500,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>

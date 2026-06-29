@@ -465,11 +465,11 @@ export const useStore = create((set, get) => ({
     }
   },
 
-    placeOrder: async (orderData) => {
+      placeOrder: async (orderData) => {
     const { cart, appliedDiscount, cartTotal, cartSubtotal, clearCart } = get();
     const products = get().products;
     
-    // تحديث المخزون
+    // 1. تحديث المخزون محلياً وفي سوبابيز
     for (const item of cart) {
       const product = products.find(p => p.id == item.product.id);
       if (product) {
@@ -527,7 +527,7 @@ export const useStore = create((set, get) => ({
       timestamps: { created: new Date().toISOString() },
       customer: customerName,
       phone: orderData?.phone || '',
-      phoneAlt: orderData?.phoneAlt || '', // 🎯 إضافة قراءة الرقم البديل هنا للـ Local DB
+      phoneAlt: orderData?.phoneAlt || '', 
       email: orderData?.email || '',
       address: orderData?.address || '',
       city: orderData?.city || '',
@@ -546,7 +546,7 @@ export const useStore = create((set, get) => ({
       date: order.date,
       customer: order.customer,
       phone: order.phone,
-      phoneAlt: order.phoneAlt, // 🎯 إرسال الرقم البديل كحقل مستقل لـ Supabase
+      phoneAlt: order.phoneAlt, 
       email: order.email,
       address: order.address,
       city: order.city,
@@ -555,15 +555,19 @@ export const useStore = create((set, get) => ({
       timestamps: JSON.stringify(order.timestamps)
     };
 
+    // إرسال الأوردر لـ Supabase
     const { error: orderError } = await supabase.from('orders').insert([supabaseOrderPayload]);
     
+    // 🎯 التعديل الجوهري هنا: حماية السلة والأوردر في حال الفشل
     if (orderError) {
       console.error("❌ خطأ حرج أثناء إرسال الأوردر لـ Supabase:", orderError);
       alert(`فشل حفظ الأوردر أونلاين: ${orderError.message}`);
-    } else {
-      console.log("🚀 ORDER SUCCESSFULLY SAVED TO SUPABASE!");
+      return { success: false, error: orderError.message }; // ⬅️ يوقف الدالة فوراً ويمنع مسح السلة وفتح واتساب
     }
 
+    console.log("🚀 ORDER SUCCESSFULLY SAVED TO SUPABASE!");
+
+    // تسييف الإشعارات المحلية
     const notifications = db.getAll('notifications') || [];
     notifications.unshift({ id: Date.now(), type: 'new_order', orderId: order.id, customer: order.customer, total: order.total, read: false, timestamp: new Date().toISOString() });
     db.setAll('notifications', notifications.slice(0, 50));
@@ -576,7 +580,7 @@ export const useStore = create((set, get) => ({
       set({ appliedDiscount: null });
     }
 
-    // ─── 🔥 تعديل الواتساب لفتح المحادثة الفورية مباشرة 🚀 ───
+    // فتح محادثة الواتساب الفورية
     try {
       let itemsText = order.items.map(item => {
         const details = [];
@@ -591,7 +595,6 @@ export const useStore = create((set, get) => ({
         discountLine = `\n🎁 Discount (${order.discountCode}): -EGP ${order.discount.toLocaleString()}`;
       }
 
-      // 🎯 تحديث نص رسالة الواتساب ليقرأ حقل الرقم البديل بشكل مستقل ومنظم
       const whatsappMessage = 
         `🛍️ New Order — ${order.id}\n\n` +
         `👤 Customer: ${order.customer}\n` +
@@ -604,7 +607,6 @@ export const useStore = create((set, get) => ({
         `📝 Notes: ${order.notes || 'None'}`;
 
       const phoneNumber = "201013380313"; 
-
       const whatsappUrl = `https://api.whatsapp.com/send/?phone=${phoneNumber}&text=${encodeURIComponent(whatsappMessage)}&type=phone_number&app_absent=0`;
 
       window.open(whatsappUrl, '_blank');
@@ -612,6 +614,7 @@ export const useStore = create((set, get) => ({
       console.error("Failed to open WhatsApp:", wsErr);
     }
     
+    // مسح السلة وتحديث البيانات فقط بعد التأكد من نجاح العملية 
     clearCart();
     get().refreshProducts();
     get().refreshOrders();
