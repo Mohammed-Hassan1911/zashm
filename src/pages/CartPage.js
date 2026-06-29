@@ -61,9 +61,12 @@ export function CartPage() {
 
   React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
 
-  const handleApplyCoupon = () => {
+    const handleApplyCoupon = () => {
     setCouponError('');
-    const result = applyDiscount((coupon ?? '').trim());
+    // 🎯 التعديل: تحويل الكود إجبارياً لحروف كبيرة وقص المسافات الزائدة
+    const cleanCoupon = (coupon ?? '').trim().toUpperCase();
+    
+    const result = applyDiscount(cleanCoupon);
     if (result.success) {
       if (typeof toast !== 'undefined') {
         toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
@@ -228,9 +231,12 @@ export function CheckoutPage() {
     });
   }, []);
 
-  const handleApplyCoupon = () => {
+    const handleApplyCoupon = () => {
     setCouponError('');
-    const result = applyDiscount((coupon ?? '').trim());
+    // 🎯 التعديل: تحويل الكود إجبارياً لحروف كبيرة وقص المسافات الزائدة هنا أيضاً
+    const cleanCoupon = (coupon ?? '').trim().toUpperCase();
+    
+    const result = applyDiscount(cleanCoupon);
     if (result.success) {
       if (typeof toast !== 'undefined') {
         toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');

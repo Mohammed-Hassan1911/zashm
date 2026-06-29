@@ -2,8 +2,13 @@ import { create } from 'zustand';
 import { db, generateOrderId, trackEvent } from './lib/security';
 import { supabase } from './lib/supabase'; // ربط سوبابيز الأونلاين
 
+// دالة مساعدة موحدة لحساب تاريخ اليوم بالكامل بناءً على التوقيت المحلي (Local Time) لتجنب مشاكل الـ UTC
+function getLocalTodayDate() {
+  const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+  return (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
+}
+
 // ─── HELPER TO GET FILE PATH FROM SUPABASE URL ──────────────────────────────
-// دالة مساعدة لقص الرابط واستخراج اسم الملف الصافي داخل الـ bucket
 function getFilePathFromUrl(url) {
   if (!url) return null;
   const parts = url.split('/products/');
@@ -36,7 +41,6 @@ function sanitizeOrder(order, products = []) {
   const status = order?.status ?? 'Pending';
   const { locked: _locked, ...rest } = order || {};
 
-  // 🎯 ذكاء اصطناعي لفك تشفير حقل الـ items بأمان لو راجع كـ نص (String) من Supabase
   let safeItems = [];
   if (order?.items) {
     if (typeof order.items === 'string') {
@@ -51,7 +55,6 @@ function sanitizeOrder(order, products = []) {
     }
   }
 
-  // 🎯 ذكاء اصطناعي لفك تشفير حقل الـ timestamps بأمان لو راجع كـ نص
   let safeTimestamps = { created: new Date().toISOString() };
   if (order?.timestamps) {
     if (typeof order.timestamps === 'string') {
@@ -76,7 +79,7 @@ function sanitizeOrder(order, products = []) {
     email: order?.email ?? '',
     address: order?.address ?? '',
     city: order?.city ?? '',
-    date: order?.date ?? new Date().toISOString().split('T')[0],
+    date: order?.date ?? getLocalTodayDate(),
     items: (safeItems || []).map(item => sanitizeOrderItem(item, products)),
     timestamps: safeTimestamps
   };
@@ -87,7 +90,7 @@ const APPLIED_DISCOUNT_KEY = 'zashm_applied_discount';
 function validateDiscountRecord(d) {
   if (!d) return null;
   const discounts = db.getAll('discounts') || [];
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalTodayDate(); // 🎯 التعديل للتوقيت المحلي
   const fresh = discounts.find(
     x => x.id === d.id &&
       x.code === d.code &&
@@ -138,7 +141,6 @@ export const useStore = create((set, get) => ({
   discounts: db.getAll('discounts') || [],
   orders: getSanitizedOrders(),
 
-  // جلب المنتجات من Supabase أونلاين وتأمين الحقول للـ UI
   refreshProducts: async () => {
     try {
       const { data, error } = await supabase.from('products').select('*');
@@ -161,7 +163,6 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // جلب الكوبونات من جدول coupons أونلاين
   refreshDiscounts: async () => {
     try {
       const { data, error } = await supabase.from('coupons').select('*');
@@ -189,17 +190,14 @@ export const useStore = create((set, get) => ({
     await supabase.from('products').update(cleanUpdates).eq('id', id);
   },
   
-  // 🔥 تعديل دالة مسح المنتج لمسح الصور من الـ Bucket أولاً 🚀
   deleteProduct: async (id) => { 
     try {
-      // 1. جلب بيانات المنتج من الداتا بيز المحلية أو سوبابيز لمعرفة روابط الصور
       const products = get().products;
       const product = products.find(p => p.id === id);
 
       if (product) {
         const filesToDelete = [];
 
-        // استخراج مسارات جميع صور المنتج
         if (Array.isArray(product.images)) {
           product.images.forEach(url => {
             const path = getFilePathFromUrl(url);
@@ -210,13 +208,11 @@ export const useStore = create((set, get) => ({
           if (path) filesToDelete.push(path);
         }
 
-        // استخراج مسار صورة الـ size guide بالاسم المطابق لـ Supabase
          if (product.sizeGuide) {
           const path = getFilePathFromUrl(product.sizeGuide);
          if (path) filesToDelete.push(path);
       }
 
-        // 2. مسح الملفات من الـ Bucket المسمى products في Supabase
         if (filesToDelete.length > 0) {
           const { error: storageError } = await supabase
             .storage
@@ -225,13 +221,10 @@ export const useStore = create((set, get) => ({
 
           if (storageError) {
             console.error("❌ فشل مسح صور المنتج من الـ Bucket:", storageError);
-          } else {
-            console.log("✅ تم مسح صور المنتج والـ size guide بنجاح من الـ Bucket");
           }
         }
       }
 
-      // 3. مسح المنتج نهائياً من الـ Local DB وسوبابيز
       db.delete('products', id); 
       set({ products: db.getAll('products') || [] }); 
       await supabase.from('products').delete().eq('id', id);
@@ -242,7 +235,6 @@ export const useStore = create((set, get) => ({
   },
   
   bulkDeleteProducts: async (ids) => { 
-    // يمكنك لاحقاً تطبيق نفس منطق الحذف الجماعي هنا للصور لو احتجت
     ids.forEach(id => db.delete('products', id)); 
     set({ products: db.getAll('products') || [] }); 
     await supabase.from('products').delete().in('id', ids);
@@ -257,7 +249,6 @@ export const useStore = create((set, get) => ({
     await supabase.from('products').update({ image: singleImage, images: Array.isArray(images) ? images : [images] }).eq('id', id);
   },
   
-  // إضافة منتج أونلاين مع توليد ID رقمي نقي ليناسب نوع bigint في سوبابيز 🚀
   addProduct: async (p) => {
     const generatedNumericId = Number(`${Date.now()}${Math.floor(100 + Math.random() * 900)}`);
 
@@ -275,7 +266,7 @@ export const useStore = create((set, get) => ({
       sizes: Array.isArray(p.sizes) ? p.sizes : [],
       images: Array.isArray(p.images) ? p.images : [],
       image: p.image || (Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : ''),
-      sizeGuide: p.sizeGuide || null // مطابق لاسم العمود في الجدول
+      sizeGuide: p.sizeGuide || null
     };
 
     try {
@@ -302,8 +293,6 @@ export const useStore = create((set, get) => ({
 
       db.insert('products', finalProduct);
       set({ products: db.getAll('products') || [] });
-
-      console.log("🚀 PRODUCT SUCCESSFULLY ADDED & SYNCED TO BIGINT ID!");
       return finalProduct;
 
     } catch (err) {
@@ -330,7 +319,6 @@ export const useStore = create((set, get) => ({
     
     const products = get().products;
     const freshProduct = products.find(p => p.id == product.id) || product;
-    
     const variantKey = `${size}-${color}`;
     
     let stockAmount = 99;
@@ -342,12 +330,10 @@ export const useStore = create((set, get) => ({
     
     const reservedAmount = Number(freshProduct.reservedStock || 0);
     const available = Math.max(0, stockAmount - reservedAmount);
-    
     const currentInCart = (get().cart || []).find(i => i.product?.id == product.id && i.size === size && i.color === color)?.qty || 0;
     
     if (currentInCart + qty > available && stockAmount !== 99) {
       const remainingToOrder = Math.max(0, available - currentInCart);
-      
       let errorMsg = "";
       if (remainingToOrder === 0) {
         errorMsg = `Sorry, this piece is out of stock in this variation (${size} - ${color}). You already have ${currentInCart} in your bag.`;
@@ -356,7 +342,6 @@ export const useStore = create((set, get) => ({
       } else {
         errorMsg = `Sorry, only ${remainingToOrder} more pieces are remaining in stock for this variation (${size} - ${color}).`;
       }
-      
       return { success: false, error: errorMsg };
     }
     
@@ -387,7 +372,6 @@ export const useStore = create((set, get) => ({
 
   updateCartQty: (key, newQty) => {
     const { cart, products } = get();
-    
     const cartItem = cart.find(item => item.key === key);
     if (!cartItem) return;
 
@@ -395,20 +379,12 @@ export const useStore = create((set, get) => ({
     
     if (currentProduct) {
       const variantKey = `${cartItem.size}-${cartItem.color}`;
-      
       let availableStock = currentProduct.stock;
       if (currentProduct.variantStock && currentProduct.variantStock[variantKey] !== undefined) {
         availableStock = Number(currentProduct.variantStock[variantKey]);
       }
 
       if (newQty > availableStock && availableStock !== undefined) {
-        if (availableStock === 0) {
-          alert(`Sorry, this item variation (${cartItem.size} - ${cartItem.color}) is completely out of stock.`);
-        } else if (availableStock === 1) {
-          alert(`Sorry, only 1 piece is remaining in stock for this variation.`);
-        } else {
-          alert(`Sorry, only ${availableStock} pieces are remaining in stock for this variation.`);
-        }
         return; 
       }
     }
@@ -457,25 +433,21 @@ export const useStore = create((set, get) => ({
         db.setAll('orders', data);
         const sanitized = data.map(o => sanitizeOrder(o, get().products));
         set({ orders: sanitized });
-      } else if (error) {
-        console.error("Error refreshing orders from Supabase:", error);
       }
     } catch(err) {
       console.error("Unexpected error in refreshOrders:", err);
     }
   },
 
-      placeOrder: async (orderData) => {
+  placeOrder: async (orderData) => {
     const { cart, appliedDiscount, cartTotal, cartSubtotal, clearCart } = get();
     const products = get().products;
     
-    // 1. تحديث المخزون محلياً وفي سوبابيز
     for (const item of cart) {
       const product = products.find(p => p.id == item.product.id);
       if (product) {
         const currentStock = product.stock ? Number(product.stock) : 0;
         const newStock = Math.max(0, currentStock - item.qty);
-        
         const variantKey = `${item.size}-${item.color}`;
         const updatedVariantStock = { ...(product.variantStock || {}) };
         
@@ -523,7 +495,7 @@ export const useStore = create((set, get) => ({
       total,
       discountCode: appliedDiscount?.code || null,
       status: 'Pending',
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalTodayDate(), // 🎯 حفظ تاريخ الأوردر بالتوقيت المحلي
       timestamps: { created: new Date().toISOString() },
       customer: customerName,
       phone: orderData?.phone || '',
@@ -555,19 +527,13 @@ export const useStore = create((set, get) => ({
       timestamps: JSON.stringify(order.timestamps)
     };
 
-    // إرسال الأوردر لـ Supabase
     const { error: orderError } = await supabase.from('orders').insert([supabaseOrderPayload]);
-    
-    // 🎯 التعديل الجوهري هنا: حماية السلة والأوردر في حال الفشل
     if (orderError) {
       console.error("❌ خطأ حرج أثناء إرسال الأوردر لـ Supabase:", orderError);
       alert(`فشل حفظ الأوردر أونلاين: ${orderError.message}`);
-      return { success: false, error: orderError.message }; // ⬅️ يوقف الدالة فوراً ويمنع مسح السلة وفتح واتساب
+      return { success: false, error: orderError.message }; 
     }
 
-    console.log("🚀 ORDER SUCCESSFULLY SAVED TO SUPABASE!");
-
-    // تسييف الإشعارات المحلية
     const notifications = db.getAll('notifications') || [];
     notifications.unshift({ id: Date.now(), type: 'new_order', orderId: order.id, customer: order.customer, total: order.total, read: false, timestamp: new Date().toISOString() });
     db.setAll('notifications', notifications.slice(0, 50));
@@ -580,7 +546,6 @@ export const useStore = create((set, get) => ({
       set({ appliedDiscount: null });
     }
 
-    // فتح محادثة الواتساب الفورية
     try {
       let itemsText = order.items.map(item => {
         const details = [];
@@ -608,13 +573,11 @@ export const useStore = create((set, get) => ({
 
       const phoneNumber = "201013380313"; 
       const whatsappUrl = `https://api.whatsapp.com/send/?phone=${phoneNumber}&text=${encodeURIComponent(whatsappMessage)}&type=phone_number&app_absent=0`;
-
       window.open(whatsappUrl, '_blank');
     } catch (wsErr) {
       console.error("Failed to open WhatsApp:", wsErr);
     }
     
-    // مسح السلة وتحديث البيانات فقط بعد التأكد من نجاح العملية 
     clearCart();
     get().refreshProducts();
     get().refreshOrders();
@@ -637,12 +600,7 @@ export const useStore = create((set, get) => ({
     let orderItems = [];
     if (order.items) {
       if (typeof order.items === 'string') {
-        try {
-          orderItems = JSON.parse(order.items);
-        } catch (e) {
-          console.error("Error parsing order items in updateOrderStatus:", e);
-          orderItems = [];
-        }
+        try { orderItems = JSON.parse(order.items); } catch (e) { orderItems = []; }
       } else if (Array.isArray(order.items)) {
         orderItems = order.items;
       }
@@ -750,18 +708,23 @@ export const useStore = create((set, get) => ({
     set({ discounts: db.getAll('discounts') || [] }); 
     await supabase.from('coupons').delete().eq('id', id);
   },
+  
+  // 🎯 تعديل الفحص الجوهري هنا ليعمل بالحروف الكبيرة والتوقيت المحلي الصحيح!
   applyDiscount: (code) => {
     const normalized = (code ?? '').trim().toUpperCase();
     if (!normalized) return { success: false, error: 'Please enter a discount code' };
+    
     const discounts = get().discounts;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalTodayDate(); // الفحص بالتوقيت المحلي الحالي 100%
+    
     const d = discounts.find(
-      x => x.code === normalized &&
+      x => x.code.trim().toUpperCase() === normalized &&
         x.active &&
         x.startDate <= today &&
         x.endDate >= today &&
-        (x.usageCount ?? 0) < (x.usageLimit ?? 0)
+        (Number(x.usageCount) ?? 0) < (Number(x.usageLimit) ?? 0)
     );
+    
     if (d) {
       saveAppliedDiscount(d);
       set({ appliedDiscount: d });
