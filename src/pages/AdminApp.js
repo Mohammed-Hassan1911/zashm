@@ -42,10 +42,11 @@ export default function AdminApp() {
   const { adminPage, setAdminPage, setPage, orders, unreadOrderCount, markNotificationsRead, getNotifications, newOrderNotification } = useStore();
   const [collapsed, setCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // حالة القائمة للموبايل
 
   useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
 
+  // Play sound on new order
   useEffect(() => {
     if (!newOrderNotification) return;
     try {
@@ -83,8 +84,10 @@ export default function AdminApp() {
   const pendingCount = orders.filter(o => o.status === 'Pending').length;
   const notifications = getNotifications().slice(0, 8);
 
+  // مكون محتويات القائمة المشترك بين الكمبيوتر والموبايل لإصلاح تكرار الكود
   const SidebarContent = ({ isMobile = false }) => (
     <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden' }}>
+      {/* Logo */}
       <div style={{ padding:'20px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, cursor: isMobile ? 'default' : 'pointer' }} onClick={() => !isMobile && setCollapsed(!collapsed)}>
           <div style={{ width:36, height:36, background:'linear-gradient(135deg, var(--gold-dark), var(--gold))', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
@@ -102,6 +105,7 @@ export default function AdminApp() {
         )}
       </div>
 
+      {/* Session Info */}
       {(!collapsed || isMobile) && (
         <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)', background:'rgba(201,168,76,0.04)' }}>
           <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -116,6 +120,7 @@ export default function AdminApp() {
         </div>
       )}
 
+      {/* Nav */}
       <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto' }}>
         {accessiblePages.map(({ id, label, icon:Icon, badge }) => {
           const active = adminPage === id;
@@ -134,6 +139,7 @@ export default function AdminApp() {
         })}
       </nav>
 
+      {/* Footer */}
       <div style={{ padding:'10px 8px', borderTop:'1px solid var(--border)' }}>
         <button onClick={() => { setPage('home'); if(isMobile) setMobileMenuOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!collapsed || isMobile) ? '10px 12px' : '10px 14px', borderRadius:6, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', justifyContent: (!collapsed || isMobile) ? 'flex-start' : 'center' }}>
           <Package2 size={17} />
@@ -149,23 +155,43 @@ export default function AdminApp() {
 
   return (
     <div className="admin-container" style={{ display:'flex', minHeight:'100vh', background:'var(--bg)', flexDirection: 'row' }}>
+      
+      {/* 1. Sidebar للكمبيوتر والتابلت فقط وينحجب تلقائياً في الموبايل */}
       <motion.aside 
         animate={{ width: collapsed ? 64 : 230 }}
         className="hidden-mobile"
-        style={{ background:'var(--bg2)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', position:'sticky', top:0, height:'100vh', overflow:'hidden', flexShrink:0 }}
+        style={{ 
+          background:'var(--bg2)', 
+          borderRight:'1px solid var(--border)', 
+          display:'flex', 
+          flexDirection:'column', 
+          position:'sticky', 
+          top:0, 
+          height:'100vh', 
+          overflow:'hidden', 
+          flexShrink:0 
+        }}
       >
         <SidebarContent isMobile={false} />
       </motion.aside>
 
+      {/* 2. Drawer متحرك خاص بالموبايل فقط يظهر عند الضغط على زر القائمة */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
+            {/* الخلفية المظلمة الشفافة */}
             <motion.div 
-              initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setMobileMenuOpen(false)}
+              initial={{ opacity:0 }} 
+              animate={{ opacity:1 }} 
+              exit={{ opacity:0 }} 
+              onClick={() => setMobileMenuOpen(false)}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:2999, backdropFilter:'blur(4px)' }} 
             />
+            {/* قائمة الخيارات الجانبية */}
             <motion.div 
-              initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+              initial={{ x: '-100%' }} 
+              animate={{ x: 0 }} 
+              exit={{ x: '-100%' }}
               transition={{ type:'spring', damping:25, stiffness:200 }}
               style={{ position:'fixed', left:0, top:0, bottom:0, width:260, background:'var(--bg2)', zIndex:3000, borderRight:'1px solid var(--border)', boxShadow:'10px 0 30px rgba(0,0,0,0.5)' }}
             >
@@ -175,11 +201,16 @@ export default function AdminApp() {
         )}
       </AnimatePresence>
 
+      {/* Main Container */}
       <main style={{ flex:1, overflow:'hidden', minWidth:0, display:'flex', flexDirection:'column' }}>
+        
+        {/* Top Bar (المعدلة لتدعم زر المنيو في الموبايل) */}
         <div style={{ position:'sticky', top:0, zIndex:100, background:'rgba(10,10,10,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid var(--border)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            {/* زر القائمة للموبايل فقط */}
             <button 
-              className="show-mobile-flex" onClick={() => setMobileMenuOpen(true)}
+              className="show-mobile-flex" 
+              onClick={() => setMobileMenuOpen(true)}
               style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:36, height:36, borderRadius:8, alignItems:'center', justifyContent:'center', cursor:'pointer' }}
             >
               <Menu size={18} />
@@ -188,6 +219,7 @@ export default function AdminApp() {
           </div>
           
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+            {/* New Order Alert */}
             <AnimatePresence>
               {newOrderNotification && (
                 <motion.div initial={{ opacity:0, scale:0.8, x:20 }} animate={{ opacity:1, scale:1, x:0 }} exit={{ opacity:0, scale:0.8, x:20 }}
@@ -199,6 +231,7 @@ export default function AdminApp() {
               )}
             </AnimatePresence>
 
+            {/* Notifications */}
             <div style={{ position:'relative' }}>
               <motion.button onClick={() => { setNotifOpen(!notifOpen); markNotificationsRead(); }}
                 style={{ width:38, height:38, borderRadius:8, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', position:'relative' }}
@@ -246,6 +279,7 @@ export default function AdminApp() {
           </div>
         </div>
 
+        {/* كود عرض محتوى لوحة التحكم وجعله يقبل السكرول بشكل منفصل ومريح على الشاشات الصغيرة */}
         <div style={{ flex:1, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
           <AnimatePresence mode="wait">
             <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-12 }} transition={{ duration:0.25 }}>
@@ -260,6 +294,7 @@ export default function AdminApp() {
         </div>
       </main>
 
+      {/* أكواد الـ CSS الافتراضية المدمجة لضمان التوافق التام بدون تعديل ملفات خارجية */}
       <style>{`
         @media (max-width: 768px) {
           .hidden-mobile { display: none !important; }
@@ -326,6 +361,7 @@ function Dashboard() {
         </motion.button>
       </div>
 
+      {/* Stat Cards Grid - تم ضبطها لتظهر عمودين على الشاشات الصغيرة جداً */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:12, marginBottom:20 }}>
         {stats.map(({ label, value, sub, icon:Icon, color, positive }, i) => (
           <motion.div key={label} initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:i*0.07 }}
@@ -345,6 +381,7 @@ function Dashboard() {
         ))}
       </div>
 
+      {/* Charts Row - تم تحويلها لعمود واحد تلقائي للموبايل لمنع ضغط الإحصائيات */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:16, marginBottom:16 }}>
         <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:16, minWidth:0 }}>
           <h3 style={{ fontSize:13, fontWeight:600, color:'var(--text2)', marginBottom:16 }}>7-Day Revenue & Orders</h3>
@@ -388,6 +425,7 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* Bottom Row - مرن ومتجاوب تماماً */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:16 }}>
         <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:16 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, borderBottom:'1px solid var(--border)', paddingBottom:12, flexWrap:'wrap', gap:8 }}>
@@ -495,6 +533,7 @@ function OrdersPanel({ canEdit }) {
           <Search size={13} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search..." style={{ width:'100%', paddingLeft:34 }} />
         </div>
+        {/* شريط الفلاتر السريع وجعله يسمح بالتمرير الأفقي الهادئ في الهواتف حتى لا يتكدس */}
         <div style={{ display:'flex', gap:4, overflowX:'auto', paddingBottom:4, width:'100%', WebkitOverflowScrolling:'touch' }}>
           {['All','Pending','Confirmed','Processing','Shipped','Delivered','Cancelled'].map(s => (
             <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
@@ -509,6 +548,7 @@ function OrdersPanel({ canEdit }) {
         </button>
       </div>
 
+      {/* الجدول مضاف له حاوية تضمن السكرول الأفقي السلس في الجوال فقط دون التأثير على التصميم العام */}
       <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
         <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
@@ -608,6 +648,7 @@ function OrdersPanel({ canEdit }) {
         )}
       </div>
 
+      {/* Order Detail Side Modal - تم تقليص عرض المودال في شاشات الموبايل حتى لا يتجاوز الحدود */}
       <AnimatePresence>
         {selected && (
           <>
@@ -728,6 +769,7 @@ function ProductsPanel({ canEdit }) {
   const [selected, setSelected] = useState(new Set());
   const [page, setPage] = useState(1);
   
+  // 🎯 الـ State المبدئية تبدأ بنص فارغ ليتطابق مع خيار None تلقائياً
   const [form, setForm] = useState({ 
     name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
     label:'', description:'', sku:'', images:[], active:true, variantStock:{} 
@@ -743,16 +785,19 @@ function ProductsPanel({ canEdit }) {
     setFormErrors(e => ({ ...e, [k]: null })); 
   };
 
+  // 🎯 فتح حقل منتج جديد ليقف دائمًا على None
   const openNew = () => {
     setEditing(null);
     setForm({ 
       name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
-      label:'', description:'', sku:'', images:[], active:true, variantStock:{} 
+      label:'', // None كقيمة مبدئية
+      description:'', sku:'', images:[], active:true, variantStock:{} 
     });
     setFormErrors({});
     setShowForm(true);
   };
 
+  // 🎯 قراءة الـ label بدقة عند تعديل المنتج الحالي وثباته
   const openEdit = (p) => {
     setEditing(p);
     setForm({ 
@@ -761,7 +806,7 @@ function ProductsPanel({ canEdit }) {
       sizes: Array.isArray(p.sizes) ? p.sizes.join(',') : (p.sizes || ''), 
       colors: Array.isArray(p.colors) ? p.colors.join(',') : (p.colors || ''),
       variantStock: p.variantStock || {},
-      label: p.label || ''
+      label: p.label || '' // يثبت على القيمة القادمة من قاعدة البيانات أو نص فارغ (None)
     });
     setFormErrors({});
     setShowForm(true);
@@ -806,6 +851,7 @@ function ProductsPanel({ canEdit }) {
       return sum;
     }, 0);
 
+    // 🎯 هنا الإصلاح: نأخذ القيمة المحددة في الفورم مباشرةً وبدون تحويلها لنص فارغ إجباري
     const finalLabel = typeof form.label === 'string' ? form.label.trim() : "";
     const finalSizeGuide = form.sizeGuide || null;
 
@@ -835,7 +881,11 @@ function ProductsPanel({ canEdit }) {
         await addProduct(productData);
         toast.success('تم إضافة المنتج الجديد للمتجر بنجاح! 🚀');
       }
-      if (form._isAddingNewCat) update('_isAddingNewCat', false);
+      
+      if (form._isAddingNewCat) {
+        update('_isAddingNewCat', false);
+      }
+      
       setShowForm(false);
     } catch (err) {
       console.error("❌ [HandleSave Error]:", err);
@@ -851,6 +901,7 @@ function ProductsPanel({ canEdit }) {
 
   return (
     <div>
+      {/* Controls */}
       <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
         <div style={{ position:'relative', flex:1, minWidth:200 }}>
           <Search size={13} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
@@ -858,12 +909,8 @@ function ProductsPanel({ canEdit }) {
         </div>
         <div style={{ display:'flex', gap:6, width: '100%', justifyContent:'flex-end', flexWrap:'wrap' }}>
           {selected.size > 0 && (
-            <button 
-              onClick={() => { if(window.confirm(`Delete ${selected.size} products?`)) { bulkDeleteProducts([...selected]); clearSelect(); } }}
-              style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', color:'var(--red)', borderRadius:6, cursor:'pointer', fontSize:12, transition:'all 0.2s ease-in-out' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.3)'; e.currentTarget.style.color = 'var(--red)'; }}
-            >
+            <button onClick={() => { if(window.confirm(`Delete ${selected.size} products?`)) { bulkDeleteProducts([...selected]); clearSelect(); } }}
+              style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', color:'var(--red)', borderRadius:6, cursor:'pointer', fontSize:12 }}>
               <Trash2 size={13} /> Delete {selected.size}
             </button>
           )}
@@ -879,6 +926,7 @@ function ProductsPanel({ canEdit }) {
         </div>
       </div>
 
+      {/* Bulk select bar */}
       {paginated.items.length > 0 && (
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
           <label style={{ display:'flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:12, color:'var(--text3)' }}>
@@ -891,6 +939,7 @@ function ProductsPanel({ canEdit }) {
         </div>
       )}
 
+      {/* Product Grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:12 }}>
         {paginated.items.map(p => (
           <motion.div key={p.id} initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }}
@@ -912,14 +961,7 @@ function ProductsPanel({ canEdit }) {
                 {canEdit && (
                   <>
                     <button onClick={() => openEdit(p)} style={{ width:32, height:32, borderRadius:'50%', background:'var(--gold)', border:'none', color:'#000000', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Edit size={12} /></button>
-                    <button 
-                      onClick={() => setProductToDelete(p)} 
-                      style={{ width:32, height:32, borderRadius:'50%', background:'#111111', border:'1px solid #333333', color:'#ffffff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'all 0.2s' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = '#111111'; e.currentTarget.style.borderColor = '#333333'; e.currentTarget.style.color = '#ffffff'; }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <button onClick={() => setProductToDelete(p)} style={{ width:32, height:32, borderRadius:'50%', background:'#111111', border:'1px solid #333333', color:'#ffffff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Trash2 size={12} /></button>
                   </>
                 )}
               </div>
@@ -936,6 +978,7 @@ function ProductsPanel({ canEdit }) {
         ))}
       </div>
 
+      {/* Pagination */}
       {paginated.totalPages > 1 && (
         <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:24 }}>
           <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasNext}
@@ -946,6 +989,7 @@ function ProductsPanel({ canEdit }) {
         </div>
       )}
 
+      {/* Product Form Modal */}
       <AnimatePresence>
         {showForm && (
           <>
@@ -976,11 +1020,19 @@ function ProductsPanel({ canEdit }) {
                     {form._isAddingNewCat ? (
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input 
-                          type="text" required value={form.category || ''} onChange={e => update('category', e.target.value)} placeholder="Write new category name..." 
+                          type="text" 
+                          required 
+                          value={form.category || ''} 
+                          onChange={e => update('category', e.target.value)} 
+                          placeholder="Write new category name..." 
                           style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} 
                         />
                         <button 
-                          type="button" onClick={() => { update('_isAddingNewCat', false); update('category', ''); }}
+                          type="button"
+                          onClick={() => {
+                            update('_isAddingNewCat', false);
+                            update('category', '');
+                          }}
                           style={{ padding: '0 12px', background: 'none', border: '1px solid var(--border)', color: 'var(--text3)', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
                         >
                           Cancel
@@ -988,10 +1040,12 @@ function ProductsPanel({ canEdit }) {
                       </div>
                     ) : (
                       <select
-                        required value={form.category || ''}
+                        required
+                        value={form.category || ''}
                         onChange={e => {
                           if (e.target.value === '___NEW_CAT___') {
-                            update('_isAddingNewCat', true); update('category', '');
+                            update('_isAddingNewCat', true);
+                            update('category', '');
                           } else {
                             update('category', e.target.value);
                           }
@@ -1000,10 +1054,16 @@ function ProductsPanel({ canEdit }) {
                       >
                         <option value="">Select a category</option>
                         {(() => {
-                          const availableCats = Array.isArray(products) ? [...new Set(products.map(p => p.category).filter(Boolean))] : [];
-                          return availableCats.map(cat => <option key={cat} value={cat}>{cat}</option>);
+                          const availableCats = Array.isArray(products) 
+                            ? [...new Set(products.map(p => p.category).filter(Boolean))]
+                            : [];
+                          return availableCats.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ));
                         })()}
-                        <option value="___NEW_CAT___" style={{ color: 'var(--gold)', fontWeight: '600' }}>➕ + Add New Category</option>
+                        <option value="___NEW_CAT___" style={{ color: 'var(--gold)', fontWeight: '600' }}>
+                          ➕ + Add New Category
+                        </option>
                       </select>
                     )}
                   </div>
@@ -1015,7 +1075,8 @@ function ProductsPanel({ canEdit }) {
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Product Label (Filter) 🎯</label>
                     <select 
-                      value={form.label || ''} onChange={e => update('label', e.target.value)}
+                      value={form.label || ''} 
+                      onChange={e => update('label', e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: form.label ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', height: '37px' }}
                     >
                       <option value="">None (Standard)</option>
@@ -1039,7 +1100,9 @@ function ProductsPanel({ canEdit }) {
                 </div>
 
                 {form.salePrice && form.price && Number(form.salePrice) > Number(form.price) && (
-                  <p style={{ color: '#ef4444', fontSize: 11, marginTop: 0, marginBottom: 12, direction: 'rtl', textAlign: 'right' }}>* سعر الخصم لا يمكن أن يكون أكبر من السعر الأصلي.</p>
+                  <p style={{ color: '#ef4444', fontSize: 11, marginTop: 0, marginBottom: 12, direction: 'rtl', textAlign: 'right' }}>
+                    * سعر الخصم لا يمكن أن يكون أكبر من السعر الأصلي.
+                  </p>
                 )}
                 
                 <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12, marginTop:12 }}>
@@ -1129,10 +1192,15 @@ function ProductsPanel({ canEdit }) {
               <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:8, flexShrink:0 }}>
                 <button 
                   className="gold-btn" 
-                  style={{ flex:1, opacity: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 0.4 : 1, cursor: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 'not-allowed' : 'pointer' }} 
+                  style={{ 
+                    flex:1,
+                    opacity: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 0.4 : 1,
+                    cursor: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 'not-allowed' : 'pointer'
+                  }} 
                   onClick={() => {
                     if (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) {
-                      toast.error('عذراً، لا يمكن أن يكون سعر الخصم أكبر من السعر الأصلي'); return;
+                      toast.error('عذراً، لا يمكن أن يكون سعر الخصم أكبر من السعر الأصلي');
+                      return;
                     }
                     handleSave();
                   }}
@@ -1146,39 +1214,82 @@ function ProductsPanel({ canEdit }) {
         )}
       </AnimatePresence>
 
+      {/* باقي الأكواد والنوافذ الأخرى كما هي... */}      
+      {/* CSV Import Modal */}
       <AnimatePresence>
         {showForm === false && showImport && (
           <>
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowImport(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
-            <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.95 }} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:540, maxWidth:'92vw', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:8, padding:20, zIndex:2001, maxHeight:'85vh', overflowY:'auto' }}>
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowImport(false)}
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
+            <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.95 }}
+              style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:540, maxWidth:'92vw', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:8, padding:20, zIndex:2001, maxHeight:'85vh', overflowY:'auto' }}>
               <CSVImport onClose={() => setShowImport(false)} />
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
+      {/* نافذة تأكيد الحذف */}
       <AnimatePresence>
         {productToDelete && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setProductToDelete(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.85)', zIndex: 3000, backdropFilter: 'blur(10px)' }} />
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setProductToDelete(null)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.85)', zIndex: 3000, backdropFilter: 'blur(10px)' }} 
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} 
+              animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} 
+              exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
-              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(201, 168, 76, 0.3)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
+              style={{ 
+                position: 'fixed', 
+                top: '50%', 
+                left: '50%', 
+                transform: 'translate(-50%, -50%)', 
+                width: '90%',
+                maxWidth: 420, 
+                background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', 
+                border: '1px solid rgba(201, 168, 76, 0.3)', 
+                borderRadius: 12, 
+                padding: '30px 20px', 
+                zIndex: 3001, 
+                textAlign: 'center'
+              }}
             >
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(201, 168, 76, 0.08)', border: '1px solid rgba(201, 168, 76, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                 <Trash2 size={28} style={{ color: 'var(--gold)' }} />
               </div>
-              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>تأكيد الحذف النهائي</h3>
-              <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>هل أنت متأكد من حذف منتج <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>؟ هذا الإجراء سيؤدي إلى إزالته نهائياً.</p>
+
+              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
+                تأكيد الحذف النهائي
+              </h3>
+              
+              <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>
+                هل أنت متأكد من حذف منتج <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>؟ هذا الإجراء سيؤدي إلى إزالته نهائياً.
+              </p>
+              
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button 
-                  onClick={() => { deleteProduct(productToDelete.id); setProductToDelete(null); toast.success('تم حذف المنتج بنجاح'); }}
+                  onClick={() => {
+                    deleteProduct(productToDelete.id);
+                    setProductToDelete(null);
+                    toast.success('تم حذف المنتج بنجاح');
+                  }}
                   style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
                   حذف
                 </button>
-                <button onClick={() => setProductToDelete(null)} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid #333333', color: '#ffffff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>إلغاء</button>
+                <button 
+                  onClick={() => setProductToDelete(null)}
+                  style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid #333333', color: '#ffffff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
+                >
+                  إلغاء
+                </button>
               </div>
             </motion.div>
           </>
@@ -1237,7 +1348,7 @@ function DiscountsPanel({ canEdit }) {
                   <span style={{ padding:'2px 8px', borderRadius:10, fontSize:10, fontWeight:600, background: isActive ? 'rgba(39,174,96,0.12)' : 'rgba(100,100,100,0.1)', color: isActive ? '#27ae60' : 'var(--text3)' }}>
                     {isActive ? '● Active' : '○ Inactive'}
                   </span>
-                  {isExpiring && <span style={{ padding:'2px 6px', borderRadius:10, fontSize:9, background:'rgba(243,156,18,0.15)', color:'#f39c12' }}>¼ Expiring</span>}
+                  {isExpiring && <span style={{ padding:'2px 6px', borderRadius:10, fontSize:9, background:'rgba(243,156,18,0.15)', color:'#f39c12' }}>⚠ Expiring</span>}
                 </div>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                   <span style={{ background:'rgba(201,168,76,0.1)', color:'var(--gold)', padding:'4px 10px', borderRadius:4, fontSize:12, fontWeight:700 }}>
@@ -1249,12 +1360,8 @@ function DiscountsPanel({ canEdit }) {
                         style={{ padding:'4px 8px', background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', borderRadius:4, cursor:'pointer', fontSize:11 }}>
                         Toggle
                       </button>
-                      <button 
-                        onClick={() => deleteDiscount(d.id)}
-                        style={{ width:28, height:28, borderRadius:4, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', color:'var(--red)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.2s ease-in-out' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.2)'; e.currentTarget.style.color = 'var(--red)'; }}
-                      >
+                      <button onClick={() => deleteDiscount(d.id)}
+                        style={{ width:28, height:28, borderRadius:4, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', color:'var(--red)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                         <Trash2 size={12} />
                       </button>
                     </>
@@ -1263,8 +1370,8 @@ function DiscountsPanel({ canEdit }) {
               </div>
               {d.description && <p style={{ color:'var(--text3)', fontSize:12, marginTop:8 }}>{d.description}</p>}
               <div style={{ display:'flex', gap:16, marginTop:12, flexWrap:'wrap' }}>
-                <span style={{ color:'var(--text3)', fontSize:11 }}>¼ {d.startDate} ➔ {d.endDate}</span>
-                <span style={{ color:'var(--text3)', fontSize:11 }}>¼ {d.usageCount}/{d.usageLimit} used</span>
+                <span style={{ color:'var(--text3)', fontSize:11 }}>📅 {d.startDate} → {d.endDate}</span>
+                <span style={{ color:'var(--text3)', fontSize:11 }}>🎯 {d.usageCount}/{d.usageLimit} used</span>
               </div>
               <div style={{ marginTop:10, height:4, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
                 <motion.div initial={{ width:0 }} animate={{ width:`${pct}%` }} transition={{ delay:0.2, duration:0.8 }}
@@ -1276,59 +1383,62 @@ function DiscountsPanel({ canEdit }) {
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <>
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowForm(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
-            <motion.div 
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:500, overflowY:'auto', background:'var(--bg2)', borderLeft:'1px solid var(--border)', padding:20, zIndex:2001, boxSizing:'border-box' }}
-            >
-              <h2 style={{ fontFamily:'var(--font-display)', fontSize:20, marginBottom:16 }}>Create Discount Code</h2>
-              <div style={{ display:'grid', gap:12 }}>
-                <div>
-                  <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Code *</label>
-                  <input value={form.code} onChange={e => update('code', e.target.value.toUpperCase())} placeholder="SUMMER25" style={{ width:'100%', fontFamily:'monospace', letterSpacing:1 }} />
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
-                  <div>
-                    <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Discount Type</label>
-                    <select value={form.type} onChange={e => update('type', e.target.value)} style={{ width:'100%' }}>
-                      <option value="percentage">Percentage (%)</option>
-                      <option value="fixed">Fixed Amount (EGP)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Value *</label>
-                    <input type="number" value={form.value} onChange={e => update('value', e.target.value)} style={{ width:'100%' }} placeholder="10" />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div>
-                      <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Start</label>
-                      <input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} style={{ width:'100%', fontSize:11 }} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>End</label>
-                      <input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} style={{ width:'100%', fontSize:11 }} />
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Usage Limit</label>
-                  <input type="number" value={form.usageLimit} onChange={e => update('usageLimit', e.target.value)} style={{ width:'100%' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Description</label>
-                  <input value={form.description} onChange={e => update('description', e.target.value)} placeholder="Internal note" style={{ width:'100%' }} />
-                </div>
+  {showForm && (
+    <>
+      <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowForm(false)}
+        style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
+      <motion.div 
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        style={{ 
+          position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:500, overflowY:'auto', 
+          background:'var(--bg2)', borderLeft:'1px solid var(--border)', padding:20, zIndex:2001, boxSizing:'border-box' 
+        }}>
+        <h2 style={{ fontFamily:'var(--font-display)', fontSize:20, marginBottom:16 }}>Create Discount Code</h2>
+        <div style={{ display:'grid', gap:12 }}>
+          <div>
+            <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Code *</label>
+            <input value={form.code} onChange={e => update('code', e.target.value.toUpperCase())} placeholder="SUMMER25" style={{ width:'100%', fontFamily:'monospace', letterSpacing:1 }} />
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
+            <div>
+              <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Discount Type</label>
+              <select value={form.type} onChange={e => update('type', e.target.value)} style={{ width:'100%' }}>
+                <option value="percentage">Percentage (%)</option>
+                <option value="fixed">Fixed Amount (EGP)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Value *</label>
+              <input type="number" value={form.value} onChange={e => update('value', e.target.value)} style={{ width:'100%' }} placeholder="10" />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Start</label>
+                <input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} style={{ width:'100%', fontSize:11 }} />
               </div>
-              <div style={{ display:'flex', gap:10, marginTop:20 }}>
-                <button className="gold-btn" style={{ flex:1 }} onClick={handleAdd}>Create</button>
-                <button className="outline-btn" onClick={() => setShowForm(false)}>Cancel</button>
+              <div>
+                <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>End</label>
+                <input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} style={{ width:'100%', fontSize:11 }} />
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Usage Limit</label>
+            <input type="number" value={form.usageLimit} onChange={e => update('usageLimit', e.target.value)} style={{ width:'100%' }} />
+          </div>
+          <div>
+            <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Description</label>
+            <input value={form.description} onChange={e => update('description', e.target.value)} placeholder="Internal note" style={{ width:'100%' }} />
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:10, marginTop:20 }}>
+          <button className="gold-btn" style={{ flex:1 }} onClick={handleAdd}>Create</button>
+          <button className="outline-btn" onClick={() => setShowForm(false)}>Cancel</button>
+        </div>
+      </motion.div>
+    </>
+  )}
+</AnimatePresence>
     </div>
   );
 }
@@ -1344,6 +1454,7 @@ function AnalyticsPanel() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      {/* الـ Cards العلوية تصبح عمودين على الشاشات الصغيرة لحماية النصوص والمبالغ */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         {[
           { label: 'Avg Order Value', value: `EGP ${Math.round(avgOrderValue).toLocaleString()}`, color: 'var(--gold)' },
@@ -1368,12 +1479,13 @@ function AnalyticsPanel() {
               <YAxis tick={{ fontSize:10 }} />
               <Tooltip contentStyle={{ background: '#1e1e1e', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }} />
               <Bar dataKey="revenue" fill="#D4AF37" />
-              <Bar dataKey="customers" fill="#C5A028" />
+              <Bar dataKey="customers" fill="#C5A028" /> {/* درجة أغمق قليلاً للتفريق بين العمودين إذا كانا متجاورين */} {/* درجة أغمق قليلاً للتفريق بين العمودين إذا كانا متجاورين */}
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
+      {/* الرسوم السفلية تصبح عمود واحد للموبايل لحماية عرض البارات والجداول */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Top Products</h3>
