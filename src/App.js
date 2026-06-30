@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import './index.css';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store';
-import { AuthProvider, useAuth } from './lib/auth'; // ✨ تم إصلاح سطر الـ Import هنا
+import { AuthProvider, useAuth } from './lib/auth'; 
 import {
   ShieldCheck,
   Instagram,
@@ -10,6 +10,7 @@ import {
   Ruler,
   Truck,
   FileText,
+  Search, 
   X
 } from 'lucide-react';
 
@@ -17,13 +18,13 @@ import Header from './components/shop/Header';
 import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
 import ProductPage from './pages/ProductPage';
+import TrackOrder from './pages/TrackOrder'; 
 import { CartPage, CheckoutPage, WishlistPage } from './pages/CartPage';
 import AdminApp from './pages/AdminApp';
 import CartDrawer from './components/shop/CartDrawer';
 import MobileNav from './components/shop/MobileNav';
 import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
 
-// جعل الـ toast متوفر عالمياً في كل ملفات المشروع تلقائياً 🚀
 if (typeof window !== 'undefined') {
   window.toast = toast;
 }
@@ -38,7 +39,7 @@ export default function App() {
 
 function AppInner() {
   const { currentPage, setPage } = useStore();
-  const { session, loading } = useAuth(); // سحب الجلسة وحالة التحميل
+  const { session, loading } = useAuth(); 
   
   const refreshProducts = useStore((state) => state.refreshProducts);
   const refreshDiscounts = useStore((state) => state.refreshDiscounts);
@@ -46,10 +47,20 @@ function AppInner() {
 
   const [activeModal, setActiveModal] = useState(null);
 
-  // 🎯 السطر السحري: أول ما الـ currentPage تتغير (home, shop, checkout...)، الشاشة تطلع فوق فوراً إجباري
+  // 🎯 لقط الأوردر وتحويل العميل لصفحة التتبع وحقن الـ ID مباشرة
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const trackId = params.get('track');
+    
+    if (trackId) {
+      setPage('track'); // تحويل المتجر فوراً لصفحة التتبع
+      useStore.setState({ searchQuery: trackId }); // حقن رقم الأوردر في حقل البحث ليعرض التتبع فوراً
+    }
+  }, [setPage]);
+
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [currentPage]); // القوس ده معناه اسمع لتغيير الصفحة واطلع فوق علطول
+  }, [currentPage]); 
 
   useEffect(() => {
     async function loadOnlineData() {
@@ -60,7 +71,6 @@ function AppInner() {
     loadOnlineData();
   }, [refreshProducts, refreshDiscounts, refreshOrders]);
 
-  // ✨ تعديل القفل الذكي: لو الـ Auth لسه بيحمل الجلسة من الـ Storage، ننتظر ثواني منعا للتضارب والطرد
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
@@ -74,7 +84,6 @@ function AppInner() {
       <Toaster />
       <OrderNotification />
 
-      {/* ✨ التعديل الجوهري: التوجيه لصفحة الأدمن يعتمد على الحالة المستقرة */}
       {currentPage === 'admin' ? (
         <AdminApp />
       ) : (
@@ -96,6 +105,7 @@ function AppInner() {
               {currentPage === 'cart' && <CartPage />}
               {currentPage === 'checkout' && <CheckoutPage />}
               {currentPage === 'wishlist' && <WishlistPage />}
+              {currentPage === 'track' && <TrackOrder />} 
             </motion.div>
           </AnimatePresence>
 
@@ -103,7 +113,6 @@ function AppInner() {
           <MobileNav />
           <BackToTop />
 
-          {/* مودال عرض السياسات والمقاسات */}
           <InfoModal type={activeModal} onClose={() => setActiveModal(null)} />
         </>
       )}
@@ -111,7 +120,7 @@ function AppInner() {
   );
 }
 
-/* ================= MODAL COMPONENT (نافذة عرض تفاصيل السياسات) ================= */
+/* ================= MODAL COMPONENT ================= */
 function InfoModal({ type, onClose }) {
   if (!type) return null;
 
@@ -171,7 +180,7 @@ function InfoModal({ type, onClose }) {
   );
 }
 
-/* ================= FOOTER COMPONENT (النسخة السرية المحمية) ================= */
+/* ================= FOOTER COMPONENT ================= */
 function Footer({ setModal }) {
   const { setPage } = useStore();
 
@@ -238,6 +247,10 @@ function Footer({ setModal }) {
 
           <div>
             <h4 style={titleStyle}>Customer Care</h4>
+            <button onClick={() => setPage('track')} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gold)' }}>
+              <Search size={13} style={{ opacity: 0.9 }} />
+              Track Your Order
+            </button>
             {[
               ['Shipping & Returns', 'shipping-returns', Truck],
               ['Privacy Policy', 'privacy', FileText]
@@ -253,7 +266,7 @@ function Footer({ setModal }) {
             <h4 style={titleStyle}>Contact</h4>
             <div style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
               <p>📞 01013380313</p>
-              <p style={{ wordBreak: 'break-all' }}>✉️ mohammedbusinessmail1@gmail.com</p>
+              <p style={{ wordBreak: 'break-all' }}>✉️ zashm.mo@gmail.com</p>
             </div>
           </div>
 

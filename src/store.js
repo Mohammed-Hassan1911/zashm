@@ -90,7 +90,7 @@ const APPLIED_DISCOUNT_KEY = 'zashm_applied_discount';
 function validateDiscountRecord(d) {
   if (!d) return null;
   const discounts = db.getAll('discounts') || [];
-  const today = getLocalTodayDate(); // 🎯 التعديل للتوقيت المحلي
+  const today = getLocalTodayDate(); 
   const fresh = discounts.find(
     x => x.id === d.id &&
       x.code === d.code &&
@@ -292,12 +292,13 @@ export const useStore = create((set, get) => ({
       };
 
       db.insert('products', finalProduct);
-      set({ products: db.getAll('products') || [] });
       return finalProduct;
 
     } catch (err) {
       console.error("Unexpected error in addProduct:", err);
       return { success: false, error: err };
+    } finally {
+      await get().refreshProducts();
     }
   },
 
@@ -364,12 +365,7 @@ export const useStore = create((set, get) => ({
     return { success: true };
   },
 
-  removeFromCart: (key) => set(s => { 
-    const cart = (s.cart || []).filter(i => i.key !== key); 
-    const saved = get()._saveCart(cart); 
-    return { cart: saved }; 
-  }),
-
+  removeFromCart: (key) => set(s => { const cart = (s.cart || []).filter(i => i.key !== key); const saved = get()._saveCart(cart); return { cart: saved }; }),
   updateCartQty: (key, newQty) => {
     const { cart, products } = get();
     const cartItem = cart.find(item => item.key === key);
@@ -394,11 +390,7 @@ export const useStore = create((set, get) => ({
     set({ cart: saved });
   },
 
-  clearCart: () => { 
-    sessionStorage.removeItem('zashm_cart'); 
-    set({ cart: [] }); 
-  },
-
+  clearCart: () => { sessionStorage.removeItem('zashm_cart'); set({ cart: [] }); },
   cartTotal: () => {
     const sub = get().cartSubtotal();
     if (!get().appliedDiscount) return sub;
@@ -407,12 +399,7 @@ export const useStore = create((set, get) => ({
     }
     return Math.max(0, sub - (get().appliedDiscount.value ?? 0));
   },
-
-  cartSubtotal: () => (get().cart || []).reduce(
-    (sum, i) => sum + (((i.product?.salePrice || i.product?.price) ?? 0) * (i.qty ?? 0)),
-    0
-  ),
-
+  cartSubtotal: () => (get().cart || []).reduce((sum, i) => sum + (((i.product?.salePrice || i.product?.price) ?? 0) * (i.qty ?? 0)), 0),
   cartDiscountAmount: () => Math.max(0, get().cartSubtotal() - get().cartTotal()),
 
   wishlist: JSON.parse(localStorage.getItem('zashm_wishlist') || '[]'),
@@ -424,11 +411,7 @@ export const useStore = create((set, get) => ({
   // ─── ORDERS & NOTIFICATIONS ────────────────────────────────────────────────
   refreshOrders: async () => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('date', { ascending: false });
-
+      const { data, error } = await supabase.from('orders').select('*').order('date', { ascending: false });
       if (data && !error) {
         db.setAll('orders', data);
         const sanitized = data.map(o => sanitizeOrder(o, get().products));
@@ -456,16 +439,8 @@ export const useStore = create((set, get) => ({
           updatedVariantStock[variantKey] = Math.max(0, currentVariantQty - item.qty);
         }
 
-        db.update('products', product.id, { 
-          stock: newStock, 
-          variantStock: updatedVariantStock, 
-          updatedAt: new Date().toISOString() 
-        });
-
-        await supabase.from('products').update({ 
-          stock: newStock, 
-          variantStock: updatedVariantStock 
-        }).eq('id', product.id);
+        db.update('products', product.id, { stock: newStock, variantStock: updatedVariantStock, updatedAt: new Date().toISOString() });
+        await supabase.from('products').update({ stock: newStock, variantStock: updatedVariantStock }).eq('id', product.id);
       }
     }
 
@@ -495,7 +470,7 @@ export const useStore = create((set, get) => ({
       total,
       discountCode: appliedDiscount?.code || null,
       status: 'Pending',
-      date: getLocalTodayDate(), // 🎯 حفظ تاريخ الأوردر بالتوقيت المحلي
+      date: getLocalTodayDate(), 
       timestamps: { created: new Date().toISOString() },
       customer: customerName,
       phone: orderData?.phone || '',
@@ -546,30 +521,51 @@ export const useStore = create((set, get) => ({
       set({ appliedDiscount: null });
     }
 
-    try {
+        try {
       let itemsText = order.items.map(item => {
         const details = [];
         if (item.size) details.push(item.size);
         if (item.color) details.push(item.color);
         const detailsStr = details.length > 0 ? ` (${details.join('/')})` : '';
-        return `• ${item.name}${detailsStr} ×${item.qty} — EGP ${item.price}`;
+        return `• *${item.name}*${detailsStr} x${item.qty} → _EGP ${item.price.toLocaleString()}_`;
       }).join('\n');
 
-      let discountLine = '';
-      if (order.discountCode && order.discount > 0) {
-        discountLine = `\n🎁 Discount (${order.discountCode}): -EGP ${order.discount.toLocaleString()}`;
-      }
+      // 🎯 الرابط الصحيح والمباشر لموقعك على Vercel لضمان وصوله للعملاء سليم 100%
+      const productionDomain = 'https://zashm-mo.vercel.app'; 
+      const trackingUrl = `${productionDomain}/?track=${order.id}`;
 
-      const whatsappMessage = 
-        `🛍️ New Order — ${order.id}\n\n` +
-        `👤 Customer: ${order.customer}\n` +
-        `📞 Phone: ${order.phone}\n` +
-        `📞 Alternative Phone: ${order.phoneAlt || 'None'}\n` +
-        `📧 Email: ${order.email}\n` +
-        `📍 Address: ${order.address}${order.city ? ', ' + order.city : ''}\n\n` +
-        `Items:\n${itemsText}\n${discountLine}\n` +
-        `💰 Total: EGP ${order.total.toLocaleString()}\n\n` +
-        `📝 Notes: ${order.notes || 'None'}`;
+      const whatsappMessage = `
+✨ *طلب جديد من متجر ZASHM* ✨
+--------------------------------🟩
+
+👤 *بيانات العميل:*
+• *الاسم:* ${order.customer}
+• *رقم الهاتف الأساسي:* ${order.phone}
+• *رقم الهاتف البديل:* ${order.phoneAlt || 'لا يوجد'}
+• *البريد الإلكتروني:* ${order.email || 'غير محدد'}
+
+📍 *تفاصيل الشحن:*
+• *المدينة:* ${order.city || 'غير محدد'}
+• *العنوان:* ${order.address}
+• *ملاحظات الطلب:* ${order.notes || 'لا توجد'}
+
+🛍 *المنتجات المطلوبة:*
+${itemsText}
+
+--------------------------------🟨
+💰 *الملخص المالي:*
+• *المجموع الفرعي:* EGP ${order.subtotal.toLocaleString()}
+• *قيمة الخصم:* EGP ${order.discount.toLocaleString()}
+• *الإجمالي الكلي:* *EGP ${order.total.toLocaleString()}*
+
+--------------------------------
+🔗 *رابط تتبع الطلب الخاص بك:*
+${trackingUrl}
+
+--------------------------------
+🔒 _رقم الطلب المرجعي: ${order.id}_
+_تم إرسال الطلب تلقائياً وتأكيده بأمان عبر الموقع_
+`.trim();
 
       const phoneNumber = "201013380313"; 
       const whatsappUrl = `https://api.whatsapp.com/send/?phone=${phoneNumber}&text=${encodeURIComponent(whatsappMessage)}&type=phone_number&app_absent=0`;
@@ -631,7 +627,7 @@ export const useStore = create((set, get) => ({
           const variantKey = `${item.size}-${item.color}`;
           const updatedVariantStock = { ...(product.variantStock || {}) };
           if (updatedVariantStock[variantKey] !== undefined) {
-            updatedVariantStock[variantKey] = Math.max(0, Number(updatedVariantStock[variantKey]) - Number(item.qty));
+            updatedVariantStock[variantKey] = Math.max(0, Number(updatedVariantStock[updatedVariantStock]) - Number(item.qty));
           }
           db.update('products', product.id, { stock: newStock, variantStock: updatedVariantStock });
           await supabase.from('products').update({ stock: newStock, variantStock: updatedVariantStock }).eq('id', product.id);
@@ -641,7 +637,7 @@ export const useStore = create((set, get) => ({
 
     db.update('orders', id, { status: newStatus, timestamps });
     set({ orders: getSanitizedOrders() });
-    await supabase.from('orders').update({ status: newStatus }).eq('id', id);
+    await supabase.from('orders').update({ status: newStatus, timestamps: JSON.stringify(timestamps) }).eq('id', id);
     get().refreshProducts();
     return { success: true };
   },
@@ -709,13 +705,12 @@ export const useStore = create((set, get) => ({
     await supabase.from('coupons').delete().eq('id', id);
   },
   
-  // 🎯 تعديل الفحص الجوهري هنا ليعمل بالحروف الكبيرة والتوقيت المحلي الصحيح!
   applyDiscount: (code) => {
     const normalized = (code ?? '').trim().toUpperCase();
     if (!normalized) return { success: false, error: 'Please enter a discount code' };
     
     const discounts = get().discounts;
-    const today = getLocalTodayDate(); // الفحص بالتوقيت المحلي الحالي 100%
+    const today = getLocalTodayDate(); 
     
     const d = discounts.find(
       x => x.code.trim().toUpperCase() === normalized &&

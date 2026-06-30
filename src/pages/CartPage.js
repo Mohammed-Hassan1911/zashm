@@ -199,7 +199,7 @@ export function CartPage() {
   );
 }
 
-// ─── CHECKOUT PAGE ────────────────────────────────────────────────────────────
+// ─── CHECKOUT PAGE (MODIFIED FOR PRODUCTION ORDER TRACKING) ──────────────────────────────
 export function CheckoutPage() {
   const {
     cart, cartTotal, cartSubtotal, cartDiscountAmount, placeOrder, setPage,
@@ -231,9 +231,8 @@ export function CheckoutPage() {
     });
   }, []);
 
-    const handleApplyCoupon = () => {
+  const handleApplyCoupon = () => {
     setCouponError('');
-    // 🎯 التعديل: تحويل الكود إجبارياً لحروف كبيرة وقص المسافات الزائدة هنا أيضاً
     const cleanCoupon = (coupon ?? '').trim().toUpperCase();
     
     const result = applyDiscount(cleanCoupon);
@@ -264,7 +263,6 @@ export function CheckoutPage() {
       errs.phone = 'Invalid phone number. Must be 11 digits starting with 01';
     }
 
-    // فحص اختياري للرقم البديل فقط في حالة قيام العميل بإدخاله للتأكد من أنه صحيح
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
       if (!egyptianPhoneRegex.test(fields.phoneAlt.trim())) {
         errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits';
@@ -277,7 +275,7 @@ export function CheckoutPage() {
     return errs;
   };
 
-      const handleOrder = async () => {
+  const handleOrder = async () => {
     const errs = validateOrderFormCustom(form);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
@@ -286,21 +284,20 @@ export function CheckoutPage() {
 
     const sanitizedCustomer = sanitizeInput(form.name.trim());
     const sanitizedPhone = form.phone.trim();
-    const sanitizedPhoneAlt = form.phoneAlt ? form.phoneAlt.trim() : ''; // قراءة الرقم البديل صافي
+    const sanitizedPhoneAlt = form.phoneAlt ? form.phoneAlt.trim() : ''; 
     const sanitizedEmail = sanitizeInput(form.email.trim());
     const sanitizedAddress = sanitizeInput(form.address.trim());
     const sanitizedNotes = sanitizeInput(form.notes.trim());
 
-    // 🎯 هنا بنبعت الحقول مستقلة ونظيفة للـ Store (بما فيهم phoneAlt)
     const result = await placeOrder({ 
       customer: sanitizedCustomer, 
       phone: sanitizedPhone,
-      phoneAlt: sanitizedPhoneAlt, // مبعوث كحقل مستقل عشان يروح للـ Supabase لوحده
+      phoneAlt: sanitizedPhoneAlt, 
       email: sanitizedEmail, 
       address: sanitizedAddress, 
       city: form.city, 
       shippingCost: shippingCost,
-      notes: sanitizedNotes,       // الملاحظات العادية صافية من غير دمج
+      notes: sanitizedNotes,       
       total: finalTotal
     });
     
@@ -311,12 +308,17 @@ export function CheckoutPage() {
       return;
     }
 
+    const orderId = result.order?.id || 'N/A';
+    
+    // 🔗 🎯 تعديل ديناميكي للإنتاج (Production): يلقط دومين الموقع أوتوماتيك ويستخدم صيغة الاستعلام السليمة لـ State
+    const trackingUrl = `${window.location.origin}/?track=${orderId}`;
+
     const orderItemsText = safeCart.map(i => {
       const price = ((i?.product?.salePrice || i?.product?.price) ?? 0);
       return `• *${i?.product?.name ?? 'Unknown'}* (${i?.size ?? 'N/A'}/${i?.color ?? 'N/A'}) x${i?.qty ?? 0} → _EGP ${(price * (i?.qty ?? 0)).toLocaleString()}_`;
     }).join('\n');
 
-    // بناء رسالة الواتساب
+    // بناء رسالة الواتساب مع إضافة رابط التتبع المباشر في النهاية
     const whatsappMessage = `
 ✨ *طلب جديد من متجر ZASHM* ✨
 --------------------------------🟩
@@ -343,7 +345,11 @@ ${orderItemsText}
 • *الإجمالي الكلي:* *EGP ${finalTotal.toLocaleString()}*
 
 --------------------------------
-🔒 _رقم الطلب المرجعي: ${result.order?.id || 'N/A'}_
+🔗 *رابط تتبع الطلب الخاص بك:*
+${trackingUrl}
+
+--------------------------------
+🔒 _رقم الطلب المرجعي: ${orderId}_
 _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر الموقع_
 `.trim();
 
@@ -356,7 +362,6 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
     setSuccess(result.order);
   };
 
-
   if (success) return (
     <div style={{ paddingTop: 90, minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <motion.div initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
@@ -365,9 +370,29 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
         
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 16, color: 'var(--gold)', letterSpacing: 1 }}>تم تسجيل طلبك مبدئياً!</h2>
         
-        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 20 }}>
+        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 10 }}>
           رقم الطلب المرجعي: <span style={{ fontFamily: 'monospace', color: 'var(--gold)', fontWeight: 600 }}>{success.id}</span>
         </p>
+
+        {/* 🎯 تعديل الرابط هنا أيضاً ليكون ديناميكياً ومتوافقاً مع الـ Production والـ State الداخلي */}
+        <div style={{ marginBottom: 24 }}>
+          <a 
+            href={`${window.location.origin}/?track=${success.id}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: 8, 
+              color: 'var(--gold)', 
+              fontSize: 13, 
+              textDecoration: 'underline',
+              fontWeight: 500
+            }}
+          >
+            📊 اضغط هنا لتتبع حالة أوردرك مباشرة في أي وقت
+          </a>
+        </div>
 
         <div style={{ background: 'rgba(212, 175, 55, 0.05)', border: '1px solid var(--border-gold)', borderRadius: 6, padding: '18px 20px', marginBottom: 32, textAlign: 'right', direction: 'rtl' }}>
           <p style={{ color: 'var(--text)', fontSize: 14, fontWeight: 600, marginBottom: 8, lineHeight: 1.5 }}>⚠️ تنبيه هام لتأكيد الأوردر:</p>
@@ -398,13 +423,12 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
         </AnimatePresence>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="checkout-grid">
-                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 22 }}>Delivery Information</h3>
             
-            {/* 📐 السطر الأول: الاسم بالكامل + رقم الهاتف الأساسي */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // تحول تلقائي لسطرين لو المساحة ضيقة
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
               gap: 14, 
               marginBottom: 14 
             }}>
@@ -432,10 +456,9 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
               </div>
             </div>
 
-            {/* 📐 السطر الثاني المطور: إضافة الـ flex و الـ minHeight لتوحيد محاذاة الحقول بالملي */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', // تضمن التجاوب الكامل على الموبايل
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
               gap: 14, 
               marginBottom: 14,
             }}>
@@ -448,7 +471,7 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
                   color:'var(--text3)', 
                   marginBottom:6, 
                   textTransform:'uppercase',
-                  minHeight: 30 // 🎯 حجز مساحة ثابتة للـ label عشان لو أخد سطرين الحقل ما ينزلش لتحت
+                  minHeight: 30 
                 }}>
                   Alternative Phone (Optional)
                 </label>
@@ -471,7 +494,7 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
                   color:'var(--text3)', 
                   marginBottom:6, 
                   textTransform:'uppercase',
-                  minHeight: 30 // 🎯 نفس المساحة الثابتة للحفاظ على استقامة الحقول
+                  minHeight: 30 
                 }}>
                   Email Address
                 </label>
@@ -485,9 +508,6 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
               </div>
             </div>
 
-            {/* 📐 السطر الثالث: العنوان بالتفصيل */}
-            {/* ... باقي الكود بتاعك زي ما هو تماماً ... */}
-            {/* 📐 السطر الثالث: العنوان بالتفصيل */}
             <div style={{ marginBottom: 14 }}>
               <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Street Address *</label>
               <input 
@@ -499,7 +519,6 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
               {errors.address && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.address}</p>}
             </div>
 
-            {/* 📐 السطر الرابع: المدينة (المحافظة) */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
               <div>
                 <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>City *</label>
@@ -513,7 +532,6 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
               </div>
             </div>
 
-            {/* 📐 السطر الخامس: ملاحظات الطلب */}
             <div>
               <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Order Notes</label>
               <textarea 
@@ -526,7 +544,6 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
             </div>
           </div>
 
-          {/* الجزء الأيمن: ملخص الطلب والتسعير */}
           <div>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 22, position:'sticky', top:100 }}>
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 16 }}>Order Summary</h3>

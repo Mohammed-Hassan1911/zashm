@@ -147,7 +147,7 @@ export default function AdminApp() {
     </div>
   );
 
-  return (
+    return (
     <div className="admin-container" style={{ display:'flex', minHeight:'100vh', background:'var(--bg)', flexDirection: 'row' }}>
       <motion.aside 
         animate={{ width: collapsed ? 64 : 230 }}
@@ -254,7 +254,19 @@ export default function AdminApp() {
               {adminPage === 'products' && <ProductsPanel canEdit={canAccess('products.write')} />}
               {adminPage === 'discounts' && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
               {adminPage === 'analytics' && <AnalyticsPanel />}
-              {adminPage === 'users' && <UsersPanel />}
+              
+              {/* 🔒 التعديل والحماية هنا لصفحة اليوزرز */}
+              {adminPage === 'users' && (
+                canAccess('users') ? (
+                  <UsersPanel />
+                ) : (
+                  // لو السيشن الجديد ملوش صلاحية والـ adminPage لسه بـ users، هيرجعه تلقائياً للـ dashboard فوراً
+                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>
+                    {setTimeout(() => setAdminPage('dashboard'), 0)}
+                    Redirecting to Dashboard...
+                  </div>
+                )
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -273,7 +285,6 @@ export default function AdminApp() {
     </div>
   );
 }
-
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard() {
   const { orders, products, refreshOrders } = useStore();
