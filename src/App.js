@@ -246,21 +246,52 @@ function Footer({ setModal }) {
           </div>
 
           <div>
-            <h4 style={titleStyle}>Customer Care</h4>
-            <button onClick={() => setPage('track')} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gold)' }}>
-              <Search size={13} style={{ opacity: 0.9 }} />
-              Track Your Order
-            </button>
-            {[
-              ['Shipping & Returns', 'shipping-returns', Truck],
-              ['Privacy Policy', 'privacy', FileText]
-            ].map(([label, id, Icon]) => (
-              <button key={label} onClick={() => setModal(id)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon size={13} style={{ opacity: 0.8 }} />
-                {label}
-              </button>
-            ))}
-          </div>
+  <h4 style={titleStyle}>Customer Care</h4>
+  
+  {/* 🎯 تحويل الـ button إلى motion.button لإضافة الأنيميشن الذكي */}
+  <motion.button 
+    onClick={() => setPage('track')} 
+    style={{ 
+      ...linkStyle, 
+      display: 'inline-flex', // استخدام inline-flex لضمان حركة الـ Scale من المنتصف بشكل صحيح
+      alignItems: 'center', 
+      gap: 8, 
+      color: 'var(--text2)', // 🌟 تم تعديله للأبيض (أو رمادي الفوتر الطبيعي) ليتناسق مع الباقيين
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer'
+    }}
+    // ✨ أنيميشن النبض الهادئ لجذب الانتباه تلقائياً
+    animate={{ 
+      scale: [1, 1.03, 1],
+      opacity: [0.8, 1, 0.8]
+    }}
+    // ✨ وميض وإضاءة ذهبية فخمة جداً لما العميل يمرر الماوس عليه (Hover)
+    whileHover={{
+      scale: 1.05,
+      color: 'var(--gold)',
+      textShadow: '0px 0px 8px var(--gold)'
+    }}
+    transition={{ 
+      duration: 3,         // حركة التنفس هادية وبطيئة على مدار 3 ثوانٍ لتليق ببراند فاخر
+      repeat: Infinity,    // تكرار لانهائي
+      ease: "easeInOut"
+    }}
+  >
+    <Search size={13} style={{ opacity: 0.9 }} />
+    Track Your Order
+  </motion.button>
+
+  {[
+    ['Shipping & Returns', 'shipping-returns', Truck],
+    ['Privacy Policy', 'privacy', FileText]
+  ].map(([label, id, Icon]) => (
+    <button key={label} onClick={() => setModal(id)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <Icon size={13} style={{ opacity: 0.8 }} />
+      {label}
+    </button>
+  ))}
+</div>
 
           <div>
             <h4 style={titleStyle}>Contact</h4>

@@ -63,7 +63,6 @@ export function CartPage() {
 
     const handleApplyCoupon = () => {
     setCouponError('');
-    // 🎯 التعديل: تحويل الكود إجبارياً لحروف كبيرة وقص المسافات الزائدة
     const cleanCoupon = (coupon ?? '').trim().toUpperCase();
     
     const result = applyDiscount(cleanCoupon);
@@ -105,7 +104,8 @@ export function CartPage() {
                     <div style={{ flex: 1 }}>
                       <p style={{ color: 'var(--text3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>{item?.product?.category ?? 'General'}</p>
                       <p style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 500, marginBottom: 5 }}>{item?.product?.name ?? 'Unknown Product'}</p>
-<p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2 }}>
                           <button onClick={() => (item?.qty ?? 0) > 1 ? updateCartQty(item?.key, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
                             style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
@@ -206,7 +206,6 @@ export function CheckoutPage() {
     appliedDiscount, applyDiscount, removeAppliedDiscount, refreshAppliedDiscount,
   } = useStore();
   
-  // 🎯 إضافة الحقل البديل phoneAlt هنا داخل الـ State الأساسية للـ Form
   const [form, setForm] = useState({ name: '', phone: '', phoneAlt: '', email: '', address: '', city: '', notes: '' });
   const [errors, setErrors] = useState({});
   const [stockErrors, setStockErrors] = useState([]);
@@ -252,20 +251,38 @@ export function CheckoutPage() {
     setErrors(e => ({ ...e, [k]: null })); 
   };
 
+    // 🎯 دالة التحقق المحدثة لمنع تكرار نفس الرقم في الهاتف البديل
   const validateOrderFormCustom = (fields) => {
     const errs = {};
     if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required';
     
     const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
+    
+    // فحص الهاتف الأساسي
     if (!fields.phone || !fields.phone.trim()) {
       errs.phone = 'Phone number is required';
     } else if (!egyptianPhoneRegex.test(fields.phone.trim())) {
       errs.phone = 'Invalid phone number. Must be 11 digits starting with 01';
     }
 
+    // فحص الهاتف البديل
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
-      if (!egyptianPhoneRegex.test(fields.phoneAlt.trim())) {
+      const trimmedPhone = fields.phone.trim();
+      const trimmedPhoneAlt = fields.phoneAlt.trim();
+
+      if (!egyptianPhoneRegex.test(trimmedPhoneAlt)) {
         errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits';
+      } else if (trimmedPhone === trimmedPhoneAlt) {
+        // 🛑 الشرط الجديد: منع تطابق الرقمين
+        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number';
+      }
+    }
+
+    // فحص الإيميل
+    if (fields.email && fields.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(fields.email.trim())) {
+        errs.email = 'Please enter a valid email address (e.g., name@example.com)';
       }
     }
 
@@ -309,8 +326,6 @@ export function CheckoutPage() {
     }
 
     const orderId = result.order?.id || 'N/A';
-    
-    // 🔗 🎯 تعديل ديناميكي للإنتاج (Production): يلقط دومين الموقع أوتوماتيك ويستخدم صيغة الاستعلام السليمة لـ State
     const trackingUrl = `${window.location.origin}/?track=${orderId}`;
 
     const orderItemsText = safeCart.map(i => {
@@ -318,7 +333,6 @@ export function CheckoutPage() {
       return `• *${i?.product?.name ?? 'Unknown'}* (${i?.size ?? 'N/A'}/${i?.color ?? 'N/A'}) x${i?.qty ?? 0} → _EGP ${(price * (i?.qty ?? 0)).toLocaleString()}_`;
     }).join('\n');
 
-    // بناء رسالة الواتساب مع إضافة رابط التتبع المباشر في النهاية
     const whatsappMessage = `
 ✨ *طلب جديد من متجر ZASHM* ✨
 --------------------------------🟩
@@ -362,42 +376,35 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
     setSuccess(result.order);
   };
 
-  if (success) return (
+    if (success) return (
     <div style={{ paddingTop: 90, minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <motion.div initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
         style={{ textAlign: 'center', padding: '60px 40px', background: 'var(--surface)', border: '1px solid var(--border-gold)', borderRadius: 8, maxWidth: 520, width: '100%' }}>
         <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.5 }}><CheckCircle size={64} color="#D4AF37" style={{ margin: '0 auto 16px' }} /></motion.div>      
         
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 16, color: 'var(--gold)', letterSpacing: 1 }}>تم تسجيل طلبك مبدئياً!</h2>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 16, color: 'var(--gold)', letterSpacing: 1 }}>تم تسجيل طلبك بنجاح!</h2>
         
-        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 10 }}>
+        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 24 }}>
           رقم الطلب المرجعي: <span style={{ fontFamily: 'monospace', color: 'var(--gold)', fontWeight: 600 }}>{success.id}</span>
         </p>
 
-        {/* 🎯 تعديل الرابط هنا أيضاً ليكون ديناميكياً ومتوافقاً مع الـ Production والـ State الداخلي */}
-        <div style={{ marginBottom: 24 }}>
-          <a 
-            href={`${window.location.origin}/?track=${success.id}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: 8, 
-              color: 'var(--gold)', 
-              fontSize: 13, 
-              textDecoration: 'underline',
-              fontWeight: 500
-            }}
-          >
-            📊 اضغط هنا لتتبع حالة أوردرك مباشرة في أي وقت
-          </a>
-        </div>
-
         <div style={{ background: 'rgba(212, 175, 55, 0.05)', border: '1px solid var(--border-gold)', borderRadius: 6, padding: '18px 20px', marginBottom: 32, textAlign: 'right', direction: 'rtl' }}>
-          <p style={{ color: 'var(--text)', fontSize: 14, fontWeight: 600, marginBottom: 8, lineHeight: 1.5 }}>⚠️ تنبيه هام لتأكيد الأوردر:</p>
+          <p style={{ color: 'var(--text)', fontSize: 14, fontWeight: 600, marginBottom: 8, lineHeight: 1.5 }}>💡 ملاحظة لتسريع شحن طلبك:</p>
           <p style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 1.6, margin: 0 }}>
-            يُرجى التأكد من أنك قمت بضغط زر <strong style={{ color: 'var(--gold)' }}>"إرسال" (Send)</strong> للرسالة التي تم تجهيزها تلقائياً على رقم الواتساب الذي فُتح لك عندما ضغطت على زر <strong style={{ color: 'var(--gold)' }}>PLACE ORDER VIA WHATSAPP</strong>، وذلك لتأكيد جدية الحجز وبدء تجهيز وشحن أوردرك فوراً.
+            يُرجى الضغط على زر <strong style={{ color: 'var(--gold)' }}>"إرسال" (Send)</strong> في تطبيق الواتساب الذي فُتح لك تلقائياً؛ لمساعدتنا في تأكيد بياناتك وبدء تجهيز الشحنة فوراً.
+            
+            {/* 🎯 تعديل التباين والوضوح هنا */}
+            <span style={{ 
+              display: 'block', 
+              marginTop: 12, 
+              paddingTop: 10,
+              borderTop: '1px dashed rgba(212, 175, 55, 0.2)',
+              color: 'var(--text)', // خليناه نفس وضوح النص الأساسي بدلاً من الباهت
+              fontSize: 12,
+              fontWeight: 500 // زيادة السمك بسيطة لسهولة القراءة
+            }}>
+              📌 يمكنك تتبع حالة الشحنة مباشرةً في أي وقت من خلال <strong style={{ color: 'var(--gold)' }}>رابط التتبع</strong> المرفق مع رسالة الواتساب.
+            </span>
           </p>
         </div>
 
@@ -405,7 +412,6 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
       </motion.div>
     </div>
   );
-
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '40px 24px' }}>
@@ -498,13 +504,15 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
                 }}>
                   Email Address (Optional)
                 </label>
+                {/* 🎯 حقل الإيميل الذكي مع قلب الحواف للون الأحمر عند الخطأ برمجياً */}
                 <input 
                   value={form.email ?? ''} 
                   onChange={e => update('email', e.target.value)} 
                   placeholder="your@email.com" 
-                  style={{ width:'100%' }} 
+                  style={{ width:'100%', borderColor: errors.email ? 'var(--red)' : undefined }} 
                   type="email" 
                 />
+                {errors.email && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.email}</p>}
               </div>
             </div>
 
@@ -638,6 +646,7 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
     </div>
   );
 }
+
 // ─── WISHLIST PAGE ────────────────────────────────────────────────────────────
 export function WishlistPage() {
   const { products, wishlist, setPage } = useStore();

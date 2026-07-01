@@ -20,7 +20,7 @@ export default function TrackOrder() {
   const [inputOrderId, setInputOrderId] = useState('');
   const [activeOrderId, setActiveOrderId] = useState('');
 
-  // 🎯 التعديل السحري والمطور: لقط الأوردر أوتوماتيكياً سواء من الـ Store أو من رابط المتصفح مباشرة
+  // 🎯 لقط الأوردر أوتوماتيكياً سواء من الـ Store أو من رابط المتصفح مباشرة
   useEffect(() => {
     if (storeSearchQuery) {
       setActiveOrderId(storeSearchQuery.trim());
@@ -53,15 +53,15 @@ export default function TrackOrder() {
   return (
     <div style={{ 
       maxWidth: 600, 
-      margin: '40px auto', 
-      padding: '0 16px', 
+      margin: '0 auto', // 🎯 تم التعديل ليكون التباعد معتمد كلياً على الـ paddingTop في الأعلى والأسفل
+      padding: '150px 16px 60px', // 🎯 تم رفع الـ paddingTop لـ 150px لإعطاء مساحة تنفس تحت الـ Navbar الثابت
       minHeight: '80vh',
       fontFamily: 'sans-serif',
       color: 'var(--text1)' 
     }}>
       {/* ─── الهيدر والبحث ─── */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <h1 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 28, color: 'var(--gold)', marginBottom: 8 }}>
+        <h1 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 28, color: 'var(--gold)', marginBottom: 8, letterSpacing: 1 }}>
           Track Your Order
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>
@@ -213,7 +213,7 @@ export default function TrackOrder() {
             </div>
           </div>
 
-          {/* معلومات الشحن والتوصيل المتوافقة مع لوحة التحكم */}
+          {/* معلومات الشحن والتوصيل */}
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div style={{ gridColumn: 'span 2', borderBottom: '1px solid var(--border)', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <MapPin size={14} style={{ color: 'var(--gold)' }} />
