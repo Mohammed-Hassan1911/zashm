@@ -496,7 +496,7 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
                   textTransform:'uppercase',
                   minHeight: 30 
                 }}>
-                  Email Address
+                  Email Address (Optional)
                 </label>
                 <input 
                   value={form.email ?? ''} 
