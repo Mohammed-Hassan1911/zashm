@@ -5,7 +5,7 @@ import {
   LogOut, Plus, Search, Edit, Trash2, Eye, Download, TrendingUp,
   AlertCircle, CheckCircle, Clock, Truck, XCircle, Bell, Users,
   Upload, Filter, RefreshCw, ChevronLeft, ChevronRight, Settings,
-  ArrowUpRight, ArrowDownRight, Zap, Package2, Star, MoreVertical, Menu, X
+  ArrowUpRight, ArrowDownRight, Zap, Package2, Star, MoreVertical, Menu, X, MessageSquare
 } from 'lucide-react';
 import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
@@ -147,7 +147,7 @@ export default function AdminApp() {
     </div>
   );
 
-    return (
+  return (
     <div className="admin-container" style={{ display:'flex', minHeight:'100vh', background:'var(--bg)', flexDirection: 'row' }}>
       <motion.aside 
         animate={{ width: collapsed ? 64 : 230 }}
@@ -255,12 +255,10 @@ export default function AdminApp() {
               {adminPage === 'discounts' && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
               {adminPage === 'analytics' && <AnalyticsPanel />}
               
-              {/* 🔒 التعديل والحماية هنا لصفحة اليوزرز */}
               {adminPage === 'users' && (
                 canAccess('users') ? (
                   <UsersPanel />
                 ) : (
-                  // لو السيشن الجديد ملوش صلاحية والـ adminPage لسه بـ users، هيرجعه تلقائياً للـ dashboard فوراً
                   <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>
                     {setTimeout(() => setAdminPage('dashboard'), 0)}
                     Redirecting to Dashboard...
@@ -285,6 +283,7 @@ export default function AdminApp() {
     </div>
   );
 }
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard() {
   const { orders, products, refreshOrders } = useStore();
@@ -472,11 +471,31 @@ function OrdersPanel({ canEdit }) {
   const [page, setPage] = useState(1);
   const PER_PAGE = 15;
 
+  // 🎯 الحالات (States) الجديدة الخاصة بسجل العميل المتكرر الـ VIP
+  const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
   useEffect(() => {
     if (!selected) return;
     const updated = (orders || []).find(o => o.id === selected.id);
     if (updated) setSelected(updated);
   }, [orders, selected?.id]);
+
+  // 🎯 دوال فحص وتجميع طلبات العميل المتكرر بناءً على رقم التليفون
+  const getCustomerOrderCount = useCallback((phone) => {
+    if (!phone) return 1;
+    return (orders || []).filter(o => o.phone === phone).length;
+  }, [orders]);
+
+  const getCustomerPreviousOrders = useCallback((phone) => {
+    if (!phone) return [];
+    return (orders || []).filter(o => o.phone === phone);
+  }, [orders]);
+
+  const handleShowCustomerHistory = (phone) => {
+    setSelectedCustomerPhone(phone);
+    setShowHistoryModal(true);
+  };
 
   const filtered = useMemo(() => {
     let list = [...(orders || [])];
@@ -531,69 +550,98 @@ function OrdersPanel({ canEdit }) {
               </tr>
             </thead>
             <tbody>
-              {paginated.items.map(order => (
-                <motion.tr key={order.id} initial={{ opacity:0 }} animate={{ opacity:1 }}
-                  style={{ borderBottom:'1px solid var(--border)', transition:'background 0.1s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding:'11px 14px', fontSize:12, color:'var(--gold)', fontWeight:700, fontFamily:'monospace', verticalAlign: 'top' }}>{order.id}</td>
-                  <td style={{ padding:'11px 14px', verticalAlign: 'top', whiteSpace:'nowrap' }}>
-                    <p style={{ fontSize:12, fontWeight:500 }}>{order.customer}</p>
-                    <p style={{ fontSize:10, color:'var(--text3)' }}>📞 {order.phone}</p>
-                    {order.phoneAlt && <p style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>📱 {order.phoneAlt} (بديل)</p>}
-                  </td>
-                  
-                  <td style={{ padding:'11px 14px', verticalAlign: 'top', minWidth: '220px' }}>
-                    <div style={{ fontSize:11, color:'var(--gold)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      📦 {order.items?.length || 0} item{order.items?.length > 1 ? 's' : ''}:
-                    </div>
-                    {order.items && order.items.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {order.items.map((item, idx) => {
-                          const details = [];
-                          if (item.size) details.push(item.size);
-                          if (item.color) details.push(item.color);
-                          const specsStr = details.length > 0 ? ` (${details.join(' / ')})` : '';
-
-                          return (
-                            <div key={idx} style={{ fontSize:11, lineHeight:'1.4', borderBottom: idx < order.items.length - 1 ? '1px dashed var(--border)' : 'none', paddingBottom: idx < order.items.length - 1 ? '4px' : '0' }}>
-                              <span style={{ fontWeight:600, color:'var(--text1)' }}>• {item.name || item.title}</span>
-                              <span style={{ color:'var(--text3)', fontSize:10, fontWeight:500 }}>{specsStr}</span>
-                              <div style={{ color:'var(--text3)', fontSize:10, paddingLeft: 8, marginTop: 1 }}>
-                                {item.qty} × EGP {(item.unitPrice || 0).toLocaleString()}
-                              </div>
-                            </div>
-                          );
-                        })}
+              {paginated.items.map(order => {
+                const orderCount = getCustomerOrderCount(order.phone);
+                return (
+                  <motion.tr key={order.id} initial={{ opacity:0 }} animate={{ opacity:1 }}
+                    style={{ borderBottom:'1px solid var(--border)', transition:'background 0.1s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding:'11px 14px', fontSize:12, color:'var(--gold)', fontWeight:700, fontFamily:'monospace', verticalAlign: 'top' }}>{order.id}</td>
+                    <td style={{ padding:'11px 14px', verticalAlign: 'top', whiteSpace:'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <p style={{ fontSize:12, fontWeight:500 }}>{order.customer}</p>
+                        
+                        {/* 🎯 الـ Badge الذهبي للعميل المتكرر */}
+                        {orderCount > 1 && (
+                          <span 
+                            onClick={() => handleShowCustomerHistory(order.phone)}
+                            style={{
+                              padding: '1px 6px',
+                              background: 'rgba(212, 175, 55, 0.12)',
+                              color: 'var(--gold)',
+                              borderRadius: 10,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              border: '1px solid rgba(201, 168, 76, 0.25)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 2,
+                              userSelect: 'none'
+                            }}
+                            title="اضغط لعرض سجل الأوردرات والتواصل"
+                          >
+                            🔥 VIP ({orderCount})
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </td>
+                      <p style={{ fontSize:10, color:'var(--text3)', marginTop: 4 }}>📞 {order.phone}</p>
+                      {order.phoneAlt && <p style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>📱 {order.phoneAlt} (بديل)</p>}
+                    </td>
+                    
+                    <td style={{ padding:'11px 14px', verticalAlign: 'top', minWidth: '220px' }}>
+                      <div style={{ fontSize:11, color:'var(--gold)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        📦 {order.items?.length || 0} item{order.items?.length > 1 ? 's' : ''}:
+                      </div>
+                      {order.items && order.items.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {order.items.map((item, idx) => {
+                            const details = [];
+                            if (item.size) details.push(item.size);
+                            if (item.color) details.push(item.color);
+                            const specsStr = details.length > 0 ? ` (${details.join(' / ')})` : '';
 
-                  <td style={{ padding:'11px 14px', verticalAlign: 'top', whiteSpace:'nowrap' }}>
-                    <p style={{ fontSize:12, fontWeight:600 }}>EGP {order.total?.toLocaleString()}</p>
-                    {order.discount > 0 && <p style={{ fontSize:10, color:'#27ae60', marginTop: 2 }}>-EGP {order.discount?.toLocaleString()}</p>}
-                  </td>
-                  <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
-                    {canEdit ? (
-                      <select value={order.status} onChange={e => updateOrderStatus(order.id, e.target.value)}
-                        style={{ padding:'4px 8px', fontSize:11, background:'var(--bg3)', border:`1px solid ${STATUS_COLORS[order.status]}`, color:STATUS_COLORS[order.status], borderRadius:4, cursor:'pointer' }}>
-                        {STATUS_FLOW.concat(['Cancelled']).map(s => <option key={s}>{s}</option>)}
-                      </select>
-                    ) : (
-                      <span style={{ fontSize:11, padding:'3px 9px', borderRadius:10, background:`${STATUS_COLORS[order.status]}1a`, color:STATUS_COLORS[order.status], fontWeight:600 }}>
-                        {order.status}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding:'11px 14px', fontSize:11, color:'var(--text3)', verticalAlign: 'top', whiteSpace:'nowrap' }}>{order.date}</td>
-                  <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
-                    <button onClick={() => setSelected(order)}
-                      style={{ width:28, height:28, borderRadius:4, background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-                      <Eye size={12} />
-                    </button>
-                  </td>
-                </motion.tr>
-              ))}
+                            return (
+                              <div key={idx} style={{ fontSize:11, lineHeight:'1.4', borderBottom: idx < order.items.length - 1 ? '1px dashed var(--border)' : 'none', paddingBottom: idx < order.items.length - 1 ? '4px' : '0' }}>
+                                <span style={{ fontWeight:600, color:'var(--text1)' }}>• {item.name || item.title}</span>
+                                <span style={{ color:'var(--text3)', fontSize:10, fontWeight:500 }}>{specsStr}</span>
+                                <div style={{ color:'var(--text3)', fontSize:10, paddingLeft: 8, marginTop: 1 }}>
+                                  {item.qty} × EGP {(item.unitPrice || 0).toLocaleString()}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
+
+                    <td style={{ padding:'11px 14px', verticalAlign: 'top', whiteSpace:'nowrap' }}>
+                      <p style={{ fontSize:12, fontWeight:600 }}>EGP {order.total?.toLocaleString()}</p>
+                      {order.discount > 0 && <p style={{ fontSize:10, color:'#27ae60', marginTop: 2 }}>-EGP {order.discount?.toLocaleString()}</p>}
+                    </td>
+                    <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
+                      {canEdit ? (
+                        <select value={order.status} onChange={e => updateOrderStatus(order.id, e.target.value)}
+                          style={{ padding:'4px 8px', fontSize:11, background:'var(--bg3)', border:`1px solid ${STATUS_COLORS[order.status]}`, color:STATUS_COLORS[order.status], borderRadius:4, cursor:'pointer' }}>
+                          {STATUS_FLOW.concat(['Cancelled']).map(s => <option key={s}>{s}</option>)}
+                        </select>
+                      ) : (
+                        <span style={{ fontSize:11, padding:'3px 9px', borderRadius:10, background:`${STATUS_COLORS[order.status]}1a`, color:STATUS_COLORS[order.status], fontWeight:600 }}>
+                          {order.status}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding:'11px 14px', fontSize:11, color:'var(--text3)', verticalAlign: 'top', whiteSpace:'nowrap' }}>{order.date}</td>
+                    <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
+                      <button onClick={() => setSelected(order)}
+                        style={{ width:28, height:28, borderRadius:4, background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                        <Eye size={12} />
+                      </button>
+                    </td>
+                  </motion.tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -618,6 +666,60 @@ function OrdersPanel({ canEdit }) {
           </div>
         )}
       </div>
+
+      {/* 🎯 النافذة المنبثقة (Modal) الذكية الجديدة لعرض الطلبات المتكررة تحت بعضها */}
+      <AnimatePresence>
+  {showHistoryModal && (
+    <>
+      <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowHistoryModal(false)}
+        style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2500, backdropFilter:'blur(4px)' }} />
+      <motion.div initial={{ opacity:0, scale:0.95, y: -20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y: -20 }}
+        style={{ position:'fixed', top:'10%', left:'50%', transform:'translateX(-50%)', width:'92%', maxWidth:460, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:20, zIndex:2501, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', paddingBottom:12, marginBottom:16 }}>
+          <div>
+            <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600 }}>📋 سجل الطلبات المتكررة</h3>
+            <p style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>الرقم: {selectedCustomerPhone}</p>
+          </div>
+          <button onClick={() => setShowHistoryModal(false)} style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:28, height:28, borderRadius:6, cursor:'pointer', fontSize:12 }}>✕</button>
+        </div>
+
+        <div style={{ maxHeight: '280px', overflowY: 'auto', marginBottom: 20, paddingRight: 4 }} className="custom-scrollbar">
+          {getCustomerPreviousOrders(selectedCustomerPhone).map((prevOrder) => (
+            <div key={prevOrder.id} style={{ background:'rgba(255,255,255,0.02)', padding:12, borderRadius:8, marginBottom:10, border:'1px solid var(--border)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
+                <span style={{ color:'var(--gold)', fontWeight:700, fontFamily:'monospace' }}>{prevOrder.id}</span>
+                <span style={{ color:'var(--text3)' }}>{prevOrder.date}</span>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
+                <span style={{ fontSize:11, padding:'2px 6px', borderRadius:4, background:`${STATUS_COLORS[prevOrder.status]}12`, color:STATUS_COLORS[prevOrder.status], fontWeight:600 }}>{prevOrder.status}</span>
+                <strong style={{ fontSize:12, color:'var(--text1)' }}>EGP {prevOrder.total?.toLocaleString()}</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display:'flex', gap:10, direction: 'rtl' }}>
+          <a 
+            href={`https://api.whatsapp.com/send/?phone=${(() => {
+              let cleaned = String(selectedCustomerPhone).replace(/[^0-9]/g, '');
+              if (cleaned.startsWith('01')) {
+                cleaned = '20' + cleaned.slice(1);
+              }
+                          return cleaned;
+          })()}&text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم! 🎉')}&type=phone_number&app_absent=0`}
+          target="_blank"
+          rel="noreferrer"
+          style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius:8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        >
+            <MessageSquare size={15} /> تواصل معه بالخصم
+          </a>
+          <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize:13 }}>إغلاق</button>
+        </div>
+      </motion.div>
+    </>
+  )}
+</AnimatePresence>
+
 
       <AnimatePresence>
         {selected && (
@@ -1217,7 +1319,6 @@ function DiscountsPanel({ canEdit }) {
   const [form, setForm] = useState({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  // حل مشكلة التوقيت: حساب تاريخ اليوم بناءً على التوقيت المحلي لجهازك بدقة (YYYY-MM-DD)
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   const today = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
 
@@ -1228,7 +1329,7 @@ function DiscountsPanel({ canEdit }) {
       ...form, 
       value: +form.value, 
       usageLimit: +form.usageLimit, 
-      usageCount: 0, // تعيين العداد لـ 0 افتراضياً لمنع الـ NaN في الـ Progress Bar
+      usageCount: 0, 
       code: form.code.toUpperCase() 
     });
     
@@ -1247,7 +1348,6 @@ function DiscountsPanel({ canEdit }) {
       )}
       <div style={{ display:'grid', gap:12 }}>
         {discounts.map(d => {
-          // مقارنة التواريخ أصبحت دقيقة وتعتمد على التوقيت المحلي
           const isActive = d.active && d.startDate <= today && d.endDate >= today;
           const currentUsage = d.usageCount || 0;
           const pct = d.usageLimit ? Math.round((currentUsage / d.usageLimit) * 100) : 0;
@@ -1301,8 +1401,6 @@ function DiscountsPanel({ canEdit }) {
       </div>
 
       <AnimatePresence>
-
-        
         {showForm && (
           <>
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowForm(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
