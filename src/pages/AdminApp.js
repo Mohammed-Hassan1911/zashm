@@ -474,6 +474,7 @@ function OrdersPanel({ canEdit }) {
   // 🎯 الحالات (States) الجديدة الخاصة بسجل العميل المتكرر الـ VIP
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [copied, setCopied] = useState(false); // حالة لإشعار النسخ
 
   useEffect(() => {
     if (!selected) return;
@@ -495,6 +496,14 @@ function OrdersPanel({ canEdit }) {
   const handleShowCustomerHistory = (phone) => {
     setSelectedCustomerPhone(phone);
     setShowHistoryModal(true);
+  };
+
+  // دالة نسخ الرابط
+  const handleCopyLink = (url) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const filtered = useMemo(() => {
@@ -669,58 +678,58 @@ function OrdersPanel({ canEdit }) {
 
       {/* 🎯 النافذة المنبثقة (Modal) الذكية الجديدة لعرض الطلبات المتكررة تحت بعضها */}
       <AnimatePresence>
-  {showHistoryModal && (
-    <>
-      <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowHistoryModal(false)}
-        style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2500, backdropFilter:'blur(4px)' }} />
-      <motion.div initial={{ opacity:0, scale:0.95, y: -20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y: -20 }}
-        style={{ position:'fixed', top:'10%', left:'50%', transform:'translateX(-50%)', width:'92%', maxWidth:460, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:20, zIndex:2501, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', paddingBottom:12, marginBottom:16 }}>
-          <div>
-            <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600 }}>📋 سجل الطلبات المتكررة</h3>
-            <p style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>الرقم: {selectedCustomerPhone}</p>
-          </div>
-          <button onClick={() => setShowHistoryModal(false)} style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:28, height:28, borderRadius:6, cursor:'pointer', fontSize:12 }}>✕</button>
-        </div>
-
-        <div style={{ maxHeight: '280px', overflowY: 'auto', marginBottom: 20, paddingRight: 4 }} className="custom-scrollbar">
-          {getCustomerPreviousOrders(selectedCustomerPhone).map((prevOrder) => (
-            <div key={prevOrder.id} style={{ background:'rgba(255,255,255,0.02)', padding:12, borderRadius:8, marginBottom:10, border:'1px solid var(--border)' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
-                <span style={{ color:'var(--gold)', fontWeight:700, fontFamily:'monospace' }}>{prevOrder.id}</span>
-                <span style={{ color:'var(--text3)' }}>{prevOrder.date}</span>
+        {showHistoryModal && (
+          <>
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowHistoryModal(false)}
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2500, backdropFilter:'blur(4px)' }} />
+            <motion.div initial={{ opacity:0, scale:0.95, y: -20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y: -20 }}
+              style={{ position:'fixed', top:'10%', left:'50%', transform:'translateX(-50%)', width:'92%', maxWidth:460, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:20, zIndex:2501, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', paddingBottom:12, marginBottom:16 }}>
+                <div>
+                  <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600 }}>📋 سجل الطلبات المتكررة</h3>
+                  <p style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>الرقم: {selectedCustomerPhone}</p>
+                </div>
+                <button onClick={() => setShowHistoryModal(false)} style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:28, height:28, borderRadius:6, cursor:'pointer', fontSize:12 }}>✕</button>
               </div>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
-                <span style={{ fontSize:11, padding:'2px 6px', borderRadius:4, background:`${STATUS_COLORS[prevOrder.status]}12`, color:STATUS_COLORS[prevOrder.status], fontWeight:600 }}>{prevOrder.status}</span>
-                <strong style={{ fontSize:12, color:'var(--text1)' }}>EGP {prevOrder.total?.toLocaleString()}</strong>
+
+              <div style={{ maxHeight: '280px', overflowY: 'auto', marginBottom: 20, paddingRight: 4 }} className="custom-scrollbar">
+                {getCustomerPreviousOrders(selectedCustomerPhone).map((prevOrder) => (
+                  <div key={prevOrder.id} style={{ background:'rgba(255,255,255,0.02)', padding:12, borderRadius:8, marginBottom:10, border:'1px solid var(--border)' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
+                      <span style={{ color:'var(--gold)', fontWeight:700, fontFamily:'monospace' }}>{prevOrder.id}</span>
+                      <span style={{ color:'var(--text3)' }}>{prevOrder.date}</span>
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
+                      <span style={{ fontSize:11, padding:'2px 6px', borderRadius:4, background:`${STATUS_COLORS[prevOrder.status]}12`, color:STATUS_COLORS[prevOrder.status], fontWeight:600 }}>{prevOrder.status}</span>
+                      <strong style={{ fontSize:12, color:'var(--text1)' }}>EGP {prevOrder.total?.toLocaleString()}</strong>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          ))}
-        </div>
 
-        <div style={{ display:'flex', gap:10, direction: 'rtl' }}>
-          <a 
-            href={`https://api.whatsapp.com/send/?phone=${(() => {
-              let cleaned = String(selectedCustomerPhone).replace(/[^0-9]/g, '');
-              if (cleaned.startsWith('01')) {
-                cleaned = '20' + cleaned.slice(1);
-              }
-                          return cleaned;
-          })()}&text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم! 🎉')}&type=phone_number&app_absent=0`}
-          target="_blank"
-          rel="noreferrer"
-          style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius:8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-        >
-            <MessageSquare size={15} /> تواصل معه بالخصم
-          </a>
-          <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize:13 }}>إغلاق</button>
-        </div>
-      </motion.div>
-    </>
-  )}
-</AnimatePresence>
+              <div style={{ display:'flex', gap:10, direction: 'rtl' }}>
+                <a 
+                  href={`https://api.whatsapp.com/send/?phone=${(() => {
+                    let cleaned = String(selectedCustomerPhone).replace(/[^0-9]/g, '');
+                    if (cleaned.startsWith('01')) {
+                      cleaned = '20' + cleaned.slice(1);
+                    }
+                    return cleaned;
+                  })()}&text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه in أي طلب قادم! 🎉')}&type=phone_number&app_absent=0`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius:8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                >
+                  <MessageSquare size={15} /> تواصل معه بالخصم
+                </a>
+                <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize:13 }}>إغلاق</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
-
+      {/* ─── SIDEBAR DETAILED VIEW ─────────────────────────────────────────── */}
       <AnimatePresence>
         {selected && (
           <>
@@ -735,7 +744,30 @@ function OrdersPanel({ canEdit }) {
                 </div>
                 <button onClick={() => setSelected(null)} style={{ width:32, height:32, borderRadius:6, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
               </div>
+              
               <div style={{ padding:16 }}>
+                
+                {/* 🎯 قـسـم تـتـبـع الـطـلـب الـجـديـد (Tracking Link) */}
+                <div style={{ background: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: 6, padding: 14, marginBottom: 16 }}>
+                  <p style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    🔗 Customer Tracking Link
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={selected.tracking_url || `https://zashm-mo.vercel.app/?track=${selected.id}`} 
+                      style={{ flex: 1, padding: '8px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text2)', fontFamily: 'monospace' }} 
+                    />
+                    <button 
+                      onClick={() => handleCopyLink(selected.tracking_url || `https://zashm-mo.vercel.app/?track=${selected.id}`)}
+                      style={{ padding: '8px 12px', background: copied ? '#27ae60' : 'var(--gold)', color: copied ? 'white' : 'var(--bg)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
+                    >
+                      {copied ? 'Copied!' : 'Copy Link'}
+                    </button>
+                  </div>
+                </div>
+
                 <div style={{ marginBottom:20, overflowX: 'auto', paddingBottom: 8 }}>
                   <p style={{ fontSize:11, color:'var(--text3)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Status Timeline</p>
                   <div style={{ display:'flex', alignItems:'center', minWidth: 360 }}>

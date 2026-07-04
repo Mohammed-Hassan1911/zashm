@@ -81,7 +81,8 @@ function sanitizeOrder(order, products = []) {
     city: order?.city ?? '',
     date: order?.date ?? getLocalTodayDate(),
     items: (safeItems || []).map(item => sanitizeOrderItem(item, products)),
-    timestamps: safeTimestamps
+    timestamps: safeTimestamps,
+    tracking_url: order?.tracking_url || '' // 🎯 تم إضافة الحقل هنا لكي لا يتم حذفه أثناء عملية الـ Sanitize
   };
 }
 
@@ -426,6 +427,12 @@ export const useStore = create((set, get) => ({
     const { cart, appliedDiscount, cartTotal, cartSubtotal, clearCart } = get();
     const products = get().products;
     
+    const orderId = generateOrderId();
+    
+    // 🎯 توليد رابط التتبع الخاص بموقعك تلقائياً هنا لحفظه
+    const productionDomain = 'https://zashm-mo.vercel.app'; 
+    const trackingUrl = `${productionDomain}/?track=${orderId}`;
+
     for (const item of cart) {
       const product = products.find(p => p.id == item.product.id);
       if (product) {
@@ -448,7 +455,6 @@ export const useStore = create((set, get) => ({
     const total = cartTotal() ?? 0;
     const discount = Math.max(0, subtotal - total);
     
-    const orderId = generateOrderId();
     const customerName = orderData?.name || orderData?.customer || 'Unknown Customer';
 
     const order = {
@@ -479,6 +485,7 @@ export const useStore = create((set, get) => ({
       address: orderData?.address || '',
       city: orderData?.city || '',
       notes: orderData?.notes || '',
+      tracking_url: trackingUrl, // ✅ حفظ الرابط في الأوبجكت المحلي
     };
 
     db.insert('orders', order);
@@ -499,7 +506,8 @@ export const useStore = create((set, get) => ({
       city: order.city,
       notes: order.notes,
       items: JSON.stringify(order.items),
-      timestamps: JSON.stringify(order.timestamps)
+      timestamps: JSON.stringify(order.timestamps),
+      tracking_url: trackingUrl // ✅ حفظ الرابط أونلاين في سوبابيز
     };
 
     const { error: orderError } = await supabase.from('orders').insert([supabaseOrderPayload]);
@@ -521,7 +529,7 @@ export const useStore = create((set, get) => ({
       set({ appliedDiscount: null });
     }
 
-        try {
+    try {
       let itemsText = order.items.map(item => {
         const details = [];
         if (item.size) details.push(item.size);
@@ -529,10 +537,6 @@ export const useStore = create((set, get) => ({
         const detailsStr = details.length > 0 ? ` (${details.join('/')})` : '';
         return `• *${item.name}*${detailsStr} x${item.qty} → _EGP ${item.price.toLocaleString()}_`;
       }).join('\n');
-
-      // 🎯 الرابط الصحيح والمباشر لموقعك على Vercel لضمان وصوله للعملاء سليم 100%
-      const productionDomain = 'https://zashm-mo.vercel.app'; 
-      const trackingUrl = `${productionDomain}/?track=${order.id}`;
 
       const whatsappMessage = `
 ✨ *طلب جديد من متجر ZASHM* ✨
