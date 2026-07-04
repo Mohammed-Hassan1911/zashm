@@ -715,7 +715,7 @@ function OrdersPanel({ canEdit }) {
                       cleaned = '20' + cleaned.slice(1);
                     }
                     return cleaned;
-                  })()}&text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه in أي طلب قادم! 🎉')}&type=phone_number&app_absent=0`}
+                  })()}&text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم! 🎉')}&type=phone_number&app_absent=0`}
                   target="_blank"
                   rel="noreferrer"
                   style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius:8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
