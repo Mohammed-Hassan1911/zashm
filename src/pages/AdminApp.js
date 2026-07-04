@@ -708,22 +708,34 @@ function OrdersPanel({ canEdit }) {
               </div>
 
               <div style={{ display:'flex', gap:10, direction: 'rtl' }}>
-                <a 
-                  href={`https://api.whatsapp.com/send/?phone=${(() => {
-                    let cleaned = String(selectedCustomerPhone).replace(/[^0-9]/g, '');
-                    if (cleaned.startsWith('01')) {
-                      cleaned = '20' + cleaned.slice(1);
-                    }
-                    return cleaned;
-                  })()}&text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم! 🎉')}&type=phone_number&app_absent=0`}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius:8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                >
-                  <MessageSquare size={15} /> تواصل معه بالخصم
-                </a>
-                <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize:13 }}>إغلاق</button>
-              </div>
+  <a 
+    href={`https://wa.me/${(() => {
+      // 1. تنظيف الرقم من أي رموز أو مسافات
+      let cleaned = String(selectedCustomerPhone).replace(/[^0-9]/g, '');
+      
+      // 2. لو الرقم مصري عادي بيبدأ بـ 01
+      if (cleaned.startsWith('01') && cleaned.length === 11) {
+        cleaned = '20' + cleaned.slice(1);
+      }
+      // 3. لو مكتوب بصفرين دوليين زيادة 0020
+      else if (cleaned.startsWith('0020')) {
+        cleaned = cleaned.slice(2);
+      }
+      // 4. لو مكتوب من غير الصفر الأولاني خالص 1xxxx
+      else if (cleaned.startsWith('1') && cleaned.length === 10) {
+        cleaned = '20' + cleaned;
+      }
+      
+      return cleaned;
+    })()}?text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم! 🎉')}`}
+    target="_blank"
+    rel="noreferrer"
+    style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+  >
+    <MessageSquare size={15} /> تواصل معه بالخصم
+  </a>
+  <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize: 13 }}>إغلاق</button>
+</div>
             </motion.div>
           </>
         )}
