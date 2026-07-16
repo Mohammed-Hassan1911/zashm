@@ -394,7 +394,15 @@ export function CheckoutPage() {
            ZASHM يسعدنا دائماً اختيارك
           </p>
           <div style={{ background: 'rgba(212, 175, 55, 0.04)', border: '1px dashed var(--border-gold)', borderRadius: 8, padding: '20px', marginBottom: 28, position: 'relative' }}>
-            <span style={{ display: 'block', color: 'var(--text3)', fontSize: 12, textTransform: 'uppercase', marginBottom: 6, letterSpacing: 1 }}>
+            <span style={{ 
+              display: 'block', 
+              color: 'var(--text2)', // 🔥 غيرنا اللون لدرجة أنصع وأوضح
+              fontSize: 13,          // 📐 تكبير حجم الخط درجة واحدة لزيادة الوضوح
+              fontWeight: 700,       // 💪 جعل الخط Bold (عريض وقوي)
+              textTransform: 'uppercase', 
+              marginBottom: 8, 
+              letterSpacing: 1 
+            }}>
               الرقم المرجعي للطلب (Order ID)
             </span>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
