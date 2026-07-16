@@ -98,51 +98,7 @@ toast.info = (message) => {
   if (addToastGlobal) addToastGlobal({ message, type: 'info' });
 };
 
-// Order Notification
+// 🎯 Order Notification (تم تعطيله لعدم إظهاره للعميل)
 export function OrderNotification() {
-  const { newOrderNotification, clearOrderNotification, orders } = useStore();
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (newOrderNotification) {
-      setShow(true);
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-        osc.start(); osc.stop(ctx.currentTime + 0.5);
-      } catch(e) {}
-      setTimeout(() => { setShow(false); clearOrderNotification(); }, 5000);
-    }
-  }, [newOrderNotification, clearOrderNotification]);
-
-  const latest = (orders && orders.length > 0) ? orders[0] : null;
-
-  return (
-    <AnimatePresence>
-      {show && latest && (
-        <motion.div
-          initial={{ opacity: 0, y: -80, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -80, scale: 0.9 }}
-          style={{ position: 'fixed', top: 90, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#111111', border: '1px solid var(--gold)', borderRadius: 4, padding: '16px 24px', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(201, 168, 76, 0.2)', display: 'flex', alignItems: 'center', gap: 14, minWidth: 320 }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(201,168,76,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse-gold 2s infinite' }}>
-            <Bell size={18} color="var(--gold)" />
-          </div>
-          <div>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--gold)', letterSpacing: 1, textTransform: 'uppercase' }}>New Order!</p>
-            <p style={{ fontSize: 13, color: '#ffffff', marginTop: 2 }}>{latest.customer ?? 'Order'} — EGP {(latest.total ?? 0).toLocaleString()}</p>
-          </div>
-          <button onClick={() => { setShow(false); clearOrderNotification(); }}
-            style={{ marginLeft: 'auto', color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+  return null; // لا يظهر أي شيء على الشاشة
 }

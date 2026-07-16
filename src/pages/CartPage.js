@@ -485,7 +485,8 @@ export function CheckoutPage() {
                 🔍 Track Your Order
               </button>
 
-              {/* زر التواصل الاحتياطي مع الدعم الفني */}
+                            {/* زر التواصل الاحتياطي مع الدعم الفني */}
+                            {/* زر التواصل الاحتياطي مع الدعم الفني */}
               <a 
                 href={`https://wa.me/201013380313?text=${encodeURIComponent(`مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ${success.id}`)}`}
                 target="_blank"
@@ -497,9 +498,9 @@ export function CheckoutPage() {
                   gap: '8px',
                   padding: '12px 24px',
                   borderRadius: '30px',
-                  border: '1px solid rgba(212, 175, 55, 0.3)',
-                  background: 'rgba(212, 175, 55, 0.05)',
-                  color: 'var(--text2)',
+                  border: '1px solid var(--gold)',
+                  background: 'var(--gold)', // اللون الأصفر مثبت افتراضياً
+                  color: '#000000',          // الخط أسود افتراضياً
                   fontSize: '12px',
                   fontWeight: '600',
                   letterSpacing: '1px',
@@ -509,13 +510,13 @@ export function CheckoutPage() {
                   cursor: 'pointer'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--gold)';
+                  e.currentTarget.style.background = 'transparent'; // يفرغ ويبقى شفاف لما تقف بالماوس
+                  e.currentTarget.style.color = 'var(--gold)';      // الخط يتحول للذهبي
                   e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 175, 55, 0.15)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--gold)';
-                  e.currentTarget.style.color = '#000000';
+                  e.currentTarget.style.background = 'var(--gold)'; // يرجع أصفر لما تشيل الماوس
+                  e.currentTarget.style.color = '#000000';          // الخط يرجع أسود
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
