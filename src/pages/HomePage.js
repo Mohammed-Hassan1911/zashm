@@ -64,7 +64,7 @@ export default function HomePage() {
           <motion.p
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0, duration: 0.8 }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(18px, 2.2vw, 28px)', color: 'rgba(245,240,232,0.92)', fontStyle: 'italic', fontWeight: 300, letterSpacing: 3, marginBottom: 14, textShadow: '0 2px 20px rgba(0,0,0,0.5)' }}
-          >Luxury Old Money Menswear</motion.p>
+          >Luxury Menswear</motion.p>
 
           <motion.p
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.8 }}

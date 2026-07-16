@@ -538,7 +538,37 @@ export const useStore = create((set, get) => ({
         return `• *${item.name}*${detailsStr} x${item.qty} → _EGP ${item.price.toLocaleString()}_`;
       }).join('\n');
 
-      const whatsappMessage = `
+     // 🎯 دالة إرسال الإشعار لتليجرام من داخل الـ Store
+const sendTelegramNotification = async (messageText) => {
+  try {
+    const BOT_TOKEN = '8991256107:AAGFPzaB_gxNBanh3yPuDWUS18GthZw5DUI';
+    const CHAT_ID = '5159341259'; 
+
+    const cleanTelegramText = messageText
+      .replace(/→/g, ':') 
+      .replace(/_/g, '');
+
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: CHAT_ID,
+        text: cleanTelegramText,
+        parse_mode: 'Markdown' 
+      }),
+    });
+    console.log('Telegram notification sent successfully from store!');
+  } catch (error) {
+    console.error('Telegram notification failed quietly:', error);
+  }
+};
+
+// ... داخل الـ Store بتاعك (مكان الجزء اللي بينتهي بـ الـ return والـ update)
+
+    // 📦 تجهيز رسالة التليجرام الفخمة بالدومين الثابت ونفس التنسيق
+    const trackingUrl = `https://zashm-mo.vercel.app/?track=${order.id}`;
+    
+    const telegramMessage = `
 ✨ *طلب جديد من متجر ZASHM* ✨
 --------------------------------🟩
 
@@ -559,6 +589,7 @@ ${itemsText}
 --------------------------------🟨
 💰 *الملخص المالي:*
 • *المجموع الفرعي:* EGP ${order.subtotal.toLocaleString()}
+• *كود الخصم المستخدم:* ${order.discountCode || 'لا يوجد'}
 • *قيمة الخصم:* EGP ${order.discount.toLocaleString()}
 • *الإجمالي الكلي:* *EGP ${order.total.toLocaleString()}*
 
@@ -568,14 +599,16 @@ ${trackingUrl}
 
 --------------------------------
 🔒 _رقم الطلب المرجعي: ${order.id}_
-_تم إرسال الطلب تلقائياً وتأكيده بأمان عبر الموقع_
+_تم تسجيل الطلب وتأكيده بأمان عبر الموقع_
 `.trim();
 
-      const phoneNumber = "201013380313"; 
-      const whatsappUrl = `https://api.whatsapp.com/send/?phone=${phoneNumber}&text=${encodeURIComponent(whatsappMessage)}&type=phone_number&app_absent=0`;
-      window.open(whatsappUrl, '_blank');
+    // 1. تشغيل إشعار تليجرام فوراً
+    await sendTelegramNotification(telegramMessage);
+
+    // 2. 🚫 تم حذف وإلغاء كود الواتساب نهائياً لمنع التحويل بره الموقع
+    
     } catch (wsErr) {
-      console.error("Failed to open WhatsApp:", wsErr);
+      console.error("Telegram/Process error:", wsErr);
     }
     
     clearCart();
@@ -631,7 +664,7 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
           const variantKey = `${item.size}-${item.color}`;
           const updatedVariantStock = { ...(product.variantStock || {}) };
           if (updatedVariantStock[variantKey] !== undefined) {
-            updatedVariantStock[variantKey] = Math.max(0, Number(updatedVariantStock[updatedVariantStock]) - Number(item.qty));
+            updatedVariantStock[variantKey] = Math.max(0, Number(updatedVariantStock[variantKey]) - Number(item.qty)); // 🛡️ تم إصلاح الـ key هنا أيضاً لتفادي الـ NaN
           }
           db.update('products', product.id, { stock: newStock, variantStock: updatedVariantStock });
           await supabase.from('products').update({ stock: newStock, variantStock: updatedVariantStock }).eq('id', product.id);
@@ -658,7 +691,7 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
   clearOrderNotification: () => set({ newOrderNotification: null }),
   markNotificationsRead: () => { const n = (db.getAll('notifications') || []).map(x => ({ ...x, read: true })); db.setAll('notifications', n); set({ unreadOrderCount: 0 }); },
   getNotifications: () => db.getAll('notifications') || [],
-
+  
   // ─── DISCOUNTS (COUPONS) ────────────────────────────────────────────────────
   appliedDiscount: loadAppliedDiscount(),
   

@@ -61,7 +61,7 @@ export function CartPage() {
 
   React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
 
-    const handleApplyCoupon = () => {
+  const handleApplyCoupon = () => {
     setCouponError('');
     const cleanCoupon = (coupon ?? '').trim().toUpperCase();
     
@@ -181,7 +181,7 @@ export function CartPage() {
                 ) : (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                     <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                    <button onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                    <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</span>
                   </div>
                 )}
 
@@ -199,7 +199,7 @@ export function CartPage() {
   );
 }
 
-// ─── CHECKOUT PAGE (MODIFIED FOR PRODUCTION ORDER TRACKING) ──────────────────────────────
+// ─── CHECKOUT PAGE (MODIFIED FOR PRODUCTION ORDER TRACKING & TELEGRAM BOT) ──────────────────────────────
 export function CheckoutPage() {
   const {
     cart, cartTotal, cartSubtotal, cartDiscountAmount, placeOrder, setPage,
@@ -213,6 +213,10 @@ export function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [coupon, setCoupon] = useState('');
   const [couponError, setCouponError] = useState('');
+  const [copied, setCopied] = useState(false); 
+
+  // 🔒 الحارس الذري لمنع استدعاء الدالة مرتين بشكل متزامن في نفس الجزء من الثانية
+  const isPlacingOrder = React.useRef(false);
 
   const subtotal = cartSubtotal() ?? 0;
   const discountAmount = cartDiscountAmount() ?? 0;
@@ -223,12 +227,21 @@ export function CheckoutPage() {
 
   React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order' }); }, []);
   React.useEffect(() => { refreshAppliedDiscount(); }, []);
+  
+  // 🔝 السكرول المبدئي عند فتح الصفحة لأول مرة
   React.useEffect(() => {
     window.scrollTo({
       top: 0,
       behavior: 'smooth'
     });
   }, []);
+
+  // 🚀 سكرول لأعلى الصفحة فوراً عند نجاح الأوردر وتحديث الـ success state
+  React.useEffect(() => {
+    if (success) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [success]);
 
   const handleApplyCoupon = () => {
     setCouponError('');
@@ -251,21 +264,18 @@ export function CheckoutPage() {
     setErrors(e => ({ ...e, [k]: null })); 
   };
 
-    // 🎯 دالة التحقق المحدثة لمنع تكرار نفس الرقم في الهاتف البديل
   const validateOrderFormCustom = (fields) => {
     const errs = {};
     if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required';
     
     const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
     
-    // فحص الهاتف الأساسي
     if (!fields.phone || !fields.phone.trim()) {
       errs.phone = 'Phone number is required';
     } else if (!egyptianPhoneRegex.test(fields.phone.trim())) {
       errs.phone = 'Invalid phone number. Must be 11 digits starting with 01';
     }
 
-    // فحص الهاتف البديل
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
       const trimmedPhone = fields.phone.trim();
       const trimmedPhoneAlt = fields.phoneAlt.trim();
@@ -273,12 +283,10 @@ export function CheckoutPage() {
       if (!egyptianPhoneRegex.test(trimmedPhoneAlt)) {
         errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits';
       } else if (trimmedPhone === trimmedPhoneAlt) {
-        // 🛑 الشرط الجديد: منع تطابق الرقمين
         errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number';
       }
     }
 
-    // فحص الإيميل
     if (fields.email && fields.email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(fields.email.trim())) {
@@ -293,125 +301,241 @@ export function CheckoutPage() {
   };
 
   const handleOrder = async () => {
+    if (isPlacingOrder.current || submitting) return;
+
     const errs = validateOrderFormCustom(form);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
+    isPlacingOrder.current = true;
     setSubmitting(true);
     setStockErrors([]);
 
-    const sanitizedCustomer = sanitizeInput(form.name.trim());
-    const sanitizedPhone = form.phone.trim();
-    const sanitizedPhoneAlt = form.phoneAlt ? form.phoneAlt.trim() : ''; 
-    const sanitizedEmail = sanitizeInput(form.email.trim());
-    const sanitizedAddress = sanitizeInput(form.address.trim());
-    const sanitizedNotes = sanitizeInput(form.notes.trim());
+    try {
+      const sanitizedCustomer = sanitizeInput(form.name.trim());
+      const sanitizedPhone = form.phone.trim();
+      const sanitizedPhoneAlt = form.phoneAlt ? form.phoneAlt.trim() : ''; 
+      const sanitizedEmail = sanitizeInput(form.email.trim());
+      const sanitizedAddress = sanitizeInput(form.address.trim());
+      const sanitizedNotes = sanitizeInput(form.notes.trim());
 
-    const result = await placeOrder({ 
-      customer: sanitizedCustomer, 
-      phone: sanitizedPhone,
-      phoneAlt: sanitizedPhoneAlt, 
-      email: sanitizedEmail, 
-      address: sanitizedAddress, 
-      city: form.city, 
-      shippingCost: shippingCost,
-      notes: sanitizedNotes,       
-      total: finalTotal
-    });
-    
-    setSubmitting(false);
+      const result = await placeOrder({ 
+        customer: sanitizedCustomer, 
+        phone: sanitizedPhone,
+        phoneAlt: sanitizedPhoneAlt, 
+        email: sanitizedEmail, 
+        address: sanitizedAddress, 
+        city: form.city, 
+        shippingCost: shippingCost,
+        notes: sanitizedNotes,       
+        total: finalTotal
+      });
 
-    if (!result || !result.success) {
-      setStockErrors(result?.errors || ['Order failed. Please try again.']);
-      return;
+      if (!result || !result.success) {
+        setStockErrors(result?.errors || ['Order failed. Please try again.']);
+        isPlacingOrder.current = false;
+        setSubmitting(false);
+        return;
+      }
+
+      // 🛑 تم حذف وإلغاء كود تكرار إرسال التليجرام من هنا نهائياً
+      // العملية الآن تتم بأمان من داخل الـ Store لضمان إرسال رسالة واحدة فقط!
+
+      setSuccess(result.order);
+      setSubmitting(false);
+
+    } catch (error) {
+      console.error("Order completion failed logic:", error);
+      isPlacingOrder.current = false;
+      setSubmitting(false);
     }
-
-    const orderId = result.order?.id || 'N/A';
-    const trackingUrl = `${window.location.origin}/?track=${orderId}`;
-
-    const orderItemsText = safeCart.map(i => {
-      const price = ((i?.product?.salePrice || i?.product?.price) ?? 0);
-      return `• *${i?.product?.name ?? 'Unknown'}* (${i?.size ?? 'N/A'}/${i?.color ?? 'N/A'}) x${i?.qty ?? 0} → _EGP ${(price * (i?.qty ?? 0)).toLocaleString()}_`;
-    }).join('\n');
-
-    const whatsappMessage = `
-✨ *طلب جديد من متجر ZASHM* ✨
---------------------------------🟩
-
-👤 *بيانات العميل:*
-• *الاسم:* ${sanitizedCustomer}
-• *رقم الهاتف الأساسي:* ${sanitizedPhone}
-${sanitizedPhoneAlt ? `• *رقم الهاتف البديل:* ${sanitizedPhoneAlt}` : '• *رقم الهاتف البديل:* لا يوجد'}
-• *البريد الإلكتروني:* ${sanitizedEmail || 'غير محدد'}
-
-📍 *تفاصيل الشحن:*
-• *المدينة:* ${form.city}
-• *العنوان:* ${sanitizedAddress}
-• *ملاحظات الطلب:* ${sanitizedNotes || 'لا توجد'}
-
-🛍 *المنتجات المطلوبة:*
-${orderItemsText}
-
---------------------------------🟨
-💰 *الملخص المالي:*
-• *المجموع الفرعي:* EGP ${subtotal.toLocaleString()}
-• *قيمة الخصم:* EGP ${discountAmount.toLocaleString()}
-• *مصاريف الشحن:* EGP ${shippingCost.toLocaleString()}
-• *الإجمالي الكلي:* *EGP ${finalTotal.toLocaleString()}*
-
---------------------------------
-🔗 *رابط تتبع الطلب الخاص بك:*
-${trackingUrl}
-
---------------------------------
-🔒 _رقم الطلب المرجعي: ${orderId}_
-_تم إرسال الطلب تلقائياً وتأكيده بأمان عبر الموقع_
-`.trim();
-
-    const encodedMessage = encodeURIComponent(whatsappMessage);
-    const whatsappNumber = "201013380313"; 
-
-    const directWhatsappUrl = `https://api.whatsapp.com/send/?phone=${whatsappNumber}&text=${encodedMessage}&type=phone_number&app_absent=0`;
-    
-    window.open(directWhatsappUrl, '_blank');
-    setSuccess(result.order);
   };
-
-    if (success) return (
-    <div style={{ paddingTop: 90, minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <motion.div initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
-        style={{ textAlign: 'center', padding: '60px 40px', background: 'var(--surface)', border: '1px solid var(--border-gold)', borderRadius: 8, maxWidth: 520, width: '100%' }}>
-        <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.5 }}><CheckCircle size={64} color="#D4AF37" style={{ margin: '0 auto 16px' }} /></motion.div>      
+  
+  if (success) {
+    return (
+      <div style={{ paddingTop: 160, paddingBottom: 60, minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: '20px', paddingRight: '20px', position: 'relative' }}>
         
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 16, color: 'var(--gold)', letterSpacing: 1 }}>تم تسجيل طلبك بنجاح!</h2>
-        
-        <p style={{ color: 'var(--text2)', fontSize: 14, marginBottom: 24 }}>
-          رقم الطلب المرجعي: <span style={{ fontFamily: 'monospace', color: 'var(--gold)', fontWeight: 600 }}>{success.id}</span>
-        </p>
+        <AnimatePresence>
+          {copied && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -20 }}
+              style={{
+                position: 'fixed',
+                top: '40px',
+                backgroundColor: 'var(--gold, #D4AF37)',
+                color: '#000000',
+                padding: '12px 24px',
+                borderRadius: '30px',
+                fontWeight: '600',
+                fontSize: '14px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                zIndex: 9999,
+                direction: 'rtl'
+              }}
+            >
+              تم نسخ رقم الطلب بنجاح! 🎉
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <div style={{ background: 'rgba(212, 175, 55, 0.05)', border: '1px solid var(--border-gold)', borderRadius: 6, padding: '18px 20px', marginBottom: 32, textAlign: 'right', direction: 'rtl' }}>
-          <p style={{ color: 'var(--text)', fontSize: 14, fontWeight: 600, marginBottom: 8, lineHeight: 1.5 }}>💡 ملاحظة لتسريع شحن طلبك:</p>
-          <p style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 1.6, margin: 0 }}>
-            يُرجى الضغط على زر <strong style={{ color: 'var(--gold)' }}>"إرسال" (Send)</strong> في تطبيق الواتساب الذي فُتح لك تلقائياً؛ لمساعدتنا في تأكيد بياناتك وبدء تجهيز الشحنة فوراً.
-            
-            {/* 🎯 تعديل التباين والوضوح هنا */}
-            <span style={{ 
-              display: 'block', 
-              marginTop: 12, 
-              paddingTop: 10,
-              borderTop: '1px dashed rgba(212, 175, 55, 0.2)',
-              color: 'var(--text)', // خليناه نفس وضوح النص الأساسي بدلاً من الباهت
-              fontSize: 12,
-              fontWeight: 500 // زيادة السمك بسيطة لسهولة القراءة
-            }}>
-              📌 يمكنك تتبع حالة الشحنة مباشرةً في أي وقت من خلال <strong style={{ color: 'var(--gold)' }}>رابط التتبع</strong> المرفق مع رسالة الواتساب.
-            </span>
+        <motion.div initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
+          style={{ textAlign: 'center', padding: '50px 30px', background: 'var(--surface)', border: '1px solid var(--border-gold)', borderRadius: 12, maxWidth: 520, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+          
+          <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 0.5 }}>
+            <CheckCircle size={72} color="#D4AF37" style={{ margin: '0 auto 20px' }} />
+          </motion.div>      
+          
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 12, color: 'var(--gold)', letterSpacing: 0.5 }}>
+             ! تم تسجيل طلبك بنجاح
+          </h2>
+          
+          <p style={{ color: 'var(--text2)', fontSize: 15, marginBottom: 24 }}>
+           ZASHM يسعدنا دائماً اختيارك
           </p>
-        </div>
+          <div style={{ background: 'rgba(212, 175, 55, 0.04)', border: '1px dashed var(--border-gold)', borderRadius: 8, padding: '20px', marginBottom: 28, position: 'relative' }}>
+            <span style={{ display: 'block', color: 'var(--text3)', fontSize: 12, textTransform: 'uppercase', marginBottom: 6, letterSpacing: 1 }}>
+              Order Reference Number
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <h3 style={{ fontFamily: 'monospace', color: 'var(--gold)', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: 1 }}>
+                {success.id}
+              </h3>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(success.id);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, fontSize: '18px' }}
+                title="Copy Order ID"
+              >
+                📋
+              </button>
+            </div>
+          </div>
 
-        <button className="gold-btn" style={{ width: '100%' }} onClick={() => setPage('home')}>Continue Shopping</button>
-      </motion.div>
-    </div>
-  );
+                    {/* 📦 قسم تتبع الطلب الاحترافي المتكامل مع موقعك والدعم */}
+          <div style={{ 
+            borderTop: '1px solid rgba(212, 175, 55, 0.15)', 
+            paddingTop: 24, 
+            marginBottom: 32, 
+            textAlign: 'center' 
+          }}>
+            <h4 style={{ 
+              fontFamily: 'var(--font-display)', 
+              color: 'var(--gold)', 
+              fontSize: 14, 
+              letterSpacing: 1.5, 
+              textTransform: 'uppercase', 
+              marginBottom: 10 
+            }}>
+              Track Your Order
+            </h4>
+            
+            <p style={{ 
+              color: 'var(--text2)', 
+              fontSize: 13, 
+              lineHeight: 1.6, 
+              margin: '0 auto 20px', 
+              maxWidth: '440px',
+              direction: 'rtl' 
+            }}>
+              يمكنك الآن تتبع حالة شحنتك وخط سيرها بسهولة بالانتقال إلى صفحة <strong style={{ color: 'var(--gold)' }}>Track Your Order</strong> باستخدام الرقم المرجعي الموضح أعلاه، أو عبر التواصل المباشر مع فريق الدعم الفني.
+            </p>
+
+            {/* الأزرار التفاعلية المزدوجة */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              gap: '12px', 
+              flexWrap: 'wrap' 
+            }}>
+              {/* زر التوجيه لصفحة التتبع بالموقع */}
+              <button 
+                onClick={() => setPage('track')} // يفترض أن اسم الصفحة بالـ store لديك هو 'track' أو غيرها حسب الـ routing عندك
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '12px 24px',
+                  borderRadius: '30px',
+                  border: '1px solid var(--gold)',
+                  background: 'var(--gold)',
+                  color: '#000000',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  letterSpacing: '1px',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--gold)';
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 175, 55, 0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--gold)';
+                  e.currentTarget.style.color = '#000000';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                🔍 Track Your Order
+              </button>
+
+              {/* زر التواصل الاحتياطي مع الدعم الفني */}
+              <a 
+                href={`https://wa.me/201013380313?text=${encodeURIComponent(`مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ${success.id}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '12px 24px',
+                  borderRadius: '30px',
+                  border: '1px solid rgba(212, 175, 55, 0.3)',
+                  background: 'rgba(212, 175, 55, 0.05)',
+                  color: 'var(--text2)',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  letterSpacing: '1px',
+                  textDecoration: 'none',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--gold)';
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 175, 55, 0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--gold)';
+                  e.currentTarget.style.color = '#000000';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                💬 Contact Support
+              </a>
+            </div>
+          </div>
+
+          <button 
+            className="gold-btn" 
+            style={{ width: '100%', padding: '14px', borderRadius: 6, fontWeight: 600, letterSpacing: 0.5 }} 
+            onClick={() => setPage('home')}
+          >
+            Continue Shopping
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '40px 24px' }}>
@@ -504,7 +628,6 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
                 }}>
                   Email Address (Optional)
                 </label>
-                {/* 🎯 حقل الإيميل الذكي مع قلب الحواف للون الأحمر عند الخطأ برمجياً */}
                 <input 
                   value={form.email ?? ''} 
                   onChange={e => update('email', e.target.value)} 
@@ -596,7 +719,7 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                   <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                  <button onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                  <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</span>
                 </div>
               )}
 
@@ -625,18 +748,23 @@ _تم إرسال الطلب تلقائياً وتأكيده بأمان عبر ا
                 </div>
               </div>
               
-              <motion.button className="gold-btn" style={{ width: '100%', marginTop: 16, opacity: submitting ? 0.7 : 1 }}
-                onClick={handleOrder} disabled={submitting} whileTap={{ scale: 0.98 }}>
-                {submitting ? (
+              <motion.button 
+                className="gold-btn" 
+                style={{ width: '100%', marginTop: 16, opacity: (submitting || isPlacingOrder.current) ? 0.7 : 1 }}
+                onClick={handleOrder} 
+                disabled={submitting || isPlacingOrder.current} 
+                whileTap={{ scale: 0.98 }}
+              >
+                {(submitting || isPlacingOrder.current) ? (
                   <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                     <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}
                       style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
                     Placing Order...
                   </span>
-                ) : 'Place Order via WhatsApp'}
+                ) : 'Place Order'}
               </motion.button>
               <p style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10 }}>
-                🔒 طلب آمن · سيتم تحويلك لتأكيد الطلب عبر الواتساب
+                🔒 طلب آمن · سيتم تسجيل طلبك وتأكيده فوراً عبر الموقع
               </p>
             </div>
           </div>
