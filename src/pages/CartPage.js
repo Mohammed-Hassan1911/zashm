@@ -673,7 +673,7 @@ export function CheckoutPage() {
             </div>
 
             <div>
-              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Order Notes</label>
+              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Order Notes (OPTIONAL)</label>
               <textarea 
                 value={form.notes ?? ''} 
                 onChange={e => update('notes', e.target.value)} 
