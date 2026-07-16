@@ -395,7 +395,7 @@ export function CheckoutPage() {
           </p>
           <div style={{ background: 'rgba(212, 175, 55, 0.04)', border: '1px dashed var(--border-gold)', borderRadius: 8, padding: '20px', marginBottom: 28, position: 'relative' }}>
             <span style={{ display: 'block', color: 'var(--text3)', fontSize: 12, textTransform: 'uppercase', marginBottom: 6, letterSpacing: 1 }}>
-              Order Reference Number
+              الرقم المرجعي للطلب (Order ID)
             </span>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <h3 style={{ fontFamily: 'monospace', color: 'var(--gold)', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: 1 }}>
