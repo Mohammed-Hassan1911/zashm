@@ -4,17 +4,6 @@ import { SlidersHorizontal } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 
-const CATEGORIES = [
-  'ALL',
-  'BASIC T-SHIRTS',
-  'T-SHIRTS',
-  'HOODIES',
-  'JEANS PANTS',
-  'OLD MONEY PANTS',
-  'SWEATPANTS',
-  'JACKETS'
-];
-
 const SORT_OPTIONS = [
   'Newest',
   'Price: Low to High',
@@ -38,6 +27,17 @@ export default function ShopPage() {
   const [priceRange, setPriceRange] = useState([0, 3000]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState('All');
+
+  const categories = useMemo(() => {
+    const seen = new Map();
+    products.forEach(p => {
+      const c = (p.category || '').trim();
+      if (!c) return;
+      const key = c.toUpperCase();
+      if (!seen.has(key)) seen.set(key, c);
+    });
+    return ['ALL', ...[...seen.values()].sort((a, b) => a.localeCompare(b))];
+  }, [products]);
 
   const filtered = useMemo(() => {
     // 🎯 إخفاء المنتجات غير النشطة عن العملاء (تُفلتر في الـ storefront فقط؛ الأدمن يظل يرى الكل)
@@ -109,7 +109,7 @@ export default function ShopPage() {
 
           {/* CATEGORIES */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
-            {CATEGORIES.map(cat => (
+            {categories.map(cat => (
               <button
                 key={cat}
                 onClick={() => setFilterCategory(cat)}
