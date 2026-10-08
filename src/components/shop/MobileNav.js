@@ -53,11 +53,6 @@ export default function MobileNav() {
           );
         })}
       </div>
-      <style>{`
-        @media (max-width: 768px) {
-          .mobile-nav { display: block !important; }
-        }
-      `}</style>
     </motion.nav>
   );
 }

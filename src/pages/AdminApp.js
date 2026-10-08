@@ -269,17 +269,6 @@ export default function AdminApp() {
           </AnimatePresence>
         </div>
       </main>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .hidden-mobile { display: none !important; }
-          .show-mobile-flex { display: flex !important; }
-        }
-        @media (min-width: 769px) {
-          .hidden-mobile { display: flex !important; }
-          .show-mobile-flex { display: none !important; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -1341,17 +1330,6 @@ function ProductsPanel({ canEdit }) {
           </>
         )}
       </AnimatePresence>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .product-card-actions { opacity: 1 !important; background: transparent !important; top: 4px; right: 4px; bottom: auto; left: auto; flex-direction: column; gap: 4px; }
-          .product-card-actions button { width: 28px !important; height: 28px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
-        }
-        @media (min-width: 769px) {
-          .product-card-img-wrapper:hover .product-card-actions { opacity: 1 !important; }
-          .product-card-actions { opacity: 0; transition: opacity 0.2s; }
-        }
-      `}</style>
     </div>
   );
 }

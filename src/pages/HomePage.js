@@ -170,7 +170,7 @@ export default function HomePage() {
             {[
               { name: 'Mr. Karim H.', loc: 'Cairo', text: 'The cashmere polo is without question the finest piece of knitwear I own. Worth every pound.' },
               { name: 'Mr. Tarek A.', loc: 'Dubai', text: 'ZASHM understands the modern gentleman — restrained, tailored, never showy. My new house.' },
-              { name: 'Mr. Youssef M.', loc: 'London', text: 'The linen shirts rival what I bring back from Como. Service is impeccable. A genuine luxury house.' },
+              { name: 'Mr. Youssef M.', loc: 'London', text: 'The linen shirts rival what I bring back from Como. بce is impeccable. A genuine luxury house.' },
             ].map((t, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12 }}
                 style={{ padding: '32px 28px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4 }}>

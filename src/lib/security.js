@@ -1,57 +1,81 @@
 import { supabase } from './supabase';
 
 // ─── ZASHM SECURITY LAYER ─────────────────────────────────────────────────────
-// Connected directly to Supabase cloud database with your specific tables
+// Client-side hardening layer. All authentication, password verification,
+// order writes and admin mutations now happen on the server (/api/*).
+// This module keeps its public interface intact for existing components.
 
-// ─── HASHING ──────────────────────────────────────────────────────────────────
+// ─── HASHING (compatibility helpers — server uses scrypt) ────────────────────
+// Kept exported for interface compatibility. Random per-password salt via
+// WebCrypto PBKDF2; never logs secrets; never compares plaintext.
+
 export async function hashPassword(password) {
   if (!password) return '';
-  
-  // تنظيف صارم: يمسح الـ " والـ ' والـ \ نهائياً من أي مكان في النص لمنع تداخل رموز JSON
-  const cleanPassword = password.toString().replace(/[\"\'\\]/g, '').trim();
-  
-  const encoder = new TextEncoder();
-  const data = encoder.encode(cleanPassword + 'zashm_salt_2024');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+  const iterations = 100000;
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(String(password)), 'PBKDF2', false, ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+    key,
+    256
+  );
+  const hashHex = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `pbkdf2$${iterations}$${saltHex}$${hashHex}`;
 }
 
-export async function verifyPassword(password, hash) {
-  if (!hash) return false;
-  
-  // تنظيف صارم للطرفين من كل أنواع علامات التنصيص الملتصقة بالنص الممرر
-  const cleanPassword = password.toString().replace(/[\"\'\\]/g, '').trim();
-  const cleanHash = hash.toString().replace(/[\"\'\\]/g, '').trim();
-  
-  console.log("📥 الباسورد الصافي تماماً الحين:", `_${cleanPassword}_`);
-  console.log("🗄️ الـ Hash الصافي تماماً الحين:", `_${cleanHash}_`);
-  
-  const computed = await hashPassword(cleanPassword);
-  const isSHA256 = /^[a-f0-9]{64}$/i.test(cleanHash);
-  
-  if (!isSHA256) {
-    const isMatch = cleanPassword === cleanHash;
-    console.log("🔄 نتيجة المقارنة كنص عادي:", isMatch);
-    return isMatch;
+export async function verifyPassword(password, stored) {
+  if (!password || !stored) return false;
+  const value = String(stored).trim();
+
+  if (value.startsWith('pbkdf2$')) {
+    try {
+      const [, iterations, saltHex, hashHex] = value.split('$');
+      const salt = new Uint8Array(
+        saltHex.match(/.{2}/g).map(h => parseInt(h, 16))
+      );
+      const key = await crypto.subtle.importKey(
+        'raw', new TextEncoder().encode(String(password)), 'PBKDF2', false, ['deriveBits']
+      );
+      const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt, iterations: parseInt(iterations, 10), hash: 'SHA-256' },
+        key,
+        256
+      );
+      const computed = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+      return computed === hashHex;
+    } catch {
+      return false;
+    }
   }
-  
-  const isMatch = computed === cleanHash;
-  console.log("🔄 نتيجة المقارنة كـ كود متشفر:", isMatch);
-  return isMatch;
+
+  // Legacy SHA-256 rows (verified without ever printing secrets).
+  if (/^[a-f0-9]{64}$/i.test(value)) {
+    const cleanPassword = String(password).replace(/["'\\]/g, '').trim();
+    const data = new TextEncoder().encode(cleanPassword + 'zashm_salt_2024');
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    const computed = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return computed === value.toLowerCase();
+  }
+
+  // Plaintext rows are no longer accepted client-side (server upgrades them
+  // transparently on the next successful login).
+  return false;
 }
 
 // ─── SESSION MANAGEMENT ───────────────────────────────────────────────────────
 const SESSION_KEY = 'zashm_session';
-const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours
+const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours (matches server TTL)
 
-export function createSession(user) {
+export function createSession(user, serverToken) {
   const session = {
     userId: user.id,
     role: user.role,
     name: user.name,
     email: user.email,
-    token: generateToken(),
+    token: serverToken || generateToken(),
     createdAt: Date.now(),
     expiresAt: Date.now() + SESSION_DURATION,
     lastActive: Date.now(),
@@ -98,7 +122,7 @@ function generateToken() {
   return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ─── RATE LIMITING ────────────────────────────────────────────────────────────
+// ─── RATE LIMITING (UX only — the server enforces the real limits) ───────────
 const rateLimitStore = new Map();
 
 export function checkRateLimit(key, maxAttempts = 5, windowMs = 15 * 60 * 1000) {
@@ -201,7 +225,7 @@ export function validateLoginForm(form) {
   return errors;
 }
 
-// ─── CSRF TOKEN ───────────────────────────────────────────────────────────────
+// ─── CSRF TOKEN (kept for interface compatibility) ────────────────────────────
 export function generateCSRFToken() {
   const token = generateToken();
   sessionStorage.setItem('csrf_token', token);
@@ -212,7 +236,7 @@ export function getCSRFToken() {
   return sessionStorage.getItem('csrf_token') || generateCSRFToken();
 }
 
-// ─── ORDER ID GENERATOR ───────────────────────────────────────────────────────
+// ─── ORDER ID GENERATOR (server generates real order ids) ─────────────────────
 export function generateOrderId() {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -224,7 +248,7 @@ export function paginate(items, page, perPage) {
   const total = items.length;
   const totalPages = Math.ceil(total / perPage);
   const start = (page - 1) * perPage;
-  const end = start + perPage;
+  const end = page * perPage;
   return {
     items: items.slice(start, end),
     total,
@@ -236,247 +260,152 @@ export function paginate(items, page, perPage) {
   };
 }
 
-// ─── SUPABASE LIVE DB (MAPPED TO YOUR EXACT TABLES) ──────────────────────────
+// ─── LOCAL CACHE (localStorage) — local-only, never holds credentials ────────
+// users / orders are NEVER stored here anymore (they contain password hashes
+// and customer PII). Legacy copies are purged on load. Server reads/writes go
+// through /api/* with the server session token.
+
+const FORBIDDEN_STORES = new Set(['users', 'orders']);
+
 class LocalDB {
   constructor() {
     this.prefix = 'zashm_db_';
-    this.syncFromServer();
+    this._purgeSensitive();
+  }
+
+  _purgeSensitive() {
+    try {
+      // Legacy keys that may contain password hashes / customer PII.
+      localStorage.removeItem('zashm_db_users');
+      localStorage.removeItem('zashm_db_orders');
+      // Legacy plaintext-ish session side channels.
+      localStorage.removeItem('csrf_token');
+
+      // Notifications move to sessionStorage (short-lived, tab-scoped).
+      const legacyNotifications = localStorage.getItem('zashm_db_notifications');
+      if (legacyNotifications && !sessionStorage.getItem('zashm_notifications')) {
+        sessionStorage.setItem('zashm_notifications', legacyNotifications);
+      }
+      if (legacyNotifications) localStorage.removeItem('zashm_db_notifications');
+    } catch {
+      /* storage may be unavailable */
+    }
+  }
+
+  _isForbidden(store) {
+    return FORBIDDEN_STORES.has(String(store || '').toLowerCase());
   }
 
   _getKey(store) {
-    const map = { 'discounts': 'coupons', 'Coupons': 'coupons', 'coupons': 'coupons' };
-    const actualStore = map[store] || store.toLowerCase();
-    return `${this.prefix}${actualStore}`;
+    const name = String(store || '').toLowerCase();
+    if (name === 'notifications') return { key: 'zashm_notifications', storage: sessionStorage };
+    const map = { 'discounts': 'coupons', 'coupons': 'coupons' };
+    const actualStore = map[name] || name;
+    return { key: `${this.prefix}${actualStore}`, storage: localStorage };
   }
 
   _getRealTableName(store) {
-    const map = { 'discounts': 'coupons', 'Coupons': 'coupons', 'coupons': 'coupons' };
-    return map[store] || store.toLowerCase();
+    const name = String(store || '').toLowerCase();
+    const map = { 'discounts': 'coupons', 'coupons': 'coupons' };
+    return map[name] || name;
   }
 
   getAll(store) {
+    if (this._isForbidden(store)) return [];
     try {
-      const raw = localStorage.getItem(this._getKey(store));
-      return raw ? JSON.parse(raw) : []; 
-    } catch { 
-      return []; 
+      const { key, storage } = this._getKey(store);
+      const raw = storage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
     }
   }
 
   setAll(store, data) {
+    if (this._isForbidden(store)) return false;
     try {
-      localStorage.setItem(this._getKey(store), JSON.stringify(data));
-      if (store === 'discounts' || store === 'Coupons' || store === 'coupons') {
+      const { key, storage } = this._getKey(store);
+      storage.setItem(key, JSON.stringify(data));
+      const name = String(store || '').toLowerCase();
+      if (name === 'discounts' || name === 'coupons') {
         localStorage.setItem(`${this.prefix}Coupons`, JSON.stringify(data));
         localStorage.setItem(`${this.prefix}discounts`, JSON.stringify(data));
         localStorage.setItem(`${this.prefix}coupons`, JSON.stringify(data));
       }
-      this._uploadToServer(store, data);
       return true;
     } catch (e) {
-      console.error("❌ Error inside setAll:", e);
-      return false; 
+      console.error('Error inside setAll:', e);
+      return false;
     }
   }
 
-   async syncFromServer() {
-    const stores = ['users', 'coupons', 'products', 'orders'];
-    
+  // Refreshes the local cache with PUBLIC data only (products, active coupons).
+  async syncFromServer() {
     try {
+      const stores = ['products', 'coupons'];
       for (const store of stores) {
         try {
           const { data, error } = await supabase.from(store).select('*');
-          
-          if (error) {
-            console.warn(`⚠️ [SYNC] Skipping table [${store}] due to error/RLS:`, error.message);
-            continue;
+          if (error || !data) continue;
+          let formatted = data;
+          if (store === 'products') {
+            formatted = data.map(p => ({
+              ...p,
+              images: p.images || (p.image ? [p.image] : []),
+              colors: p.colors || [],
+              sizes: p.sizes || [],
+              active: p.active ?? true,
+              reservedStock: p.reservedStock || 0,
+              rating: p.rating || 0,
+              reviews: p.reviews || 0,
+            }));
           }
-
-          if (data) {
-            let formattedData = data;
-            
-            if (store === 'users') {
-              formattedData = data.map(u => ({
-                id: u.id || u.Id,
-                name: u.name,
-                email: u.email ? u.email.trim().toLowerCase() : '',
-                role: u.role,
-                passwordHash: u.passwordhash,
-                createdAt: u.createdate || u.creatdat || u.createdat || u.created_at,
-                lastLogin: u.lastlogin || u['last login'] || u.last_login
-              }));
-            } else if (store === 'orders') {
-              formattedData = data.map(o => ({
-                id: o.id || o.Id,
-                customer: o.customer || o.customername || o.name || '',
-                phone: o.phone || o.customerphone || o.customer_phone || '',
-                email: o.email || o.customeremail || '',
-                address: o.address || '',
-                city: o.city || '',
-                subtotal: Number(o.subtotal || o.sub_total || 0),
-                discount: Number(o.discount || 0),
-                total: Number(o.total || o.totalprice || o.total_price || 0),
-                discountCode: o.discountcode || o.discountCode || o.coupon || '',
-                status: o.status || 'pending',
-                date: o.date || o.createdate || o.created_at || new Date().toISOString(),
-                items: typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || []),
-                shippingMethod: o.shippingmethod || o.shippingMethod || '',
-                notes: o.notes || '',
-                timestamps: o.timestamps || o.updated_at || new Date().toISOString()
-              }));
-            }
-
-            localStorage.setItem(`${this.prefix}${store}`, JSON.stringify(formattedData));
-            if (store === 'coupons') {
-              localStorage.setItem(`${this.prefix}Coupons`, JSON.stringify(formattedData));
-              localStorage.setItem(`${this.prefix}discounts`, JSON.stringify(formattedData));
-            }
-          }
+          this.setAll(store, formatted);
         } catch (tableErr) {
-          console.error(`💥 Unexpected error syncing [${store}]:`, tableErr);
+          console.error(`Unexpected error syncing [${store}]:`, tableErr);
         }
       }
     } catch (err) {
-      console.warn(`Error parallel syncing from server:`, err);
-    }
-  }
-
-  async _uploadToServer(store, data) {
-    const table = this._getRealTableName(store);
-    // منع الرفع التلقائي للمنتجات والأوردرات من دالة setAll لأن الـ Store يتعامل معها بشكل منفصل ومخصص لمنع الـ Double Sync
-    if (table === 'products' || table === 'orders') return; 
-
-    try {
-      if (data && data.length > 0) {
-        const payload = table === 'users' 
-          ? data.map(u => ({
-              id: u.id,
-              name: u.name,
-              email: u.email,
-              role: u.role,
-              passwordhash: u.passwordHash,
-              createdate: u.createdAt,
-              lastlogin: u.lastLogin
-            }))
-          : data;
-        
-        await supabase.from(table).upsert(payload);
-      }
-    } catch (err) {
-      console.error(`❌ Error uploading to server table [${table}]:`, err.message);
+      console.warn('Error syncing from server:', err);
     }
   }
 
   async insert(store, record) {
+    if (this._isForbidden(store)) return false;
     const data = this.getAll(store);
     data.unshift(record);
-    localStorage.setItem(this._getKey(store), JSON.stringify(data));
-    if (store === 'discounts' || store === 'Coupons' || store === 'coupons') {
-      localStorage.setItem(`${this.prefix}Coupons`, JSON.stringify(data));
-      localStorage.setItem(`${this.prefix}discounts`, JSON.stringify(data));
-      localStorage.setItem(`${this.prefix}coupons`, JSON.stringify(data));
-    }
-
-    const table = this._getRealTableName(store);
-    
-    // 🌟 تحديث ذكي: لو المنتج أو الأوردر مضافين بالفعل من الـ Store أونلاين، نكتفي بالحفظ المحلي فقط هنا وننهي العملية لمنع خطأ 409
-    if (table === 'products' || table === 'orders') {
-      console.log(`✅ [LocalDB] Record locally saved for [${table}]`);
-      return true;
-    }
-
-    try {
-      const nowISO = record.createdAt || new Date().toISOString();
-      const recordToInsert = table === 'users'
-        ? {
-            id: record.id,
-            name: record.name,
-            email: record.email.trim().toLowerCase(),
-            role: record.role,
-            passwordhash: record.passwordHash, 
-            lastlogin: record.lastLogin || null,
-            createdate: nowISO
-          }
-        : record;
-
-      const { error } = await supabase.from(table).upsert([recordToInsert]);
-      if (error) throw error;
-      
-      console.log(`✅ [LocalDB] Record successfully created & synced permanently to table [${table}]`);
-      return true;
-    } catch (err) { 
-      console.error(`❌ [LocalDB] فشل المزامنة المباشرة للسيرفر لجدول [${table}]:`, err.message);
-      return false; 
-    }
+    return this.setAll(store, data);
   }
 
   async update(store, id, updates) {
+    if (this._isForbidden(store)) return false;
     const data = this.getAll(store);
-    // 🌟 تحويل المقارنة لـ مرنة (==) لعدم تضارب الـ Types بين String و Number
     const idx = data.findIndex(r => r.id == id);
     if (idx === -1) return false;
-    
     data[idx] = { ...data[idx], ...updates, updatedAt: new Date().toISOString() };
-    localStorage.setItem(this._getKey(store), JSON.stringify(data));
-
-    const table = this._getRealTableName(store);
-    
-    // لو التحديث جاي لمنتج أو أوردر، الـ Store بيحدث أونلاين بنفسه، فنكتفي بالتحديث المحلي هنا لمنع التكرار
-    if (table === 'products' || table === 'orders') {
-      console.log(`✅ [LocalDB] Local Update Success for [${table}] ID: ${id}`);
-      return true;
-    }
-
-    try {
-      let dbUpdates = { ...updates };
-      
-      if (table === 'users') {
-        if (dbUpdates.passwordHash) { dbUpdates.passwordhash = dbUpdates.passwordHash; delete dbUpdates.passwordHash; }
-        if (dbUpdates.createdAt) { dbUpdates.createdate = dbUpdates.createdAt; delete dbUpdates.createdAt; }
-        if (dbUpdates.lastLogin) { dbUpdates.lastlogin = dbUpdates.lastLogin; delete dbUpdates.lastLogin; }
-        if (dbUpdates.role) { dbUpdates.role = dbUpdates.role.toLowerCase(); } 
-      }
-      
-      console.log(`🔄 [LocalDB] Attempting Permanent Server Update for [${table}] ID: ${id}`, dbUpdates);
-      
-      const { error } = await supabase.from(table).update(dbUpdates).eq('id', id);
-      
-      if (error) {
-        console.error(`❌ [Supabase Update Error] في جدول ${table}:`, error.message);
-        return false;
-      }
-      
-      console.log(`✅ [LocalDB] Permanent Server Update Success for [${table}]`);
-      return true;
-    } catch (err) { 
-      console.error("💥 Crash in DB Update:", err);
-      return false; 
-    }
+    return this.setAll(store, data);
   }
 
   async delete(store, id) {
-    // 🌟 مقارنة مرنة هنا أيضاً لحذف آمن
+    if (this._isForbidden(store)) return false;
     const data = this.getAll(store).filter(r => r.id != id);
-    localStorage.setItem(this._getKey(store), JSON.stringify(data));
-
-    try {
-      await supabase.from(this._getRealTableName(store)).delete().eq('id', id);
-      return true;
-    } catch { return false; }
+    return this.setAll(store, data);
   }
 
   findById(store, id) {
+    if (this._isForbidden(store)) return null;
     return this.getAll(store).find(r => r.id == id) || null;
   }
 
   query(store, predicate) {
+    if (this._isForbidden(store)) return [];
     return this.getAll(store).filter(predicate);
   }
 }
 
 export const db = new LocalDB();
 
-// ─── SEO META MANAGEMENT ─────────────────────────────────────────────────────
+// ─── SEO META MANAGEMENT ───────────────────────────────────────────────────────
 export function setPageMeta({ title, description, image, type = 'website' }) {
   document.title = `${title} | ZASHM Luxury Fashion`;
 
@@ -545,7 +474,7 @@ export function generateSrcSet(url) {
   return widths.map(w => `${getOptimizedImageUrl(url, { width: w })} ${w}w`).join(', ');
 }
 
-// ─── ANALYTICS HELPERS ───────────────────────────────────────────────────────
+// ─── ANALYTICS HELPERS ────────────────────────────────────────────────────────
 export function trackEvent(event, data = {}) {
   if (window.gtag) {
     window.gtag('event', event, data);

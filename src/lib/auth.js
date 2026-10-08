@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { createSession, getSession, destroySession, hashPassword, verifyPassword, checkRateLimit, resetRateLimit, db } from './security';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createSession, getSession, destroySession, checkRateLimit, resetRateLimit, db } from './security';
+import { api, setUnauthorizedHandler } from './api';
 
 const AuthContext = createContext(null);
 
@@ -7,34 +8,51 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const sessionRef = useRef(null);
+  sessionRef.current = session;
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const payload = await api.get('/admin/users');
+      setUsers(Array.isArray(payload.users) ? payload.users : []);
+    } catch (err) {
+      // No permission or session problem — users list simply stays empty.
+      if (err && (err.status === 401 || err.status === 403)) setUsers([]);
+    }
+  }, []);
+
+  // Any 401 from the server means the session token is no longer valid.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      destroySession();
+      setSession(null);
+      setUsers([]);
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   // تهيئة النظام والتحقق من الجلسة وجلب البيانات
   useEffect(() => {
     async function init() {
       try {
-        console.log("🔄 [ZASHM AUTH] Starting initialization...");
-        
         const existing = getSession();
         if (existing) {
-          console.log("🔑 [ZASHM AUTH] Existing session found:", existing);
           setSession(existing);
         }
 
-        if (db.syncFromServer) {
-          await db.syncFromServer();
-        }
+        await db.syncFromServer();
 
-        const storedUsers = db.getAll('users') || [];
-        setUsers(storedUsers);
-        console.log(`👥 [ZASHM AUTH] Synced ${storedUsers.length} users from DB.`);
+        if (existing) {
+          await loadUsers();
+        }
       } catch (error) {
-        console.error("❌ Error during auth initialization:", error);
+        console.error('Error during auth initialization:', error);
       } finally {
         setLoading(false);
       }
     }
     init();
-  }, []);
+  }, [loadUsers]);
 
   const login = useCallback(async (email, password) => {
     try {
@@ -43,8 +61,6 @@ export function AuthProvider({ children }) {
       }
 
       const cleanEmail = email.trim().toLowerCase();
-      console.log("🚀 [ZASHM LOGIN] Attempting login for:", cleanEmail);
-      
       const rateLimitKey = `login_${cleanEmail}`;
       const rateCheck = checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
 
@@ -58,68 +74,43 @@ export function AuthProvider({ children }) {
         };
       }
 
-      let storedUsers = db.getAll('users') || [];
-      let user = storedUsers.find(u => u && u.email && u.email.toString().trim().toLowerCase() === cleanEmail);
-
-      if (!user && db.syncFromServer) {
-        await db.syncFromServer();
-        storedUsers = db.getAll('users') || [];
-        user = storedUsers.find(u => u && u.email && u.email.toString().trim().toLowerCase() === cleanEmail);
-      }
-
-      if (!user) {
-        return { success: false, error: 'Invalid email or password' };
-      }
-
-      const userHash = user.passwordHash || user.passwordhash;
-      const valid = await verifyPassword(password, userHash);
-      if (!valid) {
-        return {
-          success: false,
-          error: `Invalid credentials. ${rateCheck.remaining} attempts remaining.`,
-        };
+      let payload;
+      try {
+        payload = await api.post('/auth', { action: 'login', email: cleanEmail, password });
+      } catch (err) {
+        if (err && err.status === 429) {
+          return { success: false, error: err.message, rateLimited: true };
+        }
+        if (err && err.status === 401) {
+          return {
+            success: false,
+            error: `Invalid credentials. ${rateCheck.remaining} attempts remaining.`,
+          };
+        }
+        throw err;
       }
 
       resetRateLimit(rateLimitKey);
-      
-      // ─── [حل مشكلة ثبات الباسورد والهاش التلقائي] ──────────────────────────
-      const isSHA256 = /^[a-f0-9]{64}$/i.test(userHash?.trim());
-      let updatedFields = { lastLogin: new Date().toISOString() };
-      
-      // نجهز نسخة محدثة من كائن اليوزر عشان الجلسة تتسيف صح ومترجعش قديمة
-      let userForSession = { ...user, ...updatedFields };
 
-      if (!isSHA256) {
-        console.log("🔒 [ZASHM SECURITY] Generating secure hash...");
-        const newSecureHash = await hashPassword(password.trim());
-        updatedFields.passwordHash = newSecureHash;
-        userForSession.passwordHash = newSecureHash; // تحديث الجلسة بالهاش الجديد فوراً!
-      }
-
-      // تحديث قاعدة البيانات
-      await db.update('users', user.id, updatedFields);
-      setUsers(db.getAll('users') || []);
-      // ──────────────────────────────────────────────────────────────────────────
-
-      // 1. إنشاء الجلسة بالكائن المحدث بالكامل (عشان الباسورد الجديد يثبت)
-      const newSession = createSession(userForSession);
-      
-      // 2. تحديث الـ State
+      const userForSession = payload.user;
+      const newSession = createSession(userForSession, payload.token);
       setSession(newSession);
 
-      await new Promise(resolve => setTimeout(resolve, 50));
-      return { success: true, session: newSession, user: userForSession };
+      if (['admin'].includes(newSession.role)) {
+        await loadUsers();
+      }
 
+      return { success: true, session: newSession, user: userForSession };
     } catch (loginError) {
-      console.error("💥 [ZASHM LOGIN] Critical crash:", loginError);
-      return { success: false, error: `Internal login error: ${loginError.message}` };
+      console.error('Login error:', loginError && loginError.message);
+      return { success: false, error: loginError.message || 'Login failed. Please try again.' };
     }
-  }, []);
+  }, [loadUsers]);
 
   const logout = useCallback(() => {
     destroySession();
     setSession(null);
-    console.log("🔒 [ZASHM AUTH] User logged out.");
+    setUsers([]);
   }, []);
 
   const hasPermission = useCallback((permission) => {
@@ -148,71 +139,55 @@ export function AuthProvider({ children }) {
 
   const addUser = useCallback(async ({ name, email, password, role }) => {
     if (!hasPermission('users.write')) return { success: false, error: 'Unauthorized' };
-    const cleanEmail = email.trim().toLowerCase();
-    
-    const storedUsers = db.getAll('users') || [];
-    const existing = storedUsers.find(u => u && u.email && u.email.toString().trim().toLowerCase() === cleanEmail);
-    if (existing) return { success: false, error: 'Email already exists' };
-    
-    const hash = await hashPassword(password);
-    const newUser = { 
-      id: `usr_${Date.now()}`, 
-      name, 
-      email: cleanEmail, 
-      role, 
-      passwordHash: hash, 
-      createdAt: new Date().toISOString(), 
-      lastLogin: null 
-    };
-    
-    await db.insert('users', newUser);
-    setUsers(db.getAll('users') || []);
-    return { success: true };
-  }, [hasPermission]);
+    try {
+      const payload = await api.post('/admin/users', { name, email, password, role });
+      await loadUsers();
+      return { success: true, user: payload.user };
+    } catch (err) {
+      return { success: false, error: err.message || 'Could not create user' };
+    }
+  }, [hasPermission, loadUsers]);
 
   const updateUser = useCallback(async (id, updates) => {
     if (!hasPermission('users.write')) return { success: false, error: 'Unauthorized' };
-    
-    const finalUpdates = { ...updates };
+    try {
+      const payload = await api.patch('/admin/users', { id, updates });
+      await loadUsers();
 
-    if (finalUpdates.email) {
-      finalUpdates.email = finalUpdates.email.trim().toLowerCase();
+      // لو الأدمن بيعدل بيانات نفسه، حدّث الجلسة الحالية فوراً عشان مترجعش قديمة
+      if (String(id) === String(sessionRef.current?.userId)) {
+        const updatedUser = payload.user || {};
+        const refreshedSession = createSession(
+          {
+            id: sessionRef.current.userId,
+            name: updatedUser.name || sessionRef.current.name,
+            email: updatedUser.email || sessionRef.current.email,
+            role: updatedUser.role || sessionRef.current.role,
+          },
+          sessionRef.current.token
+        );
+        setSession(refreshedSession);
+      }
+
+      return { success: true, user: payload.user };
+    } catch (err) {
+      return { success: false, error: err.message || 'Could not update user' };
     }
-
-    if (finalUpdates.password) {
-      finalUpdates.passwordHash = await hashPassword(finalUpdates.password);
-      delete finalUpdates.password;
-    }
-
-    // تحديث قاعدة البيانات للسيرفر
-    await db.update('users', id, finalUpdates);
-    
-    // 🔥 [حل التعديل الذاتي] لو الأدمن بيعدل بيانات نفسه، لازم نحدث جلسته الحالية في المتصفح فوراً عشان ميرجعش قديم!
-    if (id === session?.userId) {
-      console.log("🔄 [ZASHM AUTH] Admin updated their own data. Refreshing active session...");
-      const updatedUserObj = {
-        id: session.userId,
-        name: finalUpdates.name || session.name,
-        email: finalUpdates.email || session.email,
-        role: finalUpdates.role || session.role,
-        passwordHash: finalUpdates.passwordHash || session.passwordHash
-      };
-      const refreshedSession = createSession(updatedUserObj);
-      setSession(refreshedSession);
-    }
-
-    setUsers(db.getAll('users') || []);
-    return { success: true };
-  }, [hasPermission, session]);
+  }, [hasPermission, loadUsers]);
 
   const deleteUser = useCallback(async (id) => {
     if (!hasPermission('users.write')) return { success: false, error: 'Unauthorized' };
-    if (id === session?.userId) return { success: false, error: 'Cannot delete own account' };
-    
-    await db.delete('users', id);
-    setUsers(db.getAll('users') || []);
-    return { success: true };
-  }, [hasPermission, session]);
+    if (String(id) === String(sessionRef.current?.userId)) {
+      return { success: false, error: 'Cannot delete own account' };
+    }
+    try {
+      await api.del('/admin/users', { id });
+      await loadUsers();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message || 'Could not delete user' };
+    }
+  }, [hasPermission, loadUsers]);
 
   return (
     <AuthContext.Provider value={{ session, login, logout, hasPermission, canAccess, loading, users, addUser, updateUser, deleteUser }}>
@@ -230,7 +205,7 @@ export function useAuth() {
 export function withAuth(Component, requiredPermission) {
   return function ProtectedComponent(props) {
     const { session, hasPermission, loading } = useAuth();
-    
+
     if (loading) {
       return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
@@ -238,7 +213,7 @@ export function withAuth(Component, requiredPermission) {
         </div>
       );
     }
-    
+
     if (!session) return <LoginRequired />;
     if (requiredPermission && !hasPermission(requiredPermission)) return <AccessDenied />;
     return <Component {...props} />;
@@ -257,7 +232,7 @@ function LoginRequired() {
 
 function AccessDenied() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 8, background: 'var(--bg)' }}>
       <p style={{ color: 'var(--red)', fontFamily: 'var(--font-display)', fontSize: 24 }}>Access Denied</p>
       <p style={{ color: 'var(--text3)', fontSize: 13 }}>You don't have permission to view this page</p>
     </div>

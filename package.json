@@ -20,6 +20,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "dev": "vercel dev",
     "build": "react-scripts build"
   },
   "browserslist": {

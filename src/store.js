@@ -1,18 +1,12 @@
 import { create } from 'zustand';
-import { db, generateOrderId, trackEvent } from './lib/security';
+import { db, trackEvent } from './lib/security';
 import { supabase } from './lib/supabase'; // ربط سوبابيز الأونلاين
+import { api } from './lib/api';
 
 // دالة مساعدة موحدة لحساب تاريخ اليوم بالكامل بناءً على التوقيت المحلي (Local Time) لتجنب مشاكل الـ UTC
 function getLocalTodayDate() {
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   return (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
-}
-
-// ─── HELPER TO GET FILE PATH FROM SUPABASE URL ──────────────────────────────
-function getFilePathFromUrl(url) {
-  if (!url) return null;
-  const parts = url.split('/products/');
-  return parts.length > 1 ? parts[1] : null;
 }
 
 // ─── SANITIZE ORDER DATA ──────────────────────────────────────────────────────
@@ -131,7 +125,6 @@ function getSanitizedOrders() {
 function initDB() {
   if (!db.getAll('products')) db.setAll('products', []);
   if (!db.getAll('discounts')) db.setAll('discounts', []);
-  if (!db.getAll('orders')) db.setAll('orders', []);
   if (!db.getAll('notifications')) db.setAll('notifications', []);
 }
 initDB();
@@ -177,127 +170,57 @@ export const useStore = create((set, get) => ({
   },
   
   updateProduct: async (id, updates) => {
-    const updatedFields = { ...updates, updatedAt: new Date().toISOString() };
-    db.update('products', id, updatedFields);
-    set({ products: db.getAll('products') || [] });
-
-    const { active, createdAt, updatedAt, reservedStock, rating, reviews, ...cleanUpdates } = updatedFields;
-    
-    if (updates.colors) cleanUpdates.colors = Array.isArray(updates.colors) ? updates.colors : [];
-    if (updates.sizes) cleanUpdates.sizes = Array.isArray(updates.sizes) ? updates.sizes : [];
-    if (updates.images) cleanUpdates.images = Array.isArray(updates.images) ? updates.images : [];
-    if (updates.sku !== undefined) cleanUpdates.sku = updates.sku;
-
-    await supabase.from('products').update(cleanUpdates).eq('id', id);
-  },
-  
-  deleteProduct: async (id) => { 
     try {
-      const products = get().products;
-      const product = products.find(p => p.id === id);
-
-      if (product) {
-        const filesToDelete = [];
-
-        if (Array.isArray(product.images)) {
-          product.images.forEach(url => {
-            const path = getFilePathFromUrl(url);
-            if (path) filesToDelete.push(path);
-          });
-        } else if (product.image) {
-          const path = getFilePathFromUrl(product.image);
-          if (path) filesToDelete.push(path);
-        }
-
-         if (product.sizeGuide) {
-          const path = getFilePathFromUrl(product.sizeGuide);
-         if (path) filesToDelete.push(path);
-      }
-
-        if (filesToDelete.length > 0) {
-          const { error: storageError } = await supabase
-            .storage
-            .from('products')
-            .remove(filesToDelete);
-
-          if (storageError) {
-            console.error("❌ فشل مسح صور المنتج من الـ Bucket:", storageError);
-          }
-        }
-      }
-
-      db.delete('products', id); 
-      set({ products: db.getAll('products') || [] }); 
-      await supabase.from('products').delete().eq('id', id);
-
+      await api.patch('/admin/products', { id, updates });
     } catch (err) {
-      console.error("حدث خطأ غير متوقع أثناء عملية الحذف بالكامل:", err);
+      console.error('updateProduct failed:', err.message);
+      throw err;
+    } finally {
+      await get().refreshProducts();
     }
   },
   
-  bulkDeleteProducts: async (ids) => { 
-    ids.forEach(id => db.delete('products', id)); 
-    set({ products: db.getAll('products') || [] }); 
-    await supabase.from('products').delete().in('id', ids);
+  deleteProduct: async (id) => {
+    db.delete('products', id);
+    set({ products: db.getAll('products') || [] });
+    try {
+      await api.del('/admin/products', { id });
+    } catch (err) {
+      console.error('deleteProduct failed:', err.message);
+    }
+    await get().refreshProducts();
   },
   
-  updateProductImages: async (id, images) => { 
-    const updatedFields = { images, updatedAt: new Date().toISOString() };
-    db.update('products', id, updatedFields); 
-    set({ products: db.getAll('products') || [] }); 
-    
-    const singleImage = Array.isArray(images) ? images[0] : images;
-    await supabase.from('products').update({ image: singleImage, images: Array.isArray(images) ? images : [images] }).eq('id', id);
+  bulkDeleteProducts: async (ids) => {
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    ids.forEach(id => db.delete('products', id));
+    set({ products: db.getAll('products') || [] });
+    try {
+      await api.del('/admin/products', { ids });
+    } catch (err) {
+      console.error('bulkDeleteProducts failed:', err.message);
+    }
+    await get().refreshProducts();
+  },
+  
+  updateProductImages: async (id, images) => {
+    const list = Array.isArray(images) ? images : [images];
+    try {
+      await api.patch('/admin/products', { id, updates: { images: list, image: list[0] || '' } });
+    } catch (err) {
+      console.error('updateProductImages failed:', err.message);
+    }
+    await get().refreshProducts();
   },
   
   addProduct: async (p) => {
-    const generatedNumericId = Number(`${Date.now()}${Math.floor(100 + Math.random() * 900)}`);
-
-    const supabasePayload = {
-      id: generatedNumericId,
-      name: p.name,
-      category: p.category,
-      price: Number(p.price || 0),
-      salePrice: p.salePrice ? Number(p.salePrice) : null,
-      description: p.description || '',
-      stock: parseInt(p.stock ?? 0, 10),
-      variantStock: p.variantStock || {},
-      sku: p.sku || '',
-      colors: Array.isArray(p.colors) ? p.colors : [],
-      sizes: Array.isArray(p.sizes) ? p.sizes : [],
-      images: Array.isArray(p.images) ? p.images : [],
-      image: p.image || (Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : ''),
-      sizeGuide: p.sizeGuide || null
-    };
-
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .insert([supabasePayload])
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Supabase Products Insert Error:", error);
-        return { success: false, error };
-      }
-
-      const finalProduct = {
-        ...data,
-        reservedStock: 0, 
-        rating: 0, 
-        reviews: 0, 
-        active: data.active ?? true, 
-        createdAt: data.created_at || new Date().toISOString(), 
-        updatedAt: data.updated_at || new Date().toISOString() 
-      };
-
-      db.insert('products', finalProduct);
-      return finalProduct;
-
+      const payload = await api.post('/admin/products', { product: p });
+      if (!payload || !payload.product) return { success: false, error: 'No product returned' };
+      return payload.product;
     } catch (err) {
-      console.error("Unexpected error in addProduct:", err);
-      return { success: false, error: err };
+      console.error('addProduct failed:', err.message);
+      throw err;
     } finally {
       await get().refreshProducts();
     }
@@ -412,277 +335,105 @@ export const useStore = create((set, get) => ({
   // ─── ORDERS & NOTIFICATIONS ────────────────────────────────────────────────
   refreshOrders: async () => {
     try {
-      const { data, error } = await supabase.from('orders').select('*').order('date', { ascending: false });
-      if (data && !error) {
-        db.setAll('orders', data);
-        const sanitized = data.map(o => sanitizeOrder(o, get().products));
-        set({ orders: sanitized });
-      }
-    } catch(err) {
-      console.error("Unexpected error in refreshOrders:", err);
+      const payload = await api.get('/admin/orders');
+      const data = Array.isArray(payload.orders) ? payload.orders : [];
+      const sanitized = data.map(o => sanitizeOrder(o, get().products));
+      set({ orders: sanitized });
+    } catch (err) {
+      if (err && (err.status === 401 || err.status === 403)) return;
+      console.error("Unexpected error in refreshOrders:", err && err.message);
     }
   },
 
   placeOrder: async (orderData) => {
-    const { cart, appliedDiscount, cartTotal, cartSubtotal, clearCart } = get();
+    const { cart, appliedDiscount, clearCart } = get();
     const products = get().products;
-    
-    const orderId = generateOrderId();
-    
-    // 🎯 توليد رابط التتبع الخاص بموقعك تلقائياً هنا لحفظه
-    const productionDomain = 'https://zashm-mo.vercel.app'; 
-    const trackingUrl = `${productionDomain}/?track=${orderId}`;
 
-    for (const item of cart) {
-      const product = products.find(p => p.id == item.product.id);
-      if (product) {
-        const currentStock = product.stock ? Number(product.stock) : 0;
-        const newStock = Math.max(0, currentStock - item.qty);
-        const variantKey = `${item.size}-${item.color}`;
-        const updatedVariantStock = { ...(product.variantStock || {}) };
-        
-        if (updatedVariantStock[variantKey] !== undefined) {
-          const currentVariantQty = Number(updatedVariantStock[variantKey]);
-          updatedVariantStock[variantKey] = Math.max(0, currentVariantQty - item.qty);
-        }
+    // المرور عبر السيرفر: الأسعار والمخزون والكوبون والشحن قبل إنشاء الطلب.
+    const items = cart.map(i => ({
+      productId: i.product?.id ?? 0,
+      qty: i.qty ?? 1,
+      size: i.size ?? '',
+      color: i.color ?? '',
+    }));
 
-        db.update('products', product.id, { stock: newStock, variantStock: updatedVariantStock, updatedAt: new Date().toISOString() });
-        await supabase.from('products').update({ stock: newStock, variantStock: updatedVariantStock }).eq('id', product.id);
-      }
+    let payload;
+    try {
+      payload = await api.post('/orders', {
+        items,
+        couponCode: appliedDiscount?.code || '',
+        customer: {
+          name: orderData?.customer || '',
+          phone: orderData?.phone || '',
+          phoneAlt: orderData?.phoneAlt || '',
+          email: orderData?.email || '',
+          address: orderData?.address || '',
+          city: orderData?.city || '',
+          notes: orderData?.notes || '',
+          date: getLocalTodayDate(),
+        },
+        client: {
+          shippingCost: Number(orderData?.shippingCost || 0),
+          total: Number(orderData?.total || 0),
+        },
+      });
+    } catch (err) {
+      const errors = (err && Array.isArray(err.payload?.errors) && err.payload.errors.length)
+        ? err.payload.errors
+        : [err && err.message ? err.message : 'Order failed. Please try again.'];
+      return { success: false, error: errors[0], errors };
     }
 
-    const subtotal = cartSubtotal() ?? 0;
-    const total = cartTotal() ?? 0;
-    const discount = Math.max(0, subtotal - total);
-    
-    const customerName = orderData?.name || orderData?.customer || 'Unknown Customer';
-
-    const order = {
-      id: orderId,
-      ...orderData,
-      items: cart.map(i => ({
-        productId: i.product?.id ?? 0,
-        name: i.product?.name ?? 'Unknown Product',
-        category: (i.product?.category || '').trim() || 'General',
-        size: i.size ?? '',
-        color: i.color ?? '',
-        qty: i.qty ?? 0,
-        price: ((i.product?.salePrice || i.product?.price) ?? 0) * (i.qty ?? 0),
-        unitPrice: (i.product?.salePrice || i.product?.price) ?? 0,
-        image: (i.product?.images || [])[0] ?? '',
-      })),
-      subtotal,
-      discount,
-      total,
-      discountCode: appliedDiscount?.code || null,
-      status: 'Pending',
-      date: getLocalTodayDate(), 
-      timestamps: { created: new Date().toISOString() },
-      customer: customerName,
-      phone: orderData?.phone || '',
-      phoneAlt: orderData?.phoneAlt || '', 
-      email: orderData?.email || '',
-      address: orderData?.address || '',
-      city: orderData?.city || '',
-      notes: orderData?.notes || '',
-      tracking_url: trackingUrl, // ✅ حفظ الرابط في الأوبجكت المحلي
-    };
-
-    db.insert('orders', order);
-    
-    const supabaseOrderPayload = {
-      id: order.id,
-      subtotal: order.subtotal,
-      discount: order.discount,
-      total: order.total,
-      discountCode: order.discountCode,
-      status: order.status,
-      date: order.date,
-      customer: order.customer,
-      phone: order.phone,
-      phoneAlt: order.phoneAlt, 
-      email: order.email,
-      address: order.address,
-      city: order.city,
-      notes: order.notes,
-      items: JSON.stringify(order.items),
-      timestamps: JSON.stringify(order.timestamps),
-      tracking_url: trackingUrl // ✅ حفظ الرابط أونلاين في سوبابيز
-    };
-
-    const { error: orderError } = await supabase.from('orders').insert([supabaseOrderPayload]);
-    if (orderError) {
-      console.error("❌ خطأ حرج أثناء إرسال الأوردر لـ Supabase:", orderError);
-      alert(`فشل حفظ الأوردر أونلاين: ${orderError.message}`);
-      return { success: false, error: orderError.message }; 
-    }
+    const order = payload.order;
 
     const notifications = db.getAll('notifications') || [];
-    notifications.unshift({ id: Date.now(), type: 'new_order', orderId: order.id, customer: order.customer, total: order.total, read: false, timestamp: new Date().toISOString() });
+    notifications.unshift({ id: Date.now(), type: 'new_order', orderId: order.id, customer: order.customer, total: order.total, read: false, timestamp: Date.now() });
     db.setAll('notifications', notifications.slice(0, 50));
 
+    clearCart();
     if (appliedDiscount) {
-      const newCount = (appliedDiscount.usageCount ?? 0) + 1;
-      db.update('discounts', appliedDiscount.id, { usageCount: newCount });
-      await supabase.from('coupons').update({ usageCount: newCount }).eq('id', appliedDiscount.id);
       saveAppliedDiscount(null);
       set({ appliedDiscount: null });
     }
+    await get().refreshProducts();
 
-    try {
-      let itemsText = order.items.map(item => {
-        const details = [];
-        if (item.size) details.push(item.size);
-        if (item.color) details.push(item.color);
-        const detailsStr = details.length > 0 ? ` (${details.join('/')})` : '';
-        return `• *${item.name}*${detailsStr} x${item.qty} → _EGP ${item.price.toLocaleString()}_`;
-      }).join('\n');
-
-     // 🎯 دالة إرسال الإشعار لتليجرام من داخل الـ Store
-const sendTelegramNotification = async (messageText) => {
-  try {
-    const BOT_TOKEN = '8991256107:AAGFPzaB_gxNBanh3yPuDWUS18GthZw5DUI';
-    const CHAT_ID = '5159341259'; 
-
-    const cleanTelegramText = messageText
-      .replace(/→/g, ':') 
-      .replace(/_/g, '');
-
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: CHAT_ID,
-        text: cleanTelegramText,
-        parse_mode: 'Markdown' 
-      }),
-    });
-    console.log('Telegram notification sent successfully from store!');
-  } catch (error) {
-    console.error('Telegram notification failed quietly:', error);
-  }
-};
-
-// ... داخل الـ Store بتاعك (مكان الجزء اللي بينتهي بـ الـ return والـ update)
-
-    // 📦 تجهيز رسالة التليجرام الفخمة بالدومين الثابت ونفس التنسيق
-    const trackingUrl = `https://zashm-mo.vercel.app/?track=${order.id}`;
-    
-    const telegramMessage = `
-✨ *طلب جديد من متجر ZASHM* ✨
---------------------------------🟩
-
-👤 *بيانات العميل:*
-• *الاسم:* ${order.customer}
-• *رقم الهاتف الأساسي:* ${order.phone}
-• *رقم الهاتف البديل:* ${order.phoneAlt || 'لا يوجد'}
-• *البريد الإلكتروني:* ${order.email || 'غير محدد'}
-
-📍 *تفاصيل الشحن:*
-• *المدينة:* ${order.city || 'غير محدد'}
-• *العنوان:* ${order.address}
-• *ملاحظات الطلب:* ${order.notes || 'لا توجد'}
-
-🛍 *المنتجات المطلوبة:*
-${itemsText}
-
---------------------------------🟨
-💰 *الملخص المالي:*
-• *المجموع الفرعي:* EGP ${order.subtotal.toLocaleString()}
-• *كود الخصم المستخدم:* ${order.discountCode || 'لا يوجد'}
-• *قيمة الخصم:* EGP ${order.discount.toLocaleString()}
-• *الإجمالي الكلي:* *EGP ${order.total.toLocaleString()}*
-
---------------------------------
-🔗 *رابط تتبع الطلب الخاص بك:*
-${trackingUrl}
-
---------------------------------
-🔒 _رقم الطلب المرجعي: ${order.id}_
-_تم تسجيل الطلب وتأكيده بأمان عبر الموقع_
-`.trim();
-
-    // 1. تشغيل إشعار تليجرام فوراً
-    await sendTelegramNotification(telegramMessage);
-
-    // 2. 🚫 تم حذف وإلغاء كود الواتساب نهائياً لمنع التحويل بره الموقع
-    
-    } catch (wsErr) {
-      console.error("Telegram/Process error:", wsErr);
-    }
-    
-    clearCart();
-    get().refreshProducts();
-    get().refreshOrders();
-    
-    set({ 
-      unreadOrderCount: notifications.filter(n => !n.read).length, 
-      newOrderNotification: { order: sanitizeOrder(order, products), timestamp: Date.now() } 
+    set({
+      unreadOrderCount: notifications.filter(n => !n.read).length,
+      newOrderNotification: { order: sanitizeOrder(order, products), timestamp: Date.now() },
     });
 
     return { success: true, order: sanitizeOrder(order, products) };
   },
   
   updateOrderStatus: async (id, newStatus) => {
-    const order = db.findById('orders', id);
+    const orders = get().orders;
+    const order = orders.find(o => o.id === id);
     if (!order) return { success: false, error: 'Order not found' };
-    
-    const oldStatus = order.status;
+
     const timestamps = { ...(order.timestamps || {}), [newStatus.toLowerCase()]: new Date().toISOString() };
-    
-    let orderItems = [];
-    if (order.items) {
-      if (typeof order.items === 'string') {
-        try { orderItems = JSON.parse(order.items); } catch (e) { orderItems = []; }
-      } else if (Array.isArray(order.items)) {
-        orderItems = order.items;
-      }
+
+    // تحديث محلي فوري ثم مزامنة السيرفر (السيرفر يعالج المخزون عند الإلغاء/الرجوع)
+    set({ orders: orders.map(o => o.id === id ? { ...o, status: newStatus, timestamps } : o) });
+
+    try {
+      await api.patch('/admin/orders', { id, status: newStatus });
+    } catch (err) {
+      console.error('updateOrderStatus failed:', err.message);
     }
 
-    if (newStatus.toLowerCase() === 'cancelled' && oldStatus.toLowerCase() !== 'cancelled') {
-      const products = get().products;
-      for (const item of orderItems) {
-        const product = products.find(p => p.id == item.productId);
-        if (product) {
-          const newStock = (product.stock || 0) + Number(item.qty);
-          const variantKey = `${item.size}-${item.color}`;
-          const updatedVariantStock = { ...(product.variantStock || {}) };
-          if (updatedVariantStock[variantKey] !== undefined) {
-            updatedVariantStock[variantKey] = Number(updatedVariantStock[variantKey]) + Number(item.qty);
-          }
-          db.update('products', product.id, { stock: newStock, variantStock: updatedVariantStock, updatedAt: new Date().toISOString() });
-          await supabase.from('products').update({ stock: newStock, variantStock: updatedVariantStock }).eq('id', product.id);
-        }
-      }
-    }
-    else if (oldStatus.toLowerCase() === 'cancelled' && newStatus.toLowerCase() !== 'cancelled') {
-      const products = get().products;
-      for (const item of orderItems) {
-        const product = products.find(p => p.id == item.productId);
-        if (product) {
-          const newStock = Math.max(0, (product.stock || 0) - Number(item.qty));
-          const variantKey = `${item.size}-${item.color}`;
-          const updatedVariantStock = { ...(product.variantStock || {}) };
-          if (updatedVariantStock[variantKey] !== undefined) {
-            updatedVariantStock[variantKey] = Math.max(0, Number(updatedVariantStock[variantKey]) - Number(item.qty)); // 🛡️ تم إصلاح الـ key هنا أيضاً لتفادي الـ NaN
-          }
-          db.update('products', product.id, { stock: newStock, variantStock: updatedVariantStock });
-          await supabase.from('products').update({ stock: newStock, variantStock: updatedVariantStock }).eq('id', product.id);
-        }
-      }
-    }
-
-    db.update('orders', id, { status: newStatus, timestamps });
-    set({ orders: getSanitizedOrders() });
-    await supabase.from('orders').update({ status: newStatus, timestamps: JSON.stringify(timestamps) }).eq('id', id);
-    get().refreshProducts();
+    await get().refreshProducts();
+    await get().refreshOrders();
     return { success: true };
   },
 
   deleteOrder: async (id) => {
-    db.delete('orders', id);
-    set({ orders: getSanitizedOrders() });
-    await supabase.from('orders').delete().eq('id', id);
+    set({ orders: get().orders.filter(o => String(o.id) !== String(id)) });
+    try {
+      await api.del('/admin/orders', { id });
+    } catch (err) {
+      console.error('deleteOrder failed:', err.message);
+      await get().refreshOrders();
+    }
     return { success: true };
   },
 
@@ -706,40 +457,63 @@ _تم تسجيل الطلب وتأكيده بأمان عبر الموقع_
     }
   },
   
-  addDiscount: async (d) => { 
+  addDiscount: async (d) => {
     const id = Date.now();
-    const discount = { ...d, id, usageCount: 0, createdAt: new Date().toISOString() }; 
-    db.insert('discounts', discount); 
-    set({ discounts: db.getAll('discounts') || [] }); 
+    const discount = { ...d, id, usageCount: 0, createdAt: new Date().toISOString() };
+    db.insert('discounts', discount);
+    set({ discounts: db.getAll('discounts') || [] });
 
-    const supabaseCouponPayload = {
-      id: discount.id,
-      code: discount.code ? discount.code.trim().toUpperCase() : '',
-      type: discount.type || 'percentage',
-      value: discount.value || 0,
-      active: discount.active ?? true,
-      description: discount.description || '',
-      startDate: discount.startDate,
-      endDate: discount.endDate,
-      usageLimit: discount.usageLimit || 0,
-      usageCount: discount.usageCount || 0,
-      createdAt: discount.createdAt
-    };
+    try {
+      const payload = await api.post('/admin/coupons', { coupon: { ...discount } });
+      if (payload && payload.discount) {
+        db.update('discounts', id, payload.discount);
+        set({ discounts: db.getAll('discounts') || [] });
+      }
+    } catch (err) {
+      console.error('addDiscount failed:', err.message);
+      await get().refreshDiscounts();
+    }
+    return discount;
+  },
 
-    const { error } = await supabase.from('coupons').insert([supabaseCouponPayload]);
-    if (error) console.error("Supabase Coupons Insert Error:", error);
-    return discount; 
+  updateDiscount: async (id, updates) => {
+    const discounts = get().discounts;
+    const current = discounts.find(d => String(d.id) === String(id));
+    set({ discounts: discounts.map(d => String(d.id) === String(id) ? { ...d, ...updates } : d) });
+
+    if (current) {
+      try {
+        const payload = await api.patch('/admin/coupons', { id, updates });
+        if (payload && payload.discount) {
+          set({ discounts: get().discounts.map(d => String(d.id) === String(id) ? { ...d, ...payload.discount } : d) });
+        }
+      } catch (err) {
+        console.error('updateDiscount failed:', err.message);
+        await get().refreshDiscounts();
+      }
+    }
   },
-  
-  updateDiscount: async (id, updates) => { 
-    db.update('discounts', id, updates); 
-    set({ discounts: db.getAll('discounts') || [] }); 
-    await supabase.from('coupons').update(updates).eq('id', id);
+
+  deleteDiscount: async (id) => {
+    set({ discounts: get().discounts.filter(d => String(d.id) !== String(id)) });
+    try {
+      await api.del('/admin/coupons', { id });
+    } catch (err) {
+      console.error('deleteDiscount failed:', err.message);
+      await get().refreshDiscounts();
+    }
   },
-  deleteDiscount: async (id) => { 
-    db.delete('discounts', id); 
-    set({ discounts: db.getAll('discounts') || [] }); 
-    await supabase.from('coupons').delete().eq('id', id);
+
+  importProducts: async (list) => {
+    if (!Array.isArray(list) || list.length === 0) return { success: false, error: 'No products to import' };
+    try {
+      const payload = await api.post('/admin/products', { items: list.slice(0, 500) });
+      await get().refreshProducts();
+      return { success: true, count: payload && payload.count ? payload.count : list.length };
+    } catch (err) {
+      console.error('importProducts failed:', err.message);
+      return { success: false, error: err.message || 'Import failed' };
+    }
   },
   
   applyDiscount: (code) => {

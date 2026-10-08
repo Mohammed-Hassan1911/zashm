@@ -194,7 +194,6 @@ export function CartPage() {
           </div>
         )}
       </div>
-      <style>{`@media (max-width: 768px) { .cart-grid { grid-template-columns: 1fr !important; } }`}</style>
     </div>
   );
 }
@@ -779,7 +778,6 @@ export function CheckoutPage() {
           </div>
         </div>
       </div>
-      <style>{`@media (max-width: 768px) { .checkout-grid { grid-template-columns: 1fr !important; } }`}</style>
     </div>
   );
 }

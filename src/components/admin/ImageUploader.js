@@ -1,8 +1,48 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, Reorder } from 'framer-motion';
 import { Upload, X, GripVertical, AlertCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import { getOptimizedImageUrl } from '../../lib/security';
+
+const RAW_DIRECT_LIMIT = 2.9 * 1024 * 1024; // files up to ~2.9MB are sent as-is
+const DATAURL_LIMIT = 3.9 * 1024 * 1024;   // server accepts bodies up to 4MB
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not read the image file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressImage(dataUrl) {
+  const img = await new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('Invalid image file'));
+    el.src = dataUrl;
+  });
+  let { width, height } = img;
+  const MAX_DIM = 2000;
+  if (width > MAX_DIM || height > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
+  let out = canvas.toDataURL('image/webp', 0.85);
+  if (out.length > DATAURL_LIMIT || !out.startsWith('data:image/webp')) {
+    out = canvas.toDataURL('image/jpeg', 0.8);
+  }
+  if (out.length > DATAURL_LIMIT) {
+    throw new Error('Image too large — please upload a smaller image (max 3MB)');
+  }
+  return out;
+}
 
 export default function ImageUploader({ images = [], onChange, maxImages = 6 }) {
   const [dragging, setDragging] = useState(false);
@@ -45,7 +85,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
     setUrlInput('');
   };
 
-  // ─── SUPABASE UPLOAD FIX ─────────────────────────
+  // ─── SERVER UPLOAD (storage write happens server-side, never from the browser) ───
   const handleFileUpload = async (files) => {
     setUploading(true);
     setError('');
@@ -62,30 +102,23 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
           continue;
         }
 
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random()
-          .toString(36)
-          .substring(2)}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('products')
-          .upload(fileName, file);
-
-        if (uploadError) {
-          console.error(uploadError);
-          setError(uploadError.message);
+        // Compress larger photos locally to stay under the server body limit.
+        let dataUrl;
+        try {
+          const raw = await readAsDataUrl(file);
+          dataUrl = raw.length > DATAURL_LIMIT ? await compressImage(raw) : raw;
+          if (dataUrl.length > DATAURL_LIMIT) throw new Error('Image too large — please upload a smaller image (max 3MB)');
+        } catch (err) {
+          setError(err && err.message ? err.message : 'Upload failed');
           continue;
         }
 
-        const { data } = supabase.storage
-          .from('products')
-          .getPublicUrl(fileName);
-
-        addImage(data.publicUrl);
+        const payload = await api.post('/admin/upload', { file: dataUrl });
+        addImage(payload.url);
       }
     } catch (err) {
-      console.error(err);
-      setError('Upload failed');
+      console.error('Upload failed:', err && err.message);
+      setError('Upload failed. Please try again.');
     }
 
     setUploading(false);

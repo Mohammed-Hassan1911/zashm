@@ -515,12 +515,6 @@ export default function ProductPage() {
           </div>
         )}
       </AnimatePresence>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .product-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
-        }
-      `}</style>
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../store'; 
+import { api } from '../lib/api';
 import { Search, Package, MapPin, Phone, Calendar, ArrowRight } from 'lucide-react';
 
 const STATUS_COLORS = {
@@ -15,10 +16,19 @@ const STATUS_COLORS = {
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered'];
 
 export default function TrackOrder() {
-  const { orders } = useStore();
   const storeSearchQuery = useStore((state) => state.searchQuery); // 🎯 استدعاء الـ ID المحقون من الـ Store
   const [inputOrderId, setInputOrderId] = useState('');
   const [activeOrderId, setActiveOrderId] = useState('');
+  const [currentOrder, setCurrentOrder] = useState(null);
+  const [notFound, setNotFound] = useState(false);
+  const [loadingTrack, setLoadingTrack] = useState(false);
+  const trackTokenRef = useRef('');
+
+  // 🎯 لقط الـ tk (رمز التتبع) من رابط المتصفح للوصول الكامل للطلب
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    trackTokenRef.current = params.get('tk') || '';
+  }, []);
 
   // 🎯 لقط الأوردر أوتوماتيكياً سواء من الـ Store أو من رابط المتصفح مباشرة
   useEffect(() => {
@@ -35,13 +45,40 @@ export default function TrackOrder() {
     }
   }, [storeSearchQuery]);
 
-  // البحث عن الطلب بمطابقة دقيقة وغير حساسة لحالة الأحرف (Case-insensitive)
-  const currentOrder = useMemo(() => {
-    if (!activeOrderId) return null;
-    return (orders || []).find(o => 
-      String(o.id).trim().toLowerCase() === String(activeOrderId).trim().toLowerCase()
-    );
-  }, [orders, activeOrderId]);
+  // البحث عن الطلب عبر السيرفر (لا يوجد نسخ محلية من الطلبات لضمان الخصوصية)
+  useEffect(() => {
+    if (!activeOrderId) {
+      setCurrentOrder(null);
+      setNotFound(false);
+      return;
+    }
+    const id = activeOrderId.trim();
+    let cancelled = false;
+    setLoadingTrack(true);
+    setNotFound(false);
+    setCurrentOrder(null);
+
+    (async () => {
+      try {
+        const tk = trackTokenRef.current;
+        const qs = `/orders?track=${encodeURIComponent(id)}${tk ? `&tk=${encodeURIComponent(tk)}` : ''}`;
+        const payload = await api.get(qs);
+        if (cancelled) return;
+        if (payload && payload.found && payload.order) {
+          setCurrentOrder(payload.order);
+        } else {
+          setNotFound(true);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setNotFound(true);
+      } finally {
+        if (!cancelled) setLoadingTrack(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [activeOrderId]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault(); // 🎯 منع تحديث الصفحة أو الاتصال الخارجي نهائياً
@@ -108,8 +145,16 @@ export default function TrackOrder() {
       {/* ─── حالة عدم إدخال طلب أو طلب غير موجود ─── */}
       {!currentOrder && activeOrderId && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '30px 16px', background: 'var(--bg2)', borderRadius: 8, border: '1px solid var(--border)' }}>
-          <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 500 }}>⚠️ We couldn't find an order with ID: <span style={{ color: 'var(--gold)', fontFamily: 'monospace' }}>{activeOrderId}</span></p>
-          <p style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>Please double check the ID from your invoice or contact support.</p>
+{loadingTrack ? (
+            <p style={{ color: 'var(--text3)', fontSize: 14 }}>Loading your order...</p>
+          ) : notFound ? (
+            <>
+              <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 500 }}>⚠️ We couldn't find an order with ID: <span style={{ color: 'var(--gold)', fontFamily: 'monospace' }}>{activeOrderId}</span></p>
+              <p style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>Please double check the ID from your invoice or contact support.</p>
+            </>
+          ) : (
+            <p style={{ color: 'var(--text3)', fontSize: 13 }}>Enter your order ID above to track it.</p>
+          )}
         </motion.div>
       )}
 

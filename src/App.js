@@ -66,10 +66,13 @@ function AppInner() {
     async function loadOnlineData() {
       await refreshProducts();
       await refreshDiscounts();
-      await refreshOrders();
+      // الطلبات تتطلب جلسة أدمن — لا نجلبها أبداً لزوار المتجر.
+      if (session) {
+        await refreshOrders();
+      }
     }
     loadOnlineData();
-  }, [refreshProducts, refreshDiscounts, refreshOrders]);
+  }, [session, refreshProducts, refreshDiscounts, refreshOrders]);
 
   if (loading) {
     return (
