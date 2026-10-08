@@ -268,17 +268,33 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
 
                 {/* DELETE */}
                 <button
+                  type="button"
                   onClick={() => removeImage(img)}
                   disabled={deleting}
+                  aria-label={`Delete image ${idx + 1}`}
                   style={{
                     position: 'absolute',
-                    top: 4,
-                    right: 4,
+                    top: 8,
+                    right: 8,
+                    zIndex: 10,
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.6)',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.35)',
+                    borderRadius: 6,
+                    cursor: deleting ? 'wait' : 'pointer',
                     opacity: deleting ? 0.6 : 1,
-                    cursor: deleting ? 'wait' : 'pointer'
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                    padding: 0,
+                    WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation'
                   }}
                 >
-                  <X size={12} />
+                  <X size={16} />
                 </button>
 
                 <GripVertical

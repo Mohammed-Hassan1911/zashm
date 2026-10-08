@@ -1210,6 +1210,20 @@ function ProductsPanel({ canEdit }) {
                         return <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'10px 0' }}>Enter sizes and colors above to generate stock fields</p>;
                       }
 
+                      const commitVariantStock = (matrixKey, qty) => {
+                        const safeQty = Math.max(0, Number.isFinite(Number(qty)) ? Number(qty) : 0);
+                        const updatedMatrix = { ...(form.variantStock || {}), [matrixKey]: safeQty };
+                        update('variantStock', updatedMatrix);
+                        const totalStock = Object.keys(updatedMatrix).reduce((sum, key) => {
+                          const [sz, col] = key.split('-');
+                          if (currentSizes.includes(sz) && currentColors.includes(col)) {
+                            return sum + (updatedMatrix[key] || 0);
+                          }
+                          return sum;
+                        }, 0);
+                        update('stock', totalStock);
+                      };
+
                       const rows = [];
                       currentSizes.forEach(size => {
                         currentColors.forEach(color => {
@@ -1217,7 +1231,7 @@ function ProductsPanel({ canEdit }) {
                           const currentStock = form.variantStock ? (form.variantStock[matrixKey] || 0) : 0;
                           
                           rows.push(
-                            <div key={matrixKey} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'var(--surface)', padding:'6px 10px', borderRadius:4, border:'1px solid var(--border)' }}>
+                            <div key={matrixKey} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8, background:'var(--surface)', padding:'8px 12px', borderRadius:4, border:'1px solid var(--border)' }}>
                               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                                 <span style={{ fontSize:11, fontWeight:600, color:'var(--text)', background:'var(--bg)', padding:'2px 6px', borderRadius:4 }}>{size}</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1226,19 +1240,9 @@ function ProductsPanel({ canEdit }) {
                                 </div>
                               </div>
                               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                                <input type="number" min="0" value={currentStock} onChange={e => {
-                                  const qty = parseInt(e.target.value) || 0;
-                                  const updatedMatrix = { ...(form.variantStock || {}), [matrixKey]: qty };
-                                  update('variantStock', updatedMatrix);
-                                  const totalStock = Object.keys(updatedMatrix).reduce((sum, key) => {
-                                    const [sz, col] = key.split('-');
-                                    if (currentSizes.includes(sz) && currentColors.includes(col)) {
-                                      return sum + (updatedMatrix[key] || 0);
-                                    }
-                                    return sum;
-                                  }, 0);
-                                  update('stock', totalStock);
-                                }} style={{ width:65, padding:'4px', textAlign:'center', borderRadius:4, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontSize:12 }} />
+                                <button type="button" onClick={() => commitVariantStock(matrixKey, currentStock - 1)} aria-label={`Decrease ${size} ${color} stock`} style={{ width:32, height:32, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:'var(--bg)', color:'var(--text2)', border:'1px solid var(--border)', borderRadius:4, cursor:'pointer', fontSize:18, lineHeight:1, padding:0, WebkitTapHighlightColor:'transparent', touchAction:'manipulation' }}>-</button>
+                                <input type="number" min="0" value={currentStock} onChange={e => commitVariantStock(matrixKey, parseInt(e.target.value) || 0)} style={{ width:55, padding:'4px', textAlign:'center', borderRadius:4, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontSize:12 }} />
+                                <button type="button" onClick={() => commitVariantStock(matrixKey, currentStock + 1)} aria-label={`Increase ${size} ${color} stock`} style={{ width:32, height:32, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:'var(--gold)', color:'var(--bg)', border:'none', borderRadius:4, cursor:'pointer', fontSize:18, lineHeight:1, padding:0, WebkitTapHighlightColor:'transparent', touchAction:'manipulation' }}>+</button>
                               </div>
                             </div>
                           );
