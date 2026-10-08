@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { motion, Reorder } from 'framer-motion';
-import { Upload, X, GripVertical, AlertCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Upload, X, AlertCircle } from 'lucide-react';
 import { api, deleteStorageFile } from '../../lib/api';
 import { getOptimizedImageUrl } from '../../lib/security';
 
@@ -251,10 +251,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
 
       {/* IMAGES */}
       {images.length > 0 && (
-        <Reorder.Group
-          axis="x"
-          values={images}
-          onReorder={onChange}
+        <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
@@ -262,7 +259,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
           }}
         >
           {images.map((img, idx) => (
-            <Reorder.Item key={img} value={img}>
+            <div key={img}>
               <div style={{ position: 'relative' }}>
 
                 <img
@@ -317,15 +314,10 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
                 >
                   <X size={16} />
                 </button>
-
-                <GripVertical
-                  size={12}
-                  style={{ position: 'absolute', bottom: 4, right: 4 }}
-                />
               </div>
-            </Reorder.Item>
+            </div>
           ))}
-        </Reorder.Group>
+        </div>
       )}
     </div>
   );
