@@ -242,8 +242,40 @@ export default function AdminApp() {
                     </motion.div>
                   </>
                 )}
-              </AnimatePresence>
-            </div>
+</AnimatePresence>
+
+      <AnimatePresence>
+        {confirmBulk !== null && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setConfirmBulk(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.85)', zIndex: 3000, backdropFilter: 'blur(10px)' }} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
+              transition={{ type: "spring", damping: 20, stiffness: 300 }}
+              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(201, 168, 76, 0.3)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
+            >
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(201, 168, 76, 0.08)', border: '1px solid rgba(201, 168, 76, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <Trash2 size={28} style={{ color: 'var(--gold)' }} />
+              </div>
+              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>تأكيد الحذف الجماعي</h3>
+              <p style={{ color: '#dddddd', fontSize: 13, marginBottom: 24, lineHeight: '1.6' }}>
+                {confirmBulk === 1
+                  ? 'Are you sure you want to delete this product?'
+                  : <>Are you sure you want to delete <strong style={{ color: 'var(--gold)' }}>{confirmBulk}</strong> products?</>}
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button 
+                  onClick={() => { bulkDeleteProducts([...selected]); clearSelect(); setConfirmBulk(null); toast.success('تم حذف المنتجات بنجاح'); }}
+                  style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                >
+                  Yes
+                </button>
+                <button onClick={() => setConfirmBulk(null)} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid #333333', color: '#ffffff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>No</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
           </div>
         </div>
 
@@ -876,6 +908,7 @@ function ProductsPanel({ canEdit }) {
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
+  const [confirmBulk, setConfirmBulk] = useState(null);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [page, setPage] = useState(1);
@@ -1074,7 +1107,7 @@ function ProductsPanel({ canEdit }) {
         <div style={{ display:'flex', gap:6, width: '100%', justifyContent:'flex-end', flexWrap:'wrap' }}>
           {selected.size > 0 && (
             <button 
-              onClick={() => { if(window.confirm(`Delete ${selected.size} products?`)) { bulkDeleteProducts([...selected]); clearSelect(); } }}
+              onClick={() => setConfirmBulk(selected.size)}
               style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', color:'var(--red)', borderRadius:6, cursor:'pointer', fontSize:12, transition:'all 0.2s ease-in-out' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.3)'; e.currentTarget.style.color = 'var(--red)'; }}
