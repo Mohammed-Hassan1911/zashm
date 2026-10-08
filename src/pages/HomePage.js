@@ -11,8 +11,9 @@ export default function HomePage() {
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
   const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
-  const featured = products.filter(p => p.label === 'Featured' || p.label === 'Best Seller').slice(0, 4);
-  const newArrivals = products.filter(p => p.label === 'New Arrival').slice(0, 4);
+  // 🎯 إخفاء المنتجات غير النشطة عن العملاء (تُفلتر في الـ storefront فقط)
+  const featured = products.filter(p => p.active !== false && (p.label === 'Featured' || p.label === 'Best Seller')).slice(0, 4);
+  const newArrivals = products.filter(p => p.active !== false && p.label === 'New Arrival').slice(0, 4);
 
   return (
     <div style={{ paddingTop: 0 }}>

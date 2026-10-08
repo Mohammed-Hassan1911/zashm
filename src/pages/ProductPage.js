@@ -78,7 +78,7 @@ export default function ProductPage() {
   );
 
   const isWished = (wishlist || []).includes(p.id);
-  const related = (products || []).filter(pr => (pr.category ?? 'General') === (p.category ?? 'General') && pr.id !== p.id).slice(0, 4);
+  const related = (products || []).filter(pr => pr.active !== false && (pr.category ?? 'General') === (p.category ?? 'General') && pr.id !== p.id).slice(0, 4);
   const discount = p.salePrice ? Math.round((1 - (p.salePrice ?? 0) / (p.price ?? 0)) * 100) : null;
 
   const currentVariantKey = `${selSize}-${selColor}`;

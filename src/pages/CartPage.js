@@ -785,7 +785,8 @@ export function CheckoutPage() {
 // ─── WISHLIST PAGE ────────────────────────────────────────────────────────────
 export function WishlistPage() {
   const { products, wishlist, setPage } = useStore();
-  const wished = products.filter(p => wishlist.includes(p.id));
+  // 🎯 إخفاء المنتجات غير النشطة عن العملاء في قائمة المفضلة
+  const wished = products.filter(p => p.active !== false && wishlist.includes(p.id));
 
   React.useEffect(() => { setPageMeta({ title: 'Wishlist', description: 'Your saved luxury pieces' }); }, []);
 

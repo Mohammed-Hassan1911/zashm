@@ -7,6 +7,13 @@ import { getOptimizedImageUrl } from '../../lib/security';
 const RAW_DIRECT_LIMIT = 2.9 * 1024 * 1024; // files up to ~2.9MB are sent as-is
 const DATAURL_LIMIT = 3.9 * 1024 * 1024;   // server accepts bodies up to 4MB
 
+// استخراج مسار الملف فقط من داخل bucket products (لا شيء خارج البكت يُقبل)
+const STORAGE_PATH_RE = /\/storage\/v1\/object\/public\/products\/([A-Za-z0-9._-]+)$/;
+function storagePathFromUrl(url) {
+  const m = String(url || '').match(STORAGE_PATH_RE);
+  return m ? m[1] : null;
+}
+
 function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -48,6 +55,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
   const [dragging, setDragging] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef();
 
@@ -76,7 +84,23 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
     setError('');
   }, [images, onChange, maxImages]);
 
-  const removeImage = (url) => {
+  // حذف صورة: يحذف ملفها فعليًا من Storage عبر الأدمن API أولًا،
+  // وعند النجاح فقط يُزال الـ URL من بيانات المنتج (لا inconsistency عند الفشل).
+  const removeImage = async (url) => {
+    const path = storagePathFromUrl(url);
+    if (path) {
+      setDeleting(true);
+      setError('');
+      try {
+        await api.del('/admin/upload', { path });
+      } catch (err) {
+        console.error('Remove image failed:', err && err.message);
+        setError('Could not delete the image. Please try again.');
+        setDeleting(false);
+        return;
+      }
+      setDeleting(false);
+    }
     onChange(images.filter(i => i !== url));
   };
 
@@ -245,10 +269,13 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
                 {/* DELETE */}
                 <button
                   onClick={() => removeImage(img)}
+                  disabled={deleting}
                   style={{
                     position: 'absolute',
                     top: 4,
-                    right: 4
+                    right: 4,
+                    opacity: deleting ? 0.6 : 1,
+                    cursor: deleting ? 'wait' : 'pointer'
                   }}
                 >
                   <X size={12} />

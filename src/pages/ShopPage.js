@@ -40,7 +40,8 @@ export default function ShopPage() {
   const [labelFilter, setLabelFilter] = useState('All');
 
   const filtered = useMemo(() => {
-    let list = [...products];
+    // 🎯 إخفاء المنتجات غير النشطة عن العملاء (تُفلتر في الـ storefront فقط؛ الأدمن يظل يرى الكل)
+    let list = products.filter(p => p.active !== false);
 
     // SEARCH
     if (searchQuery) {
