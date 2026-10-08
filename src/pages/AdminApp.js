@@ -1163,9 +1163,9 @@ function ProductsPanel({ canEdit }) {
 
       {showForm && (
           <>
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} onClick={handleCancel}
-              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000, backdropFilter:'blur(4px)' }} />
-            <motion.div initial={{ opacity:0, x:80 }} animate={{ opacity:1, x:0 }}
+            <div onClick={handleCancel}
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
+            <div
               style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:520, background:'var(--bg2)', borderLeft:'1px solid var(--border)', zIndex:2001, display:'flex', flexDirection:'column', overflow:'hidden' }}>
               <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
                 <h2 style={{ fontFamily:'var(--font-display)', fontSize:20 }}>{editing ? 'Edit Product' : 'New Product'}</h2>
@@ -1359,7 +1359,7 @@ function ProductsPanel({ canEdit }) {
                 </button>          
                 <button className="outline-btn" onClick={handleCancel}>Cancel</button>
               </div>
-            </motion.div>
+            </div>
           </>
         )}
 
