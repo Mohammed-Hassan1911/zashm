@@ -1268,7 +1268,7 @@ function ProductsPanel({ canEdit }) {
                 </div>
 
                 <div style={{ marginTop:14, display:'flex', alignItems:'center', gap:8 }}>
-                  <input type="checkbox" id="active-toggle" checked={form.active} onChange={e => update('active', e.checked)} style={{ accentColor:'var(--gold)' }} />
+                  <input type="checkbox" id="active-toggle" checked={form.active} onChange={e => update('active', e.target.checked)} style={{ accentColor:'var(--gold)' }} />
                   <label htmlFor="active-toggle" style={{ fontSize:12, color:'var(--text2)', cursor:'pointer' }}>Active (visible in store)</label>
                 </div>
               </div>
