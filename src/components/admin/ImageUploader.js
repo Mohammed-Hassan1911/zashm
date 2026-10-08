@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, Reorder } from 'framer-motion';
 import { Upload, X, GripVertical, AlertCircle } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -13,6 +13,7 @@ function storagePathFromUrl(url) {
   const m = String(url || '').match(STORAGE_PATH_RE);
   return m ? m[1] : null;
 }
+export { storagePathFromUrl };
 
 function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -58,6 +59,10 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef();
+  const mountedRef = useRef(true);
+
+  // حارس لمنع أي setState أو callback بعد إغلاق/إزالة الـ component (يمنع الكراش بعد Cancel)
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   // ─── ADD IMAGE URL ─────────────────────────
   const addImage = useCallback((url) => {
@@ -95,12 +100,15 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
         await api.del('/admin/upload', { path });
       } catch (err) {
         console.error('Remove image failed:', err && err.message);
+        if (!mountedRef.current) return;
         setError('Could not delete the image. Please try again.');
         setDeleting(false);
         return;
       }
+      if (!mountedRef.current) return;
       setDeleting(false);
     }
+    if (!mountedRef.current) return;
     onChange(images.filter(i => i !== url));
   };
 
@@ -116,6 +124,8 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
 
     try {
       for (const file of Array.from(files)) {
+        if (!mountedRef.current) return;
+
         if (!file.type.startsWith('image/')) {
           setError('Only image files allowed');
           continue;
@@ -133,19 +143,22 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
           dataUrl = raw.length > DATAURL_LIMIT ? await compressImage(raw) : raw;
           if (dataUrl.length > DATAURL_LIMIT) throw new Error('Image too large — please upload a smaller image (max 3MB)');
         } catch (err) {
+          if (!mountedRef.current) return;
           setError(err && err.message ? err.message : 'Upload failed');
           continue;
         }
 
         const payload = await api.post('/admin/upload', { file: dataUrl });
+        if (!mountedRef.current) return;
         addImage(payload.url);
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       console.error('Upload failed:', err && err.message);
       setError('Upload failed. Please try again.');
     }
 
-    setUploading(false);
+    if (mountedRef.current) setUploading(false);
   };
 
   const handleDrop = (e) => {

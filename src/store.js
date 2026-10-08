@@ -545,7 +545,13 @@ export const useStore = create((set, get) => ({
 
   // Global UI States
   currentPage: 'home',
-  setPage: (p) => set({ currentPage: p }),
+  prevPage: null,
+  setPage: (p) => set(state => ({ currentPage: p, prevPage: p === state.currentPage ? state.prevPage : state.currentPage })),
+  goBack: () => {
+    const { currentPage, prevPage } = get();
+    const target = (prevPage && prevPage !== currentPage && prevPage !== 'admin') ? prevPage : 'shop';
+    get().setPage(target);
+  },
   selectedProduct: null,
   setSelectedProduct: (p) => set({ selectedProduct: p }),
   adminPage: 'dashboard',

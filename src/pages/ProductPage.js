@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+import { PageBack } from '../components/ui/BackToTop';
 
 // 🛠️ التعديل: تم حذف الـ Import الخاطئ لـ toast وتأمين عمله
 // إذا كنت تستخدم مكتبة خارجية مثل react-hot-toast فقم بفك التعليق عن السطر التالي:
@@ -114,6 +115,9 @@ export default function ProductPage() {
   return (
     <div style={{ paddingTop: 90 }}>
       <div style={{ maxWidth: 1300, margin: '0 auto', padding: '40px 24px' }}>
+        <div style={{ marginBottom: 16 }}>
+          <PageBack />
+        </div>
         {/* Breadcrumb */}
         <motion.div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>

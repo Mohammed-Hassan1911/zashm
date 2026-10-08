@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Package, ShoppingCart, Tag, BarChart2,
@@ -19,9 +19,10 @@ import {
   computeCategoryRevenue,
 } from '../lib/analytics';
 import AdminLogin from '../components/admin/AdminLogin';
-import ImageUploader from '../components/admin/ImageUploader';
+import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUploader';
 import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
+import { api } from '../lib/api';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import Papa from 'papaparse';
 import { toast } from '../components/ui/BackToTop';
@@ -864,6 +865,11 @@ function OrdersPanel({ canEdit }) {
 }
 
 // ─── PRODUCTS PANEL ───────────────────────────────────────────────────────────
+const EMPTY_PRODUCT_FORM = {
+  name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
+  label:'', description:'', sku:'', images:[], active:true, variantStock:{}
+};
+
 function ProductsPanel({ canEdit }) {
   const { products, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useStore();
   const [editing, setEditing] = useState(null);
@@ -873,29 +879,89 @@ function ProductsPanel({ canEdit }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [page, setPage] = useState(1);
-  
-  const [form, setForm] = useState({ 
-    name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
-    label:'', description:'', sku:'', images:[], active:true, variantStock:{} 
-  });
+
+  // تتبّع الصور المرفوعة خلال الجلسة الحالية فقط (مسارات داخل bucket products)
+  // حتى يمكن حذف ملفاتها الفعلية من Storage عند الحذف/الإلغاء دون لمس صور محفوظة.
+  const tempUploadsRef = useRef(new Set());
+  const cancelInFlightRef = useRef(false);
+
+  const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
   const [formErrors, setFormErrors] = useState({});
   const PER_PAGE = 16;
 
   const filtered = products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.includes(search) || p.category.toLowerCase().includes(search.toLowerCase()));
   const paginated = paginate(filtered, page, PER_PAGE);
 
-  const update = (k, v) => { 
-    setForm(f => ({ ...f, [k]: v })); 
-    setFormErrors(e => ({ ...e, [k]: null })); 
+  // تسجيل مسارات الصور الجديدة المرفوعة للسيرفر أثناء هذه الجلسة، وقطع أي مسار
+  // لم يعد ظاهراً (الملف يكون قد حُذف فعلياً عبر زر X) حتى لا يُعاد حذفه.
+  const trackTempUploads = (prevImages, prevGuide, nextImages, nextGuide) => {
+    const present = new Set((nextImages || []).map(u => storagePathFromUrl(u)).filter(Boolean));
+    const guidePath = storagePathFromUrl(nextGuide || '');
+    if (guidePath) present.add(guidePath);
+
+    (nextImages || []).forEach(u => {
+      const ph = storagePathFromUrl(u);
+      const alreadyKnown = (prevImages || []).includes(u) || (prevGuide && prevGuide === u);
+      if (ph && !alreadyKnown) tempUploadsRef.current.add(ph);
+    });
+    if (nextGuide && nextGuide !== prevGuide) {
+      const ph = storagePathFromUrl(nextGuide);
+      if (ph) tempUploadsRef.current.add(ph);
+    }
+
+    [...tempUploadsRef.current].forEach(ph => {
+      if (!present.has(ph)) tempUploadsRef.current.delete(ph);
+    });
+  };
+
+  const update = (k, v) => {
+    if ((k === 'images' || k === 'sizeGuide') && !showForm) return;
+    setForm(f => {
+      if (k === 'images') trackTempUploads(f.images, f.sizeGuide, v, f.sizeGuide);
+      if (k === 'sizeGuide') trackTempUploads(f.images, f.sizeGuide, f.images, v);
+      return { ...f, [k]: v };
+    });
+    setFormErrors(e => ({ ...e, [k]: null }));
+  };
+
+  // إلغاء فتح المنتج: يقفل الـ drawer بأمان وينظف أي صور مؤقتة من Storage
+  // (أفضل مجهود — أي فشل يظهر تنبيه فقط ولا يكسر الواجهة أبداً).
+  const handleCancel = async () => {
+    if (cancelInFlightRef.current) return;
+    cancelInFlightRef.current = true;
+
+    const pending = Array.from(tempUploadsRef.current);
+    tempUploadsRef.current = new Set();
+
+    setEditing(null);
+    setShowForm(false);
+    setForm({ ...EMPTY_PRODUCT_FORM });
+    setFormErrors({});
+
+    try {
+      if (pending.length) {
+        let failed = false;
+        await Promise.all(pending.map(async (path) => {
+          try {
+            await api.del('/admin/upload', { path });
+          } catch (err) {
+            console.error('Cancel cleanup delete failed:', err && err.message);
+            failed = true;
+          }
+        }));
+        if (failed) toast.error('تعذر حذف بعض الصور المؤقتة من التخزين، أعد المحاولة لاحقاً.');
+      }
+    } finally {
+      cancelInFlightRef.current = false;
+    }
   };
 
   const openNew = () => {
     setEditing(null);
-    setForm({ 
-      name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
-      label:'', description:'', sku:'', images:[], active:true, variantStock:{} 
-    });
+    setForm({ ...EMPTY_PRODUCT_FORM });
     setFormErrors({});
+    tempUploadsRef.current = new Set();
+    cancelInFlightRef.current = false;
     setShowForm(true);
   };
 
@@ -910,6 +976,8 @@ function ProductsPanel({ canEdit }) {
       label: p.label || ''
     });
     setFormErrors({});
+    tempUploadsRef.current = new Set();
+    cancelInFlightRef.current = false;
     setShowForm(true);
   };
 
@@ -981,6 +1049,7 @@ function ProductsPanel({ canEdit }) {
         await addProduct(productData);
         toast.success('تم إضافة المنتج الجديد للمتجر بنجاح! 🚀');
       }
+      tempUploadsRef.current = new Set();
       if (form._isAddingNewCat) update('_isAddingNewCat', false);
       setShowForm(false);
     } catch (err) {
@@ -1095,13 +1164,13 @@ function ProductsPanel({ canEdit }) {
       <AnimatePresence>
         {showForm && (
           <>
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowForm(false)}
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={handleCancel}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000, backdropFilter:'blur(4px)' }} />
             <motion.div initial={{ opacity:0, x:80 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:80 }}
               style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:520, background:'var(--bg2)', borderLeft:'1px solid var(--border)', zIndex:2001, display:'flex', flexDirection:'column', overflow:'hidden' }}>
               <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
                 <h2 style={{ fontFamily:'var(--font-display)', fontSize:20 }}>{editing ? 'Edit Product' : 'New Product'}</h2>
-                <button onClick={() => setShowForm(false)} style={{ color:'var(--text3)', background:'none', border:'none', cursor:'pointer', fontSize:20 }}>✕</button>
+                <button onClick={handleCancel} style={{ color:'var(--text3)', background:'none', border:'none', cursor:'pointer', fontSize:20 }}>✕</button>
               </div>
               <div style={{ flex:1, overflowY:'auto', padding:'16px' }}>
                 
@@ -1289,7 +1358,7 @@ function ProductsPanel({ canEdit }) {
                 >
                   {editing ? 'Save' : 'Create'}
                 </button>          
-                <button className="outline-btn" onClick={() => setShowForm(false)}>Cancel</button>
+                <button className="outline-btn" onClick={handleCancel}>Cancel</button>
               </div>
             </motion.div>
           </>
