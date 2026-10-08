@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, Reorder } from 'framer-motion';
 import { Upload, X, GripVertical, AlertCircle } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api, deleteStorageFile } from '../../lib/api';
 import { getOptimizedImageUrl } from '../../lib/security';
 
 const RAW_DIRECT_LIMIT = 2.9 * 1024 * 1024; // files up to ~2.9MB are sent as-is
@@ -91,13 +91,14 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
 
   // حذف صورة: يحذف ملفها فعليًا من Storage عبر الأدمن API أولًا،
   // وعند النجاح فقط يُزال الـ URL من بيانات المنتج (لا inconsistency عند الفشل).
+  // الـ deleteStorageFile يمنع حذفًا مزدوجًا لو تزاحم مع Cancel.
   const removeImage = async (url) => {
     const path = storagePathFromUrl(url);
     if (path) {
       setDeleting(true);
       setError('');
       try {
-        await api.del('/admin/upload', { path });
+        await deleteStorageFile(path);
       } catch (err) {
         console.error('Remove image failed:', err && err.message);
         if (!mountedRef.current) return;
@@ -149,7 +150,14 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
         }
 
         const payload = await api.post('/admin/upload', { file: dataUrl });
-        if (!mountedRef.current) return;
+        if (!mountedRef.current) {
+          // أُغلق المحرر أثناء الرفع: نظّف الملف المرفوع فورًا حتى لا يبقى orphan
+          // في Storage (أفضل مجهود، لا يكسر الواجهة أبدًا).
+          if (payload && payload.path) {
+            deleteStorageFile(payload.path).catch(err => console.error('Post-cancel upload cleanup failed:', err && err.message));
+          }
+          return;
+        }
         addImage(payload.url);
       }
     } catch (err) {

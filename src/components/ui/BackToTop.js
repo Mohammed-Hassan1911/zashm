@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowUp, ArrowLeft, CheckCircle, AlertCircle, Info, X, ShoppingBag, Bell } from 'lucide-react';
+import { ArrowUp, CheckCircle, AlertCircle, Info, X, ShoppingBag, Bell } from 'lucide-react';
 import { useStore } from '../../store';
 
 // Back to Top
@@ -24,40 +24,6 @@ export function BackToTop() {
         ><ArrowUp size={18} /></motion.button>
       )}
     </AnimatePresence>
-  );
-}
-
-// Back button (رجوع للصفحة السابقة عبر SPA navigation الحالي، مع fallback للـ Shop)
-export function PageBack() {
-  const goBack = useStore((s) => s.goBack);
-  return (
-    <motion.button
-      type="button"
-      onClick={goBack}
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      aria-label="Go back"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        background: 'none',
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        color: 'var(--text2)',
-        cursor: 'pointer',
-        padding: '8px 16px',
-        fontSize: 12,
-        fontWeight: 500,
-        fontFamily: 'inherit',
-        WebkitTapHighlightColor: 'transparent',
-        touchAction: 'manipulation'
-      }}
-    >
-      <ArrowLeft size={15} /> Back
-    </motion.button>
   );
 }
 

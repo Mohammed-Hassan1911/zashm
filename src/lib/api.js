@@ -85,3 +85,20 @@ export const api = {
   patch: (path, body, opts) => apiFetch(path, { ...opts, method: 'PATCH', body }),
   del: (path, body, opts) => apiFetch(path, { ...opts, method: 'DELETE', body }),
 };
+
+// ─── حذف ملف من Storage (bucket products) مع منع الحذف المزدوج ──────────────
+// نقطة وحيدة لحذف ملفات الصور المؤقتة من الـAdmin. إذا كان نفس الملف يُحذف في
+// وقت واحد (مثلاً X و Cancel معاً)، يُعاد استخدام نفس الـpromise بدل إرسال
+// طلب Delete ثانٍ — يحفظ ما سبق، يمنع duplicate delete، ولا يترك orphan.
+const storageDeletePending = new Map();
+export function deleteStorageFile(path) {
+  if (!path) return Promise.resolve();
+  const existing = storageDeletePending.get(path);
+  if (existing) return existing;
+  const run = (async () => {
+    await api.del('/admin/upload', { path });
+  })();
+  storageDeletePending.set(path, run);
+  run.then(() => storageDeletePending.delete(path)).catch(() => storageDeletePending.delete(path));
+  return run;
+}

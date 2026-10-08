@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
-import { PageBack } from '../components/ui/BackToTop';
 
 // 🛠️ التعديل: تم حذف الـ Import الخاطئ لـ toast وتأمين عمله
 // إذا كنت تستخدم مكتبة خارجية مثل react-hot-toast فقم بفك التعليق عن السطر التالي:
@@ -116,7 +115,33 @@ export default function ProductPage() {
     <div style={{ paddingTop: 90 }}>
       <div style={{ maxWidth: 1300, margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: 16 }}>
-          <PageBack />
+          <motion.button
+            type="button"
+            onClick={() => setPage('shop')}
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            aria-label="Back to Products"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              color: 'var(--text2)',
+              cursor: 'pointer',
+              padding: '8px 16px',
+              fontSize: 12,
+              fontWeight: 500,
+              fontFamily: 'inherit',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation'
+            }}
+          >
+            <ChevronLeft size={15} /> Back to Products
+          </motion.button>
         </div>
         {/* Breadcrumb */}
         <motion.div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}

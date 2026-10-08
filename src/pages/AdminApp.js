@@ -22,7 +22,7 @@ import AdminLogin from '../components/admin/AdminLogin';
 import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUploader';
 import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
-import { api } from '../lib/api';
+import { deleteStorageFile } from '../lib/api';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import Papa from 'papaparse';
 import { toast } from '../components/ui/BackToTop';
@@ -943,7 +943,7 @@ function ProductsPanel({ canEdit }) {
         let failed = false;
         await Promise.all(pending.map(async (path) => {
           try {
-            await api.del('/admin/upload', { path });
+            await deleteStorageFile(path);
           } catch (err) {
             console.error('Cancel cleanup delete failed:', err && err.message);
             failed = true;

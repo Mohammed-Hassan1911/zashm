@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { useStore } from '../store'; 
 import { api } from '../lib/api';
 import { Search, Package, MapPin, Phone, Calendar, ArrowRight } from 'lucide-react';
-import { PageBack } from '../components/ui/BackToTop';
 
 const STATUS_COLORS = {
   Pending: '#f39c12',
@@ -97,11 +96,6 @@ export default function TrackOrder() {
       fontFamily: 'sans-serif',
       color: 'var(--text1)' 
     }}>
-      {/* ─── زر رجوع ─── */}
-      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'flex-start' }}>
-        <PageBack />
-      </div>
-
       {/* ─── الهيدر والبحث ─── */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <h1 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 28, color: 'var(--gold)', marginBottom: 8, letterSpacing: 1 }}>
