@@ -865,6 +865,14 @@ function OrdersPanel({ canEdit }) {
 }
 
 // ─── PRODUCTS PANEL ───────────────────────────────────────────────────────────
+const PRODUCT_CATEGORIES = [
+  'T-Shirts', 'Polo Shirts', 'Shirts', 'Henleys',
+  'Pants', 'Jeans', 'Shorts', 'Joggers',
+  'Sweatpants', 'Sweatshirts', 'Hoodies', 'Crewnecks',
+  'Jackets', 'Coats', 'Blazers', 'Suits', 'Tracksuits',
+  'Dresses', 'Skirts', 'Jumpsuits', 'Waistcoats',
+  'Vests', 'Baselayers', 'Socks', 'Underwear',
+];
 const EMPTY_PRODUCT_FORM = {
   name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
   label:'', description:'', sku:'', images:[], active:true, variantStock:{}
@@ -1215,8 +1223,9 @@ function ProductsPanel({ canEdit }) {
                       >
                         <option value="">Select a category</option>
                         {(() => {
-                          const availableCats = Array.isArray(products) ? [...new Set(products.map(p => p.category).filter(Boolean))] : [];
-                          return availableCats.map(cat => <option key={cat} value={cat}>{cat}</option>);
+                          const existing = Array.isArray(products) ? [...new Set(products.map(p => p.category).filter(Boolean))] : [];
+                          const all = [...new Set([...PRODUCT_CATEGORIES, ...existing])];
+                          return all.map(cat => <option key={cat} value={cat}>{cat}</option>);
                         })()}
                         <option value="___NEW_CAT___" style={{ color: 'var(--gold)', fontWeight: '600' }}>➕ + Add New Category</option>
                       </select>
