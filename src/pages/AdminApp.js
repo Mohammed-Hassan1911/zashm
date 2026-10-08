@@ -1424,11 +1424,11 @@ function ProductsPanel({ canEdit }) {
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(201, 168, 76, 0.08)', border: '1px solid rgba(201, 168, 76, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                 <Trash2 size={28} style={{ color: 'var(--gold)' }} />
               </div>
-              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>تأكيد الحذف الجماعي</h3>
-              <p style={{ color: '#dddddd', fontSize: 13, marginBottom: 24, lineHeight: '1.6' }}>
+              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>{confirmBulk === 1 ? 'تأكيد الحذف' : 'تأكيد الحذف الجماعي'}</h3>
+              <p style={{ color: '#dddddd', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>
                 {confirmBulk === 1
-                  ? 'Are you sure you want to delete this product?'
-                  : <>Are you sure you want to delete <strong style={{ color: 'var(--gold)' }}>{confirmBulk}</strong> products?</>}
+                  ? 'هل تريد حذف هذا المنتج؟'
+                  : 'هل تريد حذف المنتجات التي اخترتها؟'}
               </p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button 
