@@ -703,11 +703,93 @@ function sanitizeStoragePath(path) {
   return p;
 }
 
+// Only our own Supabase project host is trusted for storage cleanup. Public
+// URLs served by Supabase are: https://<project-ref>.supabase.co/storage/v1/
+// object/public/products/<file>. Anything else (Unsplash, Cloudinary, custom
+// hosts, other buckets, or any URL that merely contains "/products/") yields
+// null so it is NEVER guessed, removed or otherwise touched.
+const SUPABASE_HOST_RE = /\.supabase\.(co|in)$/i;
+const PRODUCT_STORAGE_URL_RE = /\/storage\/v1\/object\/public\/products\/([A-Za-z0-9._-]{1,120})(?:[?#].*)?$/;
+
 function filePathFromPublicUrl(url) {
   if (!url) return null;
-  const parts = String(url).split('/products/');
-  if (parts.length < 2) return null;
-  return sanitizeStoragePath(parts[1]);
+  let parsed;
+  try {
+    parsed = new URL(String(url));
+  } catch (e) {
+    return null;
+  }
+  if (!SUPABASE_HOST_RE.test(parsed.hostname)) return null;
+  const m = PRODUCT_STORAGE_URL_RE.exec(parsed.pathname);
+  if (!m) return null;
+  return sanitizeStoragePath(m[1]);
+}
+
+/** Collects every trusted storage path referenced by a product row. */
+function pathsFromProductImageFields(row) {
+  const paths = new Set();
+  const push = (u) => {
+    const p = filePathFromPublicUrl(u);
+    if (p) paths.add(p);
+  };
+  if (row) {
+    if (Array.isArray(row.images)) row.images.forEach(push);
+    if (row.image) push(row.image);
+    if (row.sizeGuide) push(row.sizeGuide);
+  }
+  return [...paths];
+}
+
+/** Paths referenced by products NOT in excludeIds (i.e. still owned by others). */
+async function storagePathsUsedByOtherProducts(sb, excludeIds) {
+  const { data, error } = await sb.from('products').select('id, images, image, sizeGuide');
+  if (error) throw error;
+  const excluded = new Set((excludeIds || []).map((v) => String(v)));
+  const used = new Set();
+  for (const row of data || []) {
+    if (excluded.has(String(row.id))) continue;
+    for (const p of pathsFromProductImageFields(row)) used.add(p);
+  }
+  return used;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function isStorageObjectNotFound(error) {
+  if (!error) return false;
+  const status = Number(error.status || error.statusCode || 0);
+  const msg = String((error.message || error.error || '') + ' ' + (error.name || '')).toLowerCase();
+  if (status === 404) return true;
+  return /(object not found|resource was not found|not found|does not exist|no such key|no such object)/.test(msg);
+}
+
+/**
+ * Removes a set of storage files one by one. Every call is an explicit
+ * `remove()` whose returned `error` is inspected (a throw is a bonus). A file
+ * that no longer exists is treated as already cleaned (idempotent success so
+ * previously-leaked orphans get resolved on a re-run). Real errors are retried
+ * a limited number of times, then reported — never swallowed silently.
+ */
+async function removeStorageFiles(sb, paths, retries = 2) {
+  const unique = [...new Set((paths || []).filter(Boolean))];
+  const removed = [];
+  const failed = [];
+  for (const path of unique) {
+    let ok = false;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const { error } = await sb.storage.from('products').remove([path]);
+        if (!error) { ok = true; break; }
+        if (isStorageObjectNotFound(error)) { ok = true; break; }
+      } catch (e) {
+        // transient failure — a limited retry happens below
+      }
+      if (attempt < retries) await sleep(250 * (attempt + 1));
+    }
+    if (ok) removed.push(path);
+    else failed.push(path);
+  }
+  return { removed, failed };
 }
 
 module.exports = {
@@ -748,6 +830,9 @@ module.exports = {
   detectImageType,
   sanitizeStoragePath,
   filePathFromPublicUrl,
+  pathsFromProductImageFields,
+  storagePathsUsedByOtherProducts,
+  removeStorageFiles,
   EMAIL_RE,
   EGYPT_PHONE_RE,
 };

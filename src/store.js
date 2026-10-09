@@ -184,11 +184,10 @@ export const useStore = create((set, get) => ({
     db.delete('products', id);
     set({ products: db.getAll('products') || [] });
     try {
-      await api.del('/admin/products', { id });
-    } catch (err) {
-      console.error('deleteProduct failed:', err.message);
+      return await api.del('/admin/products', { id });
+    } finally {
+      await get().refreshProducts();
     }
-    await get().refreshProducts();
   },
   
   bulkDeleteProducts: async (ids) => {
@@ -196,11 +195,10 @@ export const useStore = create((set, get) => ({
     ids.forEach(id => db.delete('products', id));
     set({ products: db.getAll('products') || [] });
     try {
-      await api.del('/admin/products', { ids });
-    } catch (err) {
-      console.error('bulkDeleteProducts failed:', err.message);
+      return await api.del('/admin/products', { ids });
+    } finally {
+      await get().refreshProducts();
     }
-    await get().refreshProducts();
   },
   
   updateProductImages: async (id, images) => {

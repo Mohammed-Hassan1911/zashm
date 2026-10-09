@@ -965,6 +965,46 @@ function ProductsPanel({ canEdit }) {
     }
   };
 
+  // حذف منتج واحد: يُغلق المودال أولاً ثم ينفذ الحذف، ويعرض نتيجة دقيقة
+  // (ناجح بالكامل، أو ناجح مع فشل تنظيف بعض الصور).
+  const confirmSingleDelete = async () => {
+    const target = productToDelete;
+    if (!target || !target.id) return;
+    setProductToDelete(null);
+    try {
+      const payload = await deleteProduct(target.id);
+      const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
+      if (failed.length) {
+        toast.error(`تم حذف المنتج، لكن فشل تنظيف ${failed.length} صورة من التخزين. حاول مرة أخرى لاحقاً.`);
+      } else {
+        toast.success('تم حذف المنتج بنجاح');
+      }
+    } catch (err) {
+      console.error('confirmSingleDelete failed:', err && err.message);
+      toast.error('تعذر حذف المنتج، حاول مرة أخرى.');
+    }
+  };
+
+  // حذف جماعي: نفس القواعد، بنتيجة دقيقة لكل عملية.
+  const confirmBulkDelete = async () => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    clearSelect();
+    setConfirmBulk(null);
+    try {
+      const payload = await bulkDeleteProducts(ids);
+      const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
+      if (failed.length) {
+        toast.error(`تم حذف المنتجات، لكن فشل تنظيف ${failed.length} صورة من التخزين. حاول مرة أخرى لاحقاً.`);
+      } else {
+        toast.success('تم حذف المنتجات بنجاح');
+      }
+    } catch (err) {
+      console.error('confirmBulkDelete failed:', err && err.message);
+      toast.error('تعذر حذف المنتجات، حاول مرة أخرى.');
+    }
+  };
+
   const openNew = () => {
     setEditing(null);
     setForm({ ...EMPTY_PRODUCT_FORM });
@@ -1400,7 +1440,7 @@ function ProductsPanel({ canEdit }) {
               <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>هل أنت متأكد من حذف منتج <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>؟ هذا الإجراء سيؤدي إلى إزالته نهائياً.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button 
-                  onClick={() => { deleteProduct(productToDelete.id); setProductToDelete(null); toast.success('تم حذف المنتج بنجاح'); }}
+                  onClick={confirmSingleDelete}
                   style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
                   حذف
@@ -1432,7 +1472,7 @@ function ProductsPanel({ canEdit }) {
               </p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button 
-                  onClick={() => { bulkDeleteProducts([...selected]); clearSelect(); setConfirmBulk(null); toast.success('تم حذف المنتجات بنجاح'); }}
+                  onClick={confirmBulkDelete}
                   style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
                   Yes

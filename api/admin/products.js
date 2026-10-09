@@ -11,7 +11,9 @@ const {
   requirePerm,
   supabaseAdmin,
   validateProductPayload,
-  filePathFromPublicUrl,
+  pathsFromProductImageFields,
+  storagePathsUsedByOtherProducts,
+  removeStorageFiles,
 } = require('../_lib');
 
 // Columns proven to exist (insert path). `label`/`tags`/`active` are sent when
@@ -190,6 +192,47 @@ async function updateProduct(req, res) {
 
 // ─── DELETE /api/admin/products — single (with storage cleanup) or bulk ──────
 
+// Deletes product rows and cleans up their storage files with these rules:
+//  1. Rows are deleted FIRST (the operation's source of truth). If the row
+//     delete fails nothing in Storage is touched, so a product never loses its
+//     images while still existing.
+//  2. Storage paths are extracted only from the product's own URL fields and
+//     must pass the trusted-host + `products` bucket check. External images
+//     (Unsplash/Cloudinary/custom hosts) are never guessed or removed.
+//  3. A file still referenced by another remaining product is never removed.
+//  4. Every `remove()` result is inspected explicitly; failures are retried a
+//     limited number of times, logged safely (paths only, no secrets) and
+//     reported back to the client so the UI never claims full success falsely.
+function deleteProductRows(sb, ids, rows) {
+  const candidates = [...new Set(rows.flatMap((r) => pathsFromProductImageFields(r)))];
+  const cleanup = { removed: [], failed: [], shared: [] };
+
+  const run = async () => {
+    if (candidates.length > 0) {
+      const usedByOthers = await storagePathsUsedByOtherProducts(sb, ids);
+      const toRemove = candidates.filter((p) => !usedByOthers.has(p));
+      const shared = candidates.filter((p) => usedByOthers.has(p));
+      const { error } = await sb.from('products').delete().in('id', ids);
+      if (error) throw error;
+      if (toRemove.length > 0) {
+        const res = await removeStorageFiles(sb, toRemove);
+        cleanup.removed = res.removed;
+        cleanup.failed = res.failed;
+        for (const failed of res.failed) {
+          console.error(`Product delete: file still present after retries — ${failed}`);
+        }
+      }
+      cleanup.shared = shared;
+      return cleanup;
+    }
+    const { error } = await sb.from('products').delete().in('id', ids);
+    if (error) throw error;
+    return cleanup;
+  };
+
+  return run();
+}
+
 async function deleteProducts(req, res) {
   const session = requirePerm(req, res, 'products.write');
   if (!session) return;
@@ -205,51 +248,38 @@ async function deleteProducts(req, res) {
     /* GET-style delete without body is tolerated below */
   }
 
-  const id = body.id !== undefined && body.id !== null ? String(body.id) : String((req.query && req.query.id) || '');
   const ids = Array.isArray(body.ids) ? body.ids.map(String).slice(0, 500) : null;
-
-  if (ids && ids.length) {
-    try {
-      const sb = supabaseAdmin();
-      const { error } = await sb.from('products').delete().in('id', ids);
-      if (error) throw error;
-      return json(res, 200, { success: true });
-    } catch (err) {
-      console.error('Bulk product delete failed:', err && err.message);
-      return json(res, 500, { error: 'Could not delete products' });
-    }
-  }
-
-  if (!id) return json(res, 400, { error: 'Product id is required' });
+  const id = ids
+    ? ''
+    : (body.id !== undefined && body.id !== null ? String(body.id) : String((req.query && req.query.id) || ''));
 
   try {
     const sb = supabaseAdmin();
-    const { data: product, error } = await sb.from('products').select('*').eq('id', id).maybeSingle();
-    if (error) throw error;
 
-    if (product) {
-      // Remove storage files that belong to the product (same rules as before).
-      const filesToDelete = [];
-      const urls = [];
-      if (Array.isArray(product.images)) urls.push(...product.images);
-      else if (product.image) urls.push(product.image);
-      if (product.sizeGuide) urls.push(product.sizeGuide);
-      for (const url of urls) {
-        const path = filePathFromPublicUrl(url);
-        if (path) filesToDelete.push(path);
+    if (ids && ids.length) {
+      const { data: rows, error: rowsErr } = await sb
+        .from('products')
+        .select('id, images, image, sizeGuide')
+        .in('id', ids);
+      if (rowsErr) throw rowsErr;
+      if (!rows || rows.length === 0) {
+        return json(res, 200, { success: true, deleted: 0, cleanup: { removed: [], failed: [], shared: [] } });
       }
-      if (filesToDelete.length > 0) {
-        try {
-          await sb.storage.from('products').remove([...new Set(filesToDelete)]);
-        } catch (e) {
-          console.error('Storage cleanup failed:', e && e.message);
-        }
-      }
-      const { error: delErr } = await sb.from('products').delete().eq('id', id);
-      if (delErr) throw delErr;
+      const cleanup = await deleteProductRows(sb, ids, rows);
+      return json(res, 200, { success: true, deleted: rows.length, cleanup });
     }
 
-    return json(res, 200, { success: true });
+    if (!id) return json(res, 400, { error: 'Product id is required' });
+
+    const { data: product, error } = await sb.from('products').select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    if (!product) {
+      // already gone — treat as done, nothing to clean
+      return json(res, 200, { success: true, found: false, deleted: 0, cleanup: { removed: [], failed: [], shared: [] } });
+    }
+
+    const cleanup = await deleteProductRows(sb, [id], [product]);
+    return json(res, 200, { success: true, found: true, deleted: 1, cleanup });
   } catch (err) {
     console.error('Product delete failed:', err && err.message);
     return json(res, 500, { error: 'Could not delete product' });
@@ -264,3 +294,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'DELETE') return deleteProducts(req, res);
   return json(res, 405, { error: 'Method not allowed' });
 };
+
+// Export the deletion engine so the storage-cleanup behaviour can be verified
+// directly against real Supabase without going through the HTTP layer.
+module.exports.deleteProductRows = deleteProductRows;
