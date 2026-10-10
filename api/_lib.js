@@ -588,12 +588,12 @@ function parseOrderRow(row) {
   };
 }
 
-/** Removes customer PII for unauthorized (ID-only) tracking lookups. */
+/** Masks customer PII for ID-only tracking lookups; `phone` is intentionally
+ * kept so the customer sees the number they submitted on the first check. */
 function maskOrderForLimitedAccess(order) {
   return {
     ...order,
     customer: '',
-    phone: '',
     phoneAlt: '',
     email: '',
     address: '',
@@ -606,6 +606,16 @@ function maskOrderForLimitedAccess(order) {
 
 function mdSafe(v) {
   return String(v == null ? '' : v).replace(/[_*`[\]]/g, '').slice(0, 400);
+}
+
+/** Converts a phone to an international dial string for https://wa.me/ links
+ * (Egyptian 01x... → 20 1x..., "+2..." kept, otherwise "+20" is prepended). */
+function waNumber(v) {
+  let d = String(v == null ? '' : v).replace(/\D/g, '');
+  if (!d) return '';
+  if (d.charAt(0) === '0') d = '20' + d.slice(1);
+  else if (!d.startsWith('20')) d = '20' + d;
+  return d;
 }
 
 async function sendTelegramNotification(messageText) {
@@ -646,7 +656,7 @@ function buildOrderTelegramMessage(order, trackingUrl) {
 
 👤 *بيانات العميل:*
 • *الاسم:* ${mdSafe(order.customer)}
-• *رقم الهاتف الأساسي:* ${mdSafe(order.phone)}
+• *رقم الهاتف الأساسي:* ${mdSafe(order.phone)} — [واتساب](https://wa.me/${waNumber(order.phone)})
 • *رقم الهاتف البديل:* ${mdSafe(order.phoneAlt) || 'لا يوجد'}
 • *البريد الإلكتروني:* ${mdSafe(order.email) || 'غير محدد'}
 
