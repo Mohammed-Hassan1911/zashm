@@ -4,15 +4,18 @@ import {
   LayoutDashboard, Package, ShoppingCart, Tag, BarChart2,
   LogOut, Plus, Search, Edit, Trash2, Eye, Download, TrendingUp,
   AlertCircle, CheckCircle, Clock, Truck, XCircle, Bell, Users,
-  Upload, Filter, RefreshCw, ChevronLeft, ChevronRight, Settings,
-  ArrowUpRight, ArrowDownRight, Zap, Package2, Star, MoreVertical, Menu, X, MessageSquare
+  Upload, Filter, RefreshCw, ChevronLeft, ChevronRight,
+  ArrowUpRight, ArrowDownRight, Package2, Menu, X, MessageSquare
 } from 'lucide-react';
 import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
 import { paginate, sanitizeInput, validateProductForm, setPageMeta } from '../lib/security';
 import {
-  computeLast7Days,
-  computeDashboardStats,
+  computeSalesOverview,
+  RANGE_OPTIONS,
+  fmtEGP,
+  compactEGP,
+  classifyInventory,
   computeMonthlyPerformance,
   computeAnalyticsKPIs,
   computeTopProducts,
@@ -23,12 +26,66 @@ import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUplo
 import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
 import { deleteStorageFile } from '../lib/api';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { ComposedChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, Legend } from 'recharts';
 import Papa from 'papaparse';
 import { toast } from '../components/ui/BackToTop';
 
 const STATUS_COLORS = { Pending:'#f39c12', Confirmed:'#3498db', Processing:'#9b59b6', Shipped:'#c9a84c', Delivered:'#27ae60', Cancelled:'#e74c3c' };
 const STATUS_FLOW = ['Pending','Confirmed','Processing','Shipped','Delivered'];
+
+function StatusBadge({ status, small }) {
+  const key = String(status || '').toLowerCase();
+  const known = STATUS_COLORS[status];
+  return (
+    <span
+      className={`status-pill ${known ? `status-${key}` : ''}`}
+      style={small ? { fontSize: 9, padding: '2px 8px', letterSpacing: 0 } : undefined}
+    >
+      {status === 'Delivered' ? '✓ Delivered' : (status || 'Pending')}
+    </span>
+  );
+}
+
+function Card({ title, titleEn, actions, children, style }) {
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'16px', minWidth:0, ...style }}>
+      {(title || actions) && (
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14, gap:8, flexWrap:'wrap' }}>
+          <div>
+            {title && <h3 style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{title}</h3>}
+            {titleEn && <p style={{ fontSize:10, color:'var(--text3)', marginTop:1 }}>{titleEn}</p>}
+          </div>
+          {actions}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function DashEmpty({ icon:Icon, title, hint, action }) {
+  return (
+    <div style={{ textAlign:'center', padding:'30px 16px' }}>
+      <div style={{ width:44, height:44, borderRadius:10, background:'var(--bg3)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 10px' }}>
+        <Icon size={18} color="var(--text3)" />
+      </div>
+      <p style={{ fontSize:13, fontWeight:600, color:'var(--text2)' }}>{title}</p>
+      {hint && <p style={{ fontSize:11, color:'var(--text3)', marginTop:4 }}>{hint}</p>}
+      {action}
+    </div>
+  );
+}
+
+function KpiDelta({ pct }) {
+  if (pct === null || pct === undefined) return null;
+  const up = pct >= 0;
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:10, background: up ? 'rgba(39,174,96,0.12)' : 'rgba(231,76,60,0.12)', color: up ? '#27ae60' : '#e74c3c' }}>
+      {up ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+      {Math.abs(pct)}%
+    </span>
+  );
+}
 const SIDEBAR = [
   { id:'dashboard', label:'Dashboard', icon:LayoutDashboard, perm:'dashboard.read' },
   { id:'orders', label:'Orders', icon:ShoppingCart, perm:'orders.read', badge:'pending' },
@@ -44,6 +101,7 @@ export default function AdminApp() {
   const [collapsed, setCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [orderToOpen, setOrderToOpen] = useState(null);
 
   useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
 
@@ -250,8 +308,8 @@ export default function AdminApp() {
         <div style={{ flex:1, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
           <AnimatePresence mode="wait">
             <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-12 }} transition={{ duration:0.25 }}>
-              {adminPage === 'dashboard' && <Dashboard />}
-              {adminPage === 'orders' && <OrdersPanel canEdit={canAccess('orders.write') || session?.role !== 'support'} />}
+              {adminPage === 'dashboard' && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} />}
+              {adminPage === 'orders' && <OrdersPanel canEdit={canAccess('orders.write') || session?.role !== 'support'} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
               {adminPage === 'products' && <ProductsPanel canEdit={canAccess('products.write')} />}
               {adminPage === 'discounts' && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
               {adminPage === 'analytics' && <AnalyticsPanel />}
@@ -275,185 +333,283 @@ export default function AdminApp() {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard() {
-  const { orders, products, refreshOrders } = useStore();
-  const [refreshing, setRefreshing] = useState(false);
-  const [orderTab, setOrderTab] = useState('pending');
-
-  const refresh = async () => {
-    setRefreshing(true);
-    await new Promise(r => setTimeout(r, 600));
-    refreshOrders();
-    setRefreshing(false);
-  };
-
-  const { totalRevenue, todayRevenue, todayOrders, pending, delivered, orderCount } = useMemo(
-    () => computeDashboardStats(orders),
-    [orders]
-  );
-
-  const lowStock = useMemo(
-    () => (products || []).filter(p => (p.stock ?? 0) <= 5),
-    [products]
-  );
-
-  const stats = useMemo(() => [
-    { label:'Total Revenue', value:`EGP ${totalRevenue.toLocaleString()}`, sub:`+EGP ${todayRevenue.toLocaleString()} today`, icon:TrendingUp, color:'#27ae60', positive:true },
-    { label:'Total Orders', value:orderCount, sub:`${todayOrders.length} today`, icon:ShoppingCart, color:'var(--gold)', positive:todayOrders.length > 0 },
-    { label:'Pending', value:pending, sub:'Need attention', icon:Clock, color:'#f39c12', positive:false },
-    { label:'Delivered', value:delivered, sub:`${Math.round(delivered/Math.max(orderCount,1)*100)}% completion`, icon:CheckCircle, color:'#27ae60', positive:true },
-  ], [totalRevenue, todayRevenue, todayOrders, pending, delivered, orderCount]);
-
-  const last7Days = useMemo(() => computeLast7Days(orders), [orders]);
-
-  const filteredOrdersByTab = useMemo(() => {
-    if (!orders) return [];
-    if (orderTab === 'delivered') {
-      return orders.filter(o => o.status === 'Delivered');
-    }
-    return orders.filter(o => o.status === 'Pending');
-  }, [orders, orderTab]);
-
+function SalesTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null;
   return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:16 }}>
-        <motion.button onClick={refresh} whileTap={{ scale:0.95 }}
-          style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:6, color:'var(--text2)', cursor:'pointer', fontSize:12 }}>
-          <motion.div animate={{ rotate: refreshing ? 360 : 0 }} transition={{ duration:0.6, repeat: refreshing ? Infinity : 0, ease:'linear' }}>
-            <RefreshCw size={13} />
-          </motion.div>
-          Refresh
-        </motion.button>
-      </div>
-
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:12, marginBottom:20 }}>
-        {stats.map(({ label, value, sub, icon:Icon, color, positive }, i) => (
-          <motion.div key={label} initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:i*0.07 }}
-            style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-              <div style={{ width:32, height:32, borderRadius:6, background:`${color}1a`, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <Icon size={16} color={color} />
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, color: positive ? '#27ae60' : 'var(--text3)' }}>
-                {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-              </div>
-            </div>
-            <p style={{ fontFamily:'var(--font-display)', fontSize:20, fontWeight:600, color, marginBottom:4, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{value}</p>
-            <p style={{ color:'var(--text3)', fontSize:11, marginBottom:2 }}>{label}</p>
-            <p style={{ color:'var(--text3)', fontSize:10, opacity:0.8 }}>{sub}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:16, marginBottom:16 }}>
-        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:16, minWidth:0 }}>
-          <h3 style={{ fontSize:13, fontWeight:600, color:'var(--text2)', marginBottom:16 }}>7-Day Revenue & Orders</h3>
-          <div style={{ width: '100%', height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={last7Days} margin={{ left: -20, right: 10 }}>
-                <defs>
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--gold)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="var(--gold)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="day" tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text)', fontSize:12 }} />
-                <Area type="monotone" dataKey="revenue" stroke="var(--gold)" strokeWidth={2} fill="url(#revenueGrad)" name="Revenue (EGP)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        
-        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:16 }}>
-          <h3 style={{ fontSize:13, fontWeight:600, color:'var(--text2)', marginBottom:16 }}>Order Status</h3>
-          {['Pending','Confirmed','Processing','Shipped','Delivered','Cancelled'].map(s => {
-            const count = (orders || []).filter(o => o.status === s).length;
-            const pct = orderCount ? Math.round(count / orderCount * 100) : 0;
-            return (
-              <div key={s} style={{ marginBottom:10 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                  <span style={{ fontSize:11, color:STATUS_COLORS[s] }}>{s}</span>
-                  <span style={{ fontSize:11, color:'var(--text3)' }}>{count} ({pct}%)</span>
-                </div>
-                <div style={{ height:4, background:'var(--border)', borderRadius:2, overflow:'hidden' }}>
-                  <motion.div initial={{ width:0 }} animate={{ width:`${pct}%` }} transition={{ delay:0.3, duration:0.8 }}
-                    style={{ height:'100%', background: STATUS_COLORS[s], borderRadius:2 }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:16 }}>
-        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:16 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, borderBottom:'1px solid var(--border)', paddingBottom:12, flexWrap:'wrap', gap:8 }}>
-            <h3 style={{ fontSize:13, fontWeight:600, color:'var(--text2)' }}>Order Management</h3>
-            <div style={{ display:'flex', gap:2, background:'var(--bg)', padding:2, borderRadius:4, border:'1px solid var(--border)' }}>
-              <button onClick={() => setOrderTab('pending')}
-                style={{ padding: '4px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: orderTab === 'pending' ? 'var(--gold)' : 'transparent', color: orderTab === 'pending' ? 'var(--bg)' : 'var(--text3)' }}>
-                Pending ({(orders || []).filter(o => o.status === 'Pending').length})
-              </button>
-              <button onClick={() => setOrderTab('delivered')}
-                style={{ padding: '4px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: orderTab === 'delivered' ? '#27ae60' : 'transparent', color: orderTab === 'delivered' ? 'white' : 'var(--text3)' }}>
-                Delivered ({(orders || []).filter(o => o.status === 'Delivered').length})
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {filteredOrdersByTab.slice(0, 6).map(o => (
-              <div key={o.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 0', borderBottom:'1px solid var(--border)' }}>
-                <div>
-                  <p style={{ fontSize:12, fontWeight:600 }}>{o.customer}</p>
-                  <p style={{ fontSize:10, color:'var(--text3)' }}>{o.id} · {o.date}</p>
-                </div>
-                <div style={{ textAlign:'right' }}>
-                  <p style={{ color:'var(--gold)', fontSize:12 }}>EGP {o.total.toLocaleString()}</p>
-                  <span style={{ fontSize:10, padding:'2px 7px', borderRadius:8, background:`${STATUS_COLORS[o.status]}1a`, color:STATUS_COLORS[o.status], fontWeight:600 }}>
-                    {o.status === 'Delivered' ? '✓ Delivered' : o.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {filteredOrdersByTab.length === 0 && (
-              <p style={{ color:'var(--text3)', textAlign:'center', fontSize:12, padding:'24px 0' }}>No {orderTab} orders found.</p>
-            )}
-          </div>
-        </div>
-
-        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:16 }}>
-          <h3 style={{ fontSize:13, fontWeight:600, color:'var(--text2)', marginBottom:16 }}>
-            Low Stock Alerts
-            {lowStock.length > 0 && <span style={{ marginLeft:8, background:'rgba(243,156,18,0.15)', color:'#f39c12', padding:'2px 8px', borderRadius:8, fontSize:11 }}>{lowStock.length}</span>}
-          </h3>
-          {lowStock.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'24px 0' }}>
-              <CheckCircle size={32} color="#27ae60" style={{ margin:'0 auto 8px', display:'block' }} />
-              <p style={{ color:'#27ae60', fontSize:13 }}>All products well-stocked</p>
-            </div>
-          ) : lowStock.map(p => (
-            <div key={p.id} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:'1px solid var(--border)', alignItems:'center' }}>
-              <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
-                <p style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.name}</p>
-                <p style={{ fontSize:10, color:'var(--text3)' }}>{p.sku || p.category}</p>
-              </div>
-              <span style={{ color: p.stock === 0 ? 'var(--red)' : '#f39c12', fontWeight:700, fontSize:12, flexShrink:0 }}>
-                {p.stock === 0 ? 'OUT' : `${p.stock} left`}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div style={{ background:'#0d0d0d', border:'1px solid var(--border)', borderRadius:6, padding:'8px 10px', fontSize:11, boxShadow:'0 8px 24px rgba(0,0,0,0.5)' }}>
+      <p style={{ color:'var(--text3)', marginBottom:4 }}>{label}</p>
+      {payload.map((p) => (
+        <p key={String(p.dataKey)} style={{ color: p.color || 'var(--text)', display:'flex', justifyContent:'space-between', gap:14 }}>
+          <span>{p.name}</span>
+          <strong>{String(p.dataKey) === 'value' ? fmtEGP(p.value) : `${p.value} order${p.value === 1 ? '' : 's'}`}</strong>
+        </p>
+      ))}
     </div>
   );
 }
 
+function DashSkeleton() {
+  return (
+    <div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:12, marginBottom:20 }}>
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="admin-skeleton" style={{ height:92, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }} />
+        ))}
+      </div>
+      <div className="admin-skeleton" style={{ height:320, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }} />
+    </div>
+  );
+}
+
+function Dashboard({ setAdminPage, canAccess, onOpenOrder }) {
+  const { orders, products, refreshOrders, ordersLoading, ordersError } = useStore();
+
+  const [range, setRange] = useState('7d');
+
+  useEffect(() => {
+    if (!Array.isArray(orders) || orders.length === 0) refreshOrders();
+    // run once on mount to hydrate the dashboard
+  }, []);
+
+  const overview = useMemo(() => computeSalesOverview(orders, range), [orders, range]);
+  const inventory = useMemo(() => classifyInventory(products), [products]);
+
+  const recentOrders = useMemo(() => {
+    const list = Array.isArray(orders) ? [...orders] : [];
+    return list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 6);
+  }, [orders]);
+
+  const attentionOrders = useMemo(() => (Array.isArray(orders) ? orders : []).filter(o => o.status === 'Pending').slice(0, 4), [orders]);
+
+  const isEmpty = overview.orderCount === 0;
+  const loading = ordersLoading && Array.isArray(orders) && orders.length === 0;
+
+  const rangeLabel = RANGE_OPTIONS.find((r) => r.key === range);
+
+  const kpis = [
+    { key: 'totalValue', labelAr: 'قيمة الطلبات الإجمالية', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${overview.orderCount} non-cancelled orders`, color: 'var(--gold)', icon: TrendingUp, delta: overview.totalDeltaPct },
+    { key: 'delivered', labelAr: 'مبيعات الطلبات المسلّمة', labelEn: 'Delivered Sales', value: fmtEGP(overview.deliveredSales), sub: `${overview.deliveredCount} delivered`, color: '#27ae60', icon: CheckCircle },
+    { key: 'pending', labelAr: 'قيمة بانتظار التأكيد', labelEn: 'Pending Order Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: '#f39c12', icon: Clock },
+    { key: 'shipped', labelAr: 'قيمة الطلبات المشحونة', labelEn: 'Shipped Order Value', value: fmtEGP(overview.shippedValue), sub: `${overview.shippedCount} shipped`, color: '#3498db', icon: Truck },
+    { key: 'orders', labelAr: 'إجمالي الطلبات', labelEn: 'Total Orders', value: String(overview.orderCount), sub: 'all statuses', color: 'var(--text)', icon: ShoppingCart, delta: overview.orderDeltaPct },
+    { key: 'deliveredCount', labelAr: 'طلبات مسلّمة', labelEn: 'Delivered Orders', value: String(overview.deliveredCount), sub: `of ${overview.orderCount} total`, color: '#27ae60', icon: Package2 },
+    { key: 'aov', labelAr: 'متوسط قيمة الطلب', labelEn: 'Average Order Value', value: fmtEGP(overview.aov), sub: 'per eligible order', color: '#9b59b6', icon: BarChart2 },
+    { key: 'cancelled', labelAr: 'الطلبات الملغاة', labelEn: 'Cancelled Orders', value: fmtEGP(overview.cancelledValue), sub: `${overview.cancelledCount} cancelled (excluded everywhere)`, color: '#e74c3c', icon: XCircle },
+  ];
+
+  const hasSeriesData = !isEmpty && overview.series.some((p) => p.value > 0 || p.orders > 0);
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:16, gap:10, flexWrap:'wrap' }}>
+        <div>
+          <h2 style={{ fontSize:18, fontWeight:600, marginBottom:2 }}>نظرة عامة</h2>
+          <p style={{ fontSize:11, color:'var(--text3)' }}>
+            Overview · {rangeLabel ? `${rangeLabel.labelAr} (${rangeLabel.labelEn})` : ''} — up to {overview.orderCount} orders
+          </p>
+        </div>
+        <motion.button onClick={refreshOrders} whileTap={{ scale:0.95 }} disabled={ordersLoading}
+          style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:6, color:'var(--text2)', cursor:'pointer', fontSize:12, opacity: ordersLoading ? 0.7 : 1 }}>
+          <motion.span animate={{ rotate: ordersLoading ? 360 : 0 }} transition={{ duration: 0.6, repeat: ordersLoading ? Infinity : 0, ease: 'linear' }} style={{ display:'flex' }}>
+            <RefreshCw size={13} />
+          </motion.span>
+          {ordersLoading ? 'Loading…' : 'Refresh'}
+        </motion.button>
+      </div>
+
+      {ordersError && !loading && (
+        <div style={{ marginBottom:16, border:'1px solid rgba(231,76,60,0.35)', background:'rgba(231,76,60,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
+            <AlertCircle size={14} /> تعذّر تحميل الطلبات — {ordersError}
+          </p>
+          <button onClick={refreshOrders} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? <DashSkeleton /> : (
+        <>
+          {/* ── KPIs ── */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))', gap:12, marginBottom:18 }}>
+            {kpis.map(({ labelAr, labelEn, value, sub, color, icon:Icon, delta }, i) => (
+              <motion.div key={labelEn} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ delay:i*0.04 }}
+                style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'14px 14px 12px', display:'flex', flexDirection:'column' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                  <div style={{ width:30, height:30, borderRadius:8, background:`${color === 'var(--text)' ? '#2a2a2a' : color}1a`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <Icon size={15} color={color === 'var(--text)' ? 'var(--text2)' : color} />
+                  </div>
+                  {delta !== undefined && <KpiDelta pct={delta} />}
+                </div>
+                <div dir="ltr" style={{ fontSize:19, fontWeight:600, fontFamily:'var(--font-display)', color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{value}</div>
+                <p style={{ fontSize:12, fontWeight:600, marginTop:3 }}>{labelAr}</p>
+                <p style={{ fontSize:10, color:'var(--text3)', marginTop:1 }}>{labelEn} · {sub}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* ── Quick actions ── */}
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:18 }}>
+            <button onClick={() => setAdminPage('orders')} style={quickActionStyle}><ShoppingCart size={14} /> عرض كل الطلبات</button>
+            {canAccess('products.write') && <button onClick={() => setAdminPage('products')} style={quickActionStyle}><Plus size={14} /> إضافة منتج</button>}
+            {canAccess('products.read') && <button onClick={() => setAdminPage('products')} style={quickActionStyle}><Package size={14} /> إدارة المخزون</button>}
+            {canAccess('discounts.read') && <button onClick={() => setAdminPage('discounts')} style={quickActionStyle}><Tag size={14} /> كوبونات الخصم</button>}
+          </div>
+
+          {/* ── Sales performance ── */}
+          <Card
+            title={rangeLabel ? rangeLabel.labelAr : 'أداء المبيعات'}
+            titleEn="Sales Performance"
+            style={{ marginBottom: 16 }}
+            actions={
+              <div style={{ display:'flex', gap:2, background:'var(--bg)', padding:2, borderRadius:6, border:'1px solid var(--border)', overflowX:'auto' }}>
+                {RANGE_OPTIONS.map((r) => (
+                  <button key={r.key} onClick={() => setRange(r.key)}
+                    style={{ padding:'4px 10px', borderRadius:4, fontSize:10, fontWeight:600, cursor:'pointer', border:'none', background: range === r.key ? 'var(--gold)' : 'transparent', color: range === r.key ? 'var(--bg)' : 'var(--text3)', whiteSpace:'nowrap' }}>
+                    {r.labelEn}
+                  </button>
+                ))}
+              </div>
+            }
+          >
+            <div style={{ width:'100%', height:270 }}>
+              {hasSeriesData ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={overview.series} margin={{ left: -14, right: 4, top: 8 }}>
+                    <defs>
+                      <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#c9a84c" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#c9a84c" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="left" orientation="left" tickFormatter={compactEGP} tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<SalesTooltip />} />
+                    <Legend wrapperStyle={{ fontSize:11, color:'var(--text2)', marginTop:8 }} iconType="circle" iconSize={7} />
+                    <Area yAxisId="left" type="monotone" dataKey="value" name="Sales (EGP)" stroke="#c9a84c" strokeWidth={2} fill="url(#salesGrad)" dot={false} activeDot={{ r: 3 }} />
+                    <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#3b82c4" radius={[3,3,0,0]} barSize={Math.max(6, Math.min(30, Math.round(320 / (overview.series.length || 1))))} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <DashEmpty icon={BarChart2} title="لا توجد طلبات في هذه الفترة"
+                  hint="اختر نطاق زمني آخر من الأعلى أو انتظر وصول أول طلب."
+                  action={canAccess('orders.read') ? <button onClick={() => setAdminPage('orders')} style={{ marginTop:10, padding:'6px 14px', background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--gold)', borderRadius:6, cursor:'pointer', fontSize:11 }}>عرض الطلبات</button> : null} />
+              )}
+            </div>
+
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginTop:12, paddingTop:12, borderTop:'1px solid var(--border)', fontSize:11, color:'var(--text3)' }}>
+              <span>Sales = Total Order Value (غير الملغي: بانتظار/مؤكد/معالج/شُحن/سلّم). الدفع عند الاستلام (COD) — لا يُعدّ تحصيلاً نقدياً.</span>
+              {overview.prevTotalValue === null ? (
+                <span style={{ color:'var(--text2)' }}>— لا توجد فترة سابقة للمقارنة {range === 'all' ? '(all-time)' : ''}</span>
+              ) : (
+                <span style={{ color:'var(--text2)', display:'inline-flex', alignItems:'center', gap:4 }}>
+                  مقارنة بـ{overview.prevLabel}: <strong dir="ltr">{fmtEGP(overview.prevTotalValue)}</strong>
+                  {overview.totalDeltaPct !== null && <KpiDelta pct={overview.totalDeltaPct} />}
+                  {overview.totalDeltaPct === null && overview.prevTotalValue === 0 && <span>— فترة سابقة بلا طلبات</span>}
+                </span>
+              )}
+            </div>
+          </Card>
+
+          {/* ── Recent orders + store health ── */}
+          <div className="admin-dash-split" style={{ display:'grid', gridTemplateColumns:'minmax(0, 2fr) minmax(280px, 1fr)', gap:16, alignItems:'start' }}>
+            <Card title="أحدث الطلبات" titleEn="Recent Orders"
+              actions={<button onClick={() => setAdminPage('orders')} style={linkActionStyle}>عرض كل الطلبات ←</button>}
+              style={{ overflow:'hidden' }}>
+              {recentOrders.length === 0 ? (
+                <DashEmpty icon={ShoppingCart} title="لا توجد طلبات بعد"
+                  hint={canAccess('orders.read') ? 'اول طلب سيظهر هنا فور وصوله.' : null} />
+              ) : (
+                <div>
+                  <div style={{ display:'none' }}>
+                    {/* header kept hidden; compact rows below */}
+                  </div>
+                  {recentOrders.map((o) => (
+                    <motion.div key={o.id} initial={{ opacity:0 }} animate={{ opacity:1 }}
+                      style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 4px', borderBottom:'1px solid var(--border)', flexWrap:'wrap' }}>
+                      <div style={{ minWidth:0, flex:1, minWidth:150 }}>
+                        <p style={{ fontFamily:'monospace', fontSize:11, color:'var(--gold)', fontWeight:700 }}>{o.id}</p>
+                        <p style={{ fontSize:11, color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:240 }}>{o.customer}</p>
+                        <p style={{ fontSize:10, color:'var(--text3)' }}>{o.date}</p>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <strong dir="ltr" style={{ fontSize:12, color:'var(--text)' }}>{fmtEGP(o.total)}</strong>
+                        <StatusBadge status={o.status} small />
+                        <button onClick={() => onOpenOrder(o.id)} title="Open order" aria-label="Open order"
+                          style={{ width:28, height:28, borderRadius:6, background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                          <Eye size={12} />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <Card title="صحة المخزون" titleEn="Store Health">
+                {inventory.outOfStock.length === 0 && inventory.lowStock.length === 0 ? (
+                  <div style={{ display:'flex', alignItems:'center', gap:8, color:'#27ae60', fontSize:12, padding:'4px 0' }}>
+                    <CheckCircle size={15} /> كل المنتجات متاحة بمخزون جيد
+                  </div>
+                ) : (
+                  <div>
+                    {inventory.outOfStock.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <p style={{ fontSize:10, color:'var(--red)', fontWeight:600, marginBottom:4, textTransform:'uppercase', letterSpacing:0.5 }}>
+                          {inventory.outOfStock.length} نفدت من المخزون (Out of stock)
+                        </p>
+                        {inventory.outOfStock.slice(0,4).map((p) => (
+                          <div key={p.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:11 }}>
+                            <span style={{ color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginRight:8 }}>{p.name}</span>
+                            <span style={{ color:'var(--red)', fontWeight:700 }}>OUT</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {inventory.lowStock.length > 0 && (
+                      <div>
+                        <p style={{ fontSize:10, color:'#f39c12', fontWeight:600, marginBottom:4, textTransform:'uppercase', letterSpacing:0.5 }}>
+                          {inventory.lowStock.length} بكمية منخفضة (≤ 5)
+                        </p>
+                        {inventory.lowStock.slice(0,4).map((p) => (
+                          <div key={p.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:11 }}>
+                            <span style={{ color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginRight:8 }}>{p.name}</span>
+                            <span style={{ color:'#f39c12', fontWeight:700 }}>{p.stock} left</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop:'1px solid var(--border)' }}>
+                  <p style={{ fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>بانتظار التأكيد</p>
+                  {attentionOrders.length === 0 ? (
+                    <p style={{ fontSize:12, color:'#27ae60', display:'flex', alignItems:'center', gap:6 }}><CheckCircle size={14} /> لا توجد طلبات معلّقة</p>
+                  ) : attentionOrders.map((o) => (
+                    <div key={o.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', fontSize:11 }}>
+                      <span style={{ color:'var(--text2)', fontFamily:'monospace' }}>{o.id}</span>
+                      <strong dir="ltr" style={{ color:'var(--gold)' }}>{fmtEGP(o.total)}</strong>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const quickActionStyle = { display:'flex', gap:7, alignItems:'center', padding:'7px 13px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text2)', cursor:'pointer', fontSize:12, transition:'all 0.15s' };
+const linkActionStyle = { background:'none', border:'none', color:'var(--gold)', cursor:'pointer', fontSize:11, fontWeight:600, padding:0 };
+
 // ─── ORDERS PANEL ─────────────────────────────────────────────────────────────
-function OrdersPanel({ canEdit }) {
+function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const { orders, updateOrderStatus } = useStore();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -465,6 +621,13 @@ function OrdersPanel({ canEdit }) {
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [copied, setCopied] = useState(false); // حالة لإشعار النسخ
+
+  useEffect(() => {
+    if (!preOpenOrderId) return;
+    const target = (orders || []).find(o => o.id === preOpenOrderId);
+    if (target) setSelected(target);
+    if (onOrderOpened) onOrderOpened();
+  }, [preOpenOrderId, orders, onOrderOpened]);
 
   useEffect(() => {
     if (!selected) return;
@@ -549,6 +712,17 @@ function OrdersPanel({ canEdit }) {
               </tr>
             </thead>
             <tbody>
+              {paginated.items.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ padding: '8px' }}>
+                    <DashEmpty
+                      icon={ShoppingCart}
+                      title={search.trim() || statusFilter !== 'All' ? 'لا توجد طلبات مطابقة' : 'لا توجد طلبات بعد'}
+                      hint={search.trim() || statusFilter !== 'All' ? 'جرّب تغيير كلمة البحث أو الفلتر.' : 'ستظهر الطلبات الجديدة هنا تلقائياً.'}
+                    />
+                  </td>
+                </tr>
+              )}
               {paginated.items.map(order => {
                 const orderCount = getCustomerOrderCount(order.phone);
                 return (
@@ -626,9 +800,7 @@ function OrdersPanel({ canEdit }) {
                           {STATUS_FLOW.concat(['Cancelled']).map(s => <option key={s}>{s}</option>)}
                         </select>
                       ) : (
-                        <span style={{ fontSize:11, padding:'3px 9px', borderRadius:10, background:`${STATUS_COLORS[order.status]}1a`, color:STATUS_COLORS[order.status], fontWeight:600 }}>
-                          {order.status}
-                        </span>
+                        <StatusBadge status={order.status} />
                       )}
                     </td>
                     <td style={{ padding:'11px 14px', fontSize:11, color:'var(--text3)', verticalAlign: 'top', whiteSpace:'nowrap' }}>{order.date}</td>
@@ -1155,6 +1327,21 @@ function ProductsPanel({ canEdit }) {
         </div>
       )}
 
+      {paginated.items.length === 0 && (
+        <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>
+          <DashEmpty
+            icon={Package}
+            title={search ? 'لا توجد منتجات مطابقة' : 'لا توجد منتجات بعد'}
+            hint={search ? 'جرّب كلمة بحث أخرى.' : 'ابدأ بإضافة أول منتج لمتجرك.'}
+            action={(!search && canEdit) ? (
+              <button className="gold-btn" style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={openNew}>
+                <Plus size={14} /> إضافة منتج
+              </button>
+            ) : null}
+          />
+        </div>
+      )}
+
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:12 }}>
         {paginated.items.map(p => (
           <motion.div key={p.id} initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }}
@@ -1522,6 +1709,20 @@ function DiscountsPanel({ canEdit }) {
         </div>
       )}
       <div style={{ display:'grid', gap:12 }}>
+        {discounts.length === 0 && (
+          <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>
+            <DashEmpty
+              icon={Tag}
+              title="لا توجد كوبونات خصم"
+              hint="أنشئ كود خصم لجذب المزيد من الطلبات."
+              action={canEdit ? (
+                <button className="gold-btn" style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={() => setShowForm(true)}>
+                  <Plus size={14} /> إنشاء كود خصم
+                </button>
+              ) : null}
+            />
+          </div>
+        )}
         {discounts.map(d => {
           const isActive = d.active && d.startDate <= today && d.endDate >= today;
           const currentUsage = d.usageCount || 0;

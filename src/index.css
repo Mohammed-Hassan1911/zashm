@@ -298,3 +298,24 @@ div[role="status"] svg {
 @media (max-width: 768px) {
   .mobile-nav { display: block !important; }
 }
+
+/* ─── ADMIN DASHBOARD ───────────────────────────────────────────────────────── */
+.admin-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg3) !important;
+  border-radius: 8px;
+}
+
+.admin-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.055), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@media (max-width: 900px) {
+  .admin-dash-split { grid-template-columns: 1fr !important; }
+}

@@ -134,6 +134,8 @@ export const useStore = create((set, get) => ({
   products: db.getAll('products') || [],
   discounts: db.getAll('discounts') || [],
   orders: getSanitizedOrders(),
+  ordersLoading: false,
+  ordersError: null,
 
   refreshProducts: async () => {
     try {
@@ -332,14 +334,19 @@ export const useStore = create((set, get) => ({
   
   // ─── ORDERS & NOTIFICATIONS ────────────────────────────────────────────────
   refreshOrders: async () => {
+    set({ ordersLoading: true, ordersError: null });
     try {
       const payload = await api.get('/admin/orders');
       const data = Array.isArray(payload.orders) ? payload.orders : [];
       const sanitized = data.map(o => sanitizeOrder(o, get().products));
-      set({ orders: sanitized });
+      set({ orders: sanitized, ordersLoading: false });
     } catch (err) {
-      if (err && (err.status === 401 || err.status === 403)) return;
+      if (err && (err.status === 401 || err.status === 403)) {
+        set({ ordersLoading: false });
+        return;
+      }
       console.error("Unexpected error in refreshOrders:", err && err.message);
+      set({ ordersLoading: false, ordersError: (err && err.message) || 'Could not load orders' });
     }
   },
 
