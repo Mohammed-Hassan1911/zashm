@@ -60,7 +60,7 @@ async function createCoupon(req, res) {
   } catch (err) {
     console.error('Coupon create failed:', err && err.message);
     const msg = /duplicate|unique/i.test(String(err.message)) ? 'A discount with this code already exists' : 'Could not save discount';
-    return json(res, 500, { error: msg });
+    return json(res, /duplicate|unique/i.test(String(err.message)) ? 409 : 500, { error: msg });
   }
 }
 

@@ -84,31 +84,26 @@ async function updateOrder(req, res) {
     const comingFromCancelled = oldStatus.toLowerCase() === 'cancelled' && newStatus.toLowerCase() !== 'cancelled';
 
     if (goingToCancelled || comingFromCancelled) {
-      const ids = [...new Set(items.map((i) => Number(i.productId)).filter(Boolean))];
-      const { data: products } = await sb.from('products').select('id, stock, variantStock').in('id', ids);
-      const productMap = new Map((products || []).map((p) => [Number(p.id), p]));
-
-      for (const item of items) {
-        const p = productMap.get(Number(item.productId));
-        if (!p) continue;
-        const qty = Number(item.qty || 0);
-        if (!qty) continue;
-        const variantKey = `${item.size}-${item.color}`;
-        const variantStock = { ...(p.variantStock || {}) };
-        const hasVariant = variantStock[variantKey] !== undefined;
-        let nextStock;
-        let nextVariant = variantStock;
-        if (goingToCancelled) {
-          nextStock = Number(p.stock || 0) + qty;
-          if (hasVariant) variantStock[variantKey] = Number(variantStock[variantKey]) + qty;
-        } else {
-          nextStock = Math.max(0, Number(p.stock || 0) - qty);
-          if (hasVariant) variantStock[variantKey] = Math.max(0, Number(variantStock[variantKey]) - qty);
-        }
-        try {
-          await sb.from('products').update({ stock: nextStock, variantStock: nextVariant }).eq('id', p.id);
-        } catch (e) {
-          console.error('Stock reconcile failed:', e.message);
+      const lines = items
+        .map((i) => ({
+          productId: Number(i.productId),
+          qty: Number(i.qty || 0),
+          size: i.size || '',
+          color: i.color || '',
+        }))
+        .filter((l) => l.productId && l.qty > 0);
+      if (lines.length) {
+        // Atomic, row-locked stock restore/deduction (supabase/atomic_place_order.sql
+        // step 4). Serializes against concurrent order placement and aggregates
+        // multiple lines of the same product correctly.
+        const { data, error: rpcErr } = await sb.rpc('atomic_adjust_stock', {
+          p_lines: lines,
+          p_delta: goingToCancelled ? 1 : -1,
+        });
+        const r = Array.isArray(data) ? (data[0] || {}) : (data || {});
+        if (rpcErr || r.ok !== true) {
+          console.error('Stock reconcile (atomic) failed:', rpcErr ? rpcErr.message : (r && r.reason));
+          return json(res, 500, { error: 'Could not reconcile stock. Please try again.' });
         }
       }
     }
@@ -151,11 +146,53 @@ async function deleteOrder(req, res) {
 
   try {
     const sb = supabaseAdmin();
-    const { error } = await sb.from('orders').delete().eq('id', id);
-    if (error) {
-      console.error('Order delete failed:', error.message);
+    const { data: order, error } = await sb.from('orders').select('*').eq('id', id).maybeSingle();
+    if (error) return json(res, 500, { error: 'Could not load order' });
+    if (!order) return json(res, 404, { error: 'Order not found' });
+
+    const { error: delErr } = await sb.from('orders').delete().eq('id', id);
+    if (delErr) {
+      console.error('Order delete failed:', delErr.message);
       return json(res, 500, { error: 'Could not delete order' });
     }
+
+    // Restore stock and coupon usage after the row deletion (source of truth
+    // first — if the delete failed nothing was touched).
+    const items = parseOrderRow(order).items || [];
+    const lines = items
+      .map((i) => ({
+        productId: Number(i.productId),
+        qty: Number(i.qty || 0),
+        size: i.size || '',
+        color: i.color || '',
+      }))
+      .filter((l) => l.productId && l.qty > 0);
+    if (lines.length) {
+      try {
+        // Atomic, row-locked restore (supabase/atomic_place_order.sql step 4).
+        const { data, error: rpcErr } = await sb.rpc('atomic_adjust_stock', {
+          p_lines: lines,
+          p_delta: 1,
+        });
+        const r = Array.isArray(data) ? (data[0] || {}) : (data || {});
+        if (rpcErr || r.ok !== true) {
+          console.error('Order delete stock restore (atomic) failed:', rpcErr ? rpcErr.message : (r && r.reason));
+        }
+      } catch (e) {
+        console.error('Order delete stock restore (atomic) failed:', e.message);
+      }
+    }
+    if (order.discountCode) {
+      try {
+        const { data: coupon } = await sb.from('coupons').select('id, usageCount').eq('code', order.discountCode).maybeSingle();
+        if (coupon) {
+          await sb.from('coupons').update({ usageCount: Math.max(0, Number(coupon.usageCount || 0) - 1) }).eq('id', coupon.id);
+        }
+      } catch (e) {
+        console.error('Order delete coupon usage restore failed:', e.message);
+      }
+    }
+
     return json(res, 200, { success: true });
   } catch (err) {
     console.error('Order delete error:', err && err.message);

@@ -58,6 +58,12 @@ async function placeOrder(req, res) {
     return json(res, 422, { success: false, error: 'Invalid order data', errors: ['Please review your order details.'] });
   }
 
+  const rawKey = body && body.idempotencyKey;
+  const idempotencyKey = typeof rawKey === 'string' && rawKey.trim() !== '' ? rawKey.trim() : null;
+  if (idempotencyKey !== null && !/^[A-Za-z0-9._-]{8,64}$/.test(idempotencyKey)) {
+    return json(res, 422, { success: false, error: 'Invalid order data', errors: ['Please review your order details.'] });
+  }
+
   const { items, customer } = payload;
   const sb = supabaseAdmin();
 
@@ -148,7 +154,7 @@ async function placeOrder(req, res) {
     const shippingCost = getShippingCost(customer.city);
     const total = Math.max(0, subtotal + shippingCost - discount);
 
-    // 4. Create the order row.
+    // 4. Create the order row (items/timestamps as jsonb for the atomic RPC).
     const orderId = generateOrderId();
     const trackingUrl = trackingUrlFor(orderId);
     const orderDate = clampClientDate(body.customer && body.customer.date);
@@ -169,64 +175,70 @@ async function placeOrder(req, res) {
       address: customer.address,
       city: customer.city,
       notes: customer.notes || '',
-      items: JSON.stringify(orderItems),
-      timestamps: JSON.stringify(timestamps),
+      items: orderItems,
+      timestamps,
       tracking_url: trackingUrl,
     };
 
-    const { error: insertErr } = await sb.from('orders').insert([orderRow]);
-    if (insertErr) {
-      console.error('Order insert failed:', insertErr.message);
+    // 4b. Atomic place: order INSERT + stock decrement in ONE database
+    //     transaction, serialized by product row locks — the stock invariant
+    //     is enforced inside PostgreSQL, never in JS.
+    //     See supabase/atomic_place_order.sql (apply steps 1-5 there first).
+    const { data: rpcData, error: rpcErr } = await sb.rpc('atomic_place_order', {
+      p_order: orderRow,
+      p_idempotency_key: idempotencyKey,
+    });
+    if (rpcErr) {
+      console.error('atomic_place_order failed:', rpcErr.message);
       return json(res, 500, { success: false, error: 'Could not save the order. Please try again.' });
     }
+    const r = Array.isArray(rpcData) ? (rpcData[0] || {}) : (rpcData || {});
 
-    // 5. Decrement stock (guarded updates; roll back on concurrent-change failure).
-    const applied = [];
-    let stockFailure = null;
-    for (const item of orderItems) {
-      const p = productMap.get(Number(item.productId));
-      if (!p) continue;
-      const variantKey = `${item.size}-${item.color}`;
-      const prevStock = Number(p.stock || 0);
-      const prevVariant = { ...(p.variantStock || {}) };
-      const nextVariant = { ...(p.variantStock || {}) };
-      const newStock = Math.max(0, prevStock - item.qty);
-      if (nextVariant[variantKey] !== undefined) {
-        nextVariant[variantKey] = Math.max(0, Number(nextVariant[variantKey]) - item.qty);
+    if (r.ok !== true) {
+      const reason = r.reason || '';
+      if (reason === 'unavailable') {
+        const available = Number(r.available || 0);
+        const variation = `${r.size || ''} - ${r.color || ''}`.trim();
+        const msg = available === 0
+          ? variation
+            ? `Sorry, this piece is out of stock in this variation (${variation}).`
+            : 'Sorry, this piece is out of stock.'
+          : variation
+            ? `Sorry, only ${available} more piece(s) are remaining in stock for this variation (${variation}).`
+            : `Sorry, only ${available} more piece(s) are remaining in stock.`;
+        return json(res, 422, { success: false, error: msg, errors: [msg] });
       }
-      try {
-        const { data: updated, error: updErr } = await sb
-          .from('products')
-          .update({ stock: newStock, variantStock: nextVariant })
-          .eq('id', p.id)
-          .gte('stock', item.qty)
-          .select('id');
-        if (updErr) throw updErr;
-        if (!updated || updated.length === 0) {
-          stockFailure = `Sorry, "${p.name}" just sold out. Please review your bag.`;
-          break;
-        }
-        applied.push({ id: p.id, prevStock, prevVariant });
-      } catch (e) {
-        console.error('Stock update failed:', e.message);
-        stockFailure = 'Could not reserve stock. Please try again.';
-        break;
+      if (reason === 'missing_product') {
+        return json(res, 422, {
+          success: false,
+          error: 'A product in your cart is no longer available.',
+          errors: ['A product in your cart is no longer available.'],
+        });
       }
+      if (reason === 'idempotency_conflict') {
+        return json(res, 409, { success: false, error: 'Could not place the order. Please refresh your bag and try again.' });
+      }
+      return json(res, 422, { success: false, error: 'Could not place the order. Please review your bag and try again.' });
     }
 
-    if (stockFailure) {
-      for (const a of applied) {
-        try {
-          await sb.from('products').update({ stock: a.prevStock, variantStock: a.prevVariant }).eq('id', a.id);
-        } catch (e) {
-          console.error('Stock rollback failed:', e.message);
-        }
+    // 4c. Idempotent retry: this checkout already committed. Return the stored
+    //     order as success — Telegram/coupon were already sent on the FIRST
+    //     success and are deliberately skipped here.
+    if (r.duplicate === true) {
+      const { data: existing, error: dupErr } = await sb
+        .from('orders')
+        .select('*')
+        .eq('id', r.orderId || orderId)
+        .maybeSingle();
+      if (dupErr || !existing) {
+        return json(res, 500, { success: false, error: 'Order already exists but could not be loaded.' });
       }
-      await sb.from('orders').delete().eq('id', orderId);
-      return json(res, 422, { success: false, error: stockFailure, errors: [stockFailure] });
+      const dupOrder = parseOrderRow(existing);
+      dupOrder.shippingCost = getShippingCost(dupOrder.city);
+      return json(res, 200, { success: true, duplicate: true, order: dupOrder });
     }
 
-    // 6. Coupon usage counter (server-side only).
+    // 5. Coupon usage counter (server-side only; only on the FIRST success).
     if (couponRow) {
       try {
         await sb
@@ -238,7 +250,7 @@ async function placeOrder(req, res) {
       }
     }
 
-    // 7. Telegram notification (server secret; failure never blocks the order).
+    // 6. Telegram notification (server secret; failure never blocks the order).
     try {
       const message = buildOrderTelegramMessage(
         { ...orderRow, items: orderItems, shippingCost },

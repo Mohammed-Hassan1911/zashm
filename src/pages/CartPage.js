@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
-import { validateOrderForm, sanitizeInput, setPageMeta } from '../lib/security';
+import { sanitizeInput, setPageMeta } from '../lib/security';
 import { filterGovernorates, getShippingCost } from '../lib/egyptCities'; 
 
 function CityAutocomplete({ value, onChange, onSelect, error }) {
@@ -217,6 +217,15 @@ export function CheckoutPage() {
   // 🔒 الحارس الذري لمنع استدعاء الدالة مرتين بشكل متزامن في نفس الجزء من الثانية
   const isPlacingOrder = React.useRef(false);
 
+  // 🔑 مفتاح idempotency ثابت لكل جلسة Checkout: يُعاد استخدامه عند إعادة
+  // المحاولة بعد فشل الشبكة حتى لا يتكرر الطلب، ويُجدَّد تلقائيًا عند فتح
+  // صفحة Checkout جديدة (أي سلة جديدة) — يمنع الازدواج على مستوى قاعدة البيانات.
+  const idempotencyKey = React.useRef(
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+  ).current;
+
   const subtotal = cartSubtotal() ?? 0;
   const discountAmount = cartDiscountAmount() ?? 0;
   const safeCart = cart ?? []; 
@@ -327,7 +336,7 @@ export function CheckoutPage() {
         shippingCost: shippingCost,
         notes: sanitizedNotes,       
         total: finalTotal
-      });
+      }, idempotencyKey);
 
       if (!result || !result.success) {
         setStockErrors(result?.errors || ['Order failed. Please try again.']);

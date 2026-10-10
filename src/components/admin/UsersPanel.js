@@ -64,10 +64,18 @@ export default function UsersPanel() {
           updatedData.password = form.password;
         }
         
-        await updateUser(editingId, updatedData);
+        const res = await updateUser(editingId, updatedData);
+        if (!res || res.success === false) {
+          if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء حفظ بيانات العضو.', 'error');
+          return;
+        }
         if (typeof window.toast === 'function') window.toast('تم تحديث بيانات العضو بنجاح! 🔄');
       } else {
-        await addUser(form);
+        const res = await addUser(form);
+        if (!res || res.success === false) {
+          if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء إضافة العضو.', 'error');
+          return;
+        }
         if (typeof window.toast === 'function') window.toast('تم إضافة عضو الفريق بنجاح! 🚀');
       }
       
@@ -87,7 +95,11 @@ export default function UsersPanel() {
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
     try {
-      await deleteUser(userToDelete.id);
+      const res = await deleteUser(userToDelete.id);
+      if (!res || res.success === false) {
+        if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء الحذف', 'error');
+        return;
+      }
       if (typeof window.toast === 'function') window.toast('تم حذف العضو بنجاح 🗑️');
     } catch (err) {
       console.error(err);

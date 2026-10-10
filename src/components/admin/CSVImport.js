@@ -79,8 +79,12 @@ export default function CSVImport({ onClose }) {
     if (errors.length > 0 || !preview) return;
     setImporting(true);
     await new Promise(r => setTimeout(r, 600));
-    importProducts(preview);
+    const res = await importProducts(preview);
     setImporting(false);
+    if (!res || res.success === false) {
+      if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء استيراد المنتجات.', 'error');
+      return;
+    }
     setSuccess(true);
     setTimeout(() => onClose(), 2000);
   };

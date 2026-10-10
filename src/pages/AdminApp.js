@@ -1202,7 +1202,7 @@ function ProductsPanel({ canEdit }) {
 
       {paginated.totalPages > 1 && (
         <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:24 }}>
-          <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasNext}
+          <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasPrev}
             style={{ padding:'6px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:12, opacity: paginated.hasPrev ? 1 : 0.4 }}>← Prev</button>
           <span style={{ padding:'6px 8px', fontSize:12, color:'var(--text2)' }}>{page} / {paginated.totalPages}</span>
           <button onClick={() => setPage(p => Math.min(paginated.totalPages,p+1))} disabled={!paginated.hasNext}

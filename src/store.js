@@ -343,7 +343,7 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  placeOrder: async (orderData) => {
+  placeOrder: async (orderData, idempotencyKey = null) => {
     const { cart, appliedDiscount, clearCart } = get();
     const products = get().products;
 
@@ -359,6 +359,7 @@ export const useStore = create((set, get) => ({
     try {
       payload = await api.post('/orders', {
         items,
+        idempotencyKey,
         couponCode: appliedDiscount?.code || '',
         customer: {
           name: orderData?.customer || '',
@@ -400,7 +401,7 @@ export const useStore = create((set, get) => ({
       newOrderNotification: { order: sanitizeOrder(order, products), timestamp: Date.now() },
     });
 
-    return { success: true, order: sanitizeOrder(order, products) };
+    return { success: true, order: sanitizeOrder(order, products), duplicate: payload.duplicate === true };
   },
   
   updateOrderStatus: async (id, newStatus) => {

@@ -5,7 +5,8 @@ import { useStore } from '../../store';
 
 export default function MobileNav() {
   const { setPage, currentPage, cart, wishlist, setCartOpen } = useStore();
-  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+  const safeCart = cart || [];
+  const cartCount = safeCart.reduce((s, i) => s + i.qty, 0);
 
   const items = [
     { icon: Home, label: 'Home', page: 'home' },

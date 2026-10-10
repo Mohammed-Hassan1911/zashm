@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 
@@ -50,15 +50,21 @@ export default function ShopPage() {
   } = useStore();
 
   const [sort, setSort] = useState('Newest');
-  const [priceRange, setPriceRange] = useState([0, 3000]);
+  const [priceRange, setPriceRange] = useState({
+    min: '',
+    max: '3000'
+  });
   const [filterOpen, setFilterOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState('All');
 
-  // Categories are generated from the actual product data.
+  // PRODUCT CATEGORIES (only from products visible in the storefront, so a
+  // category with no active products never shows up as an empty grid).
   const categories = useMemo(() => {
     const seen = new Map();
 
     products.forEach((product) => {
+      if (product.active === false) return;
+
       const category = String(product.category ?? '').trim();
 
       if (!category) return;
@@ -76,8 +82,9 @@ export default function ShopPage() {
     ];
   }, [products]);
 
+  // FILTER AND SORT PRODUCTS
   const filtered = useMemo(() => {
-    // Hide inactive products from customers only.
+    // Hide inactive products from the storefront.
     let list = products.filter(
       (product) => product.active !== false
     );
@@ -102,7 +109,6 @@ export default function ShopPage() {
     }
 
     // MANUAL LABEL FILTER
-    // Uses the existing product.label field without changing the database.
     if (labelFilter && normalize(labelFilter) !== 'all') {
       const selectedLabel = normalize(labelFilter);
 
@@ -112,15 +118,31 @@ export default function ShopPage() {
     }
 
     // PRICE FILTER
-    const minPrice = Number(priceRange[0]);
-    const maxPrice = Number(priceRange[1]);
+    const minPrice =
+      priceRange.min.trim() === ''
+        ? 0
+        : Number(priceRange.min);
 
-    list = list.filter((product) => {
-      const price = getPrice(product);
-      return price >= minPrice && price <= maxPrice;
-    });
+    const maxPrice =
+      priceRange.max.trim() === ''
+        ? Infinity
+        : Number(priceRange.max);
 
-    // SORT A COPY, WITHOUT MUTATING THE FILTERED SOURCE ARRAY.
+    const validMin = Number.isFinite(minPrice) ? minPrice : 0;
+    const validMax = Number.isFinite(maxPrice) ? maxPrice : Infinity;
+
+    // Avoid showing misleading results if the range is invalid.
+    if (validMin <= validMax) {
+      list = list.filter((product) => {
+        const price = getPrice(product);
+
+        return price >= validMin && price <= validMax;
+      });
+    } else {
+      list = [];
+    }
+
+    // SORT A COPY; DO NOT MUTATE THE ORIGINAL PRODUCTS ARRAY.
     list = [...list];
 
     if (sort === 'Price: Low to High') {
@@ -143,16 +165,66 @@ export default function ShopPage() {
     sort
   ]);
 
+  // RESET FILTERS
   const resetFilters = () => {
     setFilterCategory('ALL');
     setLabelFilter('All');
-    setPriceRange([0, 3000]);
+    setPriceRange({
+      min: '',
+      max: '3000'
+    });
     setSort('Newest');
   };
 
-  return (
-    <div style={{ paddingTop: 90, minHeight: '100vh' }}>
+  const activeCategory =
+    !filterCategory || normalize(filterCategory) === 'all'
+      ? 'All Products'
+      : filterCategory;
 
+  const selectedPriceRangeIsInvalid =
+    priceRange.min.trim() !== '' &&
+    priceRange.max.trim() !== '' &&
+    Number(priceRange.min) > Number(priceRange.max);
+
+  const inputStyle = {
+    display: 'block',
+    boxSizing: 'border-box',
+    width: '100%',
+    marginTop: 8,
+    padding: '12px 14px',
+    background: 'var(--bg3)',
+    border: '1px solid var(--border)',
+    borderRadius: 4,
+    color: 'var(--text)',
+    fontSize: 13,
+    outline: 'none'
+  };
+
+  const filterButtonStyle = (selected) => ({
+    padding: '10px 15px',
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    border: selected
+      ? '1px solid var(--gold)'
+      : '1px solid var(--border)',
+    background: selected ? 'var(--gold)' : 'transparent',
+    color: selected ? 'var(--bg)' : 'var(--text2)',
+    cursor: 'pointer',
+    borderRadius: 3,
+    transition: 'background 0.2s ease, color 0.2s ease',
+    whiteSpace: 'nowrap'
+  });
+
+  return (
+    <div
+      style={{
+        paddingTop: 90,
+        minHeight: '100vh',
+        color: 'var(--text)'
+      }}
+    >
       {/* HEADER */}
       <div
         style={{
@@ -162,6 +234,8 @@ export default function ShopPage() {
         }}
       >
         <motion.p
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
           style={{
             fontSize: 10,
             letterSpacing: 4,
@@ -173,24 +247,28 @@ export default function ShopPage() {
         </motion.p>
 
         <motion.h1
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(32px, 5vw, 64px)'
+            fontSize: 'clamp(32px, 5vw, 64px)',
+            fontWeight: 400,
+            margin: '12px 0'
           }}
         >
-          {!filterCategory || normalize(filterCategory) === 'all'
-            ? 'All Products'
-            : filterCategory}
+          {activeCategory}
         </motion.h1>
 
         <motion.p
           style={{
             color: 'var(--text3)',
-            fontSize: 13,
-            marginTop: 8
+            fontSize: 12,
+            marginTop: 8,
+            letterSpacing: 1
           }}
         >
-          {filtered.length} {filtered.length === 1 ? 'piece' : 'pieces'} available
+          {filtered.length}{' '}
+          {filtered.length === 1 ? 'PIECE' : 'PIECES'} AVAILABLE
         </motion.p>
       </div>
 
@@ -201,8 +279,7 @@ export default function ShopPage() {
           padding: '0 24px'
         }}
       >
-
-        {/* FILTER BAR */}
+        {/* MAIN FILTER BAR */}
         <div
           style={{
             display: 'flex',
@@ -213,7 +290,6 @@ export default function ShopPage() {
             borderBottom: '1px solid var(--border)'
           }}
         >
-
           {/* CATEGORIES */}
           <div
             style={{
@@ -233,21 +309,7 @@ export default function ShopPage() {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setFilterCategory(category)}
-                  style={{
-                    padding: '9px 14px',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: 1,
-                    textTransform: 'uppercase',
-                    borderRadius: 3,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    background: selected ? 'var(--gold)' : 'transparent',
-                    color: selected ? 'var(--bg)' : 'var(--text2)',
-                    border: selected
-                      ? '1px solid var(--gold)'
-                      : '1px solid var(--border)'
-                  }}
+                  style={filterButtonStyle(selected)}
                 >
                   {category}
                 </button>
@@ -265,19 +327,20 @@ export default function ShopPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              padding: '10px 14px',
+              padding: '11px 15px',
               background: filterOpen ? 'var(--gold)' : 'var(--bg3)',
               border: '1px solid var(--border)',
               color: filterOpen ? 'var(--bg)' : 'var(--text2)',
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: 600,
+              letterSpacing: 1,
               cursor: 'pointer',
               borderRadius: 3,
               whiteSpace: 'nowrap'
             }}
           >
             <SlidersHorizontal size={14} />
-            Filter
+            {filterOpen ? 'Close Filters' : 'Filter'}
           </button>
 
           {/* SORT */}
@@ -286,11 +349,11 @@ export default function ShopPage() {
             value={sort}
             onChange={(event) => setSort(event.target.value)}
             style={{
-              padding: '10px 12px',
+              padding: '11px 12px',
               background: 'var(--bg3)',
               border: '1px solid var(--border)',
               color: 'var(--text2)',
-              fontSize: 11,
+              fontSize: 10,
               borderRadius: 3,
               cursor: 'pointer',
               maxWidth: '100%'
@@ -306,12 +369,15 @@ export default function ShopPage() {
 
         {/* FILTER PANEL */}
         {filterOpen && (
-          <div
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
             style={{
-              padding: '22px 0',
+              padding: '24px 0',
               borderBottom: '1px solid var(--border)'
             }}
           >
+            {/* PANEL HEADER */}
             <div
               style={{
                 display: 'flex',
@@ -319,160 +385,217 @@ export default function ShopPage() {
                 justifyContent: 'space-between',
                 gap: 12,
                 flexWrap: 'wrap',
-                marginBottom: 14
+                marginBottom: 18
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 11,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  color: 'var(--text2)'
-                }}
-              >
-                Shop by label
-              </h2>
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    color: 'var(--gold)',
+                    fontSize: 9,
+                    letterSpacing: 3,
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  Refine Your Selection
+                </p>
+
+                <h2
+                  style={{
+                    margin: '8px 0 0',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 24,
+                    fontWeight: 400
+                  }}
+                >
+                  Shop Filters
+                </h2>
+              </div>
 
               <button
                 type="button"
                 onClick={resetFilters}
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  padding: '9px 0',
                   background: 'transparent',
                   border: 'none',
                   color: 'var(--gold)',
-                  fontSize: 11,
-                  cursor: 'pointer',
-                  textDecoration: 'underline'
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                  cursor: 'pointer'
                 }}
               >
-                Reset all filters
+                <RotateCcw size={12} />
+                Reset All
               </button>
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                gap: 10,
-                flexWrap: 'wrap'
-              }}
-            >
-              {LABELS.map((label) => {
-                const selected = normalize(labelFilter) === normalize(label);
-
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => setLabelFilter(label)}
-                    style={{
-                      padding: '11px 16px',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      letterSpacing: 1,
-                      textTransform: 'uppercase',
-                      lineHeight: 1.4,
-                      border: selected
-                        ? '1px solid var(--gold)'
-                        : '1px solid var(--border)',
-                      background: selected ? 'var(--gold)' : 'transparent',
-                      color: selected ? 'var(--bg)' : 'var(--text2)',
-                      cursor: 'pointer',
-                      borderRadius: 3,
-                      transition: 'all 0.2s ease',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* PRICE RANGE */}
-            <div style={{ marginTop: 24 }}>
+            {/* LABEL FILTER */}
+            <div>
               <h3
                 style={{
                   margin: '0 0 12px',
-                  fontSize: 11,
+                  fontSize: 10,
+                  fontWeight: 600,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   color: 'var(--text2)'
                 }}
               >
-                Price range
+                Shop by Label
               </h3>
 
               <div
                 style={{
                   display: 'flex',
-                  gap: 12,
-                  alignItems: 'center',
+                  gap: 8,
                   flexWrap: 'wrap'
                 }}
               >
-                <label style={{ fontSize: 12, color: 'var(--text3)' }}>
-                  Min
+                {LABELS.map((label) => {
+                  const selected =
+                    normalize(labelFilter) === normalize(label);
+
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setLabelFilter(label)}
+                      style={filterButtonStyle(selected)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* PRICE FILTER */}
+            <div style={{ marginTop: 28 }}>
+              <h3
+                style={{
+                  margin: '0 0 14px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                  color: 'var(--text2)'
+                }}
+              >
+                Price Range
+              </h3>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 150px))',
+                  gap: 14,
+                  maxWidth: 320
+                }}
+              >
+                {/* MIN PRICE */}
+                <label
+                  style={{
+                    display: 'block',
+                    minWidth: 0,
+                    fontSize: 10,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    color: 'var(--text3)'
+                  }}
+                >
+                  Minimum
+
                   <input
                     type="number"
                     min="0"
-                    value={priceRange[0]}
+                    step="any"
+                    inputMode="decimal"
+                    placeholder="No minimum"
+                    value={priceRange.min}
                     onChange={(event) => {
-                      const value = Math.max(0, Number(event.target.value) || 0);
+                      const value = event.target.value;
 
-                      setPriceRange(([_, max]) => [
-                        Math.min(value, max),
-                        max
-                      ]);
+                      if (value !== '' && Number(value) < 0) return;
+
+                      setPriceRange((previous) => ({
+                        ...previous,
+                        min: value
+                      }));
                     }}
-                    style={{
-                      display: 'block',
-                      width: 110,
-                      marginTop: 6,
-                      padding: 9,
-                      background: 'var(--bg3)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text2)',
-                      borderRadius: 3
-                    }}
+                    style={inputStyle}
                   />
                 </label>
 
-                <label style={{ fontSize: 12, color: 'var(--text3)' }}>
-                  Max
+                {/* MAX PRICE */}
+                <label
+                  style={{
+                    display: 'block',
+                    minWidth: 0,
+                    fontSize: 10,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    color: 'var(--text3)'
+                  }}
+                >
+                  Maximum
+
                   <input
                     type="number"
-                    min={priceRange[0]}
-                    value={priceRange[1]}
+                    min="0"
+                    step="any"
+                    inputMode="decimal"
+                    placeholder="No maximum"
+                    value={priceRange.max}
                     onChange={(event) => {
-                      const value = Math.max(
-                        priceRange[0],
-                        Number(event.target.value) || 0
-                      );
+                      const value = event.target.value;
 
-                      setPriceRange(([min]) => [min, value]);
+                      if (value !== '' && Number(value) < 0) return;
+
+                      setPriceRange((previous) => ({
+                        ...previous,
+                        max: value
+                      }));
                     }}
-                    style={{
-                      display: 'block',
-                      width: 110,
-                      marginTop: 6,
-                      padding: 9,
-                      background: 'var(--bg3)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text2)',
-                      borderRadius: 3
-                    }}
+                    style={inputStyle}
                   />
                 </label>
               </div>
+
+              {selectedPriceRangeIsInvalid && (
+                <p
+                  role="alert"
+                  style={{
+                    marginTop: 10,
+                    color: '#d97777',
+                    fontSize: 12
+                  }}
+                >
+                  Minimum price cannot exceed maximum price.
+                </p>
+              )}
+
+              <p
+                style={{
+                  marginTop: 12,
+                  color: 'var(--text3)',
+                  fontSize: 11,
+                  lineHeight: 1.6
+                }}
+              >
+                Leave either field empty to remove that price limit.
+              </p>
             </div>
-          </div>
+          </motion.div>
         )}
 
-        {/* PRODUCTS */}
+        {/* PRODUCT GRID */}
         <div style={{ paddingBottom: 80 }}>
           {filtered.length === 0 ? (
             <div
@@ -482,35 +605,47 @@ export default function ShopPage() {
                 color: 'var(--text3)'
               }}
             >
-              <p style={{ fontSize: 16, marginBottom: 8 }}>
-                No products found
+              <p
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 26,
+                  color: 'var(--text2)',
+                  marginBottom: 10
+                }}
+              >
+                No Products Found
               </p>
 
-              <p style={{ fontSize: 12 }}>
-                Try changing your search or filters.
+              <p style={{ fontSize: 12, lineHeight: 1.8 }}>
+                Try adjusting your search or filters to discover more pieces.
               </p>
 
               <button
                 type="button"
                 onClick={resetFilters}
                 style={{
-                  marginTop: 12,
-                  padding: '10px 16px',
+                  marginTop: 18,
+                  padding: '12px 20px',
                   background: 'var(--gold)',
                   color: 'var(--bg)',
                   border: '1px solid var(--gold)',
                   cursor: 'pointer',
-                  borderRadius: 3
+                  borderRadius: 3,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase'
                 }}
               >
-                Reset filters
+                Reset Filters
               </button>
             </div>
           ) : (
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))',
+                gridTemplateColumns:
+                  'repeat(auto-fill, minmax(min(100%, 240px), 1fr))',
                 gap: 24,
                 paddingTop: 32
               }}
