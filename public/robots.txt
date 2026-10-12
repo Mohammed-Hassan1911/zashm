@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://zashm.com/sitemap.xml
+Sitemap: https://zashm-mo.vercel.app/sitemap.xml
