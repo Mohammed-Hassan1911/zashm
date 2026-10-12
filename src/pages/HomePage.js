@@ -19,30 +19,24 @@ export default function HomePage() {
     <div style={{ paddingTop: 0 }}>
       {/* ───── HERO — Old Money Menswear Editorial ───── */}
       <section ref={heroRef} style={{ height: '100vh', minHeight: 640, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {/* Primary editorial image — gentleman in tailored attire */}
+        {/* Black luxury backdrop — soft gold glow */}
         <motion.div style={{ position: 'absolute', inset: 0, y }}>
-          <img
-            src="https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?w=2000&q=90&auto=format&fit=crop"
-            alt=""
-            aria-hidden="true"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', filter: 'contrast(1.08) saturate(0.85) brightness(0.62)' }}
-          />
-          {/* Cinematic gradient overlay — dark luxury */}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(10,10,10,0.55) 0%, rgba(10,10,10,0.35) 30%, rgba(10,10,10,0.55) 65%, rgba(10,10,10,0.92) 100%)' }} />
-          {/* Vignette */}
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 30%, rgba(10,10,10,0.6) 100%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #0a0a0a 0%, #14110a 48%, #0a0a0a 100%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 38%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 34%, rgba(0,0,0,0.72) 100%)' }} />
         </motion.div>
 
-
-        {/* Floating gold particles — subtle luxury sparkle */}
-        {[...Array(6)].map((_, i) => (
-          <motion.div key={i}
-            style={{ position: 'absolute', width: 2, height: 2, borderRadius: '50%', background: 'var(--gold)', opacity: 0.4, left: `${15 + i * 14}%`, top: `${20 + (i % 3) * 20}%`, zIndex: 2 }}
-            animate={{ y: [0, -20, 0], opacity: [0.4, 0.8, 0.4] }}
-            transition={{ duration: 3 + i, repeat: Infinity, delay: i * 0.5 }}
-          />
-        ))}
+        {/* Twinkling gold dust — subtle luxury sparkle */}
+        {[...Array(28)].map((_, i) => {
+          const size = 1 + (i % 3) * 0.7;
+          return (
+            <motion.div key={i}
+              style={{ position: 'absolute', width: size, height: size, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 4px rgba(201,168,76,0.75)', left: `${(i * 37) % 100}%`, top: `${(i * 53) % 100}%`, zIndex: 2 }}
+              animate={{ opacity: [0.1, 0.85, 0.1], scale: [0.8, 1.15, 0.8] }}
+              transition={{ duration: 3 + (i % 5), repeat: Infinity, delay: (i % 7) * 0.45, ease: 'easeInOut' }}
+            />
+          );
+        })}
 
         {/* Editorial content */}
         <motion.div style={{ position: 'relative', textAlign: 'center', zIndex: 10, opacity, padding: '0 24px' }} className="hero-content">
@@ -54,7 +48,7 @@ export default function HomePage() {
           <motion.p
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.8 }}
             style={{ fontSize: 11, letterSpacing: 8, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 32, fontWeight: 500 }}
-          >Maison Établie · MMXXIV</motion.p>
+          >Est. 2026 · Egypt</motion.p>
 
           <motion.h1
             initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 1 }}
@@ -136,26 +130,34 @@ export default function HomePage() {
       )}
 
       {/* ───── EDITORIAL BANNER ───── */}
-      <section style={{ position: 'relative', height: 460, margin: '60px 0', overflow: 'hidden', background: 'var(--bg2)' }}>
-        <img
-          src="https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?w=1800&q=90&auto=format&fit=crop"
-          loading="lazy"
-          alt="ZASHM Editorial"
-          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'contrast(1.1) saturate(0.85) brightness(0.7)' }}
-        />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.55) 50%, rgba(10,10,10,0.3) 100%)' }} />
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 8%' }}>
+      <section style={{ position: 'relative', height: 460, margin: '60px 0', overflow: 'hidden', background: '#0a0a0a' }}>
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #0a0a0a 0%, #14110a 50%, #0a0a0a 100%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 22% 50%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 40%, transparent 75%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)' }} />
+        </div>
+
+        {[...Array(16)].map((_, i) => {
+          const size = 1 + (i % 3) * 0.6;
+          return (
+            <motion.div key={i}
+              style={{ position: 'absolute', width: size, height: size, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 4px rgba(201,168,76,0.7)', left: `${(i * 29) % 100}%`, top: `${(i * 61) % 100}%`, zIndex: 2 }}
+              animate={{ opacity: [0.1, 0.8, 0.1], scale: [0.8, 1.15, 0.8] }}
+              transition={{ duration: 3 + (i % 4), repeat: Infinity, delay: (i % 6) * 0.5, ease: 'easeInOut' }}
+            />
+          );
+        })}
+
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 8%', zIndex: 3 }}>
           <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}
             style={{ maxWidth: 520 }}>
             <p style={{ color: 'var(--gold)', fontSize: 10, letterSpacing: 6, textTransform: 'uppercase', marginBottom: 18 }}>The Autumn Edit</p>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(36px, 5vw, 56px)', fontWeight: 400, marginBottom: 18, lineHeight: 1.1 }}>
               A return to <em style={{ color: 'var(--gold)' }}>quiet elegance</em>
             </h2>
-            <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.8, marginBottom: 28, maxWidth: 420 }}>
-              Cashmere from Lake Como. Wool from Biella. Linen woven in family mills since 1908. The pieces that outlast the season.
+            <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.8, maxWidth: 420 }}>
+              Wool, linen and cashmere — chosen for how they fall, not the label. The pieces that outlast the season.
             </p>
-            <button className="gold-btn" onClick={() => setPage('shop')}>Explore the Edit</button>
           </motion.div>
         </div>
       </section>
@@ -170,27 +172,18 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ───── TESTIMONIALS — Gentlemen ───── */}
-      <section style={{ padding: '90px 24px', background: 'var(--bg2)', borderTop: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <SectionHeader title="From Our Gentlemen" subtitle="Letters of Patronage" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, marginTop: 56 }}>
-            {[
-              { name: 'Mr. Karim H.', loc: 'Cairo', text: 'The cashmere polo is without question the finest piece of knitwear I own. Worth every pound.' },
-              { name: 'Mr. Tarek A.', loc: 'Dubai', text: 'ZASHM understands the modern gentleman — restrained, tailored, never showy. My new house.' },
-              { name: 'Mr. Youssef M.', loc: 'London', text: 'The linen shirts rival what I bring back from Como. The service is impeccable. A genuine luxury house.' },
-            ].map((t, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12 }}
-                style={{ padding: '32px 28px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4 }}>
-                <div style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 0.5, marginBottom: 14 }}>"</div>
-                <p style={{ fontStyle: 'italic', color: 'var(--text2)', fontSize: 14, lineHeight: 1.8, marginBottom: 22 }}>{t.text}</p>
-                <div style={{ width: 28, height: 1, background: 'var(--gold)', marginBottom: 12 }} />
-                <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1 }}>{t.name}</p>
-                <p style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: 1.5, textTransform: 'uppercase' }}>{t.loc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
+      {/* ───── MANIFESTO ───── */}
+      <section style={{ padding: '110px 24px', background: 'var(--bg2)', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+        <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.9 }}
+          style={{ maxWidth: 820, margin: '0 auto' }}>
+          <div style={{ width: 60, height: 1, background: 'var(--gold)', margin: '0 auto 36px' }} />
+          <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4.2vw, 52px)', fontWeight: 300, lineHeight: 1.25, color: 'var(--text)', letterSpacing: 1, marginBottom: 28 }}>
+            For the man who has <em style={{ color: 'var(--gold)' }}>nothing left to prove</em>.
+          </p>
+          <p style={{ fontSize: 12, letterSpacing: 5, textTransform: 'uppercase', color: 'var(--text3)' }}>
+            Timeless pieces, quietly made in Cairo
+          </p>
+        </motion.div>
       </section>
     </div>
   );

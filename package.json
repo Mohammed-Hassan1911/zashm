@@ -3,17 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.108.0",
-    "ajv": "^8.20.0",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.383.0",
     "papaparse": "^5.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
     "react-scripts": "5.0.1",
     "recharts": "^2.12.0",
     "zustand": "^4.5.0"
@@ -21,7 +16,8 @@
   "scripts": {
     "start": "react-scripts start",
     "dev": "vercel dev",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "test": "node scripts/test-analytics.mjs"
   },
   "browserslist": {
     "production": [

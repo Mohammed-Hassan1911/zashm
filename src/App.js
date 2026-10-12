@@ -25,7 +25,9 @@ import CartDrawer from './components/shop/CartDrawer';
 import MobileNav from './components/shop/MobileNav';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
+import WhatsAppButton from './components/ui/WhatsAppButton';
 import { setPageMeta } from './lib/seo';
+import { trackPageView } from './lib/ga';
 
 if (typeof window !== 'undefined') {
   window.toast = toast;
@@ -50,6 +52,7 @@ function AppInner() {
   const refreshOrders = useStore((state) => state.refreshOrders);
 
   const [activeModal, setActiveModal] = useState(null);
+  const trackedFirstView = useRef(false);
 
   // 🎯 لقط الأوردر وتحويل العميل لصفحة التتبع (يقرأ TrackOrder رقم الطلب من ?track مباشرة)
   useEffect(() => {
@@ -71,13 +74,21 @@ function AppInner() {
       home: { title: 'Home' },
       shop: { title: 'Shop', description: 'Browse the full ZASHM collection — premium clothing with delivery across Egypt.' },
       product: { title: 'Product' },
-      cart: { title: 'Your Bag' },
-      checkout: { title: 'Checkout' },
-      wishlist: { title: 'Wishlist' },
-      track: { title: 'Track Your Order' },
+      cart: { title: 'Your Bag', robots: 'noindex, nofollow' },
+      checkout: { title: 'Checkout', robots: 'noindex, nofollow' },
+      wishlist: { title: 'Wishlist', robots: 'noindex, nofollow' },
+      track: { title: 'Track Your Order', robots: 'noindex, nofollow' },
       admin: { title: 'Admin', robots: 'noindex, nofollow' },
     };
-    setPageMeta(META[currentPage] || {});
+    const meta = META[currentPage] || {};
+    setPageMeta(meta);
+
+    // The initial page_view is sent by gtag 'config'; track later navigations.
+    if (trackedFirstView.current) {
+      trackPageView(currentPage === 'home' ? '/' : `/${currentPage}`, meta.title ? `${meta.title} — ZASHM` : undefined);
+    } else {
+      trackedFirstView.current = true;
+    }
   }, [currentPage]);
 
   useEffect(() => {
@@ -133,6 +144,7 @@ function AppInner() {
           <Footer setModal={setActiveModal} />
           <MobileNav />
           <BackToTop />
+          <WhatsAppButton />
 
           <InfoModal type={activeModal} onClose={() => setActiveModal(null)} />
         </>
@@ -328,7 +340,7 @@ function Footer({ setModal }) {
           <p style={{ color: '#C9A84C', fontSize: 12 }}> © 2026 ZASHM Luxury Fashion. All rights reserved.</p> 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gold)', fontSize: 12 }}>
             <ShieldCheck size={14} />
-            <span>Secure SHA-256 SSL Encryption</span>
+            <span>Secured with 256-bit SSL encryption</span>
           </div>
         </div>
 

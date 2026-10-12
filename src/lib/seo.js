@@ -42,7 +42,7 @@ export function setPageMeta({ title, description, image, url, robots } = {}) {
   if (typeof document === 'undefined') return;
   const fullTitle = title ? `${title} — ${BRAND}` : `${BRAND} — Luxury Fashion`;
   const desc = description || DEFAULT_DESC;
-  const canonical = url || (typeof window !== 'undefined' ? window.location.href : '');
+  const canonical = url || (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '');
 
   document.title = fullTitle;
   setNamed('description', desc);

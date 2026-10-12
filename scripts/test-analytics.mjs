@@ -22,11 +22,13 @@ const A = exportsOut;
 
 const CAIRO = { timeZone: 'Africa/Cairo' };
 const NOW = '2026-10-11T12:00:00';
-const today = (() => {
-  const parts = new Intl.DateTimeFormat('en-CA', { ...CAIRO, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(NOW));
+const cairoToday = (d) => {
+  const parts = new Intl.DateTimeFormat('en-CA', { ...CAIRO, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
   const g = (t) => (parts.find((p) => p.type === t) || {}).value;
-  return `${g('year')}-${g('month')}-${g('day')}`; // 2026-10-11
-})();
+  return `${g('year')}-${g('month')}-${g('day')}`;
+};
+const today = cairoToday(new Date(NOW)); // 2026-10-11
+const realToday = cairoToday(new Date());
 
 let pass = 0;
 let fail = 0;
@@ -150,9 +152,9 @@ console.log('\n[7] range boundaries (30d / month / all)');
 
 console.log('\n[8] missing / invalid timestamps');
 {
-  eq(A.orderDateKey({}), today, 'no date fields → falls back to today');
-  eq(A.orderDateKey({ date: '' }), today, "empty-string date → today (not epoch)");
-  eq(A.orderDateKey({ date: 'not-a-date' }), today, 'garbage date → today');
+  eq(A.orderDateKey({}), realToday, 'no date fields → falls back to today');
+  eq(A.orderDateKey({ date: '' }), realToday, "empty-string date → today (not epoch)");
+  eq(A.orderDateKey({ date: 'not-a-date' }), realToday, 'garbage date → today');
   eq(A.orderDateKey({ timestamps: { created: '2026-10-01T10:00:00Z' } }), '2026-10-01', 'ISO created in Cairo');
   eq(A.orderDateKey(order({ date: '2026-10-05' })), '2026-10-05', 'wall-date passthrough');
 }

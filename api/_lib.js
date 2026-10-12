@@ -32,7 +32,7 @@ function requireSecret(name) {
   return v;
 }
 
-const PUBLIC_BASE_URL = () => env('PUBLIC_BASE_URL') || 'https://zashm-mo.vercel.app';
+const PUBLIC_BASE_URL = () => env('PUBLIC_BASE_URL') || 'https://za-shm.vercel.app';
 
 // ─── SUPABASE (SERVICE ROLE) ────────────────────────────────────────────────
 
@@ -62,7 +62,7 @@ function getAllowedOrigin(req) {
   if (!origin) return null;
   const allowed = (
     env('ALLOWED_ORIGINS') ||
-    'https://zashm-mo.vercel.app,http://localhost:3000,http://127.0.0.1:3000'
+    'https://za-shm.vercel.app,http://localhost:3000,http://127.0.0.1:3000'
   )
     .split(',')
     .map((s) => s.trim())
