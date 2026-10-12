@@ -16,17 +16,14 @@ import {
   fmtEGP,
   compactEGP,
   classifyInventory,
-  computeMonthlyPerformance,
-  computeAnalyticsKPIs,
-  computeTopProducts,
-  computeCategoryRevenue,
+  computeAnalyticsReport,
 } from '../lib/analytics';
 import AdminLogin from '../components/admin/AdminLogin';
 import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUploader';
 import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
 import { deleteStorageFile } from '../lib/api';
-import { ComposedChart, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, Legend } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, Legend } from 'recharts';
 import Papa from 'papaparse';
 import { toast } from '../components/ui/BackToTop';
 
@@ -1905,73 +1902,162 @@ function DiscountsPanel({ canEdit }) {
 // ─── ANALYTICS PANEL ──────────────────────────────────────────────────────────
 function AnalyticsPanel() {
   const { orders, products } = useStore();
-  const monthly = useMemo(() => computeMonthlyPerformance(orders), [orders]);
-  const { totalRevenue, avgOrderValue, uniqueCustomers, convRate } = useMemo(() => computeAnalyticsKPIs(orders), [orders]);
-  const topProducts = useMemo(() => computeTopProducts(orders, products), [orders, products]);
-  const catRevenue = useMemo(() => computeCategoryRevenue(orders, products), [orders, products]);
-  const maxRevenue = useMemo(() => Math.max(...catRevenue.map(c => c.revenue), 1), [catRevenue]);
+  const [range, setRange] = useState('7d');
+
+  const report = useMemo(
+    () => computeAnalyticsReport(orders, products, range),
+    [orders, products, range],
+  );
+
+  const rangeLabel = RANGE_OPTIONS.find((r) => r.key === range);
+  const maxProductRevenue = useMemo(
+    () => Math.max(...report.topProducts.map((p) => p.revenue), 1),
+    [report.topProducts],
+  );
+  const maxCategoryRevenue = useMemo(
+    () => Math.max(...report.categoryRevenue.map((c) => c.revenue), 1),
+    [report.categoryRevenue],
+  );
+  const hasSeriesData = report.series.some((p) => p.value > 0 || p.orders > 0);
+
+  const kpis = [
+    { labelAr: 'إجمالي المبيعات', labelEn: 'Total Sales', value: fmtEGP(report.totalValue), sub: 'غير ملغي · COD', color: 'var(--gold)', icon: TrendingUp, delta: report.totalDeltaPct },
+    { labelAr: 'الطلبات', labelEn: 'Orders', value: String(report.orderCount), sub: 'كل الحالات في الفترة', color: 'var(--text)', icon: ShoppingCart, delta: report.orderDeltaPct },
+    { labelAr: 'متوسط قيمة الطلب', labelEn: 'Average Order Value', value: fmtEGP(report.aov), sub: 'Total Sales ÷ Orders', color: '#9b59b6', icon: BarChart2 },
+    { labelAr: 'القطع المباعة', labelEn: 'Items Sold', value: report.itemsSold.toLocaleString('en-US'), sub: 'وحدات في الطلبات', color: '#3498db', icon: Package2 },
+    { labelAr: 'عملاء مميزون', labelEn: 'Unique Customers', value: report.uniqueCustomers.toLocaleString('en-US'), sub: 'بـ رقم هاتف / اسم', color: '#16a085', icon: Users },
+    { labelAr: 'معدل العملاء المتكررين', labelEn: 'Returning Customer Rate', value: `${report.returningRate}%`, sub: `${report.returningCustomers} بأكثر من طلب`, color: '#27ae60', icon: RefreshCw },
+    { labelAr: 'معدل التسليم', labelEn: 'Fulfilment Rate', value: `${report.fulfilmentRate}%`, sub: `${report.fulfilledCount} delivered من ${report.orderCount}`, color: '#c9a84c', icon: CheckCircle },
+    { labelAr: 'معدل الإلغاء', labelEn: 'Cancellation Rate', value: `${report.cancellationRate}%`, sub: `${report.cancelledCount} ملغي`, color: '#e74c3c', icon: XCircle },
+  ];
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-        {[
-          { label: 'Avg Order Value', value: `EGP ${Math.round(avgOrderValue).toLocaleString()}`, color: 'var(--gold)' },
-          { label: 'Total Revenue', value: `EGP ${totalRevenue.toLocaleString()}`, color: '#27ae60' },
-          { label: 'Unique Customers', value: uniqueCustomers, color: '#3498db' },
-          { label: 'Conversion Rate', value: `${convRate}%`, color: '#9b59b6' },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px' }}>
-            <p style={{ fontSize: 16, fontWeight: 600, color, marginBottom: 4, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{value}</p>
-            <p style={{ color: 'var(--text3)', fontSize: 11 }}>{label}</p>
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 2 }}>التحليلات</h2>
+          <p style={{ fontSize: 11, color: 'var(--text3)' }}>
+            Analytics · {rangeLabel ? `${rangeLabel.labelAr} (${rangeLabel.labelEn})` : ''}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)', overflowX: 'auto' }}>
+          {RANGE_OPTIONS.map((r) => (
+            <button key={r.key} onClick={() => setRange(r.key)}
+              style={{ padding: '4px 10px', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: range === r.key ? 'var(--gold)' : 'transparent', color: range === r.key ? 'var(--bg)' : 'var(--text3)', whiteSpace: 'nowrap' }}>
+              {r.labelEn}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+        {kpis.map(({ labelAr, labelEn, value, sub, color, icon: Icon, delta }, i) => (
+          <motion.div key={labelEn} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: `${color === 'var(--text)' ? '#2a2a2a' : color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={15} color={color === 'var(--text)' ? 'var(--text2)' : color} />
+              </div>
+              {delta !== undefined && <KpiDelta pct={delta} />}
+            </div>
+            <div dir="ltr" style={{ fontSize: 19, fontWeight: 600, fontFamily: 'var(--font-display)', color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+            <p style={{ fontSize: 12, fontWeight: 600, marginTop: 3 }}>{labelAr}</p>
+            <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>{labelEn} · {sub}</p>
+          </motion.div>
         ))}
       </div>
 
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, minWidth:0 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Monthly Performance</h3>
-        <div style={{ width: '100%', height: 220 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthly} margin={{ left: -20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="m" tick={{ fontSize:10 }} />
-              <YAxis tick={{ fontSize:10 }} />
-              <Tooltip contentStyle={{ background: '#1e1e1e', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }} />
-              <Bar dataKey="revenue" fill="#D4AF37" />
-              <Bar dataKey="customers" fill="#C5A028" />
-            </BarChart>
-          </ResponsiveContainer>
+      <Card title="المبيعات عبر الوقت" titleEn="Sales over time">
+        <div style={{ width: '100%', height: 280 }}>
+          {hasSeriesData ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={report.series} margin={{ left: -14, right: 4, top: 8 }}>
+                <defs>
+                  <linearGradient id="analyticsSalesGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#c9a84c" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#c9a84c" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: 'var(--text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" orientation="left" tickFormatter={compactEGP} tick={{ fill: 'var(--text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{ fill: 'var(--text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip content={<SalesTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text2)', marginTop: 8 }} iconType="circle" iconSize={7} />
+                <Area yAxisId="left" type="monotone" dataKey="value" name="Sales (EGP)" stroke="#c9a84c" strokeWidth={2} fill="url(#analyticsSalesGrad)" dot={false} activeDot={{ r: 3 }} />
+                <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#3b82c4" radius={[3, 3, 0, 0]} barSize={Math.max(6, Math.min(30, Math.round(320 / (report.series.length || 1))))} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <DashEmpty icon={BarChart2} title="لا توجد طلبات في هذه الفترة"
+              hint="اختر نطاقًا زمنيًا آخر من الأعلى أو انتظر وصول أول طلب." />
+          )}
         </div>
-      </div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text3)' }}>
+          <span>Sales = إجمالي قيمة الطلبات غير الملغاة (COD — لا يُعدّ تحصيلًا نقديًا حتى التسليم).</span>
+          <span style={{ color: 'var(--text2)', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+            <span>المسلّم: <strong dir="ltr" style={{ color: '#27ae60' }}>{fmtEGP(report.deliveredSales)}</strong></span>
+            <span>·</span>
+            <span>بانتظار/معالجة: <strong dir="ltr" style={{ color: '#f39c12' }}>{fmtEGP(report.pendingValue)}</strong></span>
+            <span>·</span>
+            <span>ملغي: <strong dir="ltr" style={{ color: '#e74c3c' }}>{fmtEGP(report.cancelledValue)}</strong></span>
+          </span>
+        </div>
+      </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Top Products</h3>
-          {topProducts.map((p, i) => (
-            <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < topProducts.length - 1 ? '1px solid var(--border)' : 'none', alignItems:'center' }}>
-              <div style={{ minWidth:0, flex:1, paddingRight:8 }}>
-                <p style={{ fontSize: 12, fontWeight: 500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.name}</p>
-                <p style={{ fontSize: 10, color: 'var(--text3)' }}>{p.category}</p>
+        <Card title="الأكثر مبيعًا" titleEn="Top products by revenue">
+          {report.topProducts.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>لا توجد مبيعات في هذه الفترة.</p>
+          ) : report.topProducts.map((p, i) => (
+            <div key={`${p.name}-${i}`} style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</p>
+                  <p style={{ fontSize: 10, color: 'var(--text3)' }}>{p.category} · {p.count} sold</p>
+                </div>
+                <span dir="ltr" style={{ color: 'var(--gold)', fontSize: 12, flexShrink: 0 }}>{fmtEGP(p.revenue)}</span>
               </div>
-              <span style={{ color: 'var(--gold)', fontSize: 12, flexShrink:0 }}>EGP {p.revenue.toLocaleString()}</span>
+              <div style={{ height: 4, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                <motion.div initial={{ width: 0 }} animate={{ width: `${(p.revenue / maxProductRevenue) * 100}%` }} transition={{ delay: 0.1 + i * 0.05, duration: 0.6 }}
+                  style={{ height: '100%', background: 'linear-gradient(to right, var(--gold-dark), var(--gold))', borderRadius: 3 }} />
+              </div>
             </div>
           ))}
-        </div>
+        </Card>
 
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>Revenue by Category</h3>
-          {catRevenue.map((c, i) => (
-            <div key={c.name} style={{ marginBottom: 10 }}>
+        <Card title="الإيرادات حسب الفئة" titleEn="Revenue by category">
+          {report.categoryRevenue.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>لا توجد بيانات في هذه الفترة.</p>
+          ) : report.categoryRevenue.map((c, i) => (
+            <div key={`${c.name}-${i}`} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontSize: 12 }}>{c.name}</span>
-                <span style={{ fontSize: 11, color: 'var(--text3)' }}>EGP {c.revenue.toLocaleString()}</span>
+                <span dir="ltr" style={{ fontSize: 11, color: 'var(--text3)' }}>{fmtEGP(c.revenue)}</span>
               </div>
-              <div style={{ height: 4, background: 'var(--border)', borderRadius: 3 }}>
-                <motion.div initial={{ width: 0 }} animate={{ width: `${(c.revenue / maxRevenue) * 100}%` }} style={{ height: '100%', background: 'linear-gradient(to right, var(--gold-dark), var(--gold))', borderRadius: 3 }} />
+              <div style={{ height: 4, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                <motion.div initial={{ width: 0 }} animate={{ width: `${(c.revenue / maxCategoryRevenue) * 100}%` }} transition={{ delay: 0.1 + i * 0.05, duration: 0.6 }}
+                  style={{ height: '100%', background: 'linear-gradient(to right, var(--gold-dark), var(--gold))', borderRadius: 3 }} />
               </div>
             </div>
           ))}
-        </div>
+        </Card>
       </div>
+
+      <Card title="حالة الطلبات" titleEn="Orders by status">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+          {report.statusBreakdown.map((s) => (
+            <div key={s.status} style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLORS[s.status] || 'var(--text3)' }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)' }}>{s.status}</span>
+              </div>
+              <p style={{ fontSize: 18, fontWeight: 600, fontFamily: 'var(--font-display)', color: 'var(--text)' }}>{s.count}</p>
+              <p dir="ltr" style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>{fmtEGP(s.value)}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

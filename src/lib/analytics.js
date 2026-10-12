@@ -446,3 +446,77 @@ export function computeCategoryRevenue(orders, products = []) {
 
   return Object.values(map).sort((a, b) => b.revenue - a.revenue);
 }
+
+// ─── RANGE-AWARE ANALYTICS (Analytics panel) ─────────────────────────────────
+
+/** Orders that fall inside a range key (uses the Egypt wall-date rules). */
+export function filterOrdersInRange(orders, rangeKey = '7d', now = new Date()) {
+  return (Array.isArray(orders) ? orders : []).filter((o) => orderInRange(o, rangeKey, now));
+}
+
+/** Units sold across all non-cancelled orders (line qty totals). */
+export function computeItemsSold(orders) {
+  return getValidOrders(orders).reduce(
+    (sum, o) => sum + (o.items || []).reduce((t, it) => t + num(it?.qty), 0),
+    0,
+  );
+}
+
+/** Unique + returning customers (keyed by phone, falling back to name). */
+export function computeCustomerStats(orders) {
+  const counts = new Map();
+  getValidOrders(orders).forEach((o) => {
+    const key = String(o?.phone || o?.customer || '').trim();
+    if (!key || key === 'Unknown') return;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  const uniqueCustomers = counts.size;
+  const returningCustomers = [...counts.values()].filter((c) => c > 1).length;
+  return {
+    uniqueCustomers,
+    returningCustomers,
+    returningRate: uniqueCustomers ? Math.round((returningCustomers / uniqueCustomers) * 100) : 0,
+  };
+}
+
+/** Delivery + cancellation rates over ALL orders (cancelled included). */
+export function computeFulfillment(orders) {
+  const all = Array.isArray(orders) ? orders : [];
+  const total = all.length;
+  const delivered = all.filter((o) => String(o.status) === 'Delivered').length;
+  const cancelled = all.filter((o) => String(o.status || 'Pending') === 'Cancelled').length;
+  return {
+    fulfilledCount: delivered,
+    cancelledCount: cancelled,
+    fulfilmentRate: total ? Math.round((delivered / total) * 100) : 0,
+    cancellationRate: total ? Math.round((cancelled / total) * 100) : 0,
+  };
+}
+
+/** Count + value per status for the orders funnel. */
+export function computeStatusBreakdown(orders) {
+  const all = Array.isArray(orders) ? orders : [];
+  return ORDER_STATUSES.map((status) => {
+    const items = all.filter((o) => String(o.status || 'Pending') === status);
+    return {
+      status,
+      count: items.length,
+      value: items.reduce((s, o) => s + num(o.total), 0),
+    };
+  });
+}
+
+/** One bundle for the Analytics panel: KPIs + deltas + series + breakdowns. */
+export function computeAnalyticsReport(orders, products = [], rangeKey = '7d', now = new Date()) {
+  const overview = computeSalesOverview(orders, rangeKey, now);
+  const ranged = filterOrdersInRange(orders, rangeKey, now);
+  return {
+    ...overview,
+    itemsSold: computeItemsSold(ranged),
+    ...computeCustomerStats(ranged),
+    ...computeFulfillment(ranged),
+    statusBreakdown: computeStatusBreakdown(ranged),
+    topProducts: computeTopProducts(ranged, products),
+    categoryRevenue: computeCategoryRevenue(ranged, products),
+  };
+}
