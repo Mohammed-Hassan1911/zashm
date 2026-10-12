@@ -123,6 +123,12 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
     setUploading(true);
     setError('');
 
+    // Accumulate locally: `images` is a prop that doesn't update until the
+    // parent re-renders, so calling addImage() per file would drop every file
+    // except the last (and orphan the rest in Storage).
+    const next = [...images];
+    let changed = false;
+
     try {
       for (const file of Array.from(files)) {
         if (!mountedRef.current) return;
@@ -135,6 +141,11 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
         if (file.size > 5 * 1024 * 1024) {
           setError('File too large (max 5MB)');
           continue;
+        }
+
+        if (next.length >= maxImages) {
+          setError(`Maximum ${maxImages} images allowed`);
+          break;
         }
 
         // Compress larger photos locally to stay under the server body limit.
@@ -158,7 +169,10 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
           }
           return;
         }
-        addImage(payload.url);
+        if (payload && payload.url && !next.includes(payload.url)) {
+          next.push(payload.url);
+          changed = true;
+        }
       }
     } catch (err) {
       if (!mountedRef.current) return;
@@ -166,7 +180,10 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
       setError('Upload failed. Please try again.');
     }
 
-    if (mountedRef.current) setUploading(false);
+    if (mountedRef.current) {
+      if (changed) onChange(next);
+      setUploading(false);
+    }
   };
 
   const handleDrop = (e) => {

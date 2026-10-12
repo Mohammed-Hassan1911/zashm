@@ -13,6 +13,39 @@ export default function AdminLogin({ onSuccess }) {
   const [serverError, setServerError] = useState('');
   const [rateLimited, setRateLimited] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [lockUntil, setLockUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  const LOCK_MS = 15 * 60 * 1000;
+
+  // Start the lockout countdown the moment the server (or local limiter) reports it.
+  useEffect(() => {
+    if (rateLimited && !lockUntil) setLockUntil(Date.now() + LOCK_MS);
+  }, [rateLimited, lockUntil]);
+
+  // Tick once per second while locked so the countdown stays live.
+  useEffect(() => {
+    if (!lockUntil) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [lockUntil]);
+
+  const lockRemaining = lockUntil ? Math.max(0, Math.ceil((lockUntil - now) / 1000)) : 0;
+
+  // Auto re-enable the form when the countdown elapsed.
+  useEffect(() => {
+    if (lockUntil && lockRemaining === 0) {
+      setLockUntil(0);
+      setRateLimited(false);
+      setAttempts(0);
+    }
+  }, [lockUntil, lockRemaining]);
+
+  const formatRemaining = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
 
   const update = (k, v) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -36,8 +69,6 @@ export default function AdminLogin({ onSuccess }) {
     setLoading(false);
 
     if (result.success) {
-      console.log("🎉 [ADMIN LOGIN] Authentication successful, establishing state...");
-      
       // 1. إبلاغ المكون الأب بنجاح العملية (الـ App.jsx والـ Context هيلقطوها فوراً)
       if (onSuccess) {
         onSuccess(result.session);
@@ -101,7 +132,7 @@ export default function AdminLogin({ onSuccess }) {
           {/* Rate limited */}
           {rateLimited && (
             <div style={{ background: 'rgba(243,156,18,0.1)', border: '1px solid rgba(243,156,18,0.3)', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
-              <p style={{ color: '#f39c12', fontSize: 12 }}>🔒 Account temporarily locked due to too many failed attempts. Please wait before trying again.</p>
+              <p style={{ color: '#f39c12', fontSize: 12 }}>🔒 Account temporarily locked due to too many failed attempts. Try again in {formatRemaining(lockRemaining)}.</p>
             </div>
           )}
 

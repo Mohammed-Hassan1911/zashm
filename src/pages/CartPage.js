@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { sanitizeInput, setPageMeta } from '../lib/security';
 import { filterGovernorates, getShippingCost } from '../lib/egyptCities'; 
+import { toast } from '../components/ui/BackToTop';
 
 function CityAutocomplete({ value, onChange, onSelect, error }) {
   const [open, setOpen] = React.useState(false);
@@ -67,11 +68,7 @@ export function CartPage() {
     
     const result = applyDiscount(cleanCoupon);
     if (result.success) {
-      if (typeof toast !== 'undefined') {
-        toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
-      } else {
-        console.log('Coupon applied successfully');
-      }
+      toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
     } else {
       setCouponError(result.error ?? 'Invalid code');
     }
@@ -99,6 +96,7 @@ export function CartPage() {
                     style={{ display: 'flex', gap: 20, padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ position:'relative', cursor:'pointer' }}>
                       <img src={item?.product?.images?.[0] ?? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'} alt={item?.product?.name ?? 'Product'}
+                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'; }}
                         style={{ width: 110, height: 138, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} loading="lazy" />
                     </div>
                     <div style={{ flex: 1 }}>
@@ -257,11 +255,7 @@ export function CheckoutPage() {
     
     const result = applyDiscount(cleanCoupon);
     if (result.success) {
-      if (typeof toast !== 'undefined') {
-        toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
-      } else {
-        console.log('Coupon applied successfully');
-      }
+      toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
     } else {
       setCouponError(result.error ?? 'Invalid code');
     }
@@ -699,7 +693,7 @@ export function CheckoutPage() {
                 {safeCart.map(i => (
                   <div key={i?.key} style={{ display: 'flex', gap:10, justifyContent: 'space-between', marginBottom: 10, alignItems:'flex-start', width: '100%' }}>
                     <div style={{ display:'flex', gap:8 }}>
-                      <img src={i?.product?.images?.[0] ?? ''} alt="" style={{ width:40, height:50, objectFit:'cover', borderRadius:2, flexShrink:0 }} loading="lazy" />
+                      <img src={i?.product?.images?.[0] ?? ''} alt="" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.visibility = 'hidden'; }} style={{ width:40, height:50, objectFit:'cover', borderRadius:2, flexShrink:0 }} loading="lazy" />
                       <div>
                         <p style={{ fontSize:11, fontWeight:500, lineHeight:1.3 }}>{i?.product?.name ?? 'Unknown Product'}</p>
                         <p style={{ fontSize:10, color:'var(--text3)' }}>{i?.size ?? 'N/A'}/{i?.color ?? 'N/A'} ×{i?.qty ?? 0}</p>

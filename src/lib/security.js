@@ -406,57 +406,10 @@ class LocalDB {
 export const db = new LocalDB();
 
 // ─── SEO META MANAGEMENT ───────────────────────────────────────────────────────
-export function setPageMeta({ title, description, image, type = 'website' }) {
-  document.title = `${title} | ZASHM Luxury Fashion`;
-
-  const setMeta = (name, content, property = false) => {
-    const selector = property ? `meta[property="${name}"]` : `meta[name="${name}"]`;
-    let el = document.querySelector(selector);
-    if (!el) {
-      el = document.createElement('meta');
-      if (property) el.setAttribute('property', name);
-      else el.setAttribute('name', name);
-      document.head.appendChild(el);
-    }
-    el.setAttribute('content', content);
-  };
-
-  if (description) {
-    setMeta('description', description);
-    setMeta('og:description', description, true);
-    setMeta('twitter:description', description);
-  }
-  setMeta('og:title', `${title} | ZASHM Luxury Fashion`, true);
-  setMeta('og:type', type, true);
-  setMeta('twitter:card', 'summary_large_image');
-  setMeta('twitter:title', `${title} | ZASHM`);
-  if (image) {
-    setMeta('og:image', image, true);
-    setMeta('twitter:image', image);
-  }
-}
-
-export function generateStructuredData(product) {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.name,
-    description: product.description,
-    image: product.images,
-    brand: { '@type': 'Brand', name: 'ZASHM' },
-    offers: {
-      '@type': 'Offer',
-      price: product.salePrice || product.price,
-      priceCurrency: 'EGP',
-      availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-    },
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: product.rating,
-      reviewCount: product.reviews,
-    },
-  };
-}
+// Single source of truth lives in ./seo. Re-exported here so existing imports
+// (AdminApp, CartPage) share ONE <head> writer with the storefront (App.js,
+// ProductPage) instead of the two divergent implementations that used to coexist.
+export { setPageMeta, setProductJsonLd, clearProductJsonLd } from './seo';
 
 // ─── IMAGE OPTIMIZATION ───────────────────────────────────────────────────────
 export function getOptimizedImageUrl(url, { width = 600, quality = 80, format = 'webp' } = {}) {

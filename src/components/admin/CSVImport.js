@@ -20,6 +20,7 @@ export default function CSVImport({ onClose }) {
   const [errors, setErrors] = useState([]);
   const [importing, setImporting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
   const fileRef = useRef();
 
   const parseCSV = (file) => {
@@ -85,7 +86,11 @@ export default function CSVImport({ onClose }) {
       if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء استيراد المنتجات.', 'error');
       return;
     }
+    setImportedCount(res.count ?? preview.length);
     setSuccess(true);
+    if (res.truncated) {
+      if (typeof window.toast === 'function') window.toast(`تم استيراد ${res.count} من أصل ${res.requested} منتج. يتم استيراد 500 صف كحد أقصى في المرة الواحدة.`, 'error');
+    }
     setTimeout(() => onClose(), 2000);
   };
 
@@ -109,7 +114,7 @@ export default function CSVImport({ onClose }) {
           style={{ textAlign: 'center', padding: '40px 0' }}>
           <CheckCircle size={56} color="#27ae60" style={{ margin: '0 auto 16px', display: 'block' }} />
           <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: '#27ae60', marginBottom: 8 }}>Import Successful!</p>
-          <p style={{ color: 'var(--text2)', fontSize: 13 }}>{preview?.length} products imported</p>
+          <p style={{ color: 'var(--text2)', fontSize: 13 }}>{importedCount} products imported</p>
         </motion.div>
       ) : (
         <>

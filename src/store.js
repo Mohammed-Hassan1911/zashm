@@ -227,11 +227,12 @@ export const useStore = create((set, get) => ({
   },
 
   // ─── CART ──────────────────────────────────────────────────────────────────
-  cart: JSON.parse(sessionStorage.getItem('zashm_cart') || '[]') ?? [],
+  // Persisted in localStorage so the bag survives tab close / reload.
+  cart: JSON.parse((typeof localStorage !== 'undefined' && localStorage.getItem('zashm_cart')) || '[]') ?? [],
   _saveCart: (cart) => { 
     try {
       const safeCart = (cart || []).filter(item => item && item.product && item.key);
-      sessionStorage.setItem('zashm_cart', JSON.stringify(safeCart)); 
+      localStorage.setItem('zashm_cart', JSON.stringify(safeCart)); 
       return safeCart;
     } catch(e) {
       console.error('Cart save error:', e);
@@ -314,7 +315,7 @@ export const useStore = create((set, get) => ({
     set({ cart: saved });
   },
 
-  clearCart: () => { sessionStorage.removeItem('zashm_cart'); set({ cart: [] }); },
+  clearCart: () => { localStorage.removeItem('zashm_cart'); set({ cart: [] }); },
   cartTotal: () => {
     const sub = get().cartSubtotal();
     if (!get().appliedDiscount) return sub;
@@ -425,6 +426,9 @@ export const useStore = create((set, get) => ({
       await api.patch('/admin/orders', { id, status: newStatus });
     } catch (err) {
       console.error('updateOrderStatus failed:', err.message);
+      // Revert the optimistic change to server truth and report the failure.
+      await get().refreshOrders();
+      return { success: false, error: (err && err.message) || 'Could not update order status' };
     }
 
     await get().refreshProducts();
@@ -439,7 +443,9 @@ export const useStore = create((set, get) => ({
     } catch (err) {
       console.error('deleteOrder failed:', err.message);
       await get().refreshOrders();
+      return { success: false, error: (err && err.message) || 'Could not delete order' };
     }
+    await get().refreshProducts();
     return { success: true };
   },
 
@@ -512,10 +518,12 @@ export const useStore = create((set, get) => ({
 
   importProducts: async (list) => {
     if (!Array.isArray(list) || list.length === 0) return { success: false, error: 'No products to import' };
+    const requested = list.length;
     try {
-      const payload = await api.post('/admin/products', { items: list.slice(0, 500) });
+      const payload = await api.post('/admin/products', { items: list });
       await get().refreshProducts();
-      return { success: true, count: payload && payload.count ? payload.count : list.length };
+      const count = payload && typeof payload.count === 'number' ? payload.count : requested;
+      return { success: true, count, requested, truncated: count < requested };
     } catch (err) {
       console.error('importProducts failed:', err.message);
       return { success: false, error: err.message || 'Import failed' };
@@ -530,11 +538,11 @@ export const useStore = create((set, get) => ({
     const today = getLocalTodayDate(); 
     
     const d = discounts.find(
-      x => x.code.trim().toUpperCase() === normalized &&
+      x => (x.code || '').trim().toUpperCase() === normalized &&
         x.active &&
         x.startDate <= today &&
         x.endDate >= today &&
-        (Number(x.usageCount) ?? 0) < (Number(x.usageLimit) ?? 0)
+        Number(x.usageCount || 0) < Number(x.usageLimit || 0)
     );
     
     if (d) {

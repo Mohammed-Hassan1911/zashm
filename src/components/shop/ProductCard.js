@@ -23,8 +23,17 @@ export default function ProductCard({ product, index = 0 }) {
 
   const isWished = (wishlist || []).includes(product?.id);
   
-  // 🎯 التحقق مما إذا كان المنتج نافداً من المخزون بالكامل
-  const isSoldOut = (product?.stock ?? 0) <= 0;
+  // 🎯 التوفر: variantStock هي المصدر الحقيقي عند وجود متغيرات (نفس منطق السيرفر في orders.js)،
+  // وإلا نُرجع للحقل العام `stock`. هذا يمنع ظهور منتج "Sold Out" وهو قابل للشراء والعكس.
+  const variantStock =
+    product?.variantStock && typeof product.variantStock === 'object' && !Array.isArray(product.variantStock)
+      ? product.variantStock
+      : null;
+  const hasVariants = !!variantStock && Object.keys(variantStock).length > 0;
+  const variantTotal = hasVariants
+    ? Object.values(variantStock).reduce((sum, q) => sum + (Number(q) || 0), 0)
+    : null;
+  const isSoldOut = hasVariants ? variantTotal <= 0 : (product?.stock ?? 0) <= 0;
 
   // 🔥 FIX: force new object reference
   const handleView = () => {
@@ -41,8 +50,15 @@ export default function ProductCard({ product, index = 0 }) {
     setPage('product');
   };
 
+  const onCardKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      handleView();
+    }
+  };
+
   const discount =
-    product?.salePrice && product?.price
+    product?.salePrice && product?.price > 0
       ? Math.round((1 - product.salePrice / product.price) * 100)
       : null;
 
@@ -54,6 +70,10 @@ export default function ProductCard({ product, index = 0 }) {
       whileHover={{ y: -6 }}
       style={{ cursor: 'pointer', position: 'relative' }}
       onClick={handleView}
+      onKeyDown={onCardKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`View ${product?.name || 'product'}`}
     >
       {/* IMAGE */}
       <div

@@ -20,6 +20,22 @@ function getId(req, body) {
   return String(q).trim();
 }
 
+// Adjust a coupon's usageCount by a signed delta, clamped at zero. Best-effort:
+// failures are logged but never block the order operation (usageCount is
+// advisory and the coupon may have been deleted already).
+async function adjustCouponUsage(sb, code, delta) {
+  const code_ = String(code || '').trim();
+  if (!code_) return;
+  try {
+    const { data: coupon } = await sb.from('coupons').select('id, usageCount').eq('code', code_).maybeSingle();
+    if (!coupon) return;
+    const next = Math.max(0, Number(coupon.usageCount || 0) + delta);
+    await sb.from('coupons').update({ usageCount: next }).eq('id', coupon.id);
+  } catch (e) {
+    console.error('Coupon usage adjust failed:', e && e.message);
+  }
+}
+
 // ─── GET /api/admin/orders — full list for admin dashboard ───────────────────
 
 async function listOrders(req, res) {
@@ -106,6 +122,11 @@ async function updateOrder(req, res) {
           return json(res, 500, { error: 'Could not reconcile stock. Please try again.' });
         }
       }
+
+      // Keep coupon usage in sync with the order lifecycle: cancelling frees the
+      // coupon (usage -1), un-cancelling consumes it again (usage +1). Mirrors
+      // the placement increment in api/orders.js and the delete decrement below.
+      await adjustCouponUsage(sb, order.discountCode, goingToCancelled ? -1 : 1);
     }
 
     const { error: updErr } = await sb
@@ -157,7 +178,10 @@ async function deleteOrder(req, res) {
     }
 
     // Restore stock and coupon usage after the row deletion (source of truth
-    // first — if the delete failed nothing was touched).
+    // first — if the delete failed nothing was touched). A Cancelled order
+    // already had its stock restored and coupon freed by updateOrder, so we
+    // must NOT restore them again here (double restore → oversell).
+    const wasCancelled = String(order.status || '').toLowerCase() === 'cancelled';
     const items = parseOrderRow(order).items || [];
     const lines = items
       .map((i) => ({
@@ -167,7 +191,7 @@ async function deleteOrder(req, res) {
         color: i.color || '',
       }))
       .filter((l) => l.productId && l.qty > 0);
-    if (lines.length) {
+    if (!wasCancelled && lines.length) {
       try {
         // Atomic, row-locked restore (supabase/atomic_place_order.sql step 4).
         const { data, error: rpcErr } = await sb.rpc('atomic_adjust_stock', {
@@ -182,15 +206,8 @@ async function deleteOrder(req, res) {
         console.error('Order delete stock restore (atomic) failed:', e.message);
       }
     }
-    if (order.discountCode) {
-      try {
-        const { data: coupon } = await sb.from('coupons').select('id, usageCount').eq('code', order.discountCode).maybeSingle();
-        if (coupon) {
-          await sb.from('coupons').update({ usageCount: Math.max(0, Number(coupon.usageCount || 0) - 1) }).eq('id', coupon.id);
-        }
-      } catch (e) {
-        console.error('Order delete coupon usage restore failed:', e.message);
-      }
+    if (!wasCancelled && order.discountCode) {
+      await adjustCouponUsage(sb, order.discountCode, -1);
     }
 
     return json(res, 200, { success: true });

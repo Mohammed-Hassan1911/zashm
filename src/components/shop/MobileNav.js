@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, Grid, Heart, ShoppingBag, User } from 'lucide-react';
+import { Home, Grid, Heart, ShoppingBag } from 'lucide-react';
 import { useStore } from '../../store';
 
 export default function MobileNav() {
@@ -13,7 +13,6 @@ export default function MobileNav() {
     { icon: Grid, label: 'Shop', page: 'shop' },
     { icon: Heart, label: 'Wishlist', page: 'wishlist', badge: wishlist.length },
     { icon: ShoppingBag, label: 'Bag', action: () => setCartOpen(true), badge: cartCount },
-    { icon: User, label: 'Account', page: 'account' },
   ];
 
   return (

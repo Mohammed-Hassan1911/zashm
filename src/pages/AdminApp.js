@@ -33,6 +33,13 @@ import { toast } from '../components/ui/BackToTop';
 const STATUS_COLORS = { Pending:'#f39c12', Confirmed:'#3498db', Processing:'#9b59b6', Shipped:'#c9a84c', Delivered:'#27ae60', Cancelled:'#e74c3c' };
 const STATUS_FLOW = ['Pending','Confirmed','Processing','Shipped','Delivered'];
 
+// Build a customer tracking link on whatever host is actually serving the app,
+// instead of a hard-coded deployment domain.
+function trackingLinkFor(id) {
+  const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
+  return `${origin}/?track=${encodeURIComponent(id)}`;
+}
+
 function StatusBadge({ status, small }) {
   const key = String(status || '').toLowerCase();
   const known = STATUS_COLORS[status];
@@ -105,6 +112,12 @@ export default function AdminApp() {
 
   useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
 
+  // Guard against landing on a page the current role cannot access.
+  useEffect(() => {
+    if (!session) return;
+    if (adminPage === 'users' && !canAccess('users')) setAdminPage('dashboard');
+  }, [session, adminPage, canAccess, setAdminPage]);
+
   useEffect(() => {
     if (!newOrderNotification) return;
     try {
@@ -132,9 +145,7 @@ export default function AdminApp() {
 
   if (!session) return (
     <AdminLogin 
-      onSuccess={(sessionData) => {
-        console.log("🚀 [AdminApp] Authentication successful! Opening console via global state...");
-      }} 
+      onSuccess={() => {}} 
     />
   );
 
@@ -319,7 +330,6 @@ export default function AdminApp() {
                   <UsersPanel />
                 ) : (
                   <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>
-                    {setTimeout(() => setAdminPage('dashboard'), 0)}
                     Redirecting to Dashboard...
                   </div>
                 )
@@ -622,6 +632,13 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [copied, setCopied] = useState(false); // حالة لإشعار النسخ
 
+  const handleStatusChange = async (id, status) => {
+    const res = await updateOrderStatus(id, status);
+    if (res && res.success === false) {
+      toast.error(res.error || 'تعذر تحديث حالة الطلب، حاول مرة أخرى.');
+    }
+  };
+
   useEffect(() => {
     if (!preOpenOrderId) return;
     const target = (orders || []).find(o => o.id === preOpenOrderId);
@@ -795,7 +812,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     </td>
                     <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
                       {canEdit ? (
-                        <select value={order.status} onChange={e => updateOrderStatus(order.id, e.target.value)}
+                        <select value={order.status} onChange={e => handleStatusChange(order.id, e.target.value)}
                           style={{ padding:'4px 8px', fontSize:11, background:'var(--bg3)', border:`1px solid ${STATUS_COLORS[order.status]}`, color:STATUS_COLORS[order.status], borderRadius:4, cursor:'pointer' }}>
                           {STATUS_FLOW.concat(['Cancelled']).map(s => <option key={s}>{s}</option>)}
                         </select>
@@ -930,11 +947,11 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     <input 
                       type="text" 
                       readOnly 
-                      value={selected.tracking_url || `https://zashm-mo.vercel.app/?track=${selected.id}`} 
+                      value={selected.tracking_url || trackingLinkFor(selected.id)} 
                       style={{ flex: 1, padding: '8px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text2)', fontFamily: 'monospace' }} 
                     />
                     <button 
-                      onClick={() => handleCopyLink(selected.tracking_url || `https://zashm-mo.vercel.app/?track=${selected.id}`)}
+                      onClick={() => handleCopyLink(selected.tracking_url || trackingLinkFor(selected.id))}
                       style={{ padding: '8px 12px', background: copied ? '#27ae60' : 'var(--gold)', color: copied ? 'white' : 'var(--bg)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
                     >
                       {copied ? 'Copied!' : 'Copy Link'}
@@ -1019,7 +1036,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     <p style={{ fontSize:11, color:'var(--text3)', marginBottom:8, letterSpacing:1, textTransform:'uppercase' }}>Update Status</p>
                     <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                       {STATUS_FLOW.concat(['Cancelled']).filter(s => s !== selected.status).map(s => (
-                        <button key={s} onClick={() => { updateOrderStatus(selected.id, s); }}
+                        <button key={s} onClick={() => { handleStatusChange(selected.id, s); }}
                           style={{ padding:'6px 10px', borderRadius:4, background:`${STATUS_COLORS[s]}1a`, border:`1px solid ${STATUS_COLORS[s]}`, color:STATUS_COLORS[s], cursor:'pointer', fontSize:11, fontWeight:600 }}>
                           → {s}
                         </button>
@@ -1568,7 +1585,7 @@ function ProductsPanel({ canEdit }) {
 
                 <div style={{ marginTop:14, border:'1px dashed var(--border)', padding:12, borderRadius:4 }}>
                   <label style={{ fontSize:10, color:'var(--gold)', display:'block', marginBottom:8, textTransform:'uppercase', fontWeight:600 }}>Size Guide Chart Image</label>
-                  <ImageUploader maxFiles={1} images={form.sizeGuide ? [form.sizeGuide] : []} onChange={imgs => update('sizeGuide', imgs[0] || null)} />
+                  <ImageUploader maxImages={1} images={form.sizeGuide ? [form.sizeGuide] : []} onChange={imgs => update('sizeGuide', imgs[0] || null)} />
                 </div>
 
                 <div style={{ marginTop:14 }}>
@@ -1685,18 +1702,33 @@ function DiscountsPanel({ canEdit }) {
   const today = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
 
   const handleAdd = () => {
-    if (!form.code || !form.value || !form.startDate || !form.endDate) return;
-    
+    if (!form.code || !form.code.trim()) { toast.error('يرجى إدخال كود الخصم.'); return; }
+    const value = Number(form.value);
+    if (!form.value || !Number.isFinite(value) || value <= 0) { toast.error('يرجى إدخال قيمة خصم صحيحة أكبر من صفر.'); return; }
+    if (form.type === 'percentage' && value > 100) { toast.error('نسبة الخصم لا يمكن أن تتجاوز 100%.'); return; }
+    if (!form.startDate || !form.endDate) { toast.error('يرجى تحديد تاريخ البداية والنهاية.'); return; }
+    if (form.endDate < form.startDate) { toast.error('تاريخ النهاية يجب أن يكون بعد تاريخ البداية.'); return; }
+
     addDiscount({ 
       ...form, 
-      value: +form.value, 
+      value, 
       usageLimit: +form.usageLimit, 
       usageCount: 0, 
-      code: form.code.toUpperCase() 
+      code: form.code.trim().toUpperCase() 
     });
     
     setShowForm(false);
     setForm({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
+  };
+
+  const handleDelete = async (d) => {
+    if (!window.confirm(`هل أنت متأكد من حذف كود الخصم "${d.code}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+    try {
+      await deleteDiscount(d.id);
+      toast.success('تم حذف كود الخصم.');
+    } catch (e) {
+      toast.error('تعذر حذف كود الخصم، حاول مرة أخرى.');
+    }
   };
 
   return (
@@ -1751,7 +1783,7 @@ function DiscountsPanel({ canEdit }) {
                         Toggle
                       </button>
                       <button 
-                        onClick={() => deleteDiscount(d.id)}
+                        onClick={() => handleDelete(d)}
                         style={{ width:28, height:28, borderRadius:4, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', color:'var(--red)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.2s ease-in-out' }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.2)'; e.currentTarget.style.color = 'var(--red)'; }}

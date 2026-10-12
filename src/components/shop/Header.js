@@ -102,7 +102,7 @@ export default function Header() {
             height: isMobile ? 60 : 70, // هيدر أنحف وأشيك على الموبايل
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'between',
+            justifyContent: 'space-between',
           }}
         >
           {/* LOGO (ZASHM) */}

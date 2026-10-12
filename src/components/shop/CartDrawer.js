@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, Trash2, Plus, Minus } from 'lucide-react';
 import { useStore } from '../../store';
 
+const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="100"%3E%3Crect fill="%23222" width="80" height="100"/%3E%3C/svg%3E';
+
 export default function CartDrawer() {
   const { cart, cartOpen, setCartOpen, removeFromCart, updateCartQty, cartTotal, setPage, appliedDiscount, removeAppliedDiscount } = useStore();
   const total = cartTotal() ?? 0;
@@ -72,13 +74,14 @@ export default function CartDrawer() {
                       exit={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
                       style={{ display: 'flex', gap: 14, marginBottom: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 2, alignItems: 'center' }}
                     >
-                      <img src={item.product.images[0]} alt={item.product.name}
+                      <img src={(item.product?.images && item.product.images[0]) || FALLBACK_IMG} alt={item.product?.name || 'Product'}
+                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
                         style={{ width: 80, height: 100, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} />
                       
                       {/* تفاصيل المنتج مع حماية المساحة المتاحة */}
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: 100, justifyContent: 'space-between' }}>
                         <div>
-                          <p style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.product.name}</p>
+                          <p style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.product?.name || 'Product'}</p>
                           <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 4 }}>{item.size} · {item.color}</p>
                           <p style={{ color: 'var(--gold)', fontSize: 14, fontWeight: 600, margin: 0 }}>
                             EGP {(((item.product?.salePrice || item.product?.price) ?? 0) * (item.qty ?? 0)).toLocaleString()}

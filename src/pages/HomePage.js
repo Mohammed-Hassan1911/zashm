@@ -21,7 +21,13 @@ export default function HomePage() {
       <section ref={heroRef} style={{ height: '100vh', minHeight: 640, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* Primary editorial image — gentleman in tailored attire */}
         <motion.div style={{ position: 'absolute', inset: 0, y }}>
-          
+          <img
+            src="https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?w=2000&q=90&auto=format&fit=crop"
+            alt=""
+            aria-hidden="true"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%', filter: 'contrast(1.08) saturate(0.85) brightness(0.62)' }}
+          />
           {/* Cinematic gradient overlay — dark luxury */}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(10,10,10,0.55) 0%, rgba(10,10,10,0.35) 30%, rgba(10,10,10,0.55) 65%, rgba(10,10,10,0.92) 100%)' }} />
           {/* Vignette */}
@@ -130,11 +136,12 @@ export default function HomePage() {
       )}
 
       {/* ───── EDITORIAL BANNER ───── */}
-      <section style={{ position: 'relative', height: 460, margin: '60px 0', overflow: 'hidden' }}>
+      <section style={{ position: 'relative', height: 460, margin: '60px 0', overflow: 'hidden', background: 'var(--bg2)' }}>
         <img
           src="https://images.unsplash.com/photo-1593030761757-71fae45fa0e7?w=1800&q=90&auto=format&fit=crop"
           loading="lazy"
           alt="ZASHM Editorial"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
           style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'contrast(1.1) saturate(0.85) brightness(0.7)' }}
         />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.55) 50%, rgba(10,10,10,0.3) 100%)' }} />
@@ -171,7 +178,7 @@ export default function HomePage() {
             {[
               { name: 'Mr. Karim H.', loc: 'Cairo', text: 'The cashmere polo is without question the finest piece of knitwear I own. Worth every pound.' },
               { name: 'Mr. Tarek A.', loc: 'Dubai', text: 'ZASHM understands the modern gentleman — restrained, tailored, never showy. My new house.' },
-              { name: 'Mr. Youssef M.', loc: 'London', text: 'The linen shirts rival what I bring back from Como. بce is impeccable. A genuine luxury house.' },
+              { name: 'Mr. Youssef M.', loc: 'London', text: 'The linen shirts rival what I bring back from Como. The service is impeccable. A genuine luxury house.' },
             ].map((t, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12 }}
                 style={{ padding: '32px 28px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4 }}>

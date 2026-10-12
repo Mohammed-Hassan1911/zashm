@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+import { toast } from '../components/ui/BackToTop';
+import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
 
-// 🛠️ التعديل: تم حذف الـ Import الخاطئ لـ toast وتأمين عمله
-// إذا كنت تستخدم مكتبة خارجية مثل react-hot-toast فقم بفك التعليق عن السطر التالي:
-// import { toast } from 'react-hot-toast'; 
+const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
 export default function ProductPage() {
   const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed } = useStore();
@@ -70,6 +70,18 @@ export default function ProductPage() {
     }
   }, [p, addRecentlyViewed]);
 
+  // 🎯 بيانات SEO الخاصة بالمنتج (عنوان، وصف، صورة، وبيانات منظمة Schema.org)
+  useEffect(() => {
+    if (!p) return undefined;
+    setPageMeta({
+      title: p.name,
+      description: p.description || `${p.name} — ${p.category || 'Luxury fashion'} at ZASHM.`,
+      image: (Array.isArray(p.images) && p.images[0]) || undefined,
+    });
+    setProductJsonLd(p);
+    return () => clearProductJsonLd();
+  }, [p]);
+
   if (!p) return (
     <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>
       <p style={{ color: 'var(--text2)' }}>No product selected.</p>
@@ -79,19 +91,18 @@ export default function ProductPage() {
 
   const isWished = (wishlist || []).includes(p.id);
   const related = (products || []).filter(pr => pr.active !== false && (pr.category ?? 'General') === (p.category ?? 'General') && pr.id !== p.id).slice(0, 4);
-  const discount = p.salePrice ? Math.round((1 - (p.salePrice ?? 0) / (p.price ?? 0)) * 100) : null;
+  const discount = (p.salePrice && p.price > 0) ? Math.round((1 - (p.salePrice ?? 0) / p.price) * 100) : null;
 
   const currentVariantKey = `${selSize}-${selColor}`;
-  const currentVariantStock = p.variantStock ? (p.variantStock[currentVariantKey] || 0) : (p.stock ?? 0);
+  // المصدر الحقيقي للمخزون هو variantStock عند تعريف المفتاح (نفس منطق السيرفر)، وإلا الحقل العام.
+  const currentVariantStock =
+    p.variantStock && p.variantStock[currentVariantKey] !== undefined
+      ? Number(p.variantStock[currentVariantKey]) || 0
+      : (p.stock ?? 0);
   const isOutOfStock = currentVariantStock <= 0;
 
-  // دالة داخلية بديلة للـ toast لحماية الكود من الانهيار إذا لم تكن المكتبة مثبتة
   const showToast = (msg, type) => {
-    if (typeof toast !== 'undefined') {
-      toast(msg, type);
-    } else {
-      alert(`${type.toUpperCase()}: ${msg}`); // Fallback آمن للمطورين
-    }
+    toast(msg, type);
   };
 
   const handleAddToCart = () => {
@@ -161,6 +172,7 @@ export default function ProductPage() {
                 <motion.img key={imgIdx}
                   src={productImages[imgIdx]}
                   alt={p.name}
+                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
                   initial={{ opacity: 0, scale: 1.05 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -206,7 +218,7 @@ export default function ProductPage() {
                 <motion.div key={i} onClick={() => setImgIdx(i)}
                   style={{ width: 80, height: 100, cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
                   whileHover={{ scale: 1.05 }}>
-                  <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={img} alt="" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </motion.div>
               ))}
             </div>
@@ -469,6 +481,7 @@ export default function ProductPage() {
                   <img 
                     src={p.sizeGuide || p.sizeguide || p.size_guide} 
                     alt={`Size Guide Chart for ${p.name}`} 
+                    onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
                     style={{ width: '100%', height: 'auto', maxHeight: '50vh', objectFit: 'contain' }} 
                   />
                 </div>

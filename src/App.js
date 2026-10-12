@@ -23,7 +23,9 @@ import { CartPage, CheckoutPage, WishlistPage } from './pages/CartPage';
 import AdminApp from './pages/AdminApp';
 import CartDrawer from './components/shop/CartDrawer';
 import MobileNav from './components/shop/MobileNav';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
+import { setPageMeta } from './lib/seo';
 
 if (typeof window !== 'undefined') {
   window.toast = toast;
@@ -31,9 +33,11 @@ if (typeof window !== 'undefined') {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppInner />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -47,20 +51,34 @@ function AppInner() {
 
   const [activeModal, setActiveModal] = useState(null);
 
-  // 🎯 لقط الأوردر وتحويل العميل لصفحة التتبع وحقن الـ ID مباشرة
+  // 🎯 لقط الأوردر وتحويل العميل لصفحة التتبع (يقرأ TrackOrder رقم الطلب من ?track مباشرة)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const trackId = params.get('track');
-    
+
     if (trackId) {
       setPage('track'); // تحويل المتجر فوراً لصفحة التتبع
-      useStore.setState({ searchQuery: trackId }); // حقن رقم الأوردر في حقل البحث ليعرض التتبع فوراً
     }
   }, [setPage]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [currentPage]); 
+
+  // Keep the document title / meta description in sync with the active page.
+  useEffect(() => {
+    const META = {
+      home: { title: 'Home' },
+      shop: { title: 'Shop', description: 'Browse the full ZASHM collection — premium clothing with delivery across Egypt.' },
+      product: { title: 'Product' },
+      cart: { title: 'Your Bag' },
+      checkout: { title: 'Checkout' },
+      wishlist: { title: 'Wishlist' },
+      track: { title: 'Track Your Order' },
+      admin: { title: 'Admin', robots: 'noindex, nofollow' },
+    };
+    setPageMeta(META[currentPage] || {});
+  }, [currentPage]);
 
   useEffect(() => {
     async function loadOnlineData() {

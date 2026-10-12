@@ -52,7 +52,7 @@ export default function ShopPage() {
   const [sort, setSort] = useState('Newest');
   const [priceRange, setPriceRange] = useState({
     min: '',
-    max: '3000'
+    max: ''
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState('All');
@@ -171,7 +171,7 @@ export default function ShopPage() {
     setLabelFilter('All');
     setPriceRange({
       min: '',
-      max: '3000'
+      max: ''
     });
     setSort('Newest');
   };
