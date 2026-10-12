@@ -3,8 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
-import { sanitizeInput, setPageMeta } from '../lib/security';
-import { filterGovernorates, getShippingCost } from '../lib/egyptCities'; 
+import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
+import { filterGovernorates, getShippingCost, GOVERNORATE_AR, toCanonicalGovernorate } from '../lib/egyptCities'; 
+
+// يطابق المحافظة المكتوبة (عربي/إنجليزي، بأي حالة أحرف) مع القائمة الرسمية،
+// ويعيد '' لو مفيش تطابق — يمنع إرسال مدينة حرة يرفضها السيرفر.
+function normalizeGovernorate(value) {
+  return toCanonicalGovernorate(value);
+}
 import { toast } from '../components/ui/BackToTop';
 
 function CityAutocomplete({ value, onChange, onSelect, error }) {
@@ -42,6 +48,7 @@ function CityAutocomplete({ value, onChange, onSelect, error }) {
               onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
             >
               {city}
+              {GOVERNORATE_AR[city] && <span style={{ color: 'var(--text3)', marginInlineStart: 8 }}>{GOVERNORATE_AR[city]}</span>}
             </button>
           ))}
         </div>
@@ -269,18 +276,20 @@ export function CheckoutPage() {
   const validateOrderFormCustom = (fields) => {
     const errs = {};
     if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required';
+    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters)';
     
     const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
+    const normPhone = normalizeEgyptPhone(fields.phone);
     
     if (!fields.phone || !fields.phone.trim()) {
       errs.phone = 'Phone number is required';
-    } else if (!egyptianPhoneRegex.test(fields.phone.trim())) {
+    } else if (!egyptianPhoneRegex.test(normPhone)) {
       errs.phone = 'Invalid phone number. Must be 11 digits starting with 01';
     }
 
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
-      const trimmedPhone = fields.phone.trim();
-      const trimmedPhoneAlt = fields.phoneAlt.trim();
+      const trimmedPhone = normPhone;
+      const trimmedPhoneAlt = normalizeEgyptPhone(fields.phoneAlt);
 
       if (!egyptianPhoneRegex.test(trimmedPhoneAlt)) {
         errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits';
@@ -297,7 +306,10 @@ export function CheckoutPage() {
     }
 
     if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required';
-    if (!fields.city || !fields.city.trim() || fields.city === 'Select City') errs.city = 'City is required';
+    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters)';
+    if (!fields.city || !fields.city.trim() || fields.city === 'Select City' || !normalizeGovernorate(fields.city)) {
+      errs.city = 'Please select your governorate from the list';
+    }
     
     return errs;
   };
@@ -314,8 +326,8 @@ export function CheckoutPage() {
 
     try {
       const sanitizedCustomer = sanitizeInput(form.name.trim());
-      const sanitizedPhone = form.phone.trim();
-      const sanitizedPhoneAlt = form.phoneAlt ? form.phoneAlt.trim() : ''; 
+      const sanitizedPhone = normalizeEgyptPhone(form.phone);
+      const sanitizedPhoneAlt = form.phoneAlt ? normalizeEgyptPhone(form.phoneAlt) : ''; 
       const sanitizedEmail = sanitizeInput(form.email.trim());
       const sanitizedAddress = sanitizeInput(form.address.trim());
       const sanitizedNotes = sanitizeInput(form.notes.trim());
@@ -326,7 +338,7 @@ export function CheckoutPage() {
         phoneAlt: sanitizedPhoneAlt, 
         email: sanitizedEmail, 
         address: sanitizedAddress, 
-        city: form.city, 
+        city: normalizeGovernorate(form.city) || form.city, 
         shippingCost: shippingCost,
         notes: sanitizedNotes,       
         total: finalTotal
@@ -557,7 +569,9 @@ export function CheckoutPage() {
           {stockErrors.length > 0 && (
             <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
               style={{ background:'rgba(192,57,43,0.08)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:6, padding:'14px 18px', marginBottom:24 }}>
-              <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13 }}>⚠ Stock issues detected:</p>
+              <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13 }}>
+                {stockErrors.some(e => /stock|piece|remaining|available/i.test(e)) ? '⚠ Stock issues detected:' : '⚠ Order could not be placed:'}
+              </p>
               {stockErrors.map((e, i) => <p key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:2 }}>• {e}</p>)}
             </motion.div>
           )}

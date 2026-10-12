@@ -53,18 +53,18 @@ async function placeOrder(req, res) {
     return json(res, e.status || 400, { success: false, error: e.message });
   }
 
-  const payload = validateOrderPayload(body);
-  if (!payload) {
-    return json(res, 422, { success: false, error: 'Invalid order data', errors: ['Please review your order details.'] });
+  const validated = validateOrderPayload(body);
+  if (!validated.ok) {
+    return json(res, 422, { success: false, error: 'Invalid order data', errors: validated.errors });
   }
 
   const rawKey = body && body.idempotencyKey;
   const idempotencyKey = typeof rawKey === 'string' && rawKey.trim() !== '' ? rawKey.trim() : null;
   if (idempotencyKey !== null && !/^[A-Za-z0-9._-]{8,64}$/.test(idempotencyKey)) {
-    return json(res, 422, { success: false, error: 'Invalid order data', errors: ['Please review your order details.'] });
+    return json(res, 422, { success: false, error: 'Invalid order data', errors: ['Your checkout session expired. Please refresh the page and try again.'] });
   }
 
-  const { items, customer } = payload;
+  const { items, customer } = validated;
   const sb = supabaseAdmin();
 
   try {

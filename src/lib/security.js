@@ -188,6 +188,21 @@ export function sanitizeInput(value) {
     .trim();
 }
 
+// يحوّل الأرقام العربية (٠-٩) والفارسية (۰-۹) لإنجليزية، ويطبّع رقم الموبايل
+// المصري بحيث يقبل الكتابة العربية مثل ٠١٠١٢٣٤٥٦٧٨ وكذا صيغ +20 / 0020.
+export function normalizeEgyptPhone(value) {
+  let s = String(value ?? '')
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0))
+    .trim()
+    .replace(/[\s\-().]/g, '');
+  if (s.startsWith('+')) s = s.slice(1);
+  if (s.startsWith('00')) s = s.slice(2);
+  if (s.startsWith('20') && s.length === 12 && s.charAt(2) === '1') s = '0' + s.slice(2);
+  else if (s.length === 10 && s.charAt(0) === '1') s = '0' + s;
+  return s;
+}
+
 export function validateOrderForm(form) {
   const errors = {};
   const checks = [

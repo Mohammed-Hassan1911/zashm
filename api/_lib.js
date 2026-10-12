@@ -400,12 +400,29 @@ function isHttpsUrl(v) {
   }
 }
 
+// Convert Arabic-Indic (٠-٩) and Eastern Arabic (۰-۹) digits to ASCII.
+function normalizeDigits(v) {
+  return String(v)
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0));
+}
+
+// Normalize an Egyptian mobile number: Arabic digits → ASCII, strip common
+// separators, and accept +20 / 0020 / 20 country-code forms.
+function normalizePhone(v) {
+  let s = normalizeDigits(v).trim().replace(/[\s\-().]/g, '');
+  if (s.startsWith('+')) s = s.slice(1);
+  if (s.startsWith('00')) s = s.slice(2);
+  if (s.startsWith('20') && s.length === 12 && s.charAt(2) === '1') s = '0' + s.slice(2);
+  else if (s.length === 10 && s.charAt(0) === '1') s = '0' + s;
+  return s;
+}
+
 function validateOrderPayload(body) {
   const errors = [];
   const items = body && Array.isArray(body.items) ? body.items : null;
   if (!items || items.length < 1 || items.length > 30) {
-    errors.push('Invalid cart items');
-    return null;
+    return { ok: false, errors: ['Your bag is empty or contains too many items.'] };
   }
 
   const cleanItems = [];
@@ -418,31 +435,31 @@ function validateOrderPayload(body) {
     const color = str(raw.color).slice(0, 50);
     cleanItems.push({ productId, qty, size, color });
   }
-  if (errors.length) return null;
+  if (errors.length) return { ok: false, errors };
 
   const c = (body && body.customer) || {};
   const name = cleanText(c.name, 2, 100);
   const address = cleanText(c.address, 5, 300);
-  const phone = str(c.phone).trim();
+  const phone = normalizePhone(c.phone);
   const city = str(c.city).trim();
 
-  if (name === null) errors.push('A valid full name is required');
-  if (!EGYPT_PHONE_RE.test(phone)) errors.push('A valid phone number is required');
-  const phoneAlt = str(c.phoneAlt).trim();
+  if (name === null) errors.push('Please enter your full name (at least 2 characters).');
+  if (!EGYPT_PHONE_RE.test(phone)) errors.push('Please enter a valid Egyptian mobile number (e.g. 01XXXXXXXXX).');
+  const phoneAlt = c.phoneAlt ? normalizePhone(c.phoneAlt) : '';
   if (phoneAlt && (!EGYPT_PHONE_RE.test(phoneAlt) || phoneAlt === phone)) {
-    errors.push('Invalid alternative phone number');
+    errors.push('The alternative phone number is invalid or the same as the primary one.');
   }
   const email = str(c.email).trim();
-  if (email && (email.length > 200 || !EMAIL_RE.test(email))) errors.push('Invalid email address');
-  if (address === null) errors.push('A valid street address is required');
-  if (!EGYPT_GOVERNORATES.includes(city)) errors.push('A valid city is required');
-  const notes = str(c.notes).slice(0, 500);
+  if (email && (email.length > 200 || !EMAIL_RE.test(email))) errors.push('Please enter a valid email address.');
+  if (address === null) errors.push('Please enter a complete street address (at least 5 characters).');
+  if (!EGYPT_GOVERNORATES.includes(city)) errors.push('Please select your governorate from the list.');
 
-  if (errors.length) return null;
+  if (errors.length) return { ok: false, errors };
 
   return {
+    ok: true,
     items: cleanItems,
-    customer: { name, phone, phoneAlt, email, address, city, notes },
+    customer: { name, phone, phoneAlt, email, address, city, notes: str(c.notes).slice(0, 500) },
   };
 }
 
