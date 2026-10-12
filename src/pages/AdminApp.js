@@ -104,7 +104,7 @@ const SIDEBAR = [
 
 export default function AdminApp() {
   const { session, logout, canAccess, loading: authLoading } = useAuth();
-  const { adminPage, setAdminPage, setPage, orders, unreadOrderCount, markNotificationsRead, getNotifications, newOrderNotification } = useStore();
+  const { adminPage, setAdminPage, setPage, orders, unreadOrderCount, markNotificationsRead, getNotifications, newOrderNotification, refreshOrders, refreshDiscounts } = useStore();
   const [collapsed, setCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -135,6 +135,14 @@ export default function AdminApp() {
       });
     } catch(e) {}
   }, [newOrderNotification]);
+
+  // Keep orders + coupons fresh without a manual refresh while the console is open.
+  useEffect(() => {
+    if (!session) return;
+    const ordersId = setInterval(() => { refreshOrders(true); }, 30000);
+    const discountsId = setInterval(() => { refreshDiscounts(); }, 60000);
+    return () => { clearInterval(ordersId); clearInterval(discountsId); };
+  }, [session, refreshOrders, refreshDiscounts]);
 
   if (authLoading) return (
     <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--bg)' }}>

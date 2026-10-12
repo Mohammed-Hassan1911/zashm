@@ -334,8 +334,9 @@ export const useStore = create((set, get) => ({
   addRecentlyViewed: (id) => set(s => { const recentlyViewed = [id, ...s.recentlyViewed.filter(i => i !== id)].slice(0, 8); sessionStorage.setItem('zashm_recently', JSON.stringify(recentlyViewed)); return { recentlyViewed }; }),
   
   // ─── ORDERS & NOTIFICATIONS ────────────────────────────────────────────────
-  refreshOrders: async () => {
-    set({ ordersLoading: true, ordersError: null });
+  refreshOrders: async (silent = false) => {
+    const isSilent = silent === true;
+    if (!isSilent) set({ ordersLoading: true, ordersError: null });
     try {
       const payload = await api.get('/admin/orders');
       const data = Array.isArray(payload.orders) ? payload.orders : [];
@@ -347,7 +348,9 @@ export const useStore = create((set, get) => ({
         return;
       }
       console.error("Unexpected error in refreshOrders:", err && err.message);
-      set({ ordersLoading: false, ordersError: (err && err.message) || 'Could not load orders' });
+      // Background polls fail quietly; manual refreshes surface the error.
+      if (!isSilent) set({ ordersError: (err && err.message) || 'Could not load orders' });
+      set({ ordersLoading: false });
     }
   },
 
@@ -491,13 +494,17 @@ export const useStore = create((set, get) => ({
   updateDiscount: async (id, updates) => {
     const discounts = get().discounts;
     const current = discounts.find(d => String(d.id) === String(id));
-    set({ discounts: discounts.map(d => String(d.id) === String(id) ? { ...d, ...updates } : d) });
+    const next = discounts.map(d => String(d.id) === String(id) ? { ...d, ...updates } : d);
+    db.setAll('discounts', next);
+    set({ discounts: next });
 
     if (current) {
       try {
         const payload = await api.patch('/admin/coupons', { id, updates });
         if (payload && payload.discount) {
-          set({ discounts: get().discounts.map(d => String(d.id) === String(id) ? { ...d, ...payload.discount } : d) });
+          const merged = get().discounts.map(d => String(d.id) === String(id) ? { ...d, ...payload.discount } : d);
+          db.setAll('discounts', merged);
+          set({ discounts: merged });
         }
       } catch (err) {
         console.error('updateDiscount failed:', err.message);
@@ -507,7 +514,8 @@ export const useStore = create((set, get) => ({
   },
 
   deleteDiscount: async (id) => {
-    set({ discounts: get().discounts.filter(d => String(d.id) !== String(id)) });
+    db.delete('discounts', id);
+    set({ discounts: db.getAll('discounts') || [] });
     try {
       await api.del('/admin/coupons', { id });
     } catch (err) {
