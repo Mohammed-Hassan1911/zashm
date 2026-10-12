@@ -139,7 +139,7 @@ export default function AdminApp() {
   // Keep orders + coupons fresh without a manual refresh while the console is open.
   useEffect(() => {
     if (!session) return;
-    const ordersId = setInterval(() => { refreshOrders(true); }, 30000);
+    const ordersId = setInterval(() => { refreshOrders(true); }, 10000);
     const discountsId = setInterval(() => { refreshDiscounts(); }, 60000);
     return () => { clearInterval(ordersId); clearInterval(discountsId); };
   }, [session, refreshOrders, refreshDiscounts]);
