@@ -1695,6 +1695,7 @@ function ProductsPanel({ canEdit }) {
 function DiscountsPanel({ canEdit }) {
   const { discounts, addDiscount, deleteDiscount, updateDiscount } = useStore();
   const [showForm, setShowForm] = useState(false);
+  const [discountToDelete, setDiscountToDelete] = useState(null);
   const [form, setForm] = useState({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -1721,10 +1722,14 @@ function DiscountsPanel({ canEdit }) {
     setForm({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
   };
 
-  const handleDelete = async (d) => {
-    if (!window.confirm(`هل أنت متأكد من حذف كود الخصم "${d.code}"؟ لا يمكن التراجع عن هذا الإجراء.`)) return;
+  const handleDelete = (d) => setDiscountToDelete(d);
+
+  const confirmDelete = async () => {
+    if (!discountToDelete) return;
+    const target = discountToDelete;
+    setDiscountToDelete(null);
     try {
-      await deleteDiscount(d.id);
+      await deleteDiscount(target.id);
       toast.success('تم حذف كود الخصم.');
     } catch (e) {
       toast.error('تعذر حذف كود الخصم، حاول مرة أخرى.');
@@ -1857,6 +1862,29 @@ function DiscountsPanel({ canEdit }) {
               <div style={{ display:'flex', gap:10, marginTop:20 }}>
                 <button className="gold-btn" style={{ flex:1 }} onClick={handleAdd}>Create</button>
                 <button className="outline-btn" onClick={() => setShowForm(false)}>Cancel</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {discountToDelete && (
+          <>
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setDiscountToDelete(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:3000, backdropFilter:'blur(10px)' }} />
+            <motion.div
+              initial={{ opacity:0, scale:0.9, y:'-50%', x:'-50%' }} animate={{ opacity:1, scale:1, y:'-50%', x:'-50%' }} exit={{ opacity:0, scale:0.9, y:'-50%', x:'-50%' }}
+              transition={{ type:'spring', damping:20, stiffness:300 }}
+              style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)', width:'90%', maxWidth:420, background:'linear-gradient(180deg, #111111 0%, #000000 100%)', border:'1px solid rgba(201, 168, 76, 0.3)', borderRadius:12, padding:'30px 20px', zIndex:3001, textAlign:'center' }}
+            >
+              <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(201, 168, 76, 0.08)', border:'1px solid rgba(201, 168, 76, 0.2)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+                <Trash2 size={28} style={{ color:'var(--gold)' }} />
+              </div>
+              <h3 style={{ color:'#ffffff', fontSize:18, fontWeight:500, marginBottom:12, fontFamily:'var(--font-display)', letterSpacing:1 }}>تأكيد حذف الكوبون</h3>
+              <p style={{ color:'#aaaaaa', fontSize:13, marginBottom:24, lineHeight:'1.6', direction:'rtl' }}>هل أنت متأكد من حذف كود الخصم <strong style={{ color:'#ffffff' }}>"{discountToDelete.code}"</strong>؟ لا يمكن التراجع عن هذا الإجراء.</p>
+              <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
+                <button onClick={confirmDelete} style={{ flex:1, padding:'10px 0', background:'var(--gold)', border:'none', color:'#000000', borderRadius:6, fontWeight:600, cursor:'pointer', fontSize:13 }}>حذف</button>
+                <button onClick={() => setDiscountToDelete(null)} style={{ flex:1, padding:'10px 0', background:'transparent', border:'1px solid #333333', color:'#ffffff', borderRadius:6, cursor:'pointer', fontSize:13 }}>إلغاء</button>
               </div>
             </motion.div>
           </>

@@ -19,14 +19,14 @@ const {
   trackingUrlFor,
   verifyTrackToken,
   EGYPT_PHONE_RE,
+  cairoDateString,
 } = require('./_lib');
 
 const ORDER_ID_RE = /^ZSH-[A-Za-z0-9]{1,20}-[A-Za-z0-9]{1,8}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function localOrderDate() {
-  const tzOffset = new Date().getTimezoneOffset() * 60000;
-  return new Date(Date.now() - tzOffset).toISOString().split('T')[0];
+  return cairoDateString();
 }
 
 function clampClientDate(value) {
@@ -130,7 +130,7 @@ async function placeOrder(req, res) {
     let couponRow = null;
     const couponCode = body.couponCode ? String(body.couponCode).trim().toUpperCase() : '';
     if (couponCode) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = cairoDateString();
       const { data: c } = await sb.from('coupons').select('*').eq('code', couponCode).maybeSingle();
       if (
         c &&

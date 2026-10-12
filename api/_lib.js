@@ -418,6 +418,28 @@ function normalizePhone(v) {
   return s;
 }
 
+// Current calendar date (YYYY-MM-DD) in Egypt time. The storefront applies and
+// validates coupons using the visitor's local (Cairo) date, so the server must
+// use the same timezone for expiry windows — otherwise a coupon that starts
+// "today" is wrongly rejected for the first hours of the Cairo day (UTC lags).
+function cairoDateString(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date || new Date());
+  let year = '';
+  let month = '';
+  let day = '';
+  for (const p of parts) {
+    if (p.type === 'year') year = p.value;
+    else if (p.type === 'month') month = p.value;
+    else if (p.type === 'day') day = p.value;
+  }
+  return `${year}-${month}-${day}`;
+}
+
 function validateOrderPayload(body) {
   const errors = [];
   const items = body && Array.isArray(body.items) ? body.items : null;
@@ -843,6 +865,7 @@ module.exports = {
   trackingUrlFor,
   PUBLIC_BASE_URL,
   validateOrderPayload,
+  cairoDateString,
   validateProductPayload,
   validateCouponPayload,
   validateUserPayload,
