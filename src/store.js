@@ -384,10 +384,20 @@ export const useStore = create((set, get) => ({
       const payload = await api.get('/admin/orders');
       const data = Array.isArray(payload.orders) ? payload.orders : [];
       const sanitized = data.map(o => sanitizeOrder(o, get().products));
-      const fresh = knownOrderIds === null
+      const firstLoad = knownOrderIds === null;
+      const fresh = firstLoad
         ? []
         : sanitized.filter(o => !knownOrderIds.has(String(o.id)));
       knownOrderIds = new Set(sanitized.map(o => String(o.id)));
+      if (firstLoad) {
+        // On the very first poll, mark the current backlog as already seen so the
+        // bell doesn't report every historical order as unread.
+        try {
+          if (localStorage.getItem(NOTIF_READ_KEY) === null) {
+            localStorage.setItem(NOTIF_READ_KEY, String(Date.now()));
+          }
+        } catch (e) { /* ignore */ }
+      }
       const newest = fresh.length
         ? fresh.reduce((a, b) => (orderCreatedMs(b) > orderCreatedMs(a) ? b : a))
         : null;
