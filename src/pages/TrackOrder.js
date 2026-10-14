@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../store'; 
 import { api } from '../lib/api';
-import { Search, Package, MapPin, Phone, Calendar, ArrowRight } from 'lucide-react';
+import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
 
 const STATUS_COLORS = {
   Pending: '#f39c12',
@@ -22,14 +22,6 @@ export default function TrackOrder() {
   const [currentOrder, setCurrentOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [loadingTrack, setLoadingTrack] = useState(false);
-  const trackTokenRef = useRef('');
-
-  // 🎯 لقط الـ tk (رمز التتبع) من رابط المتصفح للوصول الكامل للطلب
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    trackTokenRef.current = params.get('tk') || '';
-  }, []);
-
   // 🎯 لقط الأوردر أوتوماتيكياً سواء من الـ Store أو من رابط المتصفح مباشرة
   useEffect(() => {
     if (storeSearchQuery) {
@@ -60,7 +52,7 @@ export default function TrackOrder() {
 
     (async () => {
       try {
-        const tk = trackTokenRef.current;
+        const tk = (new URLSearchParams(window.location.search).get('tk') || '').trim();
         const qs = `/orders?track=${encodeURIComponent(id)}${tk ? `&tk=${encodeURIComponent(tk)}` : ''}`;
         const payload = await api.get(qs);
         if (cancelled) return;
@@ -268,11 +260,7 @@ export default function TrackOrder() {
               <p style={{ fontSize: 13, fontWeight: 500 }}>{currentOrder.customer || 'Valued Gentlemen'}</p>
               <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, lineHeight: '1.4' }}>{currentOrder.address || 'Address provided upon confirmation'}{currentOrder.city ? `, ${currentOrder.city}` : ''}</p>
             </div>
-            <div>
-              <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Phone size={10} /> Contact Phone</p>
-              <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.phone || '—'}</p>
-            </div>
-            <div>
+            <div style={{ gridColumn: 'span 2' }}>
               <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> Order Date</p>
               <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.date || '—'}</p>
             </div>

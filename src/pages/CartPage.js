@@ -475,7 +475,10 @@ export function CheckoutPage() {
             }}>
               {/* زر التوجيه لصفحة التتبع بالموقع */}
               <button 
-                onClick={() => setPage('track')} // يفترض أن اسم الصفحة بالـ store لديك هو 'track' أو غيرها حسب الـ routing عندك
+                onClick={() => {
+                  const url = success.tracking_url || `/?track=${encodeURIComponent(success.id)}`;
+                  window.location.assign(url);
+                }}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
