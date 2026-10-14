@@ -106,6 +106,7 @@ export default function AdminApp() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [orderToOpen, setOrderToOpen] = useState(null);
+  const [productToAdd, setProductToAdd] = useState(false);
 
   useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
 
@@ -333,9 +334,9 @@ export default function AdminApp() {
         <div style={{ flex:1, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
           <AnimatePresence mode="wait">
             <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-12 }} transition={{ duration:0.25 }}>
-              {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} />}
+              {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} onAddProduct={() => { setProductToAdd(true); setAdminPage('products'); }} />}
               {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
-              {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} />}
+              {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} preOpenNew={productToAdd} onNewOpened={() => setProductToAdd(false)} />}
               {adminPage === 'discounts' && canAccess('discounts') && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
               {adminPage === 'analytics' && canAccess('analytics') && <AnalyticsPanel />}
 
@@ -377,7 +378,7 @@ function DashSkeleton() {
   );
 }
 
-function Dashboard({ setAdminPage, canAccess, onOpenOrder }) {
+function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
   const { orders, products, refreshOrders, ordersLoading, ordersError } = useStore();
 
   const [range, setRange] = useState('7d');
@@ -467,7 +468,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder }) {
           {/* ── Quick actions ── */}
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:18 }}>
             <button onClick={() => setAdminPage('orders')} style={quickActionStyle}><ShoppingCart size={14} /> عرض كل الطلبات</button>
-            {canAccess('products.write') && <button onClick={() => setAdminPage('products')} style={quickActionStyle}><Plus size={14} /> إضافة منتج</button>}
+            {canAccess('products.write') && <button onClick={() => onAddProduct()} style={quickActionStyle}><Plus size={14} /> إضافة منتج</button>}
             {canAccess('products.read') && <button onClick={() => setAdminPage('products')} style={quickActionStyle}><Package size={14} /> إدارة المخزون</button>}
             {canAccess('discounts.read') && <button onClick={() => setAdminPage('discounts')} style={quickActionStyle}><Tag size={14} /> كوبونات الخصم</button>}
           </div>
@@ -1081,7 +1082,7 @@ const EMPTY_PRODUCT_FORM = {
   label:'', description:'', sku:'', images:[], active:true, variantStock:{}
 };
 
-function ProductsPanel({ canEdit }) {
+function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
   const { products, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useStore();
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -1096,6 +1097,17 @@ function ProductsPanel({ canEdit }) {
   // حتى يمكن حذف ملفاتها الفعلية من Storage عند الحذف/الإلغاء دون لمس صور محفوظة.
   const tempUploadsRef = useRef(new Set());
   const cancelInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (!preOpenNew) return;
+    setEditing(null);
+    setForm({ ...EMPTY_PRODUCT_FORM });
+    setFormErrors({});
+    tempUploadsRef.current = new Set();
+    cancelInFlightRef.current = false;
+    setShowForm(true);
+    if (onNewOpened) onNewOpened();
+  }, [preOpenNew, onNewOpened]);
 
   const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
   const [formErrors, setFormErrors] = useState({});
