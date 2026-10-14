@@ -1003,9 +1003,10 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                       ['Name', selected.customer],
                       ['Phone', selected.phone],
                       ['Alternate Phone', selected.phoneAlt || '—'],
+                      ['City', selected.city || '—'],
                       ['Email', selected.email||'—'],
-                      ['Address', selected.address],
-                      ['Date', selected.date]
+                      ['Date', selected.date],
+                      ['Address', selected.address]
                     ].map(([k,v]) => (
                       <div key={k} style={{ gridColumn: k === 'Address' ? 'span 2' : 'auto' }}>
                         <p style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>{k}</p>
