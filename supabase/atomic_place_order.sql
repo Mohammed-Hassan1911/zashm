@@ -50,6 +50,7 @@ RETURNS text
 LANGUAGE sql
 IMMUTABLE
 PARALLEL SAFE
+SET search_path = public, pg_temp
 AS $$
   SELECT COALESCE(string_agg(x, '|' ORDER BY x), '')
   FROM (
