@@ -22,6 +22,7 @@ export default function TrackOrder() {
   const [currentOrder, setCurrentOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [loadingTrack, setLoadingTrack] = useState(false);
+  const [orderAccess, setOrderAccess] = useState('full');
   // 🎯 لقط الأوردر أوتوماتيكياً سواء من الـ Store أو من رابط المتصفح مباشرة
   useEffect(() => {
     if (storeSearchQuery) {
@@ -58,6 +59,7 @@ export default function TrackOrder() {
         if (cancelled) return;
         if (payload && payload.found && payload.order) {
           setCurrentOrder(payload.order);
+          setOrderAccess(payload.access || 'full');
         } else {
           setNotFound(true);
         }
@@ -71,6 +73,10 @@ export default function TrackOrder() {
 
     return () => { cancelled = true; };
   }, [activeOrderId]);
+
+  const shippingAmount = currentOrder
+    ? Math.max(0, (currentOrder.total || 0) - (currentOrder.subtotal || 0) + (currentOrder.discount || 0))
+    : 0;
 
   const handleSearchSubmit = (e) => {
     e.preventDefault(); // 🎯 منع تحديث الصفحة أو الاتصال الخارجي نهائياً
@@ -256,14 +262,19 @@ export default function TrackOrder() {
               <MapPin size={14} style={{ color: 'var(--gold)' }} />
               <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Shipping Details</span>
             </div>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div>
               <p style={{ fontSize: 13, fontWeight: 500 }}>{currentOrder.customer || 'Valued Gentlemen'}</p>
               <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, lineHeight: '1.4' }}>{currentOrder.address || 'Address provided upon confirmation'}{currentOrder.city ? `, ${currentOrder.city}` : ''}</p>
             </div>
-            <div style={{ gridColumn: 'span 2' }}>
+            <div>
               <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> Order Date</p>
               <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.date || '—'}</p>
             </div>
+            {orderAccess === 'limited' && (
+              <div style={{ gridColumn: 'span 2', padding: '8px 10px', background: 'rgba(201, 168, 76, 0.08)', border: '1px dashed var(--border-gold, var(--border))', borderRadius: 6, fontSize: 11, color: 'var(--text3)', lineHeight: 1.6, direction: 'rtl' }}>
+                🔒 تفاصيل التوصيل الكاملة متاحة من خلال <strong style={{ color: 'var(--gold)' }}>رابط الطلب</strong> الذي وصلك على واتساب.
+              </div>
+            )}
           </div>
 
           {/* ملخص المنتجات والأسعار */}
@@ -305,6 +316,13 @@ export default function TrackOrder() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ color: '#27ae60', fontSize: 12 }}>Discount Applied</span>
                   <span style={{ color: '#27ae60', fontSize: 12 }}>-EGP {currentOrder.discount.toLocaleString()}</span>
+                </div>
+              )}
+
+              {shippingAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>Shipping</span>
+                  <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {shippingAmount.toLocaleString()}</span>
                 </div>
               )}
 
