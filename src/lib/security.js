@@ -261,17 +261,18 @@ export function generateOrderId() {
 // ─── PAGINATION ───────────────────────────────────────────────────────────────
 export function paginate(items, page, perPage) {
   const total = items.length;
-  const totalPages = Math.ceil(total / perPage);
-  const start = (page - 1) * perPage;
-  const end = page * perPage;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const start = (safePage - 1) * perPage;
+  const end = safePage * perPage;
   return {
     items: items.slice(start, end),
     total,
     totalPages,
-    page,
+    page: safePage,
     perPage,
-    hasNext: page < totalPages,
-    hasPrev: page > 1,
+    hasNext: safePage < totalPages,
+    hasPrev: safePage > 1,
   };
 }
 

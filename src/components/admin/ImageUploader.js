@@ -56,7 +56,6 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
   const [dragging, setDragging] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef();
   const mountedRef = useRef(true);
@@ -89,26 +88,11 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
     setError('');
   }, [images, onChange, maxImages]);
 
-  // حذف صورة: يحذف ملفها فعليًا من Storage عبر الأدمن API أولًا،
-  // وعند النجاح فقط يُزال الـ URL من بيانات المنتج (لا inconsistency عند الفشل).
-  // الـ deleteStorageFile يمنع حذفًا مزدوجًا لو تزاحم مع Cancel.
-  const removeImage = async (url) => {
-    const path = storagePathFromUrl(url);
-    if (path) {
-      setDeleting(true);
-      setError('');
-      try {
-        await deleteStorageFile(path);
-      } catch (err) {
-        console.error('Remove image failed:', err && err.message);
-        if (!mountedRef.current) return;
-        setError('Could not delete the image. Please try again.');
-        setDeleting(false);
-        return;
-      }
-      if (!mountedRef.current) return;
-      setDeleting(false);
-    }
+  // إزالة صورة من النموذج فقط. الحذف الفعلي من Storage لا يحدث هنا: صورة منتج
+  // محفوظة قد تكون مرجّحة من قبل المنتج، فحذفها فوراً يفسدها لو أُلغي الحفظ.
+  // الأب هو من يدير الحذف (الصور المرفوعة في الجلسة عند الإلغاء، والصور القديمة
+  // المحذوفة عند نجاح الحفظ).
+  const removeImage = (url) => {
     if (!mountedRef.current) return;
     onChange(images.filter(i => i !== url));
   };
@@ -305,7 +289,6 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
                 <button
                   type="button"
                   onClick={() => removeImage(img)}
-                  disabled={deleting}
                   aria-label={`Delete image ${idx + 1}`}
                   style={{
                     position: 'absolute',
@@ -321,8 +304,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
                     color: '#fff',
                     border: '1px solid rgba(255,255,255,0.35)',
                     borderRadius: 6,
-                    cursor: deleting ? 'wait' : 'pointer',
-                    opacity: deleting ? 0.6 : 1,
+                    cursor: 'pointer',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
                     padding: 0,
                     WebkitTapHighlightColor: 'transparent',

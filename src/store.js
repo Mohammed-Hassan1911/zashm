@@ -9,6 +9,20 @@ function getLocalTodayDate() {
   return (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
 }
 
+// Safe array reader for persisted state. Malformed or blocked (opaque to JS)
+// storage would otherwise throw during module evaluation and crash the whole app
+// before it renders anything.
+function safeParseArray(key, storage) {
+  if (!storage) return [];
+  try {
+    const src = storage.getItem(key);
+    const value = src ? JSON.parse(src) : null;
+    return Array.isArray(value) ? value : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 // ─── SANITIZE ORDER DATA ──────────────────────────────────────────────────────
 function sanitizeOrderItem(item, products = []) {
   const product = (products || []).find(p => p.id == item?.productId);
@@ -121,6 +135,35 @@ function getSanitizedOrders() {
   return (Array.isArray(orders) ? orders : []).map(o => sanitizeOrder(o, products));
 }
 
+// ─── ORDER NOTIFICATIONS (derived from the live/polled order list) ────────────
+// Notifications are computed from the orders the admin polls so every admin
+// device sees new orders. The previous implementation only wrote a notification
+// on the device that ran checkout, so any other device never received one.
+const NOTIF_READ_KEY = 'zashm_notif_read_at';
+
+function orderCreatedMs(o) {
+  const t = o && o.timestamps;
+  const v = t && (t.created || t.pending || t.Pending);
+  const ms = v ? Date.parse(v) : NaN;
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function getNotifReadAt() {
+  let raw = null;
+  try { raw = localStorage.getItem(NOTIF_READ_KEY); } catch (e) { raw = null; }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function computeUnread(orders) {
+  const readAt = getNotifReadAt();
+  return (orders || []).filter(o => orderCreatedMs(o) > readAt).length;
+}
+
+// Order ids seen so far, so a background poll can raise a toast only for orders
+// that genuinely just arrived (null = first load → no toast, just baseline).
+let knownOrderIds = null;
+
 // ─── SAFE DB INITIALIZATION ──────────────────────────────────────────────────
 function initDB() {
   if (!db.getAll('products')) db.setAll('products', []);
@@ -228,7 +271,7 @@ export const useStore = create((set, get) => ({
 
   // ─── CART ──────────────────────────────────────────────────────────────────
   // Persisted in localStorage so the bag survives tab close / reload.
-  cart: JSON.parse((typeof localStorage !== 'undefined' && localStorage.getItem('zashm_cart')) || '[]') ?? [],
+  cart: safeParseArray('zashm_cart', typeof localStorage !== 'undefined' ? localStorage : null),
   _saveCart: (cart) => { 
     try {
       const safeCart = (cart || []).filter(item => item && item.product && item.key);
@@ -327,10 +370,10 @@ export const useStore = create((set, get) => ({
   cartSubtotal: () => (get().cart || []).reduce((sum, i) => sum + (((i.product?.salePrice || i.product?.price) ?? 0) * (i.qty ?? 0)), 0),
   cartDiscountAmount: () => Math.max(0, get().cartSubtotal() - get().cartTotal()),
 
-  wishlist: JSON.parse(localStorage.getItem('zashm_wishlist') || '[]'),
+  wishlist: safeParseArray('zashm_wishlist', typeof localStorage !== 'undefined' ? localStorage : null),
   toggleWishlist: (productId) => set(s => { const wishlist = s.wishlist.includes(productId) ? s.wishlist.filter(id => id !== productId) : [...s.wishlist, productId]; localStorage.setItem('zashm_wishlist', JSON.stringify(wishlist)); return { wishlist }; }),
 
-  recentlyViewed: JSON.parse(sessionStorage.getItem('zashm_recently') || '[]'),
+  recentlyViewed: safeParseArray('zashm_recently', typeof sessionStorage !== 'undefined' ? sessionStorage : null),
   addRecentlyViewed: (id) => set(s => { const recentlyViewed = [id, ...s.recentlyViewed.filter(i => i !== id)].slice(0, 8); sessionStorage.setItem('zashm_recently', JSON.stringify(recentlyViewed)); return { recentlyViewed }; }),
   
   // ─── ORDERS & NOTIFICATIONS ────────────────────────────────────────────────
@@ -341,7 +384,19 @@ export const useStore = create((set, get) => ({
       const payload = await api.get('/admin/orders');
       const data = Array.isArray(payload.orders) ? payload.orders : [];
       const sanitized = data.map(o => sanitizeOrder(o, get().products));
-      set({ orders: sanitized, ordersLoading: false });
+      const fresh = knownOrderIds === null
+        ? []
+        : sanitized.filter(o => !knownOrderIds.has(String(o.id)));
+      knownOrderIds = new Set(sanitized.map(o => String(o.id)));
+      const newest = fresh.length
+        ? fresh.reduce((a, b) => (orderCreatedMs(b) > orderCreatedMs(a) ? b : a))
+        : null;
+      set({
+        orders: sanitized,
+        ordersLoading: false,
+        unreadOrderCount: computeUnread(sanitized),
+        ...(newest ? { newOrderNotification: { order: newest, timestamp: Date.now() } } : {}),
+      });
     } catch (err) {
       if (err && (err.status === 401 || err.status === 403)) {
         set({ ordersLoading: false });
@@ -396,10 +451,6 @@ export const useStore = create((set, get) => ({
 
     const order = payload.order;
 
-    const notifications = db.getAll('notifications') || [];
-    notifications.unshift({ id: Date.now(), type: 'new_order', orderId: order.id, customer: order.customer, total: order.total, read: false, timestamp: Date.now() });
-    db.setAll('notifications', notifications.slice(0, 50));
-
     clearCart();
     if (appliedDiscount) {
       saveAppliedDiscount(null);
@@ -408,7 +459,6 @@ export const useStore = create((set, get) => ({
     await get().refreshProducts();
 
     set({
-      unreadOrderCount: notifications.filter(n => !n.read).length,
       newOrderNotification: { order: sanitizeOrder(order, products), timestamp: Date.now() },
     });
 
@@ -453,10 +503,15 @@ export const useStore = create((set, get) => ({
   },
 
   newOrderNotification: null,
-  unreadOrderCount: (db.getAll('notifications') || []).filter(n => !n.read).length,
+  unreadOrderCount: computeUnread(getSanitizedOrders()),
   clearOrderNotification: () => set({ newOrderNotification: null }),
-  markNotificationsRead: () => { const n = (db.getAll('notifications') || []).map(x => ({ ...x, read: true })); db.setAll('notifications', n); set({ unreadOrderCount: 0 }); },
-  getNotifications: () => db.getAll('notifications') || [],
+  markNotificationsRead: () => {
+    try { localStorage.setItem(NOTIF_READ_KEY, String(Date.now())); } catch (e) { /* ignore */ }
+    set({ unreadOrderCount: 0 });
+  },
+  getNotifications: () => (get().orders || [])
+    .map(o => ({ id: o.id, type: 'new_order', orderId: o.id, customer: o.customer, total: o.total, timestamp: orderCreatedMs(o) }))
+    .sort((a, b) => b.timestamp - a.timestamp),
   
   // ─── DISCOUNTS (COUPONS) ────────────────────────────────────────────────────
   appliedDiscount: loadAppliedDiscount(),

@@ -10,6 +10,12 @@ import {
   Ruler,
   Truck,
   FileText,
+  Phone,
+  Mail,
+  Home,
+  ShoppingBag,
+  Heart,
+  Gem,
   Search, 
   X
 } from 'lucide-react';
@@ -20,7 +26,6 @@ import ShopPage from './pages/ShopPage';
 import ProductPage from './pages/ProductPage';
 import TrackOrder from './pages/TrackOrder'; 
 import { CartPage, CheckoutPage, WishlistPage } from './pages/CartPage';
-import AdminApp from './pages/AdminApp';
 import CartDrawer from './components/shop/CartDrawer';
 import MobileNav from './components/shop/MobileNav';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -28,6 +33,10 @@ import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/Ba
 import WhatsAppButton from './components/ui/WhatsAppButton';
 import { setPageMeta } from './lib/seo';
 import { trackPageView } from './lib/ga';
+
+// The admin panel (recharts + papaparse, heavy) is split out of the customer
+// bundle and only downloaded when an admin actually opens /admin.
+const AdminApp = React.lazy(() => import('./pages/AdminApp'));
 
 if (typeof window !== 'undefined') {
   window.toast = toast;
@@ -117,7 +126,15 @@ function AppInner() {
       <OrderNotification />
 
       {currentPage === 'admin' ? (
-        <AdminApp />
+        <React.Suspense
+          fallback={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
+              <p style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: 2 }}>LOADING ADMIN...</p>
+            </div>
+          }
+        >
+          <AdminApp />
+        </React.Suspense>
       ) : (
         <>
           <Header />
@@ -260,21 +277,27 @@ function Footer({ setModal }) {
             >
               ZASHM
             </div>
-            <p style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>Luxury fashion crafted with elegance and precision for the modern gentleman.</p>
+            <p style={{ display: 'flex', gap: 8, color: 'var(--text2)', fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>
+              <Gem size={14} style={{ color: 'var(--gold)', flexShrink: 0, marginTop: 3 }} />
+              <span>Luxury fashion crafted with elegance and precision for the modern gentleman.</span>
+            </p>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <a href="https://instagram.com/zashm" target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}><Instagram size={18} /></a>
-              <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" style={{ color: 'var(--text2)' }}><Facebook size={18} /></a>
+              <a href="https://instagram.com/zashm" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
+              <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Facebook size={18} /></a>
             </div>
           </div>
 
           <div>
             <h4 style={titleStyle}>Quick Links</h4>
             {[
-              ['Home', 'home'],
-              ['Shop', 'shop'],
-              ['Wishlist', 'wishlist']
-            ].map(([label, page]) => (
-              <button key={label} onClick={() => setPage(page)} style={linkStyle}>{label}</button>
+              ['Home', 'home', Home],
+              ['Shop', 'shop', ShoppingBag],
+              ['Wishlist', 'wishlist', Heart]
+            ].map(([label, page, Icon]) => (
+              <button key={label} onClick={() => setPage(page)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon size={13} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+                {label}
+              </button>
             ))}
           </div>
 
@@ -311,7 +334,7 @@ function Footer({ setModal }) {
       ease: "easeInOut"
     }}
   >
-    <Search size={13} style={{ opacity: 0.9 }} />
+    <Search size={13} style={{ opacity: 0.9, color: 'var(--gold)' }} />
     Track Your Order
   </motion.button>
 
@@ -320,7 +343,7 @@ function Footer({ setModal }) {
     ['Privacy Policy', 'privacy', FileText]
   ].map(([label, id, Icon]) => (
     <button key={label} onClick={() => setModal(id)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-      <Icon size={13} style={{ opacity: 0.8 }} />
+      <Icon size={13} style={{ opacity: 0.8, color: 'var(--gold)' }} />
       {label}
     </button>
   ))}
@@ -329,8 +352,14 @@ function Footer({ setModal }) {
           <div>
             <h4 style={titleStyle}>Contact</h4>
             <div style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
-              <p>📞 01013380313</p>
-              <p style={{ wordBreak: 'break-all' }}>✉️ zashm.mo@gmail.com</p>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+                <span dir="ltr">01013380313</span>
+              </p>
+              <p style={{ display: 'flex', alignItems: 'center', gap: 8, wordBreak: 'break-all' }}>
+                <Mail size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+                <span>zashmwebsite@gmail.com</span>
+              </p>
             </div>
           </div>
 

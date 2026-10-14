@@ -70,7 +70,7 @@ function buildInsertRow(p, id) {
 // ─── POST /api/admin/products — create one product or bulk import ────────────
 
 async function createProducts(req, res) {
-  const session = requirePerm(req, res, 'products.write');
+  const session = await requirePerm(req, res, 'products.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -129,7 +129,7 @@ async function createProducts(req, res) {
 // ─── PATCH /api/admin/products — partial update ──────────────────────────────
 
 async function updateProduct(req, res) {
-  const session = requirePerm(req, res, 'products.write');
+  const session = await requirePerm(req, res, 'products.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -234,7 +234,7 @@ function deleteProductRows(sb, ids, rows) {
 }
 
 async function deleteProducts(req, res) {
-  const session = requirePerm(req, res, 'products.write');
+  const session = await requirePerm(req, res, 'products.write');
   if (!session) return;
 
   const ip = clientIp(req);

@@ -21,7 +21,7 @@ function getId(req, body) {
 // ─── POST /api/admin/coupons ─────────────────────────────────────────────────
 
 async function createCoupon(req, res) {
-  const session = requirePerm(req, res, 'discounts.write');
+  const session = await requirePerm(req, res, 'discounts.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -67,7 +67,7 @@ async function createCoupon(req, res) {
 // ─── PATCH /api/admin/coupons ────────────────────────────────────────────────
 
 async function updateCoupon(req, res) {
-  const session = requirePerm(req, res, 'discounts.write');
+  const session = await requirePerm(req, res, 'discounts.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -118,7 +118,7 @@ async function updateCoupon(req, res) {
 // ─── DELETE /api/admin/coupons ───────────────────────────────────────────────
 
 async function deleteCoupon(req, res) {
-  const session = requirePerm(req, res, 'discounts.write');
+  const session = await requirePerm(req, res, 'discounts.write');
   if (!session) return;
 
   const ip = clientIp(req);

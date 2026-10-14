@@ -176,11 +176,17 @@ function hmac(value, secret) {
 function signSession(user) {
   const secret = requireSecret('SESSION_SECRET');
   const now = Date.now();
+  const sv = Number(
+    user.session_version != null
+      ? user.session_version
+      : (user.sessionVersion != null ? user.sessionVersion : 0)
+  ) || 0;
   const payload = {
     sub: String(user.id),
     role: String(user.role || ''),
     name: String(user.name || ''),
     email: String(user.email || ''),
+    sv,
     iat: now,
     exp: now + SESSION_TTL_MS,
   };
@@ -234,13 +240,52 @@ function can(session, permission) {
   return perms.includes('*') || perms.includes(permission);
 }
 
-/** Returns the verified session or sends an error response and returns null. */
-function requirePerm(req, res, permission) {
-  const session = readBearer(req);
-  if (!session) {
+/** Returns the verified session or sends an error response and returns null.
+ *
+ * Re-reads the user row from the database on every privileged call so that a
+ * role change, an account deletion, or (after applying
+ * supabase/session_revocation.sql) a session-version bump takes effect
+ * immediately instead of lingering for up to the 8h token TTL. The DB role is
+ * authoritative — the role baked into the token is ignored. */
+async function requirePerm(req, res, permission) {
+  const token = readBearer(req);
+  if (!token) {
     json(res, 401, { error: 'Authentication required' });
     return null;
   }
+
+  let row;
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from('users')
+      .select('*')
+      .eq('id', token.sub)
+      .maybeSingle();
+    if (error) throw error;
+    row = data;
+  } catch (e) {
+    console.error('Session re-check failed:', e && e.message);
+    json(res, 401, { error: 'Session could not be verified. Please sign in again.' });
+    return null;
+  }
+
+  if (!row) {
+    json(res, 401, { error: 'Authentication required' });
+    return null;
+  }
+
+  const tokenSv = Number(token.sv || 0);
+  const dbSv = Number(
+    row.session_version != null
+      ? row.session_version
+      : (row.sessionVersion != null ? row.sessionVersion : 0)
+  ) || 0;
+  if (tokenSv !== dbSv) {
+    json(res, 401, { error: 'Session expired. Please sign in again.' });
+    return null;
+  }
+
+  const session = { ...token, role: String(row.role || '') };
   if (!can(session, permission)) {
     json(res, 403, { error: 'Forbidden' });
     return null;
@@ -633,6 +678,7 @@ function maskOrderForLimitedAccess(order) {
   return {
     ...order,
     customer: '',
+    phone: '',
     phoneAlt: '',
     email: '',
     address: '',

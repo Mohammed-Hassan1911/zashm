@@ -52,7 +52,7 @@ async function insertUserWithFallback(sb, baseRecord) {
 // ─── GET /api/admin/users — list (never includes password hashes) ────────────
 
 async function listUsers(req, res) {
-  const session = requirePerm(req, res, 'users.read');
+  const session = await requirePerm(req, res, 'users.read');
   if (!session) return;
 
   try {
@@ -69,7 +69,7 @@ async function listUsers(req, res) {
 // ─── POST /api/admin/users — create ──────────────────────────────────────────
 
 async function createUser(req, res) {
-  const session = requirePerm(req, res, 'users.write');
+  const session = await requirePerm(req, res, 'users.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -112,7 +112,7 @@ async function createUser(req, res) {
 // ─── PATCH /api/admin/users — update profile / role / password ───────────────
 
 async function updateUser(req, res) {
-  const session = requirePerm(req, res, 'users.write');
+  const session = await requirePerm(req, res, 'users.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -161,6 +161,22 @@ async function updateUser(req, res) {
     const { error: updErr } = await sb.from('users').update(write).eq('id', id);
     if (updErr) throw updErr;
 
+    // Revoke existing sessions when the role or password changes. Best-effort:
+    // a no-op until supabase/session_revocation.sql adds the session_version
+    // column, and never blocks the profile update.
+    if (write.role || write.passwordhash) {
+      const currentSv = Number(
+        existing.session_version != null
+          ? existing.session_version
+          : (existing.sessionVersion != null ? existing.sessionVersion : 0)
+      ) || 0;
+      try {
+        await sb.from('users').update({ session_version: currentSv + 1 }).eq('id', id);
+      } catch (e) {
+        /* column not present yet — revocation is best-effort */
+      }
+    }
+
     const { data: fresh } = await sb.from('users').select('*').eq('id', id).maybeSingle();
     return json(res, 200, { success: true, user: toPublicUser(fresh) });
   } catch (err) {
@@ -173,7 +189,7 @@ async function updateUser(req, res) {
 // ─── DELETE /api/admin/users ─────────────────────────────────────────────────
 
 async function deleteUser(req, res) {
-  const session = requirePerm(req, res, 'users.write');
+  const session = await requirePerm(req, res, 'users.write');
   if (!session) return;
 
   const ip = clientIp(req);

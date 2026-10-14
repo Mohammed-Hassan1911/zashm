@@ -22,15 +22,14 @@ function getId(req, body) {
 
 // Adjust a coupon's usageCount by a signed delta, clamped at zero. Best-effort:
 // failures are logged but never block the order operation (usageCount is
-// advisory and the coupon may have been deleted already).
+// advisory and the coupon may have been deleted already). The delta is applied
+// in a single atomic statement (supabase/atomic_place_order.sql step 4b) so a
+// concurrent placement increment is never lost.
 async function adjustCouponUsage(sb, code, delta) {
   const code_ = String(code || '').trim();
   if (!code_) return;
   try {
-    const { data: coupon } = await sb.from('coupons').select('id, usageCount').eq('code', code_).maybeSingle();
-    if (!coupon) return;
-    const next = Math.max(0, Number(coupon.usageCount || 0) + delta);
-    await sb.from('coupons').update({ usageCount: next }).eq('id', coupon.id);
+    await sb.rpc('zshm_adjust_coupon_usage', { p_code: code_, p_delta: delta });
   } catch (e) {
     console.error('Coupon usage adjust failed:', e && e.message);
   }
@@ -39,7 +38,7 @@ async function adjustCouponUsage(sb, code, delta) {
 // ─── GET /api/admin/orders — full list for admin dashboard ───────────────────
 
 async function listOrders(req, res) {
-  const session = requirePerm(req, res, 'orders.read');
+  const session = await requirePerm(req, res, 'orders.read');
   if (!session) return;
 
   try {
@@ -64,7 +63,7 @@ async function listOrders(req, res) {
 // ─── PATCH /api/admin/orders — status change with stock reconciliation ───────
 
 async function updateOrder(req, res) {
-  const session = requirePerm(req, res, 'orders.write');
+  const session = await requirePerm(req, res, 'orders.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -148,7 +147,7 @@ async function updateOrder(req, res) {
 // ─── DELETE /api/admin/orders ────────────────────────────────────────────────
 
 async function deleteOrder(req, res) {
-  const session = requirePerm(req, res, 'orders.write');
+  const session = await requirePerm(req, res, 'orders.write');
   if (!session) return;
 
   const ip = clientIp(req);

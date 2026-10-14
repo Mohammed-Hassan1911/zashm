@@ -77,7 +77,17 @@ async function placeOrder(req, res) {
     }
     const productMap = new Map((products || []).map((p) => [Number(p.id), p]));
 
-    // 2. Rebuild line items from DB prices + validate stock availability.
+    // 2. Aggregate demand per (product, size, color) BEFORE the availability
+    //    check. A cart that splits the same variation across several lines must
+    //    not collectively exceed what is in stock — otherwise each line passes
+    //    the per-line check and the variant is oversold. The RPC mirrors this.
+    const demand = new Map();
+    for (const item of items) {
+      const key = `${item.productId}::${item.size}-${item.color}`;
+      demand.set(key, (demand.get(key) || 0) + Number(item.qty));
+    }
+
+    // 2b. Rebuild line items from DB prices + validate stock availability.
     const orderItems = [];
     const stockErrors = [];
     for (const item of items) {
@@ -96,12 +106,12 @@ async function placeOrder(req, res) {
       }
       const reserved = Number(p.reservedStock || 0);
       const available = Math.max(0, stockAmount - reserved);
-      if (item.qty > available) {
-        stockErrors.push(
-          available === 0
-            ? `Sorry, this piece is out of stock in this variation (${item.size} - ${item.color}).`
-            : `Sorry, only ${available} more piece(s) are remaining in stock for this variation (${item.size} - ${item.color}).`
-        );
+      const requested = demand.get(`${item.productId}::${variantKey}`) || item.qty;
+      if (requested > available) {
+        const msg = available === 0
+          ? `Sorry, this piece is out of stock in this variation (${item.size} - ${item.color}).`
+          : `Sorry, only ${available} more piece(s) are remaining in stock for this variation (${item.size} - ${item.color}).`;
+        if (!stockErrors.includes(msg)) stockErrors.push(msg);
         continue;
       }
       orderItems.push({
@@ -218,6 +228,10 @@ async function placeOrder(req, res) {
       if (reason === 'idempotency_conflict') {
         return json(res, 409, { success: false, error: 'Could not place the order. Please refresh your bag and try again.' });
       }
+      if (reason === 'coupon_unavailable') {
+        const msg = 'This discount code is no longer available. Please remove it and try again.';
+        return json(res, 422, { success: false, error: msg, errors: [msg] });
+      }
       return json(res, 422, { success: false, error: 'Could not place the order. Please review your bag and try again.' });
     }
 
@@ -238,17 +252,9 @@ async function placeOrder(req, res) {
       return json(res, 200, { success: true, duplicate: true, order: dupOrder });
     }
 
-    // 5. Coupon usage counter (server-side only; only on the FIRST success).
-    if (couponRow) {
-      try {
-        await sb
-          .from('coupons')
-          .update({ usageCount: Number(couponRow.usageCount || 0) + 1 })
-          .eq('id', couponRow.id);
-      } catch (e) {
-        console.error('Coupon usage update failed:', e.message);
-      }
-    }
+    // 5. Coupon usage counters are incremented atomically INSIDE
+    //    atomic_place_order (same transaction as the INSERT/stock decrement), so
+    //    there is no separate read-modify-write here to race or lose updates.
 
     // 6. Telegram notification (server secret; failure never blocks the order).
     try {

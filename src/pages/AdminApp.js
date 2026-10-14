@@ -109,10 +109,19 @@ export default function AdminApp() {
 
   useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
 
-  // Guard against landing on a page the current role cannot access.
+  // Reset to the dashboard whenever the signed-in identity changes, so a page
+  // left open by a previous (more privileged) session is never shown.
+  useEffect(() => { setAdminPage('dashboard'); }, [session?.userId, setAdminPage]);
+
+  // Guard: never render a page the current role cannot access. Falls back to the
+  // first page the role CAN see (so roles without dashboard.read still land
+  // somewhere valid).
   useEffect(() => {
     if (!session) return;
-    if (adminPage === 'users' && !canAccess('users')) setAdminPage('dashboard');
+    if (!canAccess(adminPage)) {
+      const fallback = SIDEBAR.find((s) => canAccess(s.id));
+      setAdminPage(fallback ? fallback.id : 'dashboard');
+    }
   }, [session, adminPage, canAccess, setAdminPage]);
 
   useEffect(() => {
@@ -324,21 +333,13 @@ export default function AdminApp() {
         <div style={{ flex:1, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
           <AnimatePresence mode="wait">
             <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-12 }} transition={{ duration:0.25 }}>
-              {adminPage === 'dashboard' && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} />}
-              {adminPage === 'orders' && <OrdersPanel canEdit={canAccess('orders.write') || session?.role !== 'support'} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
-              {adminPage === 'products' && <ProductsPanel canEdit={canAccess('products.write')} />}
-              {adminPage === 'discounts' && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
-              {adminPage === 'analytics' && <AnalyticsPanel />}
-              
-              {adminPage === 'users' && (
-                canAccess('users') ? (
-                  <UsersPanel />
-                ) : (
-                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>
-                    Redirecting to Dashboard...
-                  </div>
-                )
-              )}
+              {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} />}
+              {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
+              {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} />}
+              {adminPage === 'discounts' && canAccess('discounts') && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
+              {adminPage === 'analytics' && canAccess('analytics') && <AnalyticsPanel />}
+
+              {adminPage === 'users' && canAccess('users') && <UsersPanel />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -840,17 +841,25 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
         </div>
         {paginated.totalPages > 1 && (
           <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
-            <p style={{ color:'var(--text3)', fontSize:12 }}>Showing {(page-1)*PER_PAGE+1}–{Math.min(page*PER_PAGE, paginated.total)} of {paginated.total}</p>
+            <p style={{ color:'var(--text3)', fontSize:12 }}>Showing {(paginated.page-1)*PER_PAGE+1}–{Math.min(paginated.page*PER_PAGE, paginated.total)} of {paginated.total}</p>
             <div style={{ display:'flex', gap:4 }}>
               <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasPrev}
                 style={{ width:30, height:30, borderRadius:4, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', opacity: paginated.hasPrev ? 1 : 0.4 }}>
                 <ChevronLeft size={14} />
               </button>
-              {[...Array(Math.min(3, paginated.totalPages))].map((_, i) => {
-                const p = i + 1;
-                return <button key={p} onClick={() => setPage(p)}
-                  style={{ width:30, height:30, borderRadius:4, background: page === p ? 'var(--gold)' : 'var(--bg3)', border:'1px solid var(--border)', color: page === p ? 'var(--bg)' : 'var(--text2)', cursor:'pointer', fontSize:12 }}>{p}</button>;
-              })}
+              {(() => {
+                const tp = paginated.totalPages;
+                const win = 5;
+                let start = Math.max(1, paginated.page - Math.floor(win / 2));
+                const end = Math.min(tp, start + win - 1);
+                start = Math.max(1, end - win + 1);
+                const nums = [];
+                for (let p = start; p <= end; p++) nums.push(p);
+                return nums;
+              })().map((p) => (
+                <button key={p} onClick={() => setPage(p)}
+                  style={{ width:30, height:30, borderRadius:4, background: paginated.page === p ? 'var(--gold)' : 'var(--bg3)', border:'1px solid var(--border)', color: paginated.page === p ? 'var(--bg)' : 'var(--text2)', cursor:'pointer', fontSize:12 }}>{p}</button>
+              ))}
               <button onClick={() => setPage(p => Math.min(paginated.totalPages,p+1))} disabled={!paginated.hasNext}
                 style={{ width:30, height:30, borderRadius:4, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', opacity: paginated.hasNext ? 1 : 0.4 }}>
                 <ChevronRight size={14} />
@@ -1095,13 +1104,10 @@ function ProductsPanel({ canEdit }) {
   const filtered = products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.includes(search) || p.category.toLowerCase().includes(search.toLowerCase()));
   const paginated = paginate(filtered, page, PER_PAGE);
 
-  // تسجيل مسارات الصور الجديدة المرفوعة للسيرفر أثناء هذه الجلسة، وقطع أي مسار
-  // لم يعد ظاهراً (الملف يكون قد حُذف فعلياً عبر زر X) حتى لا يُعاد حذفه.
+  // تسجيل مسارات الصور الجديدة المرفوعة للسيرفر أثناء هذه الجلسة. لا نحذف أي
+  // مسار من المجموعة عند إزالة الصورة من النموذج: يُترك ليتولّى الأب تنظيفه
+  // (عند الإلغاء لكل ما رُفع في الجلسة، وعند الحفظ لما لم يعد مرجّحاً).
   const trackTempUploads = (prevImages, prevGuide, nextImages, nextGuide) => {
-    const present = new Set((nextImages || []).map(u => storagePathFromUrl(u)).filter(Boolean));
-    const guidePath = storagePathFromUrl(nextGuide || '');
-    if (guidePath) present.add(guidePath);
-
     (nextImages || []).forEach(u => {
       const ph = storagePathFromUrl(u);
       const alreadyKnown = (prevImages || []).includes(u) || (prevGuide && prevGuide === u);
@@ -1111,10 +1117,6 @@ function ProductsPanel({ canEdit }) {
       const ph = storagePathFromUrl(nextGuide);
       if (ph) tempUploadsRef.current.add(ph);
     }
-
-    [...tempUploadsRef.current].forEach(ph => {
-      if (!present.has(ph)) tempUploadsRef.current.delete(ph);
-    });
   };
 
   const update = (k, v) => {
@@ -1292,6 +1294,33 @@ function ProductsPanel({ canEdit }) {
         await addProduct(productData);
         toast.success('تم إضافة المنتج الجديد للمتجر بنجاح! 🚀');
       }
+
+      // نظّف من Storage الملفات التي لم تعد مرجّحة من المنتج: صور رُفعت في هذه
+      // الجلسة ثم أُزيلت، وصور أصلية محفوظة حُذفت من النموذج. أفضل مجهود — فشل
+      // التنظيف لا يلغي حفظ المنتج.
+      try {
+        const finalPaths = new Set();
+        (productData.images || []).forEach(u => { const ph = storagePathFromUrl(u); if (ph) finalPaths.add(ph); });
+        const guidePh = storagePathFromUrl(productData.sizeGuide || '');
+        if (guidePh) finalPaths.add(guidePh);
+
+        const orphaned = new Set();
+        tempUploadsRef.current.forEach(ph => { if (!finalPaths.has(ph)) orphaned.add(ph); });
+        const originalUrls = [
+          ...((editing && editing.images) || []),
+          ...((editing && editing.sizeGuide) ? [editing.sizeGuide] : []),
+        ];
+        originalUrls.forEach(u => { const ph = storagePathFromUrl(u); if (ph && !finalPaths.has(ph)) orphaned.add(ph); });
+
+        if (orphaned.size) {
+          await Promise.all([...orphaned].map(ph =>
+            deleteStorageFile(ph).catch(err => console.error('Save cleanup delete failed:', err && err.message))
+          ));
+        }
+      } catch (e) {
+        console.error('Save cleanup failed:', e && e.message);
+      }
+
       tempUploadsRef.current = new Set();
       if (form._isAddingNewCat) update('_isAddingNewCat', false);
       setShowForm(false);

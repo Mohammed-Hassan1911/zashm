@@ -21,7 +21,7 @@ const MAX_DECODED = 3 * 1024 * 1024;
 // ─── POST /api/admin/upload — store an image in the public products bucket ───
 
 async function uploadImage(req, res) {
-  const session = requirePerm(req, res, 'products.write');
+  const session = await requirePerm(req, res, 'products.write');
   if (!session) return;
 
   const ip = clientIp(req);
@@ -79,7 +79,7 @@ async function uploadImage(req, res) {
 // ─── DELETE /api/admin/upload?path=<file> — remove an image ──────────────────
 
 async function deleteImage(req, res) {
-  const session = requirePerm(req, res, 'products.write');
+  const session = await requirePerm(req, res, 'products.write');
   if (!session) return;
 
   const ip = clientIp(req);

@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
     const sb = supabaseAdmin();
     const { data, error } = await sb
       .from('users')
-      .select('id, name, email, role, passwordhash, lastlogin')
+      .select('*')
       .eq('email', email)
       .maybeSingle();
 
@@ -84,7 +84,13 @@ module.exports = async function handler(req, res) {
     }
     await sb.from('users').update(updates).eq('id', data.id);
 
-    const token = signSession({ id: data.id, name: data.name, email: data.email, role: data.role });
+    const token = signSession({
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      role: data.role,
+      session_version: data.session_version,
+    });
 
     return json(res, 200, {
       success: true,

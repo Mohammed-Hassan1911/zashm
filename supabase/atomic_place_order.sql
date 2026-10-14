@@ -1,5 +1,8 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- ZASHM · H-02 · ATOMIC ORDER PLACEMENT + ATOMIC STOCK ADJUSTMENT
+-- REVISION 4 — availability pass now AGGREGATES demand per (productId, size,
+-- color) before checking, so a cart that splits the same variation across
+-- multiple lines can no longer oversell it. Mirrors api/orders.js.
 -- REVISION 3 — REVISION 2 function bodies had a real bug found by the first
 -- concurrency run: products/orders columns are stored with QUOTED camelCase
 -- ("variantStock", "reservedStock", "discountCode", "phoneAlt"), so unquoted
@@ -166,14 +169,21 @@ BEGIN
   END IF;
 
   -- Availability pass — rows are locked, values are CURRENT/committed.
+  -- Demand is AGGREGATED per (productId, size, color) first: a cart that splits
+  -- the same variation across several lines must not collectively oversell it.
+  -- Mirrors the aggregate check in api/orders.js.
   FOR v_line IN
     SELECT
       (it ->> 'productId')::bigint                                AS id,
-      (it ->> 'qty')::int                                         AS qty,
+      SUM((it ->> 'qty')::int)                                    AS qty,
       COALESCE(it ->> 'size', '') || '-' || COALESCE(it ->> 'color', '') AS vkey,
       COALESCE(it ->> 'size', '')  AS size,
       COALESCE(it ->> 'color', '') AS color
     FROM jsonb_array_elements(v_items) AS it
+    GROUP BY (it ->> 'productId')::bigint,
+             COALESCE(it ->> 'size', '') || '-' || COALESCE(it ->> 'color', ''),
+             COALESCE(it ->> 'size', ''),
+             COALESCE(it ->> 'color', '')
     ORDER BY (it ->> 'productId')::bigint
   LOOP
     SELECT * INTO v_prod FROM public.products WHERE id = v_line.id;
@@ -202,6 +212,22 @@ BEGIN
     INSERT INTO _zshm_stock_delta (id, vkey, qty)
     VALUES (v_line.id, v_line.vkey, v_line.qty);
   END LOOP;
+
+  -- Coupon consumption is atomic with the order. api/orders.js has already
+  -- validated the coupon (active + date window) and computed the discount; here
+  -- the coupon row is locked and incremented ONLY if still active and below its
+  -- usage limit. If it is exhausted, the whole transaction rolls back so the
+  -- discount cannot be applied for free (no overshoot, no lost updates).
+  IF NULLIF(p_order ->> 'discountCode', '') IS NOT NULL THEN
+    UPDATE public.coupons
+       SET "usageCount" = COALESCE("usageCount", 0) + 1
+     WHERE code = p_order ->> 'discountCode'
+       AND active = true
+       AND COALESCE("usageCount", 0) < COALESCE("usageLimit", 0);
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'coupon_unavailable');
+    END IF;
+  END IF;
 
   -- INSERT the order FIRST: a duplicate idempotency key (or a bizarre orderId
   -- collision) surfaces here, BEFORE any stock write — so the loser rolls back
@@ -338,6 +364,33 @@ BEGIN
 END;
 $$;
 
+-- ── 4b) ATOMIC COUPON USAGE ADJUSTMENT ───────────────────────────────────────
+-- Single-statement signed delta (clamped at zero), used by order cancellation /
+-- un-cancellation / deletion. Replaces the select-then-update read-modify-write
+-- that could lose a concurrent placement increment. Best-effort by design:
+-- usageCount is advisory, so callers ignore the result.
+CREATE OR REPLACE FUNCTION public.zshm_adjust_coupon_usage(
+  p_code text,
+  p_delta integer
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_updated integer;
+BEGIN
+  IF p_code IS NULL OR btrim(p_code) = '' THEN
+    RETURN jsonb_build_object('ok', true, 'skipped', true);
+  END IF;
+  UPDATE public.coupons
+     SET "usageCount" = GREATEST(COALESCE("usageCount", 0) + p_delta, 0)
+   WHERE code = btrim(p_code);
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN jsonb_build_object('ok', true, 'updated', v_updated);
+END;
+$$;
+
 -- ── 5) PRIVILEGES: only the service role may execute these ────────────────────
 -- Functions are SECURITY INVOKER (default). That is what we want here: the API
 -- calls with the service-role key, which ALREADY bypasses RLS and has full
@@ -347,9 +400,11 @@ $$;
 REVOKE ALL ON FUNCTION public.atomic_place_order(jsonb, text)     FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.atomic_adjust_stock(jsonb, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.zshm_order_signature(jsonb)         FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.zshm_adjust_coupon_usage(text, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.atomic_place_order(jsonb, text)     TO service_role;
 GRANT EXECUTE ON FUNCTION public.atomic_adjust_stock(jsonb, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.zshm_order_signature(jsonb)         TO service_role;
+GRANT EXECUTE ON FUNCTION public.zshm_adjust_coupon_usage(text, integer) TO service_role;
 
 -- ── 6) POST-APPLY VERIFICATION (run after applying) ───────────────────────────
 -- SELECT proname, provolatile FROM pg_proc
