@@ -13,11 +13,9 @@ const {
   getShippingCost,
   generateOrderId,
   parseOrderRow,
-  maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
   trackingUrlFor,
-  verifyTrackToken,
   EGYPT_PHONE_RE,
   cairoDateString,
 } = require('./_lib');
@@ -286,7 +284,6 @@ async function trackOrder(req, res) {
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   const trackId = String((req.query && req.query.track) || '').trim();
-  const tk = String((req.query && req.query.tk) || '').trim();
 
   if (!trackId || !ORDER_ID_RE.test(trackId)) {
     return json(res, 200, { found: false });
@@ -301,14 +298,9 @@ async function trackOrder(req, res) {
     }
     if (!data) return json(res, 200, { found: false });
 
-    const full = verifyTrackToken(trackId, tk);
+    // Order ID and signed link now return the same (full) result.
     const order = parseOrderRow(data);
-    order.tracking_url = full ? trackingUrlFor(trackId) : '';
-
-    if (!full) {
-      // Knowing the order ID alone must not reveal customer PII.
-      return json(res, 200, { found: true, access: 'limited', order: maskOrderForLimitedAccess(order) });
-    }
+    order.tracking_url = trackingUrlFor(trackId);
     return json(res, 200, { found: true, access: 'full', order });
   } catch (err) {
     console.error('Track error:', err && err.message);

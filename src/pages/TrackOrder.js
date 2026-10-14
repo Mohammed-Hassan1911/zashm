@@ -22,7 +22,6 @@ export default function TrackOrder() {
   const [currentOrder, setCurrentOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [loadingTrack, setLoadingTrack] = useState(false);
-  const [orderAccess, setOrderAccess] = useState('full');
   // 🎯 لقط الأوردر أوتوماتيكياً سواء من الـ Store أو من رابط المتصفح مباشرة
   useEffect(() => {
     if (storeSearchQuery) {
@@ -59,7 +58,6 @@ export default function TrackOrder() {
         if (cancelled) return;
         if (payload && payload.found && payload.order) {
           setCurrentOrder(payload.order);
-          setOrderAccess(payload.access || 'full');
         } else {
           setNotFound(true);
         }
@@ -270,11 +268,6 @@ export default function TrackOrder() {
               <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> Order Date</p>
               <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.date || '—'}</p>
             </div>
-            {orderAccess === 'limited' && (
-              <div style={{ gridColumn: 'span 2', padding: '8px 10px', background: 'rgba(201, 168, 76, 0.08)', border: '1px dashed var(--border-gold, var(--border))', borderRadius: 6, fontSize: 11, color: 'var(--text3)', lineHeight: 1.6, direction: 'rtl' }}>
-                🔒 تفاصيل التوصيل الكاملة متاحة من خلال <strong style={{ color: 'var(--gold)' }}>رابط الطلب</strong> الذي وصلك على واتساب.
-              </div>
-            )}
           </div>
 
           {/* ملخص المنتجات والأسعار */}
