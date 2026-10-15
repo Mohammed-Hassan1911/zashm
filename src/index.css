@@ -320,3 +320,38 @@ div[role="status"] svg {
 @media (max-width: 900px) {
   .admin-dash-split { grid-template-columns: 1fr !important; }
 }
+
+/* ─── GLOBAL DEVICE BASELINE (phones / tablets of every size) ───────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Media never overflows its container, on any screen */
+img, picture, video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ─── TABLETS (e.g. iPad portrait ~768–1024) ─────────────────────────────────── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  header nav { gap: 22px !important; }
+}
+
+/* ─── SMALL PHONES (e.g. iPhone SE, older Androids ≤380px) ───────────────────── */
+@media (max-width: 380px) {
+  .gold-btn, .outline-btn {
+    padding: 12px 18px !important;
+    letter-spacing: 1.5px !important;
+    font-size: 10.5px !important;
+  }
+  .label-badge { letter-spacing: 1px; }
+}
+
+/* ─── LANDSCAPE PHONES (short viewports) ─────────────────────────────────────── */
+@media (max-height: 480px) and (orientation: landscape) {
+  div[style*="height: '100vh'"],
+  div[style*="height: 100vh"] {
+    min-height: 100vh;
+  }
+}

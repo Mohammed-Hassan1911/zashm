@@ -998,7 +998,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
 
                 <div style={{ background:'var(--bg3)', borderRadius:6, padding:12, marginBottom:16 }}>
                   <p style={{ fontSize:11, color:'var(--text3)', marginBottom:10, letterSpacing:1, textTransform:'uppercase' }}>Customer</p>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap:10 }}>
                     {[
                       ['Name', selected.customer],
                       ['Phone', selected.phone],
@@ -1008,7 +1008,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                       ['Date', selected.date],
                       ['Address', selected.address]
                     ].map(([k,v]) => (
-                      <div key={k} style={{ gridColumn: k === 'Address' ? 'span 2' : 'auto' }}>
+                      <div key={k} style={{ gridColumn: k === 'Address' ? '1 / -1' : 'auto' }}>
                         <p style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>{k}</p>
                         <p style={{ fontSize: 12, color: 'var(--text1)', wordBreak:'break-word' }}>{v}</p>                     
                       </div>
