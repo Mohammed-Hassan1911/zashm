@@ -208,11 +208,13 @@ export function CheckoutPage() {
   const {
     cart, cartTotal, cartSubtotal, cartDiscountAmount, placeOrder, setPage,
     appliedDiscount, applyDiscount, removeAppliedDiscount, refreshAppliedDiscount,
+    reduceCartForStockIssues,
   } = useStore();
   
   const [form, setForm] = useState({ name: '', phone: '', phoneAlt: '', email: '', address: '', city: '', notes: '' });
   const [errors, setErrors] = useState({});
   const [stockErrors, setStockErrors] = useState([]);
+  const [stockNotice, setStockNotice] = useState([]);
   const [success, setSuccess] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [coupon, setCoupon] = useState('');
@@ -275,16 +277,16 @@ export function CheckoutPage() {
 
   const validateOrderFormCustom = (fields) => {
     const errs = {};
-    if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required';
-    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters)';
+    if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required / الاسم الكامل مطلوب';
+    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters) / يرجى إدخال اسمك الكامل (حرفان على الأقل)';
     
     const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
     const normPhone = normalizeEgyptPhone(fields.phone);
     
     if (!fields.phone || !fields.phone.trim()) {
-      errs.phone = 'Phone number is required';
+      errs.phone = 'Phone number is required / رقم الهاتف مطلوب';
     } else if (!egyptianPhoneRegex.test(normPhone)) {
-      errs.phone = 'Invalid phone number. Must be 11 digits starting with 01';
+      errs.phone = 'Invalid phone number. Must be 11 digits starting with 01 / رقم هاتف غير صحيح، يجب أن يكون 11 رقمًا ويبدأ بـ 01';
     }
 
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
@@ -292,23 +294,23 @@ export function CheckoutPage() {
       const trimmedPhoneAlt = normalizeEgyptPhone(fields.phoneAlt);
 
       if (!egyptianPhoneRegex.test(trimmedPhoneAlt)) {
-        errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits';
+        errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits / رقم الهاتف البديل غير صحيح، يجب أن يكون 11 رقمًا';
       } else if (trimmedPhone === trimmedPhoneAlt) {
-        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number';
+        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number / رقم الهاتف البديل لا يمكن أن يكون مطابقًا للرقم الأساسي';
       }
     }
 
     if (fields.email && fields.email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(fields.email.trim())) {
-        errs.email = 'Please enter a valid email address (e.g., name@example.com)';
+        errs.email = 'Please enter a valid email address (e.g., name@example.com) / يرجى إدخال بريد إلكتروني صحيح';
       }
     }
 
-    if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required';
-    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters)';
+    if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required / عنوان الشارع مطلوب';
+    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters) / يرجى إدخال عنوان شارع كامل (5 أحرف على الأقل)';
     if (!fields.city || !fields.city.trim() || fields.city === 'Select City' || !normalizeGovernorate(fields.city)) {
-      errs.city = 'Please select your governorate from the list';
+      errs.city = 'Please select your governorate from the list / يرجى اختيار المحافظة من القائمة';
     }
     
     return errs;
@@ -323,6 +325,7 @@ export function CheckoutPage() {
     isPlacingOrder.current = true;
     setSubmitting(true);
     setStockErrors([]);
+    setStockNotice([]);
 
     try {
       const sanitizedCustomer = sanitizeInput(form.name.trim());
@@ -345,7 +348,31 @@ export function CheckoutPage() {
       }, idempotencyKey);
 
       if (!result || !result.success) {
-        setStockErrors(result?.errors || ['Order failed. Please try again.']);
+        setStockErrors(result?.errors || ['Order failed. Please try again. / فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.']);
+
+        // خفّض الكميات تلقائيًا حسب ما أخبرنا به السيرفر،
+        // واعرض تنبيهًا بالعربي والإنجليزي يوضح التغيير.
+        if (result?.stockIssues && result.stockIssues.length) {
+          const { reduced, removed } = reduceCartForStockIssues(result.stockIssues);
+          const notices = [];
+          reduced.forEach(r => {
+            notices.push(
+              `تم تقليل كمية "${r.name}" من ${r.from} إلى ${r.to} قطعة فقط — المتاح في المخزون ${r.to}. ` +
+              `/ Quantity of "${r.name}" was reduced from ${r.from} to ${r.to} — only ${r.to} left in stock.`
+            );
+          });
+          removed.forEach(r => {
+            notices.push(
+              `تمت إزالة "${r.name}" من سلة التسوق لأن المخزون نفد. ` +
+              `/ "${r.name}" was removed from your bag because it is out of stock.`
+            );
+          });
+          setStockNotice(notices);
+          if (notices.length) toast(notices[0], 'info');
+        } else {
+          setStockNotice([]);
+        }
+
         isPlacingOrder.current = false;
         setSubmitting(false);
         return;
@@ -359,6 +386,9 @@ export function CheckoutPage() {
 
     } catch (error) {
       console.error("Order completion failed logic:", error);
+      const raw = error && error.message ? String(error.message) : '';
+      setStockErrors([raw ? raw : 'Order failed. Please try again. / فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.']);
+      setStockNotice([]);
       isPlacingOrder.current = false;
       setSubmitting(false);
     }
@@ -569,13 +599,27 @@ export function CheckoutPage() {
           style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>Checkout</motion.h1>
 
         <AnimatePresence>
+          {stockNotice.length > 0 && (
+            <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
+              style={{ background:'rgba(201,168,76,0.10)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'14px 18px', marginBottom:16 }}>
+              <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:8, fontSize:13 }}>
+                ✅ تم تعديل كميات السلة تلقائيًا / Your bag quantities were adjusted automatically:
+              </p>
+              {stockNotice.map((e, i) => (
+                <p key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:4, lineHeight:1.7 }}>• {e}</p>
+              ))}
+            </motion.div>
+          )}
+
           {stockErrors.length > 0 && (
             <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
               style={{ background:'rgba(192,57,43,0.08)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:6, padding:'14px 18px', marginBottom:24 }}>
               <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13 }}>
-                {stockErrors.some(e => /stock|piece|remaining|available/i.test(e)) ? '⚠ Stock issues detected:' : '⚠ Order could not be placed:'}
+                {stockErrors.some(e => /stock|piece|remaining|available|مخزون|متبقى/i.test(e))
+                  ? '⚠ مشاكل في المخزون / Stock issues detected:'
+                  : '⚠ تعذر إتمام الطلب / Order could not be placed:'}
               </p>
-              {stockErrors.map((e, i) => <p key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:2 }}>• {e}</p>)}
+              {stockErrors.map((e, i) => <p key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:2, lineHeight:1.6 }}>• {e}</p>)}
             </motion.div>
           )}
         </AnimatePresence>

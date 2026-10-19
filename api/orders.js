@@ -88,10 +88,20 @@ async function placeOrder(req, res) {
     // 2b. Rebuild line items from DB prices + validate stock availability.
     const orderItems = [];
     const stockErrors = [];
+    // Structured issues so the client can auto-correct the cart quantities.
+    const stockIssues = [];
     for (const item of items) {
       const p = productMap.get(item.productId);
       if (!p) {
         stockErrors.push('A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.');
+        stockIssues.push({
+          productId: item.productId,
+          size: item.size || '',
+          color: item.color || '',
+          requested: Number(item.qty || 0),
+          available: 0,
+          missing: true,
+        });
         continue;
       }
       const unitPrice = Number(p.salePrice) || Number(p.price) || 0;
@@ -114,6 +124,22 @@ async function placeOrder(req, res) {
           ? `Sorry, this piece is out of stock for this variation / هذا المنتج غير متوفر بهذا الاختلاف (${item.size} - ${item.color}).`
           : `Only ${available} piece(s) remaining in stock for this variation / متبقى ${available} قطعة فقط من هذا المنتج (${item.size} - ${item.color}).`;
         if (!stockErrors.includes(msg)) stockErrors.push(msg);
+        const existing = stockIssues.find(
+          (si) => si.productId === item.productId && si.size === (item.size || '') && si.color === (item.color || '')
+        );
+        if (existing) {
+          existing.requested = Math.max(existing.requested, requested);
+          existing.available = Math.min(existing.available, available);
+        } else {
+          stockIssues.push({
+            productId: item.productId,
+            size: item.size || '',
+            color: item.color || '',
+            requested,
+            available,
+            missing: false,
+          });
+        }
         continue;
       }
       orderItems.push({
@@ -133,6 +159,7 @@ async function placeOrder(req, res) {
         success: false,
         error: 'Some items could not be ordered',
         errors: stockErrors.length ? stockErrors : ['Some items could not be ordered.'],
+        stockIssues,
       });
     }
 
@@ -218,23 +245,44 @@ async function placeOrder(req, res) {
           : variation
             ? `Only ${available} piece(s) remaining in stock for this variation / متبقى ${available} قطعة فقط من هذا المنتج (${variation}).`
             : `Only ${available} piece(s) remaining in stock / متبقى ${available} قطعة فقط.`;
-        return json(res, 422, { success: false, error: msg, errors: [msg] });
-      }
-      if (reason === 'missing_product') {
         return json(res, 422, {
           success: false,
-          error: 'A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.',
-          errors: ['A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.'],
+          error: msg,
+          errors: [msg],
+          stockIssues: [{
+            productId: Number(r.productId) || 0,
+            size: r.size || '',
+            color: r.color || '',
+            requested: null,
+            available,
+            missing: false,
+          }],
+        });
+      }
+      if (reason === 'missing_product') {
+        const missingMsg = 'A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.';
+        return json(res, 422, {
+          success: false,
+          error: missingMsg,
+          errors: [missingMsg],
+          stockIssues: [{
+            productId: Number(r.productId) || 0,
+            size: '',
+            color: '',
+            requested: null,
+            available: 0,
+            missing: true,
+          }],
         });
       }
       if (reason === 'idempotency_conflict') {
-        return json(res, 409, { success: false, error: 'Could not place the order. Please refresh your bag and try again.' });
+        return json(res, 409, { success: false, error: 'Could not place the order. Please refresh your bag and try again. / تعذر إتمام الطلب. يرجى تحديث سلة التسوق والمحاولة مرة أخرى.' });
       }
       if (reason === 'coupon_unavailable') {
         const msg = 'This discount code is no longer available / كود الخصم لم يعد متاحًا. يرجى إزالته والمحاولة مرة أخرى.';
         return json(res, 422, { success: false, error: msg, errors: [msg] });
       }
-      return json(res, 422, { success: false, error: 'Could not place the order. Please review your bag and try again.' });
+      return json(res, 422, { success: false, error: 'Could not place the order. Please review your bag and try again. / تعذر إتمام الطلب. يرجى مراجعة سلة التسوق والمحاولة مرة أخرى.' });
     }
 
     // 4c. Idempotent retry: this checkout already committed. Return the stored

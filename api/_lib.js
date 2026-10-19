@@ -489,15 +489,15 @@ function validateOrderPayload(body) {
   const errors = [];
   const items = body && Array.isArray(body.items) ? body.items : null;
   if (!items || items.length < 1 || items.length > 30) {
-    return { ok: false, errors: ['Your bag is empty or contains too many items.'] };
+    return { ok: false, errors: ['Your bag is empty or contains too many items. / سلة التسوق فارغة أو تحتوي على عدد كبير من المنتجات.'] };
   }
 
   const cleanItems = [];
   for (const raw of items) {
     const productId = intInRange(raw && raw.productId, 1, Number.MAX_SAFE_INTEGER);
-    if (productId === null) { errors.push('Invalid product id'); break; }
+    if (productId === null) { errors.push('Invalid product id / معرّف منتج غير صالح'); break; }
     const qty = intInRange(raw && raw.qty, 1, 20);
-    if (qty === null) { errors.push('Invalid quantity for an item'); break; }
+    if (qty === null) { errors.push('Invalid quantity for an item / كمية غير صالحة لمنتج'); break; }
     const size = str(raw.size).slice(0, 50);
     const color = str(raw.color).slice(0, 50);
     cleanItems.push({ productId, qty, size, color });
@@ -510,16 +510,16 @@ function validateOrderPayload(body) {
   const phone = normalizePhone(c.phone);
   const city = str(c.city).trim();
 
-  if (name === null) errors.push('Please enter your full name (at least 2 characters).');
-  if (!EGYPT_PHONE_RE.test(phone)) errors.push('Please enter a valid Egyptian mobile number (e.g. 01XXXXXXXXX).');
+  if (name === null) errors.push('Please enter your full name (at least 2 characters). / يرجى إدخال اسمك الكامل (حرفان على الأقل).');
+  if (!EGYPT_PHONE_RE.test(phone)) errors.push('Please enter a valid Egyptian mobile number (e.g. 01XXXXXXXXX). / يرجى إدخال رقم موبايل مصري صحيح (مثال: 01XXXXXXXXX).');
   const phoneAlt = c.phoneAlt ? normalizePhone(c.phoneAlt) : '';
   if (phoneAlt && (!EGYPT_PHONE_RE.test(phoneAlt) || phoneAlt === phone)) {
-    errors.push('The alternative phone number is invalid or the same as the primary one.');
+    errors.push('The alternative phone number is invalid or the same as the primary one. / رقم الهاتف البديل غير صالح أو مطابق لرقم الهاتف الأساسي.');
   }
   const email = str(c.email).trim();
-  if (email && (email.length > 200 || !EMAIL_RE.test(email))) errors.push('Please enter a valid email address.');
-  if (address === null) errors.push('Please enter a complete street address (at least 5 characters).');
-  if (!EGYPT_GOVERNORATES.includes(city)) errors.push('Please select your governorate from the list.');
+  if (email && (email.length > 200 || !EMAIL_RE.test(email))) errors.push('Please enter a valid email address. / يرجى إدخال بريد إلكتروني صحيح.');
+  if (address === null) errors.push('Please enter a complete street address (at least 5 characters). / يرجى إدخال عنوان شارع كامل (5 أحرف على الأقل).');
+  if (!EGYPT_GOVERNORATES.includes(city)) errors.push('Please select your governorate from the list. / يرجى اختيار المحافظة من القائمة.');
 
   if (errors.length) return { ok: false, errors };
 

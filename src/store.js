@@ -284,7 +284,7 @@ export const useStore = create((set, get) => ({
   },
   
   addToCart: (product, size, color, qty = 1) => {
-    if (!product?.id) return { success: false, error: 'Invalid product' };
+    if (!product?.id) return { success: false, error: 'Invalid product / منتج غير صالح' };
     
     const products = get().products;
     const freshProduct = products.find(p => p.id == product.id) || product;
@@ -308,11 +308,11 @@ export const useStore = create((set, get) => ({
       const remainingToOrder = Math.max(0, available - currentInCart);
       let errorMsg = "";
       if (remainingToOrder === 0) {
-        errorMsg = `Sorry, this piece is out of stock in this variation (${size} - ${color}). You already have ${currentInCart} in your bag.`;
+        errorMsg = `Sorry, this piece is out of stock in this variation (${size} - ${color}). You already have ${currentInCart} in your bag. / نفدت الكمية من هذا الاختلاف (${size} - ${color}) وعندك بالفعل ${currentInCart} في السلة.`;
       } else if (remainingToOrder === 1) {
-        errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}).`;
+        errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}). / تبقت قطعة واحدة فقط من هذا الاختلاف (${size} - ${color}).`;
       } else {
-        errorMsg = `Sorry, only ${remainingToOrder} more pieces are remaining in stock for this variation (${size} - ${color}).`;
+        errorMsg = `Sorry, only ${remainingToOrder} more pieces are remaining in stock for this variation (${size} - ${color}). / تبقت ${remainingToOrder} قطع فقط من هذا الاختلاف (${size} - ${color}).`;
       }
       return { success: false, error: errorMsg };
     }
@@ -360,6 +360,44 @@ export const useStore = create((set, get) => ({
     const newCart = cart.map(item => item.key === key ? { ...item, qty: newQty } : item);
     const saved = get()._saveCart(newCart);
     set({ cart: saved });
+  },
+
+  // ضبط تلقائي للكميات بعد رد السيرفر: يقلل الكميات المتاحة أو يشيل
+  // المنتجات غير المتوفرة، ويرجع ملخص التغييرات لعرض تنبيه ثنائي اللغة.
+  reduceCartForStockIssues: (stockIssues) => {
+    if (!Array.isArray(stockIssues) || stockIssues.length === 0) return { reduced: [], removed: [] };
+    const cart = get().cart || [];
+    const reduced = [];
+    const removed = [];
+    const kept = [];
+
+    for (const item of cart) {
+      const issue = stockIssues.find(si => {
+        if (Number(si.productId) !== Number(item.product?.id)) return false;
+        if (si.missing) return true;
+        return (si.size || '') === (item.size || '') && (si.color || '') === (item.color || '');
+      });
+
+      if (!issue) { kept.push(item); continue; }
+
+      const label = item.product?.name || 'this item';
+      if (issue.missing || Number(issue.available) <= 0) {
+        removed.push({ name: label, size: item.size || '', color: item.color || '' });
+        continue;
+      }
+
+      const avail = Math.max(1, Math.floor(Number(issue.available)));
+      if (Number(item.qty) > avail) {
+        reduced.push({ name: label, size: item.size || '', color: item.color || '', from: Number(item.qty), to: avail });
+        kept.push({ ...item, qty: avail });
+      } else {
+        kept.push(item);
+      }
+    }
+
+    const saved = get()._saveCart(kept);
+    set({ cart: saved });
+    return { reduced, removed };
   },
 
   clearCart: () => { localStorage.removeItem('zashm_cart'); set({ cart: [] }); },
@@ -459,8 +497,9 @@ export const useStore = create((set, get) => ({
     } catch (err) {
       const errors = (err && Array.isArray(err.payload?.errors) && err.payload.errors.length)
         ? err.payload.errors
-        : [err && err.message ? err.message : 'Order failed. Please try again.'];
-      return { success: false, error: errors[0], errors };
+        : [err && err.message ? err.message : 'Order failed. Please try again. / فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.'];
+      const stockIssues = (err && Array.isArray(err.payload?.stockIssues)) ? err.payload.stockIssues : [];
+      return { success: false, error: errors[0], errors, stockIssues };
     }
 
     const order = payload.order;
@@ -609,7 +648,7 @@ export const useStore = create((set, get) => ({
   
   applyDiscount: (code) => {
     const normalized = (code ?? '').trim().toUpperCase();
-    if (!normalized) return { success: false, error: 'Please enter a discount code' };
+    if (!normalized) return { success: false, error: 'Please enter a discount code / يرجى إدخال كود الخصم' };
     
     const discounts = get().discounts;
     const today = getLocalTodayDate(); 
@@ -627,7 +666,7 @@ export const useStore = create((set, get) => ({
       set({ appliedDiscount: d });
       return { success: true, discount: d };
     }
-    return { success: false, error: 'Invalid or expired discount code' };
+    return { success: false, error: 'Invalid or expired discount code / كود خصم غير صالح أو منتهي الصلاحية' };
   },
   removeAppliedDiscount: () => {
     saveAppliedDiscount(null);

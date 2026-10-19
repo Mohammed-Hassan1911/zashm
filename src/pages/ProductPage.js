@@ -108,19 +108,19 @@ export default function ProductPage() {
   };
 
   const handleAddToCart = () => {
-    if (!selSize) { showToast('Please select a size', 'error'); return; }
-    if (!selColor) { showToast('Please select a color', 'error'); return; }
+    if (!selSize) { showToast('Please select a size / يرجى اختيار المقاس', 'error'); return; }
+    if (!selColor) { showToast('Please select a color / يرجى اختيار اللون', 'error'); return; }
     if (qty > currentVariantStock) {
-      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.` });
+      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}. / عذراً، تتوفر ${currentVariantStock} قطع فقط للمقاس: ${selSize} / اللون: ${selColor}.` });
       return;
     }
     
     const result = addToCart(p, selSize, selColor, qty);
     
     if (result && result.success) {
-      showToast(`${p.name ?? 'Product'} added to your bag!`, 'success');
+      showToast(`${p.name ?? 'Product'} added to your bag! / تمت إضافة المنتج إلى سلة التسوق!`, 'success');
     } else {
-      setStockModal({ open: true, message: result?.error || "Requested quantity is not available." });
+      setStockModal({ open: true, message: result?.error || 'Requested quantity is not available. / الكمية المطلوبة غير متاحة.' });
     }
   };
 

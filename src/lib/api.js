@@ -33,17 +33,32 @@ export function getSessionToken() {
 function extractError(status, payload) {
   if (payload && typeof payload.error === 'string' && payload.error) return payload.error;
   if (payload && Array.isArray(payload.errors) && payload.errors.length) return payload.errors[0];
-  if (status === 401) return 'Your session has expired. Please log in again.';
-  if (status === 403) return 'You do not have permission to do that.';
-  if (status === 429) return 'Too many requests. Please try again shortly.';
-  return 'Request failed. Please try again.';
+  if (status === 401) return 'Your session has expired. Please log in again. / انتهت جلستك، يرجى تسجيل الدخول من جديد.';
+  if (status === 403) return 'You do not have permission to do that. / ليس لديك صلاحية لتنفيذ هذا الإجراء.';
+  if (status === 429) return 'Too many requests. Please try again shortly. / طلبات كثيرة جدًا، يرجى المحاولة بعد قليل.';
+  return 'Request failed. Please try again. / فشل الطلب، يرجى المحاولة مرة أخرى.';
 }
 
-export async function apiFetch(path, { method = 'GET', body, signal } = {}) {
+export async function apiFetch(path, { method = 'GET', body, signal, timeoutMs = 45000 } = {}) {
   const headers = {};
   const token = getSessionToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+  // Timeout افتراضي عشان الزرار ما يفضلش شغال لحد ما لا نهاية
+  // لو السيرفر أخد وقت (cold start أو بطء شبكة).
+  let didTimeout = false;
+  let timeoutId = null;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  if (controller && timeoutMs > 0) {
+    timeoutId = setTimeout(() => { didTimeout = true; controller.abort(); }, timeoutMs);
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else if (typeof signal.addEventListener === 'function') {
+        signal.addEventListener('abort', () => controller.abort(), { once: true });
+      }
+    }
+  }
 
   let res;
   try {
@@ -51,12 +66,17 @@ export async function apiFetch(path, { method = 'GET', body, signal } = {}) {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal,
+      signal: controller ? controller.signal : signal,
     });
   } catch (err) {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (didTimeout) {
+      throw new ApiError(408, 'The server took too long to respond. Please try again. / استغرق الخادم وقتًا طويلًا للاستجابة، يرجى المحاولة مرة أخرى.');
+    }
     if (err && err.name === 'AbortError') throw err;
-    throw new ApiError(0, 'Network error — could not reach the server');
+    throw new ApiError(0, 'Network error — could not reach the server. / خطأ في الشبكة — تعذر الوصول إلى الخادم.');
   }
+  if (timeoutId) clearTimeout(timeoutId);
 
   let payload = {};
   try {
