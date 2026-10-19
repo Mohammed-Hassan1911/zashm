@@ -357,14 +357,14 @@ export function CheckoutPage() {
           const notices = [];
           reduced.forEach(r => {
             notices.push(
-              `تم تقليل كمية "${r.name}" من ${r.from} إلى ${r.to} قطعة فقط — المتاح في المخزون ${r.to}. ` +
-              `/ Quantity of "${r.name}" was reduced from ${r.from} to ${r.to} — only ${r.to} left in stock.`
+              `تم تقليل كمية "${r.name}" تلقائياً من ${r.from} إلى ${r.to} قطعة. المتبقي حالياً: ${r.to} قطعة فقط. ` +
+              `/ The quantity of "${r.name}" was automatically reduced from ${r.from} to ${r.to} — only ${r.to} left in stock.`
             );
           });
           removed.forEach(r => {
             notices.push(
-              `تمت إزالة "${r.name}" من سلة التسوق لأن المخزون نفد. ` +
-              `/ "${r.name}" was removed from your bag because it is out of stock.`
+              `تمت إزالة "${r.name}" من سلة التسوق تلقائياً لأن المخزون نفد. ` +
+              `/ "${r.name}" was automatically removed from your bag because it's out of stock.`
             );
           });
           setStockNotice(notices);
@@ -833,7 +833,7 @@ export function CheckoutPage() {
                       style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
                     جاري تنفيذ الطلب... / Placing Order...
                   </span>
-                ) : 'تأكيد الطلب / Place Order'}
+                ) : 'تأكيد الطلب / PLACE ORDER'}
               </motion.button>
               <p style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10 }}>
                 🔒 طلب آمن · سيتم تسجيل طلبك وتأكيده فوراً عبر الموقع

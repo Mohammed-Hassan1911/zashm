@@ -308,7 +308,7 @@ export const useStore = create((set, get) => ({
       const remainingToOrder = Math.max(0, available - currentInCart);
       let errorMsg = "";
       if (remainingToOrder === 0) {
-        errorMsg = `Sorry, this piece is out of stock in this variation (${size} - ${color}). You already have ${currentInCart} in your bag. / نفدت الكمية من هذا الاختلاف (${size} - ${color}) وعندك بالفعل ${currentInCart} في السلة.`;
+        errorMsg = `Sorry, this piece is out of stock in this variation (${size} - ${color}). You already have ${currentInCart} in your bag. / نفدت الكمية لهذا المقاس/اللون (${size} - ${color})، لديك ${currentInCart} قطعة بالفعل في السلة.`;
       } else if (remainingToOrder === 1) {
         errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}). / تبقت قطعة واحدة فقط من هذا الاختلاف (${size} - ${color}).`;
       } else {
