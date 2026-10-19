@@ -787,9 +787,9 @@ export function CheckoutPage() {
                   <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                     <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}
                       style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
-                    Placing Order...
+                    جاري تنفيذ الطلب... / Placing Order...
                   </span>
-                ) : 'Place Order'}
+                ) : 'تأكيد الطلب / Place Order'}
               </motion.button>
               <p style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10 }}>
                 🔒 طلب آمن · سيتم تسجيل طلبك وتأكيده فوراً عبر الموقع

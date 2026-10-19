@@ -91,7 +91,7 @@ async function placeOrder(req, res) {
     for (const item of items) {
       const p = productMap.get(item.productId);
       if (!p) {
-        stockErrors.push('A product in your cart is no longer available.');
+        stockErrors.push('A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.');
         continue;
       }
       const unitPrice = Number(p.salePrice) || Number(p.price) || 0;
@@ -111,8 +111,8 @@ async function placeOrder(req, res) {
       const requested = demand.get(`${item.productId}::${variantKey}`) || item.qty;
       if (requested > available) {
         const msg = available === 0
-          ? `Sorry, this piece is out of stock in this variation (${item.size} - ${item.color}).`
-          : `Sorry, only ${available} more piece(s) are remaining in stock for this variation (${item.size} - ${item.color}).`;
+          ? `Sorry, this piece is out of stock for this variation / هذا المنتج غير متوفر بهذا الاختلاف (${item.size} - ${item.color}).`
+          : `Only ${available} piece(s) remaining in stock for this variation / متبقى ${available} قطعة فقط من هذا المنتج (${item.size} - ${item.color}).`;
         if (!stockErrors.includes(msg)) stockErrors.push(msg);
         continue;
       }
@@ -213,25 +213,25 @@ async function placeOrder(req, res) {
         const variation = `${r.size || ''} - ${r.color || ''}`.trim();
         const msg = available === 0
           ? variation
-            ? `Sorry, this piece is out of stock in this variation (${variation}).`
-            : 'Sorry, this piece is out of stock.'
+            ? `Sorry, this piece is out of stock for this variation / هذا المنتج غير متوفر بهذا الاختلاف (${variation}).`
+            : 'Sorry, this piece is out of stock / هذا المنتج غير متوفر'
           : variation
-            ? `Sorry, only ${available} more piece(s) are remaining in stock for this variation (${variation}).`
-            : `Sorry, only ${available} more piece(s) are remaining in stock.`;
+            ? `Only ${available} piece(s) remaining in stock for this variation / متبقى ${available} قطعة فقط من هذا المنتج (${variation}).`
+            : `Only ${available} piece(s) remaining in stock / متبقى ${available} قطعة فقط.`;
         return json(res, 422, { success: false, error: msg, errors: [msg] });
       }
       if (reason === 'missing_product') {
         return json(res, 422, {
           success: false,
-          error: 'A product in your cart is no longer available.',
-          errors: ['A product in your cart is no longer available.'],
+          error: 'A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.',
+          errors: ['A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.'],
         });
       }
       if (reason === 'idempotency_conflict') {
         return json(res, 409, { success: false, error: 'Could not place the order. Please refresh your bag and try again.' });
       }
       if (reason === 'coupon_unavailable') {
-        const msg = 'This discount code is no longer available. Please remove it and try again.';
+        const msg = 'This discount code is no longer available / كود الخصم لم يعد متاحًا. يرجى إزالته والمحاولة مرة أخرى.';
         return json(res, 422, { success: false, error: msg, errors: [msg] });
       }
       return json(res, 422, { success: false, error: 'Could not place the order. Please review your bag and try again.' });
