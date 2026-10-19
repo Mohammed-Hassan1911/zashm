@@ -833,7 +833,7 @@ export function CheckoutPage() {
                       style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
                     جاري تنفيذ الطلب... / Placing Order...
                   </span>
-                ) : 'تأكيد الطلب / PLACE ORDER'}
+                ) : '\u062a\u0623\u0643\u064a\u062f \u0627\u0644\u0637\u0644\u0628 / PLACE ORDER'}
               </motion.button>
               <p style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10 }}>
                 🔒 طلب آمن · سيتم تسجيل طلبك وتأكيده فوراً عبر الموقع
