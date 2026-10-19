@@ -342,19 +342,18 @@ export const useStore = create((set, get) => ({
     const cartItem = cart.find(item => item.key === key);
     if (!cartItem) return;
 
-    const currentProduct = products.find(p => p.id === cartItem.product.id);
-    
+    // استخدم بيانات المنتج الحيّة من الليستة، وإلا ارجع لنسخة المنتج المحفوظة
+    // داخل عنصر السلة (حتى لو الليستة لم تُحمّل بعد) لمنع تجاوز المخزون بلا نهاية.
+    const currentProduct = products.find(p => p.id == cartItem.product.id) || cartItem.product;
+
     if (currentProduct) {
       const variantKey = `${cartItem.size}-${cartItem.color}`;
-      let availableStock = currentProduct.stock;
       const pv = currentProduct.variantStock;
       const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
-      if (hasVariantStock) {
-        availableStock = Number(pv[variantKey]) || 0;
-      }
+      const availableStock = hasVariantStock ? (Number(pv[variantKey]) || 0) : currentProduct.stock;
 
-      if (newQty > availableStock && availableStock !== undefined) {
-        return; 
+      if (availableStock !== undefined && availableStock !== null && newQty > Number(availableStock)) {
+        return;
       }
     }
 
