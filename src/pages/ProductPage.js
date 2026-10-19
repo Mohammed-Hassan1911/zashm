@@ -94,11 +94,13 @@ export default function ProductPage() {
   const discount = (p.salePrice && p.price > 0) ? Math.round((1 - (p.salePrice ?? 0) / p.price) * 100) : null;
 
   const currentVariantKey = `${selSize}-${selColor}`;
-  // المصدر الحقيقي للمخزون هو variantStock عند تعريف المفتاح (نفس منطق السيرفر)، وإلا الحقل العام.
-  const currentVariantStock =
-    p.variantStock && p.variantStock[currentVariantKey] !== undefined
-      ? Number(p.variantStock[currentVariantKey]) || 0
-      : (p.stock ?? 0);
+  // المصدر الحقيقي للمخزون هو variantStock عند وجود متغيرات؛ المفتاح غير المعرّف = صفر
+  // (وليس الرجوع للمخزون العام لأنه مجموع كل المتغيرات). الحقل العام يُستخدم فقط
+  // للمنتجات التي لا تحتوي متغيرات إطلاقًا.
+  const hasVariantStock = !!(p.variantStock && typeof p.variantStock === 'object' && !Array.isArray(p.variantStock) && Object.keys(p.variantStock).length > 0);
+  const currentVariantStock = hasVariantStock
+    ? (Number(p.variantStock[currentVariantKey]) || 0)
+    : (p.stock ?? 0);
   const isOutOfStock = currentVariantStock <= 0;
 
   const showToast = (msg, type) => {
@@ -247,7 +249,7 @@ export default function ProductPage() {
               <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>Color: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(p.colors || []).map(c => {
-                  const isColorOOS = p.variantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
+                  const isColorOOS = hasVariantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
                   
                   return (
                     <button key={c} onClick={() => { setSelColor(c); setQty(1); }}
@@ -274,7 +276,7 @@ export default function ProductPage() {
     {(p.sizes || []).map(s => {
       // تحويل الطرفين لنصوص لضمان دقة المقارنة والاختيار
       const isSelected = String(selSize) === String(s);
-      const isSizeOOSWithSelectedColor = p.variantStock ? (p.variantStock[`${s}-${selColor}`] || 0) <= 0 : false;
+      const isSizeOOSWithSelectedColor = hasVariantStock ? (p.variantStock[`${s}-${selColor}`] || 0) <= 0 : false;
 
       return (
         <motion.button 

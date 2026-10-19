@@ -291,8 +291,11 @@ export const useStore = create((set, get) => ({
     const variantKey = `${size}-${color}`;
     
     let stockAmount = 99;
-    if (freshProduct.variantStock && freshProduct.variantStock[variantKey] !== undefined) {
-      stockAmount = Number(freshProduct.variantStock[variantKey]);
+    const pv = freshProduct.variantStock;
+    const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
+    if (hasVariantStock) {
+      // موجود متغيرات: المفتاح غير المعرّف = صفر (لا نرجع للمخزون العام = مجموع المتغيرات)
+      stockAmount = Number(pv[variantKey]) || 0;
     } else if (freshProduct.stock !== undefined && freshProduct.stock !== null) {
       stockAmount = Number(freshProduct.stock);
     }
@@ -344,8 +347,10 @@ export const useStore = create((set, get) => ({
     if (currentProduct) {
       const variantKey = `${cartItem.size}-${cartItem.color}`;
       let availableStock = currentProduct.stock;
-      if (currentProduct.variantStock && currentProduct.variantStock[variantKey] !== undefined) {
-        availableStock = Number(currentProduct.variantStock[variantKey]);
+      const pv = currentProduct.variantStock;
+      const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
+      if (hasVariantStock) {
+        availableStock = Number(pv[variantKey]) || 0;
       }
 
       if (newQty > availableStock && availableStock !== undefined) {

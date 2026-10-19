@@ -189,10 +189,14 @@ BEGIN
   LOOP
     SELECT * INTO v_prod FROM public.products WHERE id = v_line.id;
 
-    -- Mirror api/orders.js exactly: variant qty if the key exists, else global
-    -- stock, else 99. COALESCE(null-cast, 0) mirrors Number(null)=0 in JS.
+    -- Mirror api/orders.js exactly: when the product HAS variants (non-empty
+    -- variantStock object), availability comes ONLY from the variant key — a
+    -- missing key means 0. Only fall back to global stock for products with no
+    -- variants, else 99. COALESCE(null-cast, 0) mirrors Number(undefined)=0.
     -- Columns are stored quoted-camelCase → MUST quote the identifiers.
-    IF v_prod."variantStock" IS NOT NULL AND v_prod."variantStock" ? v_line.vkey THEN
+    IF v_prod."variantStock" IS NOT NULL
+       AND jsonb_typeof(v_prod."variantStock") = 'object'
+       AND v_prod."variantStock" <> '{}'::jsonb THEN
       v_available := COALESCE((v_prod."variantStock" ->> v_line.vkey)::int, 0);
     ELSIF v_prod.stock IS NOT NULL THEN
       v_available := v_prod.stock;

@@ -97,8 +97,12 @@ async function placeOrder(req, res) {
       const unitPrice = Number(p.salePrice) || Number(p.price) || 0;
       const variantKey = `${item.size}-${item.color}`;
       let stockAmount = 99;
-      if (p.variantStock && p.variantStock[variantKey] !== undefined) {
-        stockAmount = Number(p.variantStock[variantKey]);
+      const pv = p.variantStock;
+      const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
+      if (hasVariantStock) {
+        // Variant products: an undefined key means zero available. Falling back to
+        // the global stock (the sum of all variants) would wrongly allow orders.
+        stockAmount = Number(pv[variantKey]) || 0;
       } else if (p.stock !== undefined && p.stock !== null) {
         stockAmount = Number(p.stock);
       }
