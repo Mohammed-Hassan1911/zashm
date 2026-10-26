@@ -282,7 +282,7 @@ function Footer({ setModal }) {
               <span>Luxury fashion crafted with elegance and precision for the modern gentleman.</span>
             </p>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <a href="https://instagram.com/zashm" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
+              <a href="https://www.instagram.com/zashm_brand?obrf=MWh1NHhqMWQ4MTRycg%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
               <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Facebook size={18} /></a>
             </div>
           </div>
@@ -358,7 +358,7 @@ function Footer({ setModal }) {
               </p>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8, wordBreak: 'break-all' }}>
                 <Mail size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-                <span>zashmwebsite@gmail.com</span>
+                <span>zashmbrand@gmail.com</span>
               </p>
             </div>
           </div>
