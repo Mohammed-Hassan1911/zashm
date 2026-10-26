@@ -722,51 +722,41 @@ async function sendTelegramNotification(messageText) {
 function buildOrderTelegramMessage(order, trackingUrl) {
   const itemsText = (order.items || [])
     .map((item) => {
-      const details = [];
-      if (item.size) details.push(item.size);
-      if (item.color) details.push(item.color);
-      const detailsStr = details.length > 0 ? ` (${details.join('/')})` : '';
-      const price = Number(item.price || 0);
-      return `• *${mdSafe(item.name)}*${mdSafe(detailsStr)} x${Number(item.qty || 0)} → _EGP ${price.toLocaleString()}_`;
+      const details = [item.size, item.color].filter(Boolean);
+      const detailsStr = details.length
+        ? ` (${mdSafe(details.join(' / '))})`
+        : '';
+      return `▪️ ${mdSafe(item.name)}${detailsStr} × ${Number(item.qty || 0)} — EGP ${Number(item.price || 0).toLocaleString()}`;
     })
     .join('\n');
-
   const shippingLine = order.shippingCost
-    ? `\n• *قيمة الشحن:* EGP ${Number(order.shippingCost).toLocaleString()}`
+    ? `• الشحن: EGP ${Number(order.shippingCost).toLocaleString()}\n`
     : '';
-
   return `
-✨ *طلب جديد من متجر ZASHM* ✨
---------------------------------🟩
-
-👤 *بيانات العميل:*
-• *الاسم:* ${mdSafe(order.customer)}
-• *رقم الهاتف الأساسي:* ${mdSafe(order.phone)} — [واتساب](https://wa.me/${waNumber(order.phone)})
-• *رقم الهاتف البديل:* ${mdSafe(order.phoneAlt) || 'لا يوجد'}
-• *البريد الإلكتروني:* ${mdSafe(order.email) || 'غير محدد'}
-
-📍 *تفاصيل الشحن:*
-• *المدينة:* ${mdSafe(order.city) || 'غير محدد'}
-• *العنوان:* ${mdSafe(order.address)}
-• *ملاحظات الطلب:* ${mdSafe(order.notes) || 'لا توجد'}
-
-🛍 *المنتجات المطلوبة:*
-${itemsText}
-
---------------------------------🟨
-💰 *الملخص المالي:*
-• *المجموع الفرعي:* EGP ${Number(order.subtotal || 0).toLocaleString()}${shippingLine}
-• *كود الخصم المستخدم:* ${mdSafe(order.discountCode) || 'لا يوجد'}
-• *قيمة الخصم:* EGP ${Number(order.discount || 0).toLocaleString()}
-• *الإجمالي الكلي:* *EGP ${Number(order.total || 0).toLocaleString()}*
-
---------------------------------
-🔗 *رابط تتبع الطلب الخاص بك:*
+✨ *ZASHM | طلب جديد* ✨
+━━━━━━━━━━━━━━
+👤 *بيانات العميل*
+• الاسم: ${mdSafe(order.customer)}
+• الهاتف: ${mdSafe(order.phone)} — [واتساب](https://wa.me/${waNumber(order.phone)})
+• هاتف بديل: ${mdSafe(order.phoneAlt) || 'لا يوجد'}
+• الإيميل: ${mdSafe(order.email) || 'غير محدد'}
+📍 *عنوان الشحن*
+• المدينة: ${mdSafe(order.city) || 'غير محدد'}
+• العنوان: ${mdSafe(order.address)}
+• ملاحظات: ${mdSafe(order.notes) || 'لا توجد'}
+🛍 *المنتجات*
+${itemsText || 'لا توجد منتجات'}
+━━━━━━━━━━━━━━
+💰 *ملخص الحساب*
+• المجموع الفرعي: EGP ${Number(order.subtotal || 0).toLocaleString()}
+${shippingLine}• كود الخصم: ${mdSafe(order.discountCode) || 'لا يوجد'}
+• قيمة الخصم: EGP ${Number(order.discount || 0).toLocaleString()}
+💵 *الإجمالي: EGP ${Number(order.total || 0).toLocaleString()}*
+🔗 *تتبع الطلب*
 ${trackingUrl}
-
---------------------------------
-🔒 _رقم الطلب المرجعي: ${mdSafe(order.id)}_
-_تم تسجيل الطلب وتأكيده بأمان عبر الموقع_
+🧾 رقم الطلب: ${mdSafe(order.id)}
+━━━━━━━━━━━━━━
+💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.
 `.trim();
 }
 
