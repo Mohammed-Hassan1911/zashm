@@ -1080,7 +1080,7 @@ const PRODUCT_CATEGORIES = [
 ];
 const EMPTY_PRODUCT_FORM = {
   name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
-  label:'', description:'', sku:'', images:[], active:true, variantStock:{}
+  label:'', description:'', sku:'', images:[], active:true, variantStock:{}, sizeRecommendations:{}
 };
 
 function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
@@ -1231,6 +1231,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       sizes: Array.isArray(p.sizes) ? p.sizes.join(',') : (p.sizes || ''), 
       colors: Array.isArray(p.colors) ? p.colors.join(',') : (p.colors || ''),
       variantStock: p.variantStock || {},
+      sizeRecommendations: p.sizeRecommendations && typeof p.sizeRecommendations === 'object' ? p.sizeRecommendations : {},
       label: p.label || ''
     });
     setFormErrors({});
@@ -1268,6 +1269,50 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
     const cleanColors = typeof form.colors === 'string' 
       ? form.colors.split(',').map(c => c.trim()).filter(Boolean) 
       : (Array.isArray(form.colors) ? form.colors : []);
+    
+    // Process and validate size recommendations
+    const sizeRecs = {};
+    if (form.sizeRecommendations && typeof form.sizeRecommendations === 'object') {
+      for (const size of cleanSizes) {
+        const rec = form.sizeRecommendations[size];
+        if (!rec) continue;
+        const hasAny = (rec.heightMin !== '' && rec.heightMin !== undefined && rec.heightMin !== null) ||
+                       (rec.heightMax !== '' && rec.heightMax !== undefined && rec.heightMax !== null) ||
+                       (rec.weightMin !== '' && rec.weightMin !== undefined && rec.weightMin !== null) ||
+                       (rec.weightMax !== '' && rec.weightMax !== undefined && rec.weightMax !== null);
+        if (!hasAny) continue;
+        const allPresent = (rec.heightMin !== '' && rec.heightMin !== undefined && rec.heightMin !== null) &&
+                           (rec.heightMax !== '' && rec.heightMax !== undefined && rec.heightMax !== null) &&
+                           (rec.weightMin !== '' && rec.weightMin !== undefined && rec.weightMin !== null) &&
+                           (rec.weightMax !== '' && rec.weightMax !== undefined && rec.weightMax !== null);
+        if (!allPresent) {
+          toast.error(`Incomplete recommendation range for size "${size}": fill all four values or leave all blank`);
+          return;
+        }
+        const hMin = Number(rec.heightMin);
+        const hMax = Number(rec.heightMax);
+        const wMin = Number(rec.weightMin);
+        const wMax = Number(rec.weightMax);
+        if (!Number.isFinite(hMin) || !Number.isFinite(hMax) || !Number.isFinite(wMin) || !Number.isFinite(wMax)) {
+          toast.error(`Invalid numeric values for size "${size}" in recommendations`);
+          return;
+        }
+        if (hMin < 0 || wMin < 0 || hMax < 0 || wMax < 0) {
+          toast.error(`Invalid values for size "${size}" in recommendations`);
+          return;
+        }
+        if (hMin > hMax || wMin > wMax) {
+          toast.error(`Minimum values must not exceed maximum values for size "${size}"`);
+          return;
+        }
+        sizeRecs[size] = {
+          heightMin: Math.round(hMin),
+          heightMax: Math.round(hMax),
+          weightMin: Math.round(wMin),
+          weightMax: Math.round(wMax)
+        };
+      }
+    }
 
     const finalVariantStock = form.variantStock || {};
     const calculatedTotalStock = Object.keys(finalVariantStock).reduce((sum, key) => {
@@ -1294,6 +1339,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       sizes: cleanSizes,       
       colors: cleanColors,     
       variantStock: finalVariantStock, 
+      sizeRecommendations: Object.keys(sizeRecs).length > 0 ? sizeRecs : null,
       images: form.images,     
       sizeGuide: finalSizeGuide, 
       label: finalLabel          
@@ -1633,6 +1679,74 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                 <div style={{ marginTop:14, border:'1px dashed var(--border)', padding:12, borderRadius:4 }}>
                   <label style={{ fontSize:10, color:'var(--gold)', display:'block', marginBottom:8, textTransform:'uppercase', fontWeight:600 }}>Size Guide Chart Image</label>
                   <ImageUploader maxImages={1} images={form.sizeGuide ? [form.sizeGuide] : []} onChange={imgs => update('sizeGuide', imgs[0] || null)} />
+                </div>
+
+                {/* Smart Size Recommendations */}
+                <div style={{ marginTop:16, padding:12, background:'var(--bg3)', borderRadius:6, border:'1px solid var(--border)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                    <label style={{ fontSize:11, color:'var(--gold)', letterSpacing:1, textTransform:'uppercase', fontWeight:600 }}>Smart Size Recommendations</label>
+                    <span style={{ fontSize:9, color:'var(--text3)' }}>Optional</span>
+                  </div>
+                  {(() => {
+                    const currentSizes = typeof form.sizes === 'string' 
+                      ? form.sizes.split(',').map(s => s.trim()).filter(Boolean) 
+                      : (Array.isArray(form.sizes) ? form.sizes : []);
+                    
+                    if (currentSizes.length === 0) {
+                      return <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'10px 0' }}>Enter sizes above to configure recommendations</p>;
+                    }
+                    
+                    const recs = form.sizeRecommendations && typeof form.sizeRecommendations === 'object' ? form.sizeRecommendations : {};
+                    const updateRec = (size, field, value) => {
+                      const updated = { ...(form.sizeRecommendations || {}) };
+                      if (!updated[size]) updated[size] = {};
+                      updated[size] = { ...updated[size], [field]: value };
+                      update('sizeRecommendations', updated);
+                    };
+                    
+                    return (
+                      <div style={{ display:'grid', gap:10 }}>
+                        <p style={{ fontSize:10, color:'var(--text3)', marginBottom:4 }}>Configure height and weight ranges (cm/kg) for each size</p>
+                        {currentSizes.map(size => (
+                          <div key={size} style={{ background:'var(--surface)', padding:'10px 12px', borderRadius:4, border:'1px solid var(--border)' }}>
+                            <div style={{ fontSize:11, fontWeight:600, color:'var(--text)', marginBottom:8 }}>{size}</div>
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:6 }}>
+                              <div>
+                                <label style={{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:3 }}>Height Min (cm)</label>
+                                <input type="number" min="0" placeholder="e.g. 170" 
+                                  value={recs[size]?.heightMin ?? ''} 
+                                  onChange={e => updateRec(size, 'heightMin', e.target.value)}
+                                  style={{ width:'100%', padding:'6px 8px', fontSize:11, borderRadius:4, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)' }} />
+                              </div>
+                              <div>
+                                <label style={{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:3 }}>Height Max (cm)</label>
+                                <input type="number" min="0" placeholder="e.g. 178" 
+                                  value={recs[size]?.heightMax ?? ''} 
+                                  onChange={e => updateRec(size, 'heightMax', e.target.value)}
+                                  style={{ width:'100%', padding:'6px 8px', fontSize:11, borderRadius:4, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)' }} />
+                              </div>
+                            </div>
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                              <div>
+                                <label style={{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:3 }}>Weight Min (kg)</label>
+                                <input type="number" min="0" placeholder="e.g. 65" 
+                                  value={recs[size]?.weightMin ?? ''} 
+                                  onChange={e => updateRec(size, 'weightMin', e.target.value)}
+                                  style={{ width:'100%', padding:'6px 8px', fontSize:11, borderRadius:4, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)' }} />
+                              </div>
+                              <div>
+                                <label style={{ fontSize:9, color:'var(--text3)', display:'block', marginBottom:3 }}>Weight Max (kg)</label>
+                                <input type="number" min="0" placeholder="e.g. 75" 
+                                  value={recs[size]?.weightMax ?? ''} 
+                                  onChange={e => updateRec(size, 'weightMax', e.target.value)}
+                                  style={{ width:'100%', padding:'6px 8px', fontSize:11, borderRadius:4, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)' }} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ marginTop:14 }}>

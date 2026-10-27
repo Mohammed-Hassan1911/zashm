@@ -530,6 +530,69 @@ function validateOrderPayload(body) {
   };
 }
 
+function validateSizeRecommendations(recs, allowedSizes) {
+  if (recs === null || recs === undefined) return { ok: true, value: null };
+  if (typeof recs !== 'object' || Array.isArray(recs)) return { ok: true, value: null };
+  
+  const allowed = Array.isArray(allowedSizes) ? new Set(allowedSizes.map(s => str(s))) : null;
+  const result = {};
+  const errors = [];
+  
+  for (const key of Object.keys(recs)) {
+    const size = str(key);
+    if (!size) continue;
+    if (allowed && !allowed.has(size)) continue; // ignore unknown sizes
+    
+    const rec = recs[key];
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
+      errors.push(`Invalid recommendation configuration for size "${size}"`);
+      continue;
+    }
+    
+    const hasAny = rec.heightMin !== undefined && rec.heightMin !== null && rec.heightMin !== '' ||
+                   rec.heightMax !== undefined && rec.heightMax !== null && rec.heightMax !== '' ||
+                   rec.weightMin !== undefined && rec.weightMin !== null && rec.weightMin !== '' ||
+                   rec.weightMax !== undefined && rec.weightMax !== null && rec.weightMax !== '';
+    
+    if (!hasAny) continue; // size has no configuration - allowed (optional)
+    
+    // If partially completed, treat as error (do not silently save incomplete)
+    const allPresent = rec.heightMin !== undefined && rec.heightMin !== null && rec.heightMin !== '' &&
+                       rec.heightMax !== undefined && rec.heightMax !== null && rec.heightMax !== '' &&
+                       rec.weightMin !== undefined && rec.weightMin !== null && rec.weightMin !== '' &&
+                       rec.weightMax !== undefined && rec.weightMax !== null && rec.weightMax !== '';
+    
+    if (!allPresent) {
+      errors.push(`Incomplete recommendation range for size "${size}": all four values (height min/max, weight min/max) are required or leave all blank`);
+      continue;
+    }
+    
+    const hMin = numInRange(rec.heightMin, 0, 300);
+    const hMax = numInRange(rec.heightMax, 0, 300);
+    const wMin = numInRange(rec.weightMin, 0, 500);
+    const wMax = numInRange(rec.weightMax, 0, 500);
+    
+    if (hMin === null || hMax === null || wMin === null || wMax === null) {
+      errors.push(`Invalid numeric values for size "${size}" in recommendations`);
+      continue;
+    }
+    if (hMin > hMax || wMin > wMax) {
+      errors.push(`Minimum values must not exceed maximum values for size "${size}"`);
+      continue;
+    }
+    
+    result[size] = {
+      heightMin: Math.round(hMin),
+      heightMax: Math.round(hMax),
+      weightMin: Math.round(wMin),
+      weightMax: Math.round(wMax),
+    };
+  }
+  
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, value: Object.keys(result).length > 0 ? result : null };
+}
+
 function validateProductPayload(p) {
   const errors = [];
   const name = cleanText(p.name, 1, 200);
@@ -570,6 +633,16 @@ function validateProductPayload(p) {
     }
   }
 
+  const sizeRecValidation = validateSizeRecommendations(p.sizeRecommendations, sizes);
+  if (sizeRecValidation && sizeRecValidation.ok === false) {
+    if (Array.isArray(sizeRecValidation.errors)) {
+      errors.push(...sizeRecValidation.errors);
+    } else {
+      errors.push('Invalid size recommendations');
+    }
+  }
+  const sizeRecommendations = sizeRecValidation && sizeRecValidation.ok ? sizeRecValidation.value : null;
+
   if (errors.length) return null;
 
   return {
@@ -582,6 +655,7 @@ function validateProductPayload(p) {
     colors,
     images,
     variantStock,
+    sizeRecommendations,
     sku: str(p.sku).replace(/[<>]/g, '').slice(0, 60),
     label: str(p.label).replace(/[<>]/g, '').slice(0, 40),
     description: str(p.description).slice(0, 5000),

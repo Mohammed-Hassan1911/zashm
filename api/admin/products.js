@@ -18,6 +18,7 @@ const {
 
 // Columns proven to exist (insert path). `label`/`tags`/`active` are sent when
 // provided but stripped and retried if the column turns out to be missing.
+// `sizeRecommendations` is handled specially: if missing column and data provided, we must error.
 const OPTIONAL_COLUMNS = ['label', 'tags', 'active'];
 
 function isUnknownColumn(error) {
@@ -30,11 +31,28 @@ function isUnknownColumn(error) {
   );
 }
 
+function isMissingSizeRecommendationsColumn(error) {
+  if (!isUnknownColumn(error)) return false;
+  const msg = String((error && error.message) || '').toLowerCase();
+  return msg.includes('sizerecommendations') || msg.includes('size_recommendations');
+}
+
 async function insertProduct(sb, row) {
   let { data, error } = await sb.from('products').insert([row]).select().single();
   if (error && isUnknownColumn(error)) {
+    // If trying to save recommendations but column missing, return clear error
+    if (row && Object.prototype.hasOwnProperty.call(row, 'sizeRecommendations') && row.sizeRecommendations != null) {
+      const err = new Error('Database column "sizeRecommendations" is missing. Please apply the migration supabase/size_recommendations.sql in the Supabase SQL Editor before saving recommendation settings.');
+      err.status = 400;
+      throw err;
+    }
     const stripped = { ...row };
     for (const col of OPTIONAL_COLUMNS) delete stripped[col];
+    // Also strip sizeRecommendations if null/undefined? If it's explicitly null and column missing, 
+    // better to be safe - but we only error if non-null recommendations are being saved
+    if (Object.prototype.hasOwnProperty.call(stripped, 'sizeRecommendations') && stripped.sizeRecommendations == null) {
+      delete stripped.sizeRecommendations;
+    }
     ({ data, error } = await sb.from('products').insert([stripped]).select().single());
   }
   if (error) throw error;
@@ -55,6 +73,7 @@ function buildInsertRow(p, id) {
     description: p.description || '',
     stock: Number(p.stock),
     variantStock: p.variantStock || {},
+    sizeRecommendations: p.sizeRecommendations || null,
     sku: p.sku || '',
     label: p.label || '',
     tags: p.tags || null,
@@ -122,7 +141,8 @@ async function createProducts(req, res) {
     return json(res, 200, { success: true, product: created[0] });
   } catch (err) {
     console.error('Product create failed:', err && err.message);
-    return json(res, 500, { error: 'Could not save product', detail: err && err.message });
+    const status = err && err.status ? err.status : 500;
+    return json(res, status, { error: err && err.message ? err.message : 'Could not save product' });
   }
 }
 
@@ -161,6 +181,7 @@ async function updateProduct(req, res) {
     // Only write fields the client actually sent (mirrors previous behaviour).
     const allowedKeys = [
       'name', 'category', 'price', 'salePrice', 'description', 'stock', 'variantStock',
+      'sizeRecommendations',
       'sku', 'colors', 'sizes', 'images', 'image', 'sizeGuide', 'label', 'tags', 'active',
     ];
     const write = {};
@@ -176,8 +197,17 @@ async function updateProduct(req, res) {
 
     let { error: updErr } = await sb.from('products').update(write).eq('id', id);
     if (updErr && isUnknownColumn(updErr)) {
+      // If trying to save recommendations but column missing, return clear error
+      if (write && Object.prototype.hasOwnProperty.call(write, 'sizeRecommendations') && write.sizeRecommendations != null) {
+        const err = new Error('Database column "sizeRecommendations" is missing. Please apply the migration supabase/size_recommendations.sql in the Supabase SQL Editor before saving recommendation settings.');
+        err.status = 400;
+        throw err;
+      }
       // `active` (and similar) may not exist as a column in older schemas.
       delete write.active;
+      if (Object.prototype.hasOwnProperty.call(write, 'sizeRecommendations') && write.sizeRecommendations == null) {
+        delete write.sizeRecommendations;
+      }
       ({ error: updErr } = await sb.from('products').update(write).eq('id', id));
     }
     if (updErr) throw updErr;
@@ -186,7 +216,8 @@ async function updateProduct(req, res) {
     return json(res, 200, { success: true, product: fresh });
   } catch (err) {
     console.error('Product update failed:', err && err.message);
-    return json(res, 500, { error: 'Could not update product', detail: err && err.message });
+    const status = err && err.status ? err.status : 500;
+    return json(res, status, { error: err && err.message ? err.message : 'Could not update product' });
   }
 }
 

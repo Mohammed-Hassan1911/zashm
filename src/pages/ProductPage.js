@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
+import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
+import { recommendSize } from '../lib/sizeRecommendation';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
@@ -19,6 +20,9 @@ export default function ProductPage() {
   // ستايت التحكم في مودال المخزون ومودال دليل المقاسات
   const [stockModal, setStockModal] = useState({ open: false, message: '' });
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const [sizeRecommenderOpen, setSizeRecommenderOpen] = useState(false);
+  const [recommenderForm, setRecommenderForm] = useState({ height: '', weight: '', fit: 'regular' });
+  const [recommendationResult, setRecommendationResult] = useState(null);
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
@@ -263,14 +267,22 @@ export default function ProductPage() {
 
             {/* Sizes */}
 <div style={{ marginBottom: 28 }}>
-  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
     <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>Size: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
-    <button 
-      onClick={() => setSizeGuideOpen(true)}
-      style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1 }}
-    >
-      Size Guide
-    </button>
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <button 
+        onClick={() => { setSizeRecommenderOpen(true); setRecommendationResult(null); setRecommenderForm({ height: '', weight: '', fit: 'regular' }); }}
+        style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}
+      >
+        <Ruler size={12} /> Find My Size
+      </button>
+      <button 
+        onClick={() => setSizeGuideOpen(true)}
+        style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1 }}
+      >
+        Size Guide
+      </button>
+    </div>
   </div>
   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
     {(p.sizes || []).map(s => {
@@ -554,6 +566,155 @@ export default function ProductPage() {
                     * Note: Measurements may vary by 1-2 cm depending on the luxury cut and style.
                   </p>
                 </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── 3. مودال Smart Size Recommendation ─── */}
+      <AnimatePresence>
+        {sizeRecommenderOpen && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999, padding: 20
+          }} onClick={() => setSizeRecommenderOpen(false)}>
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              transition={{ duration: 0.3 }}
+              style={{
+                background: '#111111', border: '1px solid var(--gold, #c9a84c)', borderRadius: 4,
+                width: '100%', maxWidth: 420, padding: '32px 24px', position: 'relative',
+                boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,168,76,0.1)'
+              }} onClick={e => e.stopPropagation()}
+            >
+              <button onClick={() => setSizeRecommenderOpen(false)}
+                style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: '#888', cursor: 'pointer', zIndex: 10 }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--gold, #c9a84c)'}
+                onMouseLeave={e => e.currentTarget.style.color = '#888'}
+              >
+                <X size={18} />
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, justifyContent: 'center' }}>
+                <Ruler size={20} color="var(--gold)" />
+                <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 22, color: 'white', fontWeight: 400, letterSpacing: 1.5 }}>
+                  FIND MY SIZE
+                </h3>
+              </div>
+              <p style={{ color: 'var(--text3, #888)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 24, textAlign: 'center' }}>
+                Smart Recommendation
+              </p>
+
+              {!recommendationResult ? (
+                <div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Height (cm) *</label>
+                    <input type="number" min="0" value={recommenderForm.height} 
+                      onChange={e => setRecommenderForm(f => ({ ...f, height: e.target.value }))}
+                      placeholder="e.g. 175"
+                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13 }} />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Weight (kg) *</label>
+                    <input type="number" min="0" value={recommenderForm.weight} 
+                      onChange={e => setRecommenderForm(f => ({ ...f, weight: e.target.value }))}
+                      placeholder="e.g. 70"
+                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13 }} />
+                  </div>
+                  <div style={{ marginBottom: 20, opacity: 0.5 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text3)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Fit Preference (Not available)</label>
+                    <select disabled value={recommenderForm.fit}
+                      onChange={e => setRecommenderForm(f => ({ ...f, fit: e.target.value }))}
+                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text3)', fontSize: 13, cursor: 'not-allowed' }}>
+                      <option value="regular">Regular</option>
+                      <option value="slim">Slim</option>
+                      <option value="oversized">Oversized</option>
+                    </select>
+                    <p style={{ fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>Fit adjustments are not configured for this store.</p>
+                  </div>
+                  <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 12 }}
+                    onClick={() => {
+                      const result = recommendSize(p, { 
+                        height: recommenderForm.height, 
+                        weight: recommenderForm.weight,
+                        fit: recommenderForm.fit,
+                        color: selColor
+                      });
+                      setRecommendationResult(result);
+                    }}>
+                    Get Recommendation
+                  </button>
+                  <button onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}
+                    style={{ width: '100%', color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                    View Size Guide Instead
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  {recommendationResult.success ? (
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(39,174,96,0.1)', border: '2px solid #27ae60', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <span style={{ fontSize: 24, fontWeight: 700, color: '#27ae60' }}>{recommendationResult.size}</span>
+                      </div>
+                      <h4 style={{ color: 'white', fontSize: 16, marginBottom: 8, fontFamily: 'var(--font-display)' }}>Recommended Size: {recommendationResult.size}</h4>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6 }}>{recommendationResult.message}</p>
+                      <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
+                        onClick={() => { 
+                          setSelSize(recommendationResult.size); 
+                          setQty(1); 
+                          setSizeRecommenderOpen(false); 
+                          toast.success(`Size ${recommendationResult.size} selected!`);
+                        }}>
+                        Select This Size
+                      </button>
+                      {recommendationResult.alternatives && recommendationResult.alternatives.length > 0 && (
+                        <p style={{ color: 'var(--text3)', fontSize: 11, marginBottom: 10 }}>
+                          Also consider: {recommendationResult.alternatives.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  ) : recommendationResult.reason === 'ambiguous' ? (
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(243,156,18,0.1)', border: '2px solid #f39c12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <AlertTriangle size={28} color="#f39c12" />
+                      </div>
+                      <h4 style={{ color: 'white', fontSize: 16, marginBottom: 8, fontFamily: 'var(--font-display)' }}>Ambiguous Match</h4>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12, lineHeight: 1.6 }}>{recommendationResult.message}</p>
+                      {recommendationResult.matchingSizes && recommendationResult.matchingSizes.length > 0 && (
+                        <p style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 16, fontWeight: 600 }}>
+                          Matching sizes: {recommendationResult.matchingSizes.join(', ')}
+                        </p>
+                      )}
+                      {recommendationResult.showSizeGuide && (
+                        <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
+                          onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}>
+                          View Size Guide
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(243,156,18,0.1)', border: '2px solid #f39c12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <AlertTriangle size={28} color="#f39c12" />
+                      </div>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6 }}>{recommendationResult.message}</p>
+                      {recommendationResult.showSizeGuide && (
+                        <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
+                          onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}>
+                          View Size Guide
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <button onClick={() => setRecommendationResult(null)}
+                    style={{ width: '100%', color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginTop: 8 }}>
+                    Try Again
+                  </button>
+                </div>
               )}
             </motion.div>
           </div>
