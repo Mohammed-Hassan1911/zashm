@@ -90,13 +90,19 @@ export function recommendSize(product, userInput) {
   const sizes = product.sizes || [];
   const recommendations = product.sizeRecommendations || {};
   
-  // Check availability separately from matching (do not let stock prevent identifying likely size)
-  const getStockStatus = (size) => {
-    return isSizeAvailable(product, size, color);
-  };
+  // Get available sizes (respecting selected color if provided)
+  const availableSizes = getAvailableSizes(product, color);
   
-  // Find sizes that have recommendation data
-  const candidatesWithData = sizes.filter(size => {
+  if (availableSizes.length === 0) {
+    return { 
+      success: false, 
+      reason: 'no_stock', 
+      message: 'No sizes are available for this product with the current selection.' 
+    };
+  }
+  
+  // Find sizes that have recommendation data AND are available
+  const candidatesWithData = availableSizes.filter(size => {
     const rec = recommendations[size];
     return rec && 
            typeof rec.heightMin === 'number' && typeof rec.heightMax === 'number' &&
@@ -113,8 +119,10 @@ export function recommendSize(product, userInput) {
     };
   }
   
-  // Score each candidate for perfect match
-  const perfectMatches = [];
+  // Score each candidate
+  // Perfect match = both height and weight in range
+  // Tie-breaking: prefer perfect matches, then if multiple perfect matches pick based on fit preference or first
+  const matches = [];
   
   for (const size of candidatesWithData) {
     const rec = recommendations[size];
@@ -122,109 +130,19 @@ export function recommendSize(product, userInput) {
     const weightOk = w >= rec.weightMin && w <= rec.weightMax;
     
     if (heightOk && weightOk) {
-      perfectMatches.push({ 
+      matches.push({ 
         size, 
-        perfect: true,
-        rec
+        perfect: true, 
+        score: 100,
+        heightOk: true,
+        weightOk: true
       });
     }
+    // We do NOT count partial matches as reliable recommendations per requirements
+    // "do not present a partial match as a high-confidence recommendation"
   }
   
-  // Sort by position in product.sizes array for deterministic ordering
-  const sortBySizeOrder = (a, b) => {
-    const idxA = sizes.indexOf(a.size);
-    const idxB = sizes.indexOf(b.size);
-    if (idxA !== idxB) return idxA - idxB;
-    return 0;
-  };
-  
-  if (perfectMatches.length > 1) {
-    const sortedMatches = [...perfectMatches].sort(sortBySizeOrder);
-    const matchingSizes = sortedMatches.map(m => m.size);
-    // Check if any are in stock
-    const inStockMatches = sortedMatches.filter(m => getStockStatus(m.size));
-    // Still ambiguous overall, but can note stock status
-    return {
-      success: false,
-      reason: 'ambiguous',
-      message: 'Multiple sizes match your measurements. We cannot reliably distinguish between them. Please check the size guide or select based on your preference.',
-      matchingSizes,
-      alternatives: matchingSizes,
-      showSizeGuide: true
-    };
-  } else if (perfectMatches.length === 1) {
-    const matched = perfectMatches[0];
-    const inStock = getStockStatus(matched.size);
-    
-    if (!inStock) {
-      // Find alternative available size
-      const availableSizes = getAvailableSizes(product, color);
-      let alternative = null;
-      if (availableSizes.length > 0) {
-        // Try to find a reasonable alternative
-        alternative = availableSizes[0]; // Simple alternative
-      }
-      
-      return {
-        success: false,
-        reason: 'out_of_stock',
-        size: matched.size,
-        message: `Your recommended size is ${matched.size}, but this size is currently out of stock. We hope to have it available again soon.`,
-        alternative,
-        showSizeGuide: true
-      };
-    }
-    
-    return { 
-      success: true, 
-      size: matched.size, 
-      confidence: 'high',
-      alternatives: [],
-      message: `Based on your measurements, we recommend size ${matched.size}.`
-    };
-  }
-  
-  // No perfect match - look for closest match
-  const heightWeightThreshold = 5; // cm and kg
-  let closestMatches = [];
-  
-  for (const size of candidatesWithData) {
-    const rec = recommendations[size];
-    const heightInRange = h >= rec.heightMin && h <= rec.heightMax;
-    const weightInRange = w >= rec.weightMin && w <= rec.weightMax;
-    const heightDiff = heightInRange 
-      ? 0 
-      : h < rec.heightMin 
-        ? rec.heightMin - h 
-        : h - rec.heightMax;
-    const weightDiff = weightInRange 
-      ? 0 
-      : w < rec.weightMin 
-        ? rec.weightMin - w 
-        : w - rec.weightMax;
-    
-    // Only consider as close match if BOTH are within threshold and at least reasonably close
-    // Also don't do closest match if it's just a partial match (one in range, other outside) per test expectations
-    if (heightInRange && weightInRange) {
-      continue; // should have been caught as perfect match
-    }
-    // For partial matches (only one in range), don't give confident recommendation
-    if ((heightInRange && !weightInRange) || (!heightInRange && weightInRange)) {
-      continue;
-    }
-    // Both outside range but within threshold
-    if (heightDiff <= heightWeightThreshold && weightDiff <= heightWeightThreshold && heightDiff > 0 && weightDiff > 0) {
-      closestMatches.push({
-        size,
-        rec,
-        heightDiff,
-        weightDiff,
-        totalDiff: heightDiff + weightDiff
-      });
-    }
-  }
-  
-  if (closestMatches.length === 0) {
+  if (matches.length === 0) {
     return { 
       success: false, 
       reason: 'out_of_range', 
@@ -233,46 +151,34 @@ export function recommendSize(product, userInput) {
     };
   }
   
-  // Sort by total difference, then prefer larger size if weight is high
-  closestMatches.sort((a, b) => {
-    if (a.totalDiff !== b.totalDiff) return a.totalDiff - b.totalDiff;
-    // If weight suggests larger size might be better
-    if (w > a.rec.weightMax && w <= b.rec.weightMax && b.rec.weightMax >= a.rec.weightMax) {
-      return 1; // prefer b (larger)
-    }
-    if (w > b.rec.weightMax && w <= a.rec.weightMax && a.rec.weightMax >= b.rec.weightMax) {
-      return -1;
-    }
-    return sortBySizeOrder(a, b);
-  });
-  
-  const closest = closestMatches[0];
-  const inStock = getStockStatus(closest.size);
-  
-  if (!inStock) {
-    const availableSizes = getAvailableSizes(product, color);
-    let alternative = null;
-    if (availableSizes.length > 0) {
-      // Try to find reasonable alternative from available
-      alternative = availableSizes[0];
-    }
-    
+  // If multiple sizes match perfectly, we cannot reliably distinguish - return ambiguous result
+  if (matches.length > 1) {
+    // Sort by position in product.sizes array for consistent display
+    const sortedMatches = [...matches].sort((a, b) => {
+      const idxA = sizes.indexOf(a.size);
+      const idxB = sizes.indexOf(b.size);
+      if (idxA !== idxB) return idxA - idxB;
+      return 0;
+    });
+    const matchingSizes = sortedMatches.map(m => m.size);
     return {
       success: false,
-      reason: 'out_of_stock_closest',
-      size: closest.size,
-      message: `Your closest match is ${closest.size}, but this size is currently out of stock. We hope to have it available again soon.`,
-      alternative,
+      reason: 'ambiguous',
+      message: 'Multiple sizes match your measurements. We cannot reliably distinguish between them. Please check the size guide or select based on your preference.',
+      matchingSizes,
+      alternatives: matchingSizes,
       showSizeGuide: true
     };
   }
   
-  return {
-    success: true,
-    size: closest.size,
-    confidence: 'tentative',
-    alternatives: closestMatches.slice(1, 3).map(m => m.size),
-    message: `Your closest match is size ${closest.size} (fit not guaranteed). Please check the size guide for more details.`
+  // Exactly one match
+  const recommended = matches[0].size;
+  return { 
+    success: true, 
+    size: recommended, 
+    confidence: 'high',
+    alternatives: [],
+    message: `Based on your measurements, we recommend size ${recommended}.`
   };
 }
 

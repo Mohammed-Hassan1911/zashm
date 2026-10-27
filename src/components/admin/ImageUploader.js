@@ -57,8 +57,13 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
   const [urlInput, setUrlInput] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [isTouchDragging, setIsTouchDragging] = useState(false);
   const fileRef = useRef();
   const mountedRef = useRef(true);
+  const touchDragIndex = useRef(null);
+  const touchDragImg = useRef(null);
 
   // حارس لمنع أي setState أو callback بعد إغلاق/إزالة الـ component (يمنع الكراش بعد Cancel)
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -97,29 +102,14 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
     onChange(images.filter(i => i !== url));
   };
 
-  const moveImage = (index, direction) => {
+  const reorderImages = useCallback((fromIndex, toIndex) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= images.length || toIndex >= images.length) return;
     const newImages = [...images];
-    const targetIndex = direction === 'left' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= newImages.length) return;
-    [newImages[index], newImages[targetIndex]] = [newImages[targetIndex], newImages[index]];
+    const [moved] = newImages.splice(fromIndex, 1);
+    newImages.splice(toIndex, 0, moved);
     onChange(newImages);
-  };
-
-  const moveImageToStart = (index) => {
-    if (index === 0) return;
-    const newImages = [...images];
-    const [item] = newImages.splice(index, 1);
-    newImages.unshift(item);
-    onChange(newImages);
-  };
-
-  const moveImageToEnd = (index) => {
-    if (index === images.length - 1) return;
-    const newImages = [...images];
-    const [item] = newImages.splice(index, 1);
-    newImages.push(item);
-    onChange(newImages);
-  };
+  }, [images, onChange]);
 
   const handleUrlAdd = () => {
     addImage(urlInput.trim());
@@ -276,54 +266,138 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
 
       {/* IMAGES */}
       {images.length > 0 && (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+            gap: 10
+          }}
+        >
           {images.map((img, idx) => (
-            <div key={img} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 8, background: 'var(--bg3)', borderRadius: 4, border: idx === 0 ? '1px solid var(--gold)' : '1px solid var(--border)' }}>
-              <div style={{ position: 'relative', width: 60, height: 80, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)', flexShrink: 0 }}>
+            <div
+              key={img}
+              draggable
+              onDragStart={(e) => {
+                setDraggedIndex(idx);
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', String(idx)); } catch {}
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverIndex !== idx) setDragOverIndex(idx);
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                if (dragOverIndex !== idx) setDragOverIndex(idx);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const fromIdx = draggedIndex !== null ? draggedIndex : Number(e.dataTransfer.getData('text/plain'));
+                if (Number.isFinite(fromIdx)) {
+                  reorderImages(fromIdx, idx);
+                }
+                setDraggedIndex(null);
+                setDragOverIndex(null);
+              }}
+              onDragEnd={() => {
+                setDraggedIndex(null);
+                setDragOverIndex(null);
+              }}
+              onTouchStart={(e) => {
+                touchDragIndex.current = idx;
+                touchDragImg.current = img;
+                setIsTouchDragging(true);
+                setDraggedIndex(idx);
+              }}
+              onTouchMove={(e) => {
+                if (touchDragIndex.current === null) return;
+                const touch = e.touches[0];
+                const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                if (!target) return;
+                const tile = target.closest('[data-img-tile]');
+                if (tile && tile.dataset.imgTileIndex !== undefined) {
+                  const overIdx = Number(tile.dataset.imgTileIndex);
+                  if (!Number.isNaN(overIdx) && overIdx !== dragOverIndex) {
+                    setDragOverIndex(overIdx);
+                  }
+                }
+              }}
+              onTouchEnd={(e) => {
+                if (touchDragIndex.current !== null && dragOverIndex !== null && dragOverIndex !== touchDragIndex.current) {
+                  reorderImages(touchDragIndex.current, dragOverIndex);
+                }
+                touchDragIndex.current = null;
+                touchDragImg.current = null;
+                setIsTouchDragging(false);
+                setDraggedIndex(null);
+                setDragOverIndex(null);
+              }}
+              data-img-tile
+              data-img-tile-index={idx}
+              style={{
+                cursor: 'grab',
+                transition: 'transform 150ms ease, opacity 150ms ease, box-shadow 150ms ease',
+                transform: draggedIndex === idx ? 'scale(0.98)' : dragOverIndex === idx && draggedIndex !== null && draggedIndex !== idx ? 'translateY(4px)' : 'none',
+                opacity: draggedIndex === idx ? 0.7 : 1,
+                boxShadow: dragOverIndex === idx && draggedIndex !== null && draggedIndex !== idx ? '0 4px 12px rgba(201,168,76,0.25)' : 'none'
+              }}
+            >
+              <div style={{ position: 'relative' }}>
+
                 <img
-                  src={getOptimizedImageUrl(img, { width: 120, height: 160, quality: 70 })}
-                  alt={`Product image ${idx + 1}`}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  src={getOptimizedImageUrl(img, { width: 200, quality: 70 })}
+                  style={{
+                    width: '100%',
+                    aspectRatio: '3/4',
+                    objectFit: 'cover',
+                    userSelect: 'none',
+                    pointerEvents: 'none'
+                  }}
+                  draggable={false}
                 />
+
+                {/* COVER */}
                 {idx === 0 && (
                   <div style={{
                     position: 'absolute',
-                    bottom: 2,
-                    left: 2,
-                    background: 'var(--gold)',
-                    color: '#000',
-                    fontSize: 7,
-                    padding: '1px 3px',
-                    borderRadius: 2,
-                    fontWeight: 600
+                    top: 4,
+                    left: 4,
+                    background: 'gold',
+                    fontSize: 10,
+                    padding: '2px 4px'
                   }}>
-                    PRIMARY
+                    COVER
                   </div>
                 )}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 11, color: 'var(--text2)' }}>Image {idx + 1}</p>
-              </div>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                <button type="button" onClick={() => moveImageToStart(idx)} disabled={idx === 0} aria-label="Move to first" style={{ padding: '4px 6px', fontSize: 9, background: 'var(--bg)', border: '1px solid var(--border)', color: idx === 0 ? 'var(--text3)' : 'var(--text)', borderRadius: 3, cursor: idx === 0 ? 'not-allowed' : 'pointer' }}>« First</button>
-                <button type="button" onClick={() => moveImage(idx, 'left')} disabled={idx === 0} aria-label="Move left" style={{ padding: '4px 6px', fontSize: 9, background: 'var(--bg)', border: '1px solid var(--border)', color: idx === 0 ? 'var(--text3)' : 'var(--text)', borderRadius: 3, cursor: idx === 0 ? 'not-allowed' : 'pointer' }}>← Left</button>
-                <button type="button" onClick={() => moveImage(idx, 'right')} disabled={idx === images.length - 1} aria-label="Move right" style={{ padding: '4px 6px', fontSize: 9, background: 'var(--bg)', border: '1px solid var(--border)', color: idx === images.length - 1 ? 'var(--text3)' : 'var(--text)', borderRadius: 3, cursor: idx === images.length - 1 ? 'not-allowed' : 'pointer' }}>Right →</button>
-                <button type="button" onClick={() => moveImageToEnd(idx)} disabled={idx === images.length - 1} aria-label="Move to last" style={{ padding: '4px 6px', fontSize: 9, background: 'var(--bg)', border: '1px solid var(--border)', color: idx === images.length - 1 ? 'var(--text3)' : 'var(--text)', borderRadius: 3, cursor: idx === images.length - 1 ? 'not-allowed' : 'pointer' }}>Last »</button>
+
+                {/* DELETE */}
                 <button
                   type="button"
-                  onClick={() => removeImage(img)}
+                  onClick={(e) => { e.stopPropagation(); removeImage(img); }}
                   aria-label={`Delete image ${idx + 1}`}
                   style={{
-                    padding: '4px 8px',
-                    fontSize: 9,
-                    background: 'rgba(192,57,43,0.1)',
-                    color: '#e74c3c',
-                    border: '1px solid rgba(192,57,43,0.3)',
-                    borderRadius: 3,
-                    cursor: 'pointer'
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    zIndex: 10,
+                    width: 32,
+                    height: 32,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.6)',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.35)',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                    padding: 0,
+                    WebkitTapHighlightColor: 'transparent',
+                    touchAction: 'manipulation'
                   }}
                 >
-                  Remove
+                  <X size={16} />
                 </button>
               </div>
             </div>

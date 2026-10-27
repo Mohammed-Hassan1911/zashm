@@ -268,32 +268,6 @@ div[role="status"] svg {
 
 @media (max-width: 768px) {
   .product-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
-  .shop-sidebar { display: none !important; }
-  .shop-categories-horizontal { display: flex !important; }
-}
-
-.shop-layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 24px;
-}
-.shop-sidebar {
-  display: none;
-}
-.shop-categories-horizontal {
-  display: flex;
-}
-@media (min-width: 1024px) {
-  .shop-layout {
-    grid-template-columns: 260px 1fr;
-    gap: 32px;
-  }
-  .shop-sidebar {
-    display: flex;
-  }
-  .shop-categories-horizontal {
-    display: flex;
-  }
 }
 
 @media (max-width: 768px) {
