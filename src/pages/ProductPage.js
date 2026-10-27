@@ -7,10 +7,68 @@ import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
 import { recommendSize } from '../lib/sizeRecommendation';
 
+const SIZE_I18N = {
+  ar: {
+    findMySize: 'ابحث عن مقاسي',
+    smartRecommendation: 'توصية ذكية',
+    height: 'الطول (سم)',
+    weight: 'الوزن (كجم)',
+    getRecommendation: 'احصل على التوصية',
+    viewSizeGuide: 'عرض دليل المقاسات',
+    recommendedSize: 'المقاس المناسب',
+    selectThisSize: 'اختيار هذا المقاس',
+    alsoConsider: 'يمكنك أيضاً النظر في:',
+    ambiguousMatch: 'تطابق غامض',
+    ambiguousDesc: 'تطابق قياساتك مع أكثر من مقاس. لا يمكن التمييز بينهم بشكل دقيق.',
+    matchingSizes: 'المقاسات المطابقة:',
+    viewSizeGuideBtn: 'عرض دليل المقاسات',
+    outOfStock: 'غير متوفر',
+    tryAgain: 'حاول مرة أخرى',
+    backToProducts: 'العودة للمنتجات',
+    home: 'الرئيسية',
+    shop: 'المتجر',
+    size: 'المقاس',
+    color: 'اللون',
+    addToBag: 'أضف إلى السلة',
+    outOfStockBtn: 'نفذ المخزون',
+    findMySizeBtn: 'ابحث عن مقاسي',
+    sizeGuideBtn: 'دليل المقاسات'
+  },
+  en: {
+    findMySize: 'FIND MY SIZE',
+    smartRecommendation: 'SMART RECOMMENDATION',
+    height: 'Height (cm)',
+    weight: 'Weight (kg)',
+    getRecommendation: 'Get Recommendation',
+    viewSizeGuide: 'View Size Guide Instead',
+    recommendedSize: 'Recommended Size',
+    selectThisSize: 'Select This Size',
+    alsoConsider: 'Also consider:',
+    ambiguousMatch: 'Ambiguous Match',
+    ambiguousDesc: 'Multiple sizes match your measurements. We cannot reliably distinguish between them.',
+    matchingSizes: 'Matching sizes:',
+    viewSizeGuideBtn: 'View Size Guide',
+    outOfStock: 'Out of Stock',
+    tryAgain: 'Try Again',
+    backToProducts: 'Back to Products',
+    home: 'Home',
+    shop: 'Shop',
+    size: 'Size',
+    color: 'Color',
+    addToBag: 'ADD TO BAG',
+    outOfStockBtn: 'OUT OF STOCK',
+    findMySizeBtn: 'Find My Size',
+    sizeGuideBtn: 'Size Guide'
+  }
+};
+
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
 export default function ProductPage() {
-  const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed, language } = useStore();
+  const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed } = useStore();
+  const lang = typeof localStorage !== 'undefined' ? (localStorage.getItem('zashm_lang') || 'ar') : 'ar';
+  const t = SIZE_I18N[lang] || SIZE_I18N.ar;
+  const isAr = lang === 'ar';
   const [selSize, setSelSize] = useState('');
   const [selColor, setSelColor] = useState('');
   const [qty, setQty] = useState(1);
@@ -89,7 +147,7 @@ export default function ProductPage() {
   if (!p) return (
     <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>
       <p style={{ color: 'var(--text2)' }}>No product selected.</p>
-      <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>Back to Shop</button>
+      <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>{isAr ? 'العودة للمتجر' : 'Back to Shop'}</button>
     </div>
   );
 
@@ -157,15 +215,15 @@ export default function ProductPage() {
               touchAction: 'manipulation'
             }}
           >
-            <ChevronLeft size={15} /> Back to Products
+            <ChevronLeft size={15} /> {t.backToProducts}
           </motion.button>
         </div>
         {/* Breadcrumb */}
         <motion.div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-          <button onClick={() => setPage('home')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>Home</button>
+          <button onClick={() => setPage('home')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>{t.home}</button>
           <span style={{ color: 'var(--text3)' }}>/</span>
-          <button onClick={() => setPage('shop')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>Shop</button>
+          <button onClick={() => setPage('shop')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>{t.shop}</button>
           <span style={{ color: 'var(--text3)' }}>/</span>
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>{p.name}</span>
         </motion.div>
@@ -250,7 +308,7 @@ export default function ProductPage() {
 
             {/* Colors */}
             <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>Color: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
+              <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>{t.color}: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(p.colors || []).map(c => {
                   const isColorOOS = hasVariantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
@@ -268,19 +326,19 @@ export default function ProductPage() {
             {/* Sizes */}
 <div style={{ marginBottom: 28 }}>
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-    <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>Size: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
+    <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>{t.size}: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
       <button 
         onClick={() => { setSizeRecommenderOpen(true); setRecommendationResult(null); setRecommenderForm({ height: '', weight: '', fit: 'regular' }); }}
         style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}
       >
-        <Ruler size={12} /> Find My Size
+        <Ruler size={12} /> {t.findMySizeBtn}
       </button>
       <button 
         onClick={() => setSizeGuideOpen(true)}
         style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1 }}
       >
-        Size Guide
+        {t.sizeGuideBtn}
       </button>
     </div>
   </div>
@@ -340,7 +398,7 @@ export default function ProductPage() {
                 disabled={isOutOfStock}
                 whileTap={isOutOfStock ? {} : { scale: 0.98 }}
               >
-                <ShoppingBag size={16} /> {isOutOfStock ? 'OUT OF STOCK' : 'ADD TO BAG'}
+                <ShoppingBag size={16} /> {isOutOfStock ? t.outOfStockBtn : t.addToBag}
               </motion.button>
 
               <motion.button
@@ -599,42 +657,42 @@ export default function ProductPage() {
                 <X size={18} />
               </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, justifyContent: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, justifyContent: 'center', direction: isAr ? 'rtl' : 'ltr' }}>
                 <Ruler size={20} color="var(--gold)" />
-                <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 22, color: 'white', fontWeight: 400, letterSpacing: 1.5 }}>
-                  FIND MY SIZE
+                <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 22, color: 'white', fontWeight: 400, letterSpacing: 1.5, margin: 0 }}>
+                  {t.findMySize}
                 </h3>
               </div>
-              <p style={{ color: 'var(--text3, #888)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 24, textAlign: 'center' }}>
-                Smart Recommendation
+              <p style={{ color: 'var(--text3, #888)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 24, textAlign: 'center', direction: isAr ? 'rtl' : 'ltr' }}>
+                {t.smartRecommendation}
               </p>
 
               {!recommendationResult ? (
-                <div>
+                <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
                   <div style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Height (cm) *</label>
+                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5, textAlign: isAr ? 'right' : 'left' }}>{t.height} *</label>
                     <input type="number" min="0" value={recommenderForm.height} 
                       onChange={e => setRecommenderForm(f => ({ ...f, height: e.target.value }))}
-                      placeholder="e.g. 175"
-                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13 }} />
+                      placeholder={isAr ? 'مثال: 175' : 'e.g. 175'}
+                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13, direction: 'ltr', textAlign: isAr ? 'right' : 'left' }} />
                   </div>
                   <div style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Weight (kg) *</label>
+                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5, textAlign: isAr ? 'right' : 'left' }}>{t.weight} *</label>
                     <input type="number" min="0" value={recommenderForm.weight} 
                       onChange={e => setRecommenderForm(f => ({ ...f, weight: e.target.value }))}
-                      placeholder="e.g. 70"
-                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13 }} />
+                      placeholder={isAr ? 'مثال: 70' : 'e.g. 70'}
+                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13, direction: 'ltr', textAlign: isAr ? 'right' : 'left' }} />
                   </div>
                   <div style={{ marginBottom: 20, opacity: 0.5 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text3)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Fit Preference (Not available)</label>
+                    <label style={{ fontSize: 11, color: 'var(--text3)', display: 'block', marginBottom: 6, letterSpacing: 0.5, textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'تفضيل المقاس (غير متاح)' : 'Fit Preference (Not available)'}</label>
                     <select disabled value={recommenderForm.fit}
                       onChange={e => setRecommenderForm(f => ({ ...f, fit: e.target.value }))}
-                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text3)', fontSize: 13, cursor: 'not-allowed' }}>
+                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text3)', fontSize: 13, cursor: 'not-allowed', direction: isAr ? 'rtl' : 'ltr' }}>
                       <option value="regular">Regular</option>
                       <option value="slim">Slim</option>
                       <option value="oversized">Oversized</option>
                     </select>
-                    <p style={{ fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>Fit adjustments are not configured for this store.</p>
+                    <p style={{ fontSize: 9, color: 'var(--text3)', marginTop: 4, textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'تعديلات المقاس غير مكونة في هذا المتجر.' : 'Fit adjustments are not configured for this store.'}</p>
                   </div>
                   <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 12 }}
                     onClick={() => {
@@ -643,39 +701,39 @@ export default function ProductPage() {
                         weight: recommenderForm.weight,
                         fit: recommenderForm.fit,
                         color: selColor,
-                        lang: language
+                        lang: lang
                       });
                       setRecommendationResult(result);
                     }}>
-                    Get Recommendation
+                    {t.getRecommendation}
                   </button>
                   <button onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}
                     style={{ width: '100%', color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                    View Size Guide Instead
+                    {t.viewSizeGuide}
                   </button>
                 </div>
               ) : (
-                <div>
+                <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
                   {recommendationResult.success ? (
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ width: 60, height: 60, borderRadius: '50%', background: recommendationResult.inStock === false ? 'rgba(243,156,18,0.1)' : 'rgba(39,174,96,0.1)', border: `2px solid ${recommendationResult.inStock === false ? '#f39c12' : '#27ae60'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                        <span style={{ fontSize: 24, fontWeight: 700, color: recommendationResult.inStock === false ? '#f39c12' : '#27ae60' }}>{recommendationResult.size}</span>
+                        <span style={{ fontSize: 24, fontWeight: 700, color: recommendationResult.inStock === false ? '#f39c12' : '#27ae60', direction: 'ltr', unicodeBidi: 'isolate' }}>{recommendationResult.size}</span>
                       </div>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{recommendationResult.message}</p>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.8, whiteSpace: 'pre-line', textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr', unicodeBidi: 'plaintext' }}>{recommendationResult.message}</p>
                       {recommendationResult.inStock !== false && (
                         <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
                           onClick={() => { 
                             setSelSize(recommendationResult.size); 
                             setQty(1); 
                             setSizeRecommenderOpen(false); 
-                            toast.success(language === 'ar' ? `تم اختيار المقاس ${recommendationResult.size}!` : `Size ${recommendationResult.size} selected!`);
+                            toast.success(isAr ? `تم اختيار المقاس ${recommendationResult.size}!` : `Size ${recommendationResult.size} selected!`);
                           }}>
-                          {language === 'ar' ? 'اختيار هذا المقاس' : 'Select This Size'}
+                          {t.selectThisSize}
                         </button>
                       )}
                       {recommendationResult.alternatives && recommendationResult.alternatives.length > 0 && (
-                        <p style={{ color: 'var(--text3)', fontSize: 11, marginBottom: 10 }}>
-                          {language === 'ar' ? 'يمكنك أيضاً النظر في:' : 'Also consider:'} {recommendationResult.alternatives.join(', ')}
+                        <p style={{ color: 'var(--text3)', fontSize: 11, marginBottom: 10, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
+                          {t.alsoConsider} <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>{recommendationResult.alternatives.join(', ')}</span>
                         </p>
                       )}
                     </div>
@@ -684,17 +742,17 @@ export default function ProductPage() {
                       <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(243,156,18,0.1)', border: '2px solid #f39c12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                         <AlertTriangle size={28} color="#f39c12" />
                       </div>
-                      <h4 style={{ color: 'white', fontSize: 16, marginBottom: 8, fontFamily: 'var(--font-display)' }}>Ambiguous Match</h4>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12, lineHeight: 1.6 }}>{recommendationResult.message}</p>
+                      <h4 style={{ color: 'white', fontSize: 16, marginBottom: 8, fontFamily: 'var(--font-display)' }}>{t.ambiguousMatch}</h4>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12, lineHeight: 1.6, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr', unicodeBidi: 'plaintext' }}>{recommendationResult.message || t.ambiguousDesc}</p>
                       {recommendationResult.matchingSizes && recommendationResult.matchingSizes.length > 0 && (
-                        <p style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 16, fontWeight: 600 }}>
-                          Matching sizes: {recommendationResult.matchingSizes.join(', ')}
+                        <p style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 16, fontWeight: 600, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
+                          {t.matchingSizes} <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>{recommendationResult.matchingSizes.join(', ')}</span>
                         </p>
                       )}
                       {recommendationResult.showSizeGuide && (
                         <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
                           onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}>
-                          View Size Guide
+                          {t.viewSizeGuideBtn}
                         </button>
                       )}
                     </div>
@@ -703,18 +761,18 @@ export default function ProductPage() {
                       <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(243,156,18,0.1)', border: '2px solid #f39c12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                         <AlertTriangle size={28} color="#f39c12" />
                       </div>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6 }}>{recommendationResult.message}</p>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr', unicodeBidi: 'plaintext' }}>{recommendationResult.message}</p>
                       {recommendationResult.showSizeGuide && (
                         <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
                           onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}>
-                          View Size Guide
+                          {t.viewSizeGuideBtn}
                         </button>
                       )}
                     </div>
                   )}
                   <button onClick={() => setRecommendationResult(null)}
                     style={{ width: '100%', color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginTop: 8 }}>
-                    Try Again
+                    {t.tryAgain}
                   </button>
                 </div>
               )}
