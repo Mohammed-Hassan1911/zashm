@@ -10,7 +10,7 @@ import { recommendSize } from '../lib/sizeRecommendation';
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
 export default function ProductPage() {
-  const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed } = useStore();
+  const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed, language } = useStore();
   const [selSize, setSelSize] = useState('');
   const [selColor, setSelColor] = useState('');
   const [qty, setQty] = useState(1);
@@ -642,7 +642,8 @@ export default function ProductPage() {
                         height: recommenderForm.height, 
                         weight: recommenderForm.weight,
                         fit: recommenderForm.fit,
-                        color: selColor
+                        color: selColor,
+                        lang: language
                       });
                       setRecommendationResult(result);
                     }}>
@@ -657,23 +658,24 @@ export default function ProductPage() {
                 <div>
                   {recommendationResult.success ? (
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(39,174,96,0.1)', border: '2px solid #27ae60', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                        <span style={{ fontSize: 24, fontWeight: 700, color: '#27ae60' }}>{recommendationResult.size}</span>
+                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: recommendationResult.inStock === false ? 'rgba(243,156,18,0.1)' : 'rgba(39,174,96,0.1)', border: `2px solid ${recommendationResult.inStock === false ? '#f39c12' : '#27ae60'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <span style={{ fontSize: 24, fontWeight: 700, color: recommendationResult.inStock === false ? '#f39c12' : '#27ae60' }}>{recommendationResult.size}</span>
                       </div>
-                      <h4 style={{ color: 'white', fontSize: 16, marginBottom: 8, fontFamily: 'var(--font-display)' }}>Recommended Size: {recommendationResult.size}</h4>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6 }}>{recommendationResult.message}</p>
-                      <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
-                        onClick={() => { 
-                          setSelSize(recommendationResult.size); 
-                          setQty(1); 
-                          setSizeRecommenderOpen(false); 
-                          toast.success(`Size ${recommendationResult.size} selected!`);
-                        }}>
-                        Select This Size
-                      </button>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{recommendationResult.message}</p>
+                      {recommendationResult.inStock !== false && (
+                        <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
+                          onClick={() => { 
+                            setSelSize(recommendationResult.size); 
+                            setQty(1); 
+                            setSizeRecommenderOpen(false); 
+                            toast.success(language === 'ar' ? `تم اختيار المقاس ${recommendationResult.size}!` : `Size ${recommendationResult.size} selected!`);
+                          }}>
+                          {language === 'ar' ? 'اختيار هذا المقاس' : 'Select This Size'}
+                        </button>
+                      )}
                       {recommendationResult.alternatives && recommendationResult.alternatives.length > 0 && (
                         <p style={{ color: 'var(--text3)', fontSize: 11, marginBottom: 10 }}>
-                          Also consider: {recommendationResult.alternatives.join(', ')}
+                          {language === 'ar' ? 'يمكنك أيضاً النظر في:' : 'Also consider:'} {recommendationResult.alternatives.join(', ')}
                         </p>
                       )}
                     </div>

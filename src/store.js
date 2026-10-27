@@ -676,6 +676,13 @@ export const useStore = create((set, get) => ({
   // Global UI States
   currentPage: 'home',
   setPage: (p) => set({ currentPage: p }),
+  language: (typeof localStorage !== 'undefined' && localStorage.getItem('zashm_lang')) || 'ar',
+  setLanguage: (lang) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('zashm_lang', lang);
+    }
+    set({ language: lang });
+  },
   selectedProduct: null,
   setSelectedProduct: (p) => set({ selectedProduct: p }),
   adminPage: 'dashboard',

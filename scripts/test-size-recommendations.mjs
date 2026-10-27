@@ -68,7 +68,7 @@ console.log('=== Size Recommendations Tests ===\n');
   };
   const res = recommendSize(product, { height: 177, weight: 65, color: 'Black' }); // height ok, weight low
   assert('partial match not recommended', res.success === false);
-  assert('no confident recommendation message', /confident|size guide/i.test(res.message));
+  assert('no confident recommendation message', /confident|size guide|خارج نطاق|راجع/i.test(res.message));
 }
 
 // 4. Invalid user measurements
@@ -97,7 +97,8 @@ console.log('=== Size Recommendations Tests ===\n');
     variantStock: { 'M-Black': 5 },
     sizeRecommendations: {}
   };
-  assert('no recommendations configured', recommendSize(product1, { height: 177, weight: 72 }).success === false && /not configured|size guide/i.test(recommendSize(product1, { height: 177, weight: 72 }).message));
+  const res1b = recommendSize(product1, { height: 177, weight: 72 });
+  assert('no recommendations configured', res1b.success === false && /not configured|size guide|لم يتم إعداد/i.test(res1b.message));
   
   const product2 = {
     sizes: ['M'],
@@ -135,7 +136,8 @@ console.log('=== Size Recommendations Tests ===\n');
       M: { heightMin: 175, heightMax: 180, weightMin: 70, weightMax: 75 }
     }
   };
-  assert('out of stock not recommended', recommendSize(product, { height: 177, weight: 72 }).success === false);
+  const res = recommendSize(product, { height: 177, weight: 72 });
+  assert('out of stock reported but size identified', res.success === true && res.size === 'M' && res.inStock === false);
 }
 
 // 8. Selected-color stock checks
@@ -149,7 +151,8 @@ console.log('=== Size Recommendations Tests ===\n');
       M: { heightMin: 175, heightMax: 180, weightMin: 70, weightMax: 75 }
     }
   };
-  assert('selected color Black unavailable', recommendSize(product, { height: 177, weight: 72, color: 'Black' }).success === false);
+  const resBlack = recommendSize(product, { height: 177, weight: 72, color: 'Black' });
+  assert('selected color Black unavailable', resBlack.success === true && resBlack.inStock === false);
   assert('selected color White available', recommendSize(product, { height: 177, weight: 72, color: 'White' }).success === true);
 }
 
@@ -188,7 +191,8 @@ console.log('=== Size Recommendations Tests ===\n');
       M: { heightMin: 175, heightMax: 180, weightMin: 70, weightMax: 75 }
     }
   };
-  assert('legacy stock zero not recommended', recommendSize(product2, { height: 177, weight: 72 }).success === false);
+  const res2 = recommendSize(product2, { height: 177, weight: 72 });
+  assert('legacy stock zero reported as unavailable', res2.success === true && res2.inStock === false);
 }
 
 // 11. isSizeAvailable

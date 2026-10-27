@@ -2,6 +2,48 @@
 // Product-specific size recommendations based on height/weight
 // Never invents missing data, never recommends unavailable sizes
 
+const MESSAGES = {
+  ar: {
+    invalid_input: 'يرجى إدخال قيم صحيحة للطول والوزن.',
+    sanity_range: 'يرجى إدخال قيم معقولة للطول (سم) والوزن (كجم).',
+    no_product: 'معلومات المنتج غير متاحة.',
+    no_stock: 'لا توجد مقاسات متاحة لهذا المنتج بالاختيار الحالي.',
+    no_data: 'لم يتم إعداد توصيات المقاسات لهذا المنتج. يرجى استخدام دليل المقاسات.',
+    no_data_suffix: 'يرجى استخدام دليل المقاسات.',
+    recommended_direct: (size) => `مقاسك المناسب هو ${size} 🎯`,
+    recommended_direct_with_unavailable: (size) => `مقاسك المناسب هو ${size} 🎯\nللأسف، المقاس ${size} غير متوفر حاليًا. تابعنا لمعرفة موعد توفره مرة تانية.`,
+    closest: (size) => `أقرب مقاس لبياناتك هو ${size}. يُرجى مراجعة دليل المقاسات للتأكد.`,
+    out_of_range: 'بياناتك خارج نطاق المقاسات المتاحة. يُرجى مراجعة دليل المقاسات لاختيار الأنسب.',
+    ambiguous: 'تطابق قياساتك مع أكثر من مقاس. لا يمكن التمييز بينهم بشكل دقيق. يرجى مراجعة دليل المقاسات أو الاختيار حسب تفضيلك.',
+    try_again: 'حاول مرة أخرى'
+  },
+  en: {
+    invalid_input: 'Please enter valid height and weight values.',
+    sanity_range: 'Please enter reasonable height (cm) and weight (kg) values.',
+    no_product: 'Product information not available.',
+    no_stock: 'No sizes are available for this product with the current selection.',
+    no_data: 'Size recommendations are not configured for this product. Please use the size guide.',
+    no_data_suffix: 'Please use the size guide.',
+    recommended_direct: (size) => `Your recommended size is ${size} 🎯`,
+    recommended_direct_with_unavailable: (size) => `Your recommended size is ${size} 🎯\nUnfortunately, size ${size} is currently unavailable. Check back for availability updates.`,
+    closest: (size) => `The closest size to your measurements is ${size}. Please check the size guide to confirm.`,
+    out_of_range: 'Your measurements fall outside the available size ranges. Please check the size guide to find the best fit.',
+    ambiguous: 'Multiple sizes match your measurements. We cannot reliably distinguish between them. Please check the size guide or select based on your preference.',
+    try_again: 'Try Again'
+  }
+};
+
+function getLang(userInput) {
+  const lang = userInput?.lang || userInput?.language;
+  if (lang === 'ar' || lang === 'arabic') return 'ar';
+  if (lang === 'en' || lang === 'english') return 'en';
+  if (typeof localStorage !== 'undefined') {
+    const stored = localStorage.getItem('zashm_lang');
+    if (stored === 'ar' || stored === 'en') return stored;
+  }
+  return 'ar';
+}
+
 /**
  * Check if a specific size is available (has stock in at least one color)
  * @param {Object} product 
@@ -52,17 +94,19 @@ export function getAvailableSizes(product, selectedColor = null) {
 /**
  * Recommend size based on height, weight, and product configuration
  * @param {Object} product 
- * @param {Object} userInput - { height: number (cm), weight: number (kg), fit?: 'slim'|'regular'|'oversized', color?: string }
+ * @param {Object} userInput - { height: number (cm), weight: number (kg), fit?: 'slim'|'regular'|'oversized', color?: string, lang?: 'ar'|'en' }
  * @returns {Object} recommendation result
  */
 export function recommendSize(product, userInput) {
   const { height, weight, fit = 'regular', color = null } = userInput || {};
+  const lang = getLang(userInput);
+  const t = MESSAGES[lang];
   
   if (!product) {
     return { 
       success: false, 
       reason: 'no_product', 
-      message: 'Product information not available.' 
+      message: t.no_product 
     };
   }
   
@@ -74,7 +118,7 @@ export function recommendSize(product, userInput) {
     return { 
       success: false, 
       reason: 'invalid_input', 
-      message: 'Please enter valid height and weight values.' 
+      message: t.invalid_input 
     };
   }
   
@@ -83,26 +127,15 @@ export function recommendSize(product, userInput) {
     return { 
       success: false, 
       reason: 'invalid_input', 
-      message: 'Please enter reasonable height (cm) and weight (kg) values.' 
+      message: t.sanity_range 
     };
   }
   
   const sizes = product.sizes || [];
   const recommendations = product.sizeRecommendations || {};
   
-  // Get available sizes (respecting selected color if provided)
-  const availableSizes = getAvailableSizes(product, color);
-  
-  if (availableSizes.length === 0) {
-    return { 
-      success: false, 
-      reason: 'no_stock', 
-      message: 'No sizes are available for this product with the current selection.' 
-    };
-  }
-  
-  // Find sizes that have recommendation data AND are available
-  const candidatesWithData = availableSizes.filter(size => {
+  // Find sizes that have recommendation data (check all sizes with data, not just available ones)
+  const candidatesWithData = sizes.filter(size => {
     const rec = recommendations[size];
     return rec && 
            typeof rec.heightMin === 'number' && typeof rec.heightMax === 'number' &&
@@ -114,15 +147,21 @@ export function recommendSize(product, userInput) {
     return { 
       success: false, 
       reason: 'no_data', 
-      message: 'Size recommendations are not configured for this product. Please use the size guide.',
+      message: t.no_data,
       showSizeGuide: true
     };
   }
   
-  // Score each candidate
-  // Perfect match = both height and weight in range
-  // Tie-breaking: prefer perfect matches, then if multiple perfect matches pick based on fit preference or first
-  const matches = [];
+  // Sort by position in product.sizes array for consistent display
+  const sortBySizeOrder = (a, b) => {
+    const idxA = sizes.indexOf(a.size);
+    const idxB = sizes.indexOf(b.size);
+    if (idxA !== idxB) return idxA - idxB;
+    return 0;
+  };
+  
+  // Score each candidate for perfect match (both height and weight in range)
+  const perfectMatches = [];
   
   for (const size of candidatesWithData) {
     const rec = recommendations[size];
@@ -130,55 +169,122 @@ export function recommendSize(product, userInput) {
     const weightOk = w >= rec.weightMin && w <= rec.weightMax;
     
     if (heightOk && weightOk) {
-      matches.push({ 
+      perfectMatches.push({ 
         size, 
-        perfect: true, 
-        score: 100,
-        heightOk: true,
-        weightOk: true
+        perfect: true,
+        rec
       });
     }
-    // We do NOT count partial matches as reliable recommendations per requirements
-    // "do not present a partial match as a high-confidence recommendation"
   }
   
-  if (matches.length === 0) {
-    return { 
-      success: false, 
-      reason: 'out_of_range', 
-      message: 'Your measurements fall outside the configured ranges for available sizes. A confident recommendation cannot be made. Please check the size guide.',
-      showSizeGuide: true
-    };
-  }
-  
-  // If multiple sizes match perfectly, we cannot reliably distinguish - return ambiguous result
-  if (matches.length > 1) {
-    // Sort by position in product.sizes array for consistent display
-    const sortedMatches = [...matches].sort((a, b) => {
-      const idxA = sizes.indexOf(a.size);
-      const idxB = sizes.indexOf(b.size);
-      if (idxA !== idxB) return idxA - idxB;
-      return 0;
-    });
+  if (perfectMatches.length > 1) {
+    const sortedMatches = [...perfectMatches].sort(sortBySizeOrder);
     const matchingSizes = sortedMatches.map(m => m.size);
     return {
       success: false,
       reason: 'ambiguous',
-      message: 'Multiple sizes match your measurements. We cannot reliably distinguish between them. Please check the size guide or select based on your preference.',
+      message: t.ambiguous,
       matchingSizes,
       alternatives: matchingSizes,
       showSizeGuide: true
     };
+  } else if (perfectMatches.length === 1) {
+    const matched = perfectMatches[0];
+    const inStock = isSizeAvailable(product, matched.size, color);
+    
+    if (!inStock) {
+      return {
+        success: true,
+        size: matched.size,
+        confidence: 'high',
+        inStock: false,
+        alternatives: [],
+        message: t.recommended_direct_with_unavailable(matched.size)
+      };
+    }
+    
+    return { 
+      success: true, 
+      size: matched.size, 
+      confidence: 'high',
+      inStock: true,
+      alternatives: [],
+      message: t.recommended_direct(matched.size)
+    };
   }
   
-  // Exactly one match
-  const recommended = matches[0].size;
-  return { 
-    success: true, 
-    size: recommended, 
-    confidence: 'high',
-    alternatives: [],
-    message: `Based on your measurements, we recommend size ${recommended}.`
+  // No perfect match - look for closest match (within 5cm / 5kg)
+  const heightWeightThreshold = 5;
+  let closestMatches = [];
+  
+  for (const size of candidatesWithData) {
+    const rec = recommendations[size];
+    const heightInRange = h >= rec.heightMin && h <= rec.heightMax;
+    const weightInRange = w >= rec.weightMin && w <= rec.weightMax;
+    
+    // Skip partial matches - need to evaluate both
+    const heightDiff = heightInRange 
+      ? 0 
+      : h < rec.heightMin 
+        ? rec.heightMin - h 
+        : h - rec.heightMax;
+    const weightDiff = weightInRange 
+      ? 0 
+      : w < rec.weightMin 
+        ? rec.weightMin - w 
+        : w - rec.weightMax;
+    
+    // Only consider if both are outside but within threshold
+    if (!heightInRange && !weightInRange && heightDiff <= heightWeightThreshold && weightDiff <= heightWeightThreshold && heightDiff >= 0 && weightDiff >= 0) {
+      closestMatches.push({
+        size,
+        rec,
+        heightDiff,
+        weightDiff,
+        totalDiff: heightDiff + weightDiff
+      });
+    } else if (heightInRange && weightInRange) {
+      continue;
+    }
+    // Partial match (one in range, other out) - don't give confident recommendation per requirements
+  }
+  
+  if (closestMatches.length === 0) {
+    return { 
+      success: false, 
+      reason: 'out_of_range', 
+      message: t.out_of_range,
+      showSizeGuide: true
+    };
+  }
+  
+  // Sort by total difference
+  closestMatches.sort((a, b) => {
+    if (a.totalDiff !== b.totalDiff) return a.totalDiff - b.totalDiff;
+    return sortBySizeOrder(a, b);
+  });
+  
+  const closest = closestMatches[0];
+  const inStock = isSizeAvailable(product, closest.size, color);
+  
+  if (!inStock) {
+    return {
+      success: true,
+      size: closest.size,
+      confidence: 'closest',
+      inStock: false,
+      alternatives: closestMatches.slice(1, 3).map(m => m.size),
+      message: `${t.closest(closest.size)}\n${t.recommended_direct_with_unavailable(closest.size).split('\n')[1]}`
+    };
+  }
+  
+  return {
+    success: true,
+    size: closest.size,
+    confidence: 'closest',
+    inStock: true,
+    alternatives: closestMatches.slice(1, 3).map(m => m.size),
+    message: t.closest(closest.size)
   };
 }
 
