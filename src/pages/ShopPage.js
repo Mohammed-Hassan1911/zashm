@@ -279,45 +279,113 @@ export default function ShopPage() {
           padding: '0 24px'
         }}
       >
-        {/* MAIN FILTER BAR */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 12,
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            padding: '24px 0',
-            borderBottom: '1px solid var(--border)'
-          }}
-        >
-          {/* CATEGORIES */}
-          <div
+        {/* MOBILE CATEGORY DRAWER TOGGLE */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '16px 0 0 0' }}>
+          <button
+            type="button"
+            onClick={() => setFilterOpen((open) => !open)}
             style={{
               display: 'flex',
+              alignItems: 'center',
               gap: 8,
-              flexWrap: 'wrap',
-              flex: '1 1 300px'
+              padding: '10px 14px',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              color: 'var(--text2)',
+              cursor: 'pointer',
+              borderRadius: 3,
+              fontSize: 11,
+              letterSpacing: 1,
+              textTransform: 'uppercase'
             }}
           >
-            {categories.map((category) => {
-              const selected =
-                normalize(filterCategory || 'ALL') === normalize(category);
+            <SlidersHorizontal size={14} />
+            {filterOpen ? 'Hide Filters' : 'Categories & Filters'}
+          </button>
+        </div>
 
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setFilterCategory(category)}
-                  style={filterButtonStyle(selected)}
-                >
-                  {category}
-                </button>
-              );
-            })}
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 32, alignItems: 'start', paddingTop: 24 }} className="shop-layout">
+          {/* DESKTOP SIDEBAR - CATEGORIES */}
+          <aside
+            className="shop-sidebar"
+            style={{
+              flexDirection: 'column',
+              gap: 16,
+              position: 'sticky',
+              top: 100
+            }}
+          >
+            <div>
+              <p style={{ fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 12 }}>Categories</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {categories.map((category) => {
+                  const selected = normalize(filterCategory || 'ALL') === normalize(category);
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setFilterCategory(category)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '8px 0',
+                        background: 'transparent',
+                        border: 'none',
+                        color: selected ? 'var(--gold)' : 'var(--text2)',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        borderBottom: selected ? '1px solid var(--gold)' : '1px solid transparent'
+                      }}
+                    >
+                      {category === 'ALL' ? 'All Products' : category}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
 
-          {/* FILTER TOGGLE */}
+          <div>
+            {/* MAIN FILTER BAR */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 12,
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                padding: '0 0 24px 0',
+                borderBottom: '1px solid var(--border)'
+              }}
+            >
+              {/* CATEGORIES */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                  flex: '1 1 300px'
+                }}
+                className="shop-categories-horizontal"
+              >
+                {categories.map((category) => {
+                  const selected =
+                    normalize(filterCategory || 'ALL') === normalize(category);
+
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setFilterCategory(category)}
+                      style={filterButtonStyle(selected)}
+                    >
+                      {category === 'ALL' ? 'All Products' : category}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* FILTER TOGGLE */}
           <button
             type="button"
             aria-expanded={filterOpen}
@@ -595,8 +663,34 @@ export default function ShopPage() {
           </motion.div>
         )}
 
+            {/* MOBILE CATEGORY DRAWER */}
+            {filterOpen && (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 4, padding: 16, marginTop: 16, background: 'var(--bg2)' }}>
+                <p style={{ fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 12 }}>Categories</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {categories.map((category) => {
+                    const selected = normalize(filterCategory || 'ALL') === normalize(category);
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => { setFilterCategory(category); setFilterOpen(false); }}
+                        style={filterButtonStyle(selected)}
+                      >
+                        {category === 'ALL' ? 'All Products' : category}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+
         {/* PRODUCT GRID */}
-        <div style={{ paddingBottom: 80 }}>
+        <div style={{ paddingBottom: 80, paddingTop: 32 }}>
           {filtered.length === 0 ? (
             <div
               style={{

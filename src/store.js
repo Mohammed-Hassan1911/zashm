@@ -674,7 +674,7 @@ export const useStore = create((set, get) => ({
   },
 
   // Global UI States
-  currentPage: 'home',
+  currentPage: 'shop',
   setPage: (p) => set({ currentPage: p }),
   selectedProduct: null,
   setSelectedProduct: (p) => set({ selectedProduct: p }),

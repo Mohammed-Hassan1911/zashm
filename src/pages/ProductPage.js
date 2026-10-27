@@ -618,30 +618,18 @@ export default function ProductPage() {
                       placeholder="e.g. 175"
                       style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13 }} />
                   </div>
-                  <div style={{ marginBottom: 16 }}>
+                  <div style={{ marginBottom: 20 }}>
                     <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Weight (kg) *</label>
                     <input type="number" min="0" value={recommenderForm.weight} 
                       onChange={e => setRecommenderForm(f => ({ ...f, weight: e.target.value }))}
                       placeholder="e.g. 70"
                       style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13 }} />
                   </div>
-                  <div style={{ marginBottom: 20, opacity: 0.5 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text3)', display: 'block', marginBottom: 6, letterSpacing: 0.5 }}>Fit Preference (Not available)</label>
-                    <select disabled value={recommenderForm.fit}
-                      onChange={e => setRecommenderForm(f => ({ ...f, fit: e.target.value }))}
-                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text3)', fontSize: 13, cursor: 'not-allowed' }}>
-                      <option value="regular">Regular</option>
-                      <option value="slim">Slim</option>
-                      <option value="oversized">Oversized</option>
-                    </select>
-                    <p style={{ fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>Fit adjustments are not configured for this store.</p>
-                  </div>
                   <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 12 }}
                     onClick={() => {
                       const result = recommendSize(p, { 
                         height: recommenderForm.height, 
                         weight: recommenderForm.weight,
-                        fit: recommenderForm.fit,
                         color: selColor
                       });
                       setRecommendationResult(result);
@@ -687,6 +675,25 @@ export default function ProductPage() {
                       {recommendationResult.matchingSizes && recommendationResult.matchingSizes.length > 0 && (
                         <p style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 16, fontWeight: 600 }}>
                           Matching sizes: {recommendationResult.matchingSizes.join(', ')}
+                        </p>
+                      )}
+                      {recommendationResult.showSizeGuide && (
+                        <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
+                          onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}>
+                          View Size Guide
+                        </button>
+                      )}
+                    </div>
+                  ) : recommendationResult.reason === 'out_of_stock' || recommendationResult.reason === 'out_of_stock_closest' ? (
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(243,156,18,0.1)', border: '2px solid #f39c12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <AlertTriangle size={28} color="#f39c12" />
+                      </div>
+                      <h4 style={{ color: 'white', fontSize: 16, marginBottom: 8, fontFamily: 'var(--font-display)' }}>Out of Stock</h4>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12, lineHeight: 1.6 }}>{recommendationResult.message}</p>
+                      {recommendationResult.alternative && (
+                        <p style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 16 }}>
+                          Alternative available size: <strong>{recommendationResult.alternative}</strong>
                         </p>
                       )}
                       {recommendationResult.showSizeGuide && (
