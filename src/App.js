@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import './index.css';
 import { AnimatePresence, motion } from 'framer-motion';
+import { getLanguage, applyDocumentLanguage } from './lib/i18n';
 import { useStore } from './store';
 import { AuthProvider, useAuth } from './lib/auth'; 
 import {
@@ -62,6 +63,14 @@ function AppInner() {
 
   const [activeModal, setActiveModal] = useState(null);
   const trackedFirstView = useRef(false);
+
+  useEffect(() => {
+    const lang = getLanguage();
+    applyDocumentLanguage(lang);
+    const handler = () => applyDocumentLanguage(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
 
   // 🎯 لقط الأوردر وتحويل العميل لصفحة التتبع (يقرأ TrackOrder رقم الطلب من ?track مباشرة)
   useEffect(() => {
@@ -233,6 +242,12 @@ function InfoModal({ type, onClose }) {
 /* ================= FOOTER COMPONENT ================= */
 function Footer({ setModal }) {
   const { setPage } = useStore();
+  const [lang, setLang] = useState(getLanguage());
+  useEffect(() => {
+    const handler = () => setLang(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
 
   const [clickCount, setClickCount] = useState(0);
   const timerRef = useRef(null);
@@ -279,7 +294,7 @@ function Footer({ setModal }) {
             </div>
             <p style={{ display: 'flex', gap: 8, color: 'var(--text2)', fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>
               <Gem size={14} style={{ color: 'var(--gold)', flexShrink: 0, marginTop: 3 }} />
-              <span>Luxury fashion crafted with elegance and precision for the modern gentleman.</span>
+              <span>{lang === 'ar' ? 'أزياء فاخرة مصنوعة بعناية وأناقة للرجل العصري.' : 'Luxury fashion crafted with elegance and precision for the modern gentleman.'}</span>
             </p>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
               <a href="https://www.instagram.com/zashm_brand?obrf=MWh1NHhqMWQ4MTRycg%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
@@ -288,11 +303,11 @@ function Footer({ setModal }) {
           </div>
 
           <div>
-            <h4 style={titleStyle}>Quick Links</h4>
+            <h4 style={titleStyle}>{lang === 'ar' ? 'روابط سريعة' : 'Quick Links'}</h4>
             {[
-              ['Home', 'home', Home],
-              ['Shop', 'shop', ShoppingBag],
-              ['Wishlist', 'wishlist', Heart]
+              [lang === 'ar' ? 'الرئيسية' : 'Home', 'home', Home],
+              [lang === 'ar' ? 'المتجر' : 'Shop', 'shop', ShoppingBag],
+              [lang === 'ar' ? 'قائمة الرغبات' : 'Wishlist', 'wishlist', Heart]
             ].map(([label, page, Icon]) => (
               <button key={label} onClick={() => setPage(page)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Icon size={13} style={{ color: 'var(--gold)', flexShrink: 0 }} />
@@ -302,7 +317,7 @@ function Footer({ setModal }) {
           </div>
 
           <div>
-  <h4 style={titleStyle}>Customer Care</h4>
+  <h4 style={titleStyle}>{lang === 'ar' ? 'خدمة العملاء' : 'Customer Care'}</h4>
   
   {/* 🎯 تحويل الـ button إلى motion.button لإضافة الأنيميشن الذكي */}
   <motion.button 
@@ -335,12 +350,12 @@ function Footer({ setModal }) {
     }}
   >
     <Search size={13} style={{ opacity: 0.9, color: 'var(--gold)' }} />
-    Track Your Order
+    {lang === 'ar' ? 'تتبع طلبك' : 'Track Your Order'}
   </motion.button>
 
   {[
-    ['Shipping & Returns', 'shipping-returns', Truck],
-    ['Privacy Policy', 'privacy', FileText]
+    [lang === 'ar' ? 'الشحن والإرجاع' : 'Shipping & Returns', 'shipping-returns', Truck],
+    [lang === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy', 'privacy', FileText]
   ].map(([label, id, Icon]) => (
     <button key={label} onClick={() => setModal(id)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
       <Icon size={13} style={{ opacity: 0.8, color: 'var(--gold)' }} />
@@ -350,7 +365,7 @@ function Footer({ setModal }) {
 </div>
 
           <div>
-            <h4 style={titleStyle}>Contact</h4>
+            <h4 style={titleStyle}>{lang === 'ar' ? 'اتصل بنا' : 'Contact'}</h4>
             <div style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
@@ -366,10 +381,10 @@ function Footer({ setModal }) {
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 48, paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <p style={{ color: '#C9A84C', fontSize: 12 }}> © 2026 ZASHM Luxury Fashion. All rights reserved.</p> 
+          <p style={{ color: '#C9A84C', fontSize: 12 }}> © 2026 ZASHM Luxury Fashion. {lang === 'ar' ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'}</p> 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gold)', fontSize: 12 }}>
             <ShieldCheck size={14} />
-            <span>Secured with 256-bit SSL encryption</span>
+            <span>{lang === 'ar' ? 'محمي بتشفير SSL 256 بت' : 'Secured with 256-bit SSL encryption'}</span>
           </div>
         </div>
 

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, Eye } from 'lucide-react';
 import { useStore } from '../../store';
+import { getLanguage } from '../../lib/i18n';
 
 const LABEL_CLASS = {
   'New Arrival': 'label-new',
@@ -11,6 +12,12 @@ const LABEL_CLASS = {
 };
 
 export default function ProductCard({ product, index = 0 }) {
+  const [lang, setLang] = useState(getLanguage());
+  useEffect(() => {
+    const handler = () => setLang(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
   const {
     toggleWishlist,
     wishlist,
@@ -122,7 +129,7 @@ export default function ProductCard({ product, index = 0 }) {
                 letterSpacing: 1
               }}
             >
-              Sold Out
+              {lang === 'ar' ? 'نفذ المخزون' : 'Sold Out'}
             </span>
           ) : (
             // شارات المنتج العادية تظهر فقط لو المنتج متوفر

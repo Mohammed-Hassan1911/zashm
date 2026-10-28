@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
-import { filterGovernorates, getShippingCost, GOVERNORATE_AR, toCanonicalGovernorate } from '../lib/egyptCities'; 
+import { filterGovernorates, getShippingCost, GOVERNORATE_AR, toCanonicalGovernorate } from '../lib/egyptCities';
+import { getLanguage } from '../lib/i18n';
 
 // يطابق المحافظة المكتوبة (عربي/إنجليزي، بأي حالة أحرف) مع القائمة الرسمية،
 // ويعيد '' لو مفيش تطابق — يمنع إرسال مدينة حرة يرفضها السيرفر.
@@ -24,7 +25,7 @@ function CityAutocomplete({ value, onChange, onSelect, error }) {
         onChange={e => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Cairo"
+        placeholder={lang === 'ar' ? 'القاهرة' : 'Cairo'}
         style={{ width: '100%', borderColor: error ? 'var(--red)' : undefined }}
         autoComplete="off"
       />
@@ -60,6 +61,12 @@ function CityAutocomplete({ value, onChange, onSelect, error }) {
 // ─── CART PAGE ────────────────────────────────────────────────────────────────
 export function CartPage() {
   const { cart, removeFromCart, updateCartQty, cartTotal, cartSubtotal, cartDiscountAmount, setPage, appliedDiscount, applyDiscount, removeAppliedDiscount } = useStore();
+  const [lang, setLang] = useState(getLanguage());
+  useEffect(() => {
+    const handler = () => setLang(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
   const [coupon, setCoupon] = useState('');
   const [couponError, setCouponError] = useState('');
   const total = cartTotal() ?? 0;
@@ -67,7 +74,7 @@ export function CartPage() {
   const discountAmount = cartDiscountAmount() ?? 0;
   const safeCart = cart ?? [];
 
-  React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
+  React.useEffect(() => { setPageMeta({ title: lang === 'ar' ? 'سلة التسوق' : 'Shopping Bag', description: lang === 'ar' ? 'راجع منتجاتك المختارة' : 'Review your selected luxury pieces' }); }, [lang]);
 
   const handleApplyCoupon = () => {
     setCouponError('');
@@ -85,14 +92,14 @@ export function CartPage() {
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
         <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
-          style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>Shopping Bag</motion.h1>
+          style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>{lang === 'ar' ? 'سلة التسوق' : 'Shopping Bag'}</motion.h1>
 
         {safeCart.length === 0 ? (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
             <ShoppingBag size={80} color="var(--border)" style={{ margin: '0 auto 24px', display: 'block' }} />
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</p>
-            <p style={{ color: 'var(--text3)', marginBottom: 32 }}>Explore our collection to find your next luxury piece</p>
-            <button className="gold-btn" onClick={() => setPage('shop')}>Explore Collection</button>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8, color: 'var(--text2)' }}>{lang === 'ar' ? 'سلتك فارغة' : 'Your bag is empty'}</p>
+            <p style={{ color: 'var(--text3)', marginBottom: 32 }}>{lang === 'ar' ? 'استكشف مجموعتنا للعثور على قطعة فاخرة' : 'Explore our collection to find your next luxury piece'}</p>
+            <button className="gold-btn" onClick={() => setPage('shop')}>{lang === 'ar' ? 'استكشف المجموعة' : 'Explore Collection'}</button>
           </motion.div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="cart-grid">
@@ -109,7 +116,7 @@ export function CartPage() {
                     <div style={{ flex: 1 }}>
                       <p style={{ color: 'var(--text3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>{item?.product?.category ?? 'General'}</p>
                       <p style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 500, marginBottom: 5 }}>{item?.product?.name ?? 'Unknown Product'}</p>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12 }}>{lang === 'ar' ? 'المقاس' : 'Size'}: {item?.size ?? 'N/A'} · {lang === 'ar' ? 'اللون' : 'Color'}: {item?.color ?? 'N/A'}</p>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2 }}>
                           <button onClick={() => (item?.qty ?? 0) > 1 ? updateCartQty(item?.key, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
@@ -138,26 +145,26 @@ export function CartPage() {
 
             <div>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: 24, position: 'sticky', top: 100 }}>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 20 }}>Order Summary</h3>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 20 }}>{lang === 'ar' ? 'ملخص الطلب' : 'Order Summary'}</h3>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>Subtotal</span>
+                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>{lang === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
                   <span style={{ fontSize: 13 }}>EGP {subtotal.toLocaleString()}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ color: 'var(--text2)', fontSize: 13 }}>
-                    Discount{appliedDiscount ? ` (${appliedDiscount.code})` : ''}
+                    {lang === 'ar' ? 'خصم' : 'Discount'}{appliedDiscount ? ` (${appliedDiscount.code})` : ''}
                   </span>
                   <span style={{ fontSize: 13, color: discountAmount > 0 ? '#27ae60' : 'var(--text3)' }}>
                     {discountAmount > 0 ? `-EGP ${discountAmount.toLocaleString()}` : 'EGP 0'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>Shipping</span>
-                  <span style={{ color: 'var(--text3)', fontSize: 13 }}>Calculated at next step</span>
+                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>{lang === 'ar' ? 'الشحن' : 'Shipping'}</span>
+                  <span style={{ color: 'var(--text3)', fontSize: 13 }}>{lang === 'ar' ? 'يُحسب في الخطوة التالية' : 'Calculated at next step'}</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 18 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 600 }}>Total</span>
+                    <span style={{ fontWeight: 600 }}>{lang === 'ar' ? 'الإجمالي' : 'Total'}</span>
                     <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>EGP {total.toLocaleString()}</span>
                   </div>
                 </div>
@@ -169,11 +176,11 @@ export function CartPage() {
                         <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                         <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                           onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
-                          placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
+                          placeholder={lang === 'ar' ? 'كود الخصم' : 'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                       </div>
                       <button onClick={handleApplyCoupon}
                         style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
-                        Apply
+                        {lang === 'ar' ? 'تطبيق' : 'Apply'}
                       </button>
                     </div>
                     {couponError && (
@@ -186,14 +193,14 @@ export function CartPage() {
                 ) : (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                     <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                    <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</span>
+                    <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>{lang === 'ar' ? 'إزالة' : 'Remove'}</span>
                   </div>
                 )}
 
                 <button className="gold-btn" style={{ width: '100%', marginBottom: 10 }} onClick={() => setPage('checkout')}>
-                  Proceed to Checkout
+                  {lang === 'ar' ? 'إتمام الطلب' : 'Proceed to Checkout'}
                 </button>
-                <button className="outline-btn" style={{ width: '100%' }} onClick={() => setPage('shop')}>Continue Shopping</button>
+                <button className="outline-btn" style={{ width: '100%' }} onClick={() => setPage('shop')}>{lang === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}</button>
               </div>
             </div>
           </div>
@@ -210,7 +217,12 @@ export function CheckoutPage() {
     appliedDiscount, applyDiscount, removeAppliedDiscount, refreshAppliedDiscount,
     reduceCartForStockIssues,
   } = useStore();
-  
+  const [lang, setLang] = useState(getLanguage());
+  useEffect(() => {
+    const handler = () => setLang(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
   const [form, setForm] = useState({ name: '', phone: '', phoneAlt: '', email: '', address: '', city: '', notes: '' });
   const [errors, setErrors] = useState({});
   const [stockErrors, setStockErrors] = useState([]);
@@ -240,7 +252,7 @@ export function CheckoutPage() {
   const shippingCost = getShippingCost(form.city);
   const finalTotal = subtotal + shippingCost - discountAmount;
 
-  React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order' }); }, []);
+  React.useEffect(() => { setPageMeta({ title: lang === 'ar' ? 'إتمام الطلب' : 'Checkout', description: lang === 'ar' ? 'أكمل طلبك' : 'Complete your order' }); }, [lang]);
   React.useEffect(() => { refreshAppliedDiscount(); }, []);
   
   // 🔝 السكرول المبدئي عند فتح الصفحة لأول مرة
@@ -277,16 +289,16 @@ export function CheckoutPage() {
 
   const validateOrderFormCustom = (fields) => {
     const errs = {};
-    if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required / الاسم الكامل مطلوب';
-    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters) / يرجى إدخال اسمك الكامل (حرفان على الأقل)';
+    if (!fields.name || !fields.name.trim()) errs.name = lang === 'ar' ? 'الاسم الكامل مطلوب' : 'Full name is required';
+    else if (fields.name.trim().length < 2) errs.name = lang === 'ar' ? 'يرجى إدخال اسمك الكامل (حرفان على الأقل)' : 'Please enter your full name (at least 2 characters)';
     
     const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
     const normPhone = normalizeEgyptPhone(fields.phone);
     
     if (!fields.phone || !fields.phone.trim()) {
-      errs.phone = 'Phone number is required / رقم الهاتف مطلوب';
+      errs.phone = lang === 'ar' ? 'رقم الهاتف مطلوب' : 'Phone number is required';
     } else if (!egyptianPhoneRegex.test(normPhone)) {
-      errs.phone = 'Invalid phone number. Must be 11 digits starting with 01 / رقم هاتف غير صحيح، يجب أن يكون 11 رقمًا ويبدأ بـ 01';
+      errs.phone = lang === 'ar' ? 'رقم هاتف غير صحيح، يجب أن يكون 11 رقمًا ويبدأ بـ 01' : 'Invalid phone number. Must be 11 digits starting with 01';
     }
 
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
@@ -294,23 +306,23 @@ export function CheckoutPage() {
       const trimmedPhoneAlt = normalizeEgyptPhone(fields.phoneAlt);
 
       if (!egyptianPhoneRegex.test(trimmedPhoneAlt)) {
-        errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits / رقم الهاتف البديل غير صحيح، يجب أن يكون 11 رقمًا';
+        errs.phoneAlt = lang === 'ar' ? 'رقم الهاتف البديل غير صحيح، يجب أن يكون 11 رقمًا' : 'Invalid alternative phone number. Must be 11 digits';
       } else if (trimmedPhone === trimmedPhoneAlt) {
-        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number / رقم الهاتف البديل لا يمكن أن يكون مطابقًا للرقم الأساسي';
+        errs.phoneAlt = lang === 'ar' ? 'رقم الهاتف البديل لا يمكن أن يكون مطابقًا للرقم الأساسي' : 'Alternative phone cannot be the same as the primary phone number';
       }
     }
 
     if (fields.email && fields.email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(fields.email.trim())) {
-        errs.email = 'Please enter a valid email address (e.g., name@example.com) / يرجى إدخال بريد إلكتروني صحيح';
+        errs.email = lang === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email address';
       }
     }
 
-    if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required / عنوان الشارع مطلوب';
-    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters) / يرجى إدخال عنوان شارع كامل (5 أحرف على الأقل)';
+    if (!fields.address || !fields.address.trim()) errs.address = lang === 'ar' ? 'عنوان الشارع مطلوب' : 'Street address is required';
+    else if (fields.address.trim().length < 5) errs.address = lang === 'ar' ? 'يرجى إدخال عنوان شارع كامل (5 أحرف على الأقل)' : 'Please enter a complete street address (at least 5 characters)';
     if (!fields.city || !fields.city.trim() || fields.city === 'Select City' || !normalizeGovernorate(fields.city)) {
-      errs.city = 'Please select your governorate from the list / يرجى اختيار المحافظة من القائمة';
+      errs.city = lang === 'ar' ? 'يرجى اختيار المحافظة من القائمة' : 'Please select your governorate from the list';
     }
     
     return errs;
@@ -348,7 +360,7 @@ export function CheckoutPage() {
       }, idempotencyKey);
 
       if (!result || !result.success) {
-        setStockErrors(result?.errors || ['Order failed. Please try again. / فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.']);
+        setStockErrors(result?.errors || [lang === 'ar' ? 'فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.' : 'Order failed. Please try again.']);
 
         // خفّض الكميات تلقائيًا حسب ما أخبرنا به السيرفر،
         // واعرض تنبيهًا بالعربي والإنجليزي يوضح التغيير.
@@ -387,7 +399,7 @@ export function CheckoutPage() {
     } catch (error) {
       console.error("Order completion failed logic:", error);
       const raw = error && error.message ? String(error.message) : '';
-      setStockErrors([raw ? raw : 'Order failed. Please try again. / فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.']);
+      setStockErrors([raw ? raw : (lang === 'ar' ? 'فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.' : 'Order failed. Please try again.')]);
       setStockNotice([]);
       isPlacingOrder.current = false;
       setSubmitting(false);
@@ -418,7 +430,7 @@ export function CheckoutPage() {
                 direction: 'rtl'
               }}
             >
-              تم نسخ رقم الطلب بنجاح! 🎉
+              {lang === 'ar' ? 'تم نسخ رقم الطلب بنجاح! 🎉' : 'Order ID copied successfully! 🎉'}
             </motion.div>
           )}
         </AnimatePresence>
@@ -431,11 +443,11 @@ export function CheckoutPage() {
           </motion.div>      
           
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 12, color: 'var(--gold)', letterSpacing: 0.5 }}>
-             ! تم تسجيل طلبك بنجاح
+             {lang === 'ar' ? '! تم تسجيل طلبك بنجاح' : 'Order placed successfully!'}
           </h2>
           
           <p style={{ color: 'var(--text2)', fontSize: 15, marginBottom: 24 }}>
-           ZASHM يسعدنا دائماً اختيارك
+           {lang === 'ar' ? 'ZASHM يسعدنا دائماً اختيارك' : 'Thank you for choosing ZASHM'}
           </p>
           <div style={{ background: 'rgba(212, 175, 55, 0.04)', border: '1px dashed var(--border-gold)', borderRadius: 8, padding: '20px', marginBottom: 28, position: 'relative' }}>
             <span style={{ 
@@ -447,7 +459,7 @@ export function CheckoutPage() {
               marginBottom: 8, 
               letterSpacing: 1 
             }}>
-              الرقم المرجعي للطلب (Order ID)
+              {lang === 'ar' ? 'الرقم المرجعي للطلب (Order ID)' : 'Order Reference (Order ID)'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <h3 style={{ fontFamily: 'monospace', color: 'var(--gold)', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: 1 }}>
@@ -482,7 +494,7 @@ export function CheckoutPage() {
               textTransform: 'uppercase', 
               marginBottom: 10 
             }}>
-              Track Your Order
+              {lang === 'ar' ? 'تتبع طلبك' : 'Track Your Order'}
             </h4>
             
             <p style={{ 
@@ -491,9 +503,11 @@ export function CheckoutPage() {
               lineHeight: 1.6, 
               margin: '0 auto 20px', 
               maxWidth: '440px',
-              direction: 'rtl' 
+              direction: lang === 'ar' ? 'rtl' : 'ltr'
             }}>
-              يمكنك الآن تتبع حالة شحنتك وخط سيرها بسهولة بالانتقال إلى صفحة <strong style={{ color: 'var(--gold)' }}>Track Your Order</strong> باستخدام الرقم المرجعي الموضح أعلاه، أو عبر التواصل المباشر مع فريق الدعم الفني.
+              {lang === 'ar' ? 'يمكنك الآن تتبع حالة شحنتك بالانتقال إلى صفحة ' : 'You can now track your order by going to the '}
+              <strong style={{ color: 'var(--gold)' }}>{lang === 'ar' ? 'تتبع طلبك' : 'Track Your Order'}</strong>
+              {lang === 'ar' ? ' باستخدام الرقم المرجعي الموضح أعلاه، أو عبر التواصل المباشر مع فريق الدعم الفني.' : ' page using the order reference above, or by contacting our support team.'}
             </p>
 
             {/* الأزرار التفاعلية المزدوجة */}
@@ -537,7 +551,7 @@ export function CheckoutPage() {
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                🔍 Track Your Order
+                🔍 {lang === 'ar' ? 'تتبع طلبك' : 'Track Your Order'}
               </button>
 
                             {/* زر التواصل الاحتياطي مع الدعم الفني */}
@@ -575,7 +589,7 @@ export function CheckoutPage() {
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                💬 Contact Support
+                💬 {lang === 'ar' ? 'تواصل مع الدعم' : 'Contact Support'}
               </a>
             </div>
           </div>
@@ -585,7 +599,7 @@ export function CheckoutPage() {
             style={{ width: '100%', padding: '14px', borderRadius: 6, fontWeight: 600, letterSpacing: 0.5 }} 
             onClick={() => setPage('home')}
           >
-            Continue Shopping
+            {lang === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}
           </button>
         </motion.div>
       </div>
@@ -596,14 +610,14 @@ export function CheckoutPage() {
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '40px 24px' }}>
         <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
-          style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>Checkout</motion.h1>
+          style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>{lang === 'ar' ? 'إتمام الطلب' : 'Checkout'}</motion.h1>
 
         <AnimatePresence>
           {stockNotice.length > 0 && (
             <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
               style={{ background:'rgba(201,168,76,0.10)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'14px 18px', marginBottom:16 }}>
               <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:8, fontSize:13 }}>
-                ✅ تم تعديل كميات السلة تلقائيًا / Your bag quantities were adjusted automatically:
+                {lang === 'ar' ? '✅ تم تعديل كميات السلة تلقائيًا:' : '✅ Your bag quantities were adjusted automatically:'}
               </p>
               {stockNotice.map((e, i) => (
                 <p key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:4, lineHeight:1.7 }}>• {e}</p>
@@ -616,8 +630,8 @@ export function CheckoutPage() {
               style={{ background:'rgba(192,57,43,0.08)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:6, padding:'14px 18px', marginBottom:24 }}>
               <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13 }}>
                 {stockErrors.some(e => /stock|piece|remaining|available|مخزون|متبقى/i.test(e))
-                  ? '⚠ مشاكل في المخزون / Stock issues detected:'
-                  : '⚠ تعذر إتمام الطلب / Order could not be placed:'}
+                  ? (lang === 'ar' ? '⚠ مشاكل في المخزون:' : '⚠ Stock issues detected:')
+                  : (lang === 'ar' ? '⚠ تعذر إتمام الطلب:' : '⚠ Order could not be placed:')}
               </p>
               {stockErrors.map((e, i) => <p key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:2, lineHeight:1.6 }}>• {e}</p>)}
             </motion.div>
@@ -626,7 +640,7 @@ export function CheckoutPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="checkout-grid">
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 22 }}>Delivery Information</h3>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 22 }}>{lang === 'ar' ? 'معلومات التوصيل' : 'Delivery Information'}</h3>
             
             <div style={{ 
               display: 'grid', 
@@ -635,7 +649,7 @@ export function CheckoutPage() {
               marginBottom: 14 
             }}>
               <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Full Name *</label>
+                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{lang === 'ar' ? 'الاسم الكامل *' : 'Full Name *'}</label>
                 <input 
                   type="text" 
                   value={form.name ?? ''} 
@@ -646,7 +660,7 @@ export function CheckoutPage() {
                 {errors.name && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.name}</p>}
               </div>
               <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Phone Number *</label>
+                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{lang === 'ar' ? 'رقم الهاتف *' : 'Phone Number *'}</label>
                 <input 
                   type="tel" 
                   value={form.phone ?? ''} 
@@ -675,7 +689,7 @@ export function CheckoutPage() {
                   textTransform:'uppercase',
                   minHeight: 30 
                 }}>
-                  Alternative Phone (Optional)
+                  {lang === 'ar' ? 'رقم هاتف بديل (اختياري)' : 'Alternative Phone (Optional)'}
                 </label>
                 <input 
                   type="tel" 
@@ -698,7 +712,7 @@ export function CheckoutPage() {
                   textTransform:'uppercase',
                   minHeight: 30 
                 }}>
-                  Email Address (Optional)
+                  {lang === 'ar' ? 'البريد الإلكتروني (اختياري)' : 'Email Address (Optional)'}
                 </label>
                 <input 
                   value={form.email ?? ''} 
@@ -712,7 +726,7 @@ export function CheckoutPage() {
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Street Address *</label>
+              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{lang === 'ar' ? 'عنوان الشارع *' : 'Street Address *'}</label>
               <input 
                 value={form.address ?? ''} 
                 onChange={e => update('address', e.target.value)} 
@@ -724,7 +738,7 @@ export function CheckoutPage() {
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
               <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>City *</label>
+                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{lang === 'ar' ? 'المحافظة *' : 'City *'}</label>
                 <CityAutocomplete
                   value={form.city}
                   onChange={v => update('city', v)}
@@ -736,7 +750,7 @@ export function CheckoutPage() {
             </div>
 
             <div>
-              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>Order Notes (OPTIONAL)</label>
+              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{lang === 'ar' ? 'ملاحظات الطلب (اختياري)' : 'Order Notes (OPTIONAL)'}</label>
               <textarea 
                 value={form.notes ?? ''} 
                 onChange={e => update('notes', e.target.value)} 
@@ -749,7 +763,7 @@ export function CheckoutPage() {
 
           <div>
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 22, position:'sticky', top:100 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 16 }}>Order Summary</h3>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 16 }}>{lang === 'ar' ? 'ملخص الطلب' : 'Order Summary'}</h3>
               <div style={{ maxHeight: 240, overflowY: 'auto', marginBottom: 14 }}>
                 {safeCart.map(i => (
                   <div key={i?.key} style={{ display: 'flex', gap:10, justifyContent: 'space-between', marginBottom: 10, alignItems:'flex-start', width: '100%' }}>
@@ -774,11 +788,11 @@ export function CheckoutPage() {
                       <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                       <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                         onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
-                        placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
+                        placeholder={lang === 'ar' ? 'كود الخصم' : 'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                     </div>
                     <button onClick={handleApplyCoupon}
                       style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      Apply
+                      {lang === 'ar' ? 'تطبيق' : 'Apply'}
                     </button>
                   </div>
                   {couponError && (
@@ -791,7 +805,7 @@ export function CheckoutPage() {
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                   <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                  <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</span>
+                  <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>{lang === 'ar' ? 'إزالة' : 'Remove'}</span>
                 </div>
               )}
 
@@ -833,10 +847,10 @@ export function CheckoutPage() {
                       style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
                     جاري تنفيذ الطلب... / Placing Order...
                   </span>
-                ) : '\u062a\u0623\u0643\u064a\u062f \u0627\u0644\u0637\u0644\u0628 / PLACE ORDER'}
+                ) : (lang === 'ar' ? 'تأكيد الطلب / PLACE ORDER' : 'PLACE ORDER / تأكيد الطلب')}
               </motion.button>
               <p style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10 }}>
-                🔒 طلب آمن · سيتم تسجيل طلبك وتأكيده فوراً عبر الموقع
+                {lang === 'ar' ? '🔒 طلب آمن · سيتم تسجيل طلبك وتأكيده فوراً عبر الموقع' : '🔒 Secure order · Your order will be confirmed via the website'}
               </p>
             </div>
           </div>
@@ -849,25 +863,31 @@ export function CheckoutPage() {
 // ─── WISHLIST PAGE ────────────────────────────────────────────────────────────
 export function WishlistPage() {
   const { products, wishlist, setPage } = useStore();
+  const [lang, setLang] = useState(getLanguage());
+  useEffect(() => {
+    const handler = () => setLang(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
   // 🎯 إخفاء المنتجات غير النشطة عن العملاء في قائمة المفضلة
   const wished = products.filter(p => p.active !== false && wishlist.includes(p.id));
 
-  React.useEffect(() => { setPageMeta({ title: 'Wishlist', description: 'Your saved luxury pieces' }); }, []);
+  React.useEffect(() => { setPageMeta({ title: lang === 'ar' ? 'قائمة الرغبات' : 'Wishlist', description: lang === 'ar' ? 'قطعك المحفوظة' : 'Your saved luxury pieces' }); }, [lang]);
 
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
-          <p style={{ fontSize: 10, letterSpacing: 4, color: 'var(--gold)', textTransform: 'uppercase', marginBottom: 8 }}>Saved</p>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 400 }}>Wishlist</h1>
-          <p style={{ color: 'var(--text3)', marginTop: 8 }}>{wished.length} item{wished.length !== 1 ? 's' : ''} saved</p>
+          <p style={{ fontSize: 10, letterSpacing: 4, color: 'var(--gold)', textTransform: 'uppercase', marginBottom: 8 }}>{lang === 'ar' ? 'محفوظ' : 'Saved'}</p>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 400 }}>{lang === 'ar' ? 'قائمة الرغبات' : 'Wishlist'}</h1>
+          <p style={{ color: 'var(--text3)', marginTop: 8 }}>{wished.length} {lang === 'ar' ? (wished.length === 1 ? 'قطعة' : 'قطع') : (wished.length === 1 ? 'item' : 'items')} {lang === 'ar' ? 'محفوظة' : 'saved'}</p>
         </div>
         {wished.length === 0 ? (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '60px 0' }}>
             <Heart size={80} color="var(--border)" style={{ margin: '0 auto 24px', display: 'block' }} />
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8, color: 'var(--text2)' }}>Nothing saved yet</p>
-            <p style={{ color: 'var(--text3)', marginBottom: 32 }}>Save your favourite pieces for later</p>
-            <button className="gold-btn" onClick={() => setPage('shop')}>Explore Collection</button>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8, color: 'var(--text2)' }}>{lang === 'ar' ? 'لم يتم حفظ أي شيء بعد' : 'Nothing saved yet'}</p>
+            <p style={{ color: 'var(--text3)', marginBottom: 32 }}>{lang === 'ar' ? 'احفظ قطعك المفضلة لوقت لاحق' : 'Save your favourite pieces for later'}</p>
+            <button className="gold-btn" onClick={() => setPage('shop')}>{lang === 'ar' ? 'استكشف المجموعة' : 'Explore Collection'}</button>
           </motion.div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24 }}>

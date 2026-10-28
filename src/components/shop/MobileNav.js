@@ -1,18 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Home, Grid, Heart, ShoppingBag } from 'lucide-react';
+import { Home, Grid, Heart, ShoppingBag, Globe } from 'lucide-react';
 import { useStore } from '../../store';
+import { getLanguage, setLanguage, t } from '../../lib/i18n';
 
 export default function MobileNav() {
   const { setPage, currentPage, cart, wishlist, setCartOpen } = useStore();
   const safeCart = cart || [];
   const cartCount = safeCart.reduce((s, i) => s + i.qty, 0);
+  const [lang, setLangState] = useState(getLanguage());
+
+  useEffect(() => {
+    const handler = () => setLangState(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
+
+  const toggleLang = () => {
+    const newLang = lang === 'en' ? 'ar' : 'en';
+    setLangState(newLang);
+    setLanguage(newLang);
+    window.dispatchEvent(new Event('languagechange'));
+  };
 
   const items = [
-    { icon: Home, label: 'Home', page: 'home' },
-    { icon: Grid, label: 'Shop', page: 'shop' },
-    { icon: Heart, label: 'Wishlist', page: 'wishlist', badge: wishlist.length },
-    { icon: ShoppingBag, label: 'Bag', action: () => setCartOpen(true), badge: cartCount },
+    { icon: Home, label: t('home', lang), page: 'home' },
+    { icon: Grid, label: t('shop', lang), page: 'shop' },
+    { icon: Heart, label: t('wishlist', lang), page: 'wishlist', badge: wishlist.length },
+    { icon: ShoppingBag, label: t('bag', lang), action: () => setCartOpen(true), badge: cartCount },
   ];
 
   return (
@@ -35,7 +50,7 @@ export default function MobileNav() {
             <motion.button
               key={label}
               onClick={action || (() => setPage(page))}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 16px', background: 'none', border: 'none', cursor: 'pointer', position: 'relative', color: active ? 'var(--gold)' : 'var(--text3)' }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 12px', background: 'none', border: 'none', cursor: 'pointer', position: 'relative', color: active ? 'var(--gold)' : 'var(--text3)' }}
               whileTap={{ scale: 0.9 }}
             >
               <div style={{ position: 'relative' }}>
@@ -52,6 +67,14 @@ export default function MobileNav() {
             </motion.button>
           );
         })}
+        <motion.button
+          onClick={toggleLang}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)' }}
+          whileTap={{ scale: 0.9 }}
+        >
+          <Globe size={20} />
+          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1 }}>{lang === 'en' ? 'AR' : 'EN'}</span>
+        </motion.button>
       </div>
     </motion.nav>
   );

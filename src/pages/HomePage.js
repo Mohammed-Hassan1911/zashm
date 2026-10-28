@@ -6,6 +6,12 @@ import ProductCard from '../components/shop/ProductCard';
 
 export default function HomePage() {
   const { products, setPage, setFilterCategory } = useStore();
+  const [lang, setLang] = React.useState(typeof localStorage !== 'undefined' ? localStorage.getItem('zashm_lang') || 'en' : 'en');
+  React.useEffect(() => {
+    const handler = () => setLang(typeof localStorage !== 'undefined' ? localStorage.getItem('zashm_lang') || 'en' : 'en');
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
   const heroRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
@@ -65,12 +71,12 @@ export default function HomePage() {
           <motion.p
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0, duration: 0.8 }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(18px, 2.2vw, 28px)', color: 'rgba(245,240,232,0.92)', fontStyle: 'italic', fontWeight: 300, letterSpacing: 3, marginBottom: 14, textShadow: '0 2px 20px rgba(0,0,0,0.5)' }}
-          >Luxury Menswear</motion.p>
+          >{lang === 'ar' ? 'ملابس رجالية فاخرة' : 'Luxury Menswear'}</motion.p>
 
           <motion.p
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.8 }}
             style={{ fontSize: 13, color: 'rgba(245,240,232,0.65)', maxWidth: 480, margin: '0 auto 44px', letterSpacing: 3.5, lineHeight: 1.9, textTransform: 'uppercase' }}
-          >Tailored for the discerning gentleman</motion.p>
+          >{lang === 'ar' ? 'مُصممة للرجل الذواق' : 'Tailored for the discerning gentleman'}</motion.p>
 
           {/* 🎯 تم تعديل هنا: مسح الزر الإضافي وتوسيط الـ Button الأساسي بأناقة ومساحة أكبر */}
           <motion.div
@@ -82,7 +88,7 @@ export default function HomePage() {
               onClick={() => setPage('shop')}
               style={{ padding: '14px 42px', fontSize: 12, letterSpacing: 2 }} // زيادة مساحة الزرار الفاخر لإعطائه هيبة الـ Hero Center
             >
-              Explore Collection
+              {lang === 'ar' ? 'استكشف المجموعة' : 'Explore Collection'}
             </button>
           </motion.div>
         </motion.div>

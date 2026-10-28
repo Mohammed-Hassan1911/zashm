@@ -676,12 +676,19 @@ export const useStore = create((set, get) => ({
   // Global UI States
   currentPage: 'home',
   setPage: (p) => set({ currentPage: p }),
-  language: (typeof localStorage !== 'undefined' && localStorage.getItem('zashm_lang')) || 'ar',
+  language: (typeof localStorage !== 'undefined' && localStorage.getItem('zashm_lang')) || 'en',
   setLanguage: (lang) => {
+    const normalized = lang === 'ar' ? 'ar' : 'en';
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('zashm_lang', lang);
+      localStorage.setItem('zashm_lang', normalized);
     }
-    set({ language: lang });
+    try {
+      if (typeof document !== 'undefined') {
+        document.documentElement.lang = normalized === 'ar' ? 'ar' : 'en';
+        document.documentElement.dir = normalized === 'ar' ? 'rtl' : 'ltr';
+      }
+    } catch (e) {}
+    set({ language: normalized });
   },
   selectedProduct: null,
   setSelectedProduct: (p) => set({ selectedProduct: p }),

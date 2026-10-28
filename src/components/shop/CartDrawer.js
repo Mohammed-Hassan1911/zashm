@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, Trash2, Plus, Minus } from 'lucide-react';
 import { useStore } from '../../store';
+import { getLanguage } from '../../lib/i18n';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="100"%3E%3Crect fill="%23222" width="80" height="100"/%3E%3C/svg%3E';
 
 export default function CartDrawer() {
   const { cart, cartOpen, setCartOpen, removeFromCart, updateCartQty, cartTotal, setPage, appliedDiscount, removeAppliedDiscount } = useStore();
+  const [lang, setLang] = useState(getLanguage());
+  useEffect(() => {
+    const handler = () => setLang(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
   const total = cartTotal() ?? 0;
 
   return (
@@ -39,7 +46,7 @@ export default function CartDrawer() {
             <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <ShoppingBag size={20} color="var(--gold)" />
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>Shopping Bag</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{lang === 'ar' ? 'سلة التسوق' : 'Shopping Bag'}</span>
                 <span style={{ background: 'var(--gold)', color: 'var(--bg)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
                   {cart.reduce((s, i) => s + i.qty, 0)}
                 </span>
@@ -57,10 +64,10 @@ export default function CartDrawer() {
                   style={{ textAlign: 'center', padding: '80px 0' }}
                 >
                   <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px' }} />
-                  <p style={{ color: 'var(--text3)', fontSize: 14, marginBottom: 8 }}>Your bag is empty</p>
-                  <p style={{ color: 'var(--text3)', fontSize: 12 }}>Add some luxury pieces to get started</p>
+                  <p style={{ color: 'var(--text3)', fontSize: 14, marginBottom: 8 }}>{lang === 'ar' ? 'سلتك فارغة' : 'Your bag is empty'}</p>
+                  <p style={{ color: 'var(--text3)', fontSize: 12 }}>{lang === 'ar' ? 'أضف بعض القطع الفاخرة للبدء' : 'Add some luxury pieces to get started'}</p>
                   <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => { setCartOpen(false); setPage('shop'); }}>
-                    Explore Collection
+                    {lang === 'ar' ? 'استكشف المجموعة' : 'Explore Collection'}
                   </button>
                 </motion.div>
               ) : (
@@ -82,7 +89,7 @@ export default function CartDrawer() {
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: 100, justifyContent: 'space-between' }}>
                         <div>
                           <p style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.product?.name || 'Product'}</p>
-                          <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 4 }}>{item.size} · {item.color}</p>
+                          <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 4 }}>{lang === 'ar' ? 'المقاس' : 'Size'}: {item.size} · {lang === 'ar' ? 'اللون' : 'Color'}: {item.color}</p>
                           <p style={{ color: 'var(--gold)', fontSize: 14, fontWeight: 600, margin: 0 }}>
                             EGP {(((item.product?.salePrice || item.product?.price) ?? 0) * (item.qty ?? 0)).toLocaleString()}
                           </p>
@@ -135,7 +142,7 @@ export default function CartDrawer() {
                 </div>
                 <button className="gold-btn" style={{ width: '100%', marginBottom: 10 }}
                   onClick={() => { setCartOpen(false); setPage('checkout'); }}>
-                  Proceed to Checkout
+                  {lang === 'ar' ? 'إتمام الطلب' : 'Proceed to Checkout'}
                 </button>
                 <button className="outline-btn" style={{ width: '100%' }}
                   onClick={() => { setCartOpen(false); setPage('cart'); }}>

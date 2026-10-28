@@ -1,22 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+import { getLanguage, t } from '../lib/i18n';
 
-const SORT_OPTIONS = [
-  'Newest',
-  'Price: Low to High',
-  'Price: High to Low',
-  'Best Seller'
+const SORT_KEYS = [
+  { key: 'Newest', en: 'Newest', ar: 'الأحدث' },
+  { key: 'Price: Low to High', en: 'Price: Low to High', ar: 'السعر: من الأقل للأعلى' },
+  { key: 'Price: High to Low', en: 'Price: High to Low', ar: 'السعر: من الأعلى للأقل' },
+  { key: 'Best Seller', en: 'Best Seller', ar: 'الأكثر مبيعًا' }
 ];
 
-const LABELS = [
-  'All',
-  'New Arrival',
-  'Best Seller',
-  'Featured',
-  'Limited Edition'
+const LABEL_KEYS = [
+  { key: 'All', en: 'All', ar: 'الكل' },
+  { key: 'New Arrival', en: 'New Arrival', ar: 'وصل حديثًا' },
+  { key: 'Best Seller', en: 'Best Seller', ar: 'الأكثر مبيعًا' },
+  { key: 'Featured', en: 'Featured', ar: 'مميز' },
+  { key: 'Limited Edition', en: 'Limited Edition', ar: 'إصدار محدود' }
 ];
 
 const normalize = (value) =>
@@ -48,6 +49,13 @@ export default function ShopPage() {
     filterCategory,
     setFilterCategory
   } = useStore();
+
+  const [lang, setLang] = useState(getLanguage());
+  useEffect(() => {
+    const handler = () => setLang(getLanguage());
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
 
   const [sort, setSort] = useState('Newest');
   const [priceRange, setPriceRange] = useState({
@@ -243,7 +251,7 @@ export default function ShopPage() {
             textTransform: 'uppercase'
           }}
         >
-          Our Collection
+          {lang === 'ar' ? 'مجموعتنا' : 'Our Collection'}
         </motion.p>
 
         <motion.h1
@@ -268,7 +276,7 @@ export default function ShopPage() {
           }}
         >
           {filtered.length}{' '}
-          {filtered.length === 1 ? 'PIECE' : 'PIECES'} AVAILABLE
+          {lang === 'ar' ? (filtered.length === 1 ? 'قطعة' : 'قطع') : (filtered.length === 1 ? 'PIECE' : 'PIECES')} {lang === 'ar' ? 'متاحة' : 'AVAILABLE'}
         </motion.p>
       </div>
 
@@ -340,12 +348,12 @@ export default function ShopPage() {
             }}
           >
             <SlidersHorizontal size={14} />
-            {filterOpen ? 'Close Filters' : 'Filter'}
+            {filterOpen ? (lang === 'ar' ? 'إغلاق الفلاتر' : 'Close Filters') : (lang === 'ar' ? 'فلتر' : 'Filter')}
           </button>
 
           {/* SORT */}
           <select
-            aria-label="Sort products"
+            aria-label={lang === 'ar' ? 'ترتيب المنتجات' : 'Sort products'}
             value={sort}
             onChange={(event) => setSort(event.target.value)}
             style={{
@@ -359,9 +367,9 @@ export default function ShopPage() {
               maxWidth: '100%'
             }}
           >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
+            {SORT_KEYS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {lang === 'ar' ? option.ar : option.en}
               </option>
             ))}
           </select>
@@ -398,7 +406,7 @@ export default function ShopPage() {
                     textTransform: 'uppercase'
                   }}
                 >
-                  Refine Your Selection
+                  {lang === 'ar' ? 'تحسين التحديد' : 'Refine Your Selection'}
                 </p>
 
                 <h2
@@ -409,7 +417,7 @@ export default function ShopPage() {
                     fontWeight: 400
                   }}
                 >
-                  Shop Filters
+                  {lang === 'ar' ? 'فلاتر المتجر' : 'Shop Filters'}
                 </h2>
               </div>
 
@@ -431,7 +439,7 @@ export default function ShopPage() {
                 }}
               >
                 <RotateCcw size={12} />
-                Reset All
+                {lang === 'ar' ? 'إعادة تعيين الكل' : 'Reset All'}
               </button>
             </div>
 
@@ -447,7 +455,7 @@ export default function ShopPage() {
                   color: 'var(--text2)'
                 }}
               >
-                Shop by Label
+                {lang === 'ar' ? 'تسوق حسب التصنيف' : 'Shop by Label'}
               </h3>
 
               <div
@@ -457,19 +465,19 @@ export default function ShopPage() {
                   flexWrap: 'wrap'
                 }}
               >
-                {LABELS.map((label) => {
+                {LABEL_KEYS.map((label) => {
                   const selected =
-                    normalize(labelFilter) === normalize(label);
+                    normalize(labelFilter) === normalize(label.key);
 
                   return (
                     <button
-                      key={label}
+                      key={label.key}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => setLabelFilter(label)}
+                      onClick={() => setLabelFilter(label.key)}
                       style={filterButtonStyle(selected)}
                     >
-                      {label}
+                      {lang === 'ar' ? label.ar : label.en}
                     </button>
                   );
                 })}
@@ -488,7 +496,7 @@ export default function ShopPage() {
                   color: 'var(--text2)'
                 }}
               >
-                Price Range
+                {lang === 'ar' ? 'نطاق السعر' : 'Price Range'}
               </h3>
 
               <div
@@ -510,14 +518,14 @@ export default function ShopPage() {
                     color: 'var(--text3)'
                   }}
                 >
-                  Minimum
+                  {lang === 'ar' ? 'الحد الأدنى' : 'Minimum'}
 
                   <input
                     type="number"
                     min="0"
                     step="any"
                     inputMode="decimal"
-                    placeholder="No minimum"
+                    placeholder={lang === 'ar' ? 'بدون حد أدنى' : 'No minimum'}
                     value={priceRange.min}
                     onChange={(event) => {
                       const value = event.target.value;
@@ -544,14 +552,14 @@ export default function ShopPage() {
                     color: 'var(--text3)'
                   }}
                 >
-                  Maximum
+                  {lang === 'ar' ? 'الحد الأقصى' : 'Maximum'}
 
                   <input
                     type="number"
                     min="0"
                     step="any"
                     inputMode="decimal"
-                    placeholder="No maximum"
+                    placeholder={lang === 'ar' ? 'بدون حد أقصى' : 'No maximum'}
                     value={priceRange.max}
                     onChange={(event) => {
                       const value = event.target.value;
@@ -577,7 +585,7 @@ export default function ShopPage() {
                     fontSize: 12
                   }}
                 >
-                  Minimum price cannot exceed maximum price.
+                  {lang === 'ar' ? 'يجب أن يكون السعر الأدنى أقل من السعر الأقصى.' : 'Minimum price cannot exceed maximum price.'}
                 </p>
               )}
 
@@ -589,7 +597,7 @@ export default function ShopPage() {
                   lineHeight: 1.6
                 }}
               >
-                Leave either field empty to remove that price limit.
+                {lang === 'ar' ? 'اترك أحد الحقول فارغًا لإزالة حد السعر.' : 'Leave either field empty to remove that price limit.'}
               </p>
             </div>
           </motion.div>
@@ -613,11 +621,11 @@ export default function ShopPage() {
                   marginBottom: 10
                 }}
               >
-                No Products Found
+                {lang === 'ar' ? 'لا توجد منتجات' : 'No Products Found'}
               </p>
 
               <p style={{ fontSize: 12, lineHeight: 1.8 }}>
-                Try adjusting your search or filters to discover more pieces.
+                {lang === 'ar' ? 'جرب تعديل البحث أو الفلاتر لاكتشاف المزيد.' : 'Try adjusting your search or filters to discover more pieces.'}
               </p>
 
               <button
@@ -637,7 +645,7 @@ export default function ShopPage() {
                   textTransform: 'uppercase'
                 }}
               >
-                Reset Filters
+                {lang === 'ar' ? 'إعادة تعيين الفلاتر' : 'Reset Filters'}
               </button>
             </div>
           ) : (

@@ -41,7 +41,7 @@ function getLang(userInput) {
     const stored = localStorage.getItem('zashm_lang');
     if (stored === 'ar' || stored === 'en') return stored;
   }
-  return 'ar';
+  return 'en';
 }
 
 /**

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler } from 'lucide-react';
+import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
-import { recommendSize } from '../lib/sizeRecommendation';
 
 const SIZE_I18N = {
   ar: {
@@ -57,7 +56,7 @@ const SIZE_I18N = {
     color: 'Color',
     addToBag: 'ADD TO BAG',
     outOfStockBtn: 'OUT OF STOCK',
-    findMySizeBtn: 'Find My Size',
+    findMySizeBtn: '',
     sizeGuideBtn: 'Size Guide'
   }
 };
@@ -66,7 +65,12 @@ const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/sv
 
 export default function ProductPage() {
   const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed } = useStore();
-  const lang = typeof localStorage !== 'undefined' ? (localStorage.getItem('zashm_lang') || 'ar') : 'ar';
+  const [lang, setLangState] = React.useState(typeof localStorage !== 'undefined' ? (localStorage.getItem('zashm_lang') || 'en') : 'en');
+  React.useEffect(() => {
+    const handler = () => setLangState(typeof localStorage !== 'undefined' ? (localStorage.getItem('zashm_lang') || 'en') : 'en');
+    window.addEventListener('languagechange', handler);
+    return () => window.removeEventListener('languagechange', handler);
+  }, []);
   const t = SIZE_I18N[lang] || SIZE_I18N.ar;
   const isAr = lang === 'ar';
   const [selSize, setSelSize] = useState('');
@@ -78,9 +82,6 @@ export default function ProductPage() {
   // ستايت التحكم في مودال المخزون ومودال دليل المقاسات
   const [stockModal, setStockModal] = useState({ open: false, message: '' });
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
-  const [sizeRecommenderOpen, setSizeRecommenderOpen] = useState(false);
-  const [recommenderForm, setRecommenderForm] = useState({ height: '', weight: '', fit: 'regular' });
-  const [recommendationResult, setRecommendationResult] = useState(null);
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
@@ -170,7 +171,7 @@ export default function ProductPage() {
   };
 
   const handleAddToCart = () => {
-    if (!selSize) { showToast('Please select a size / يرجى اختيار المقاس', 'error'); return; }
+    if (!selSize) { showToast(lang === 'ar' ? 'يرجى اختيار المقاس' : 'Please select a size', 'error'); return; }
     if (!selColor) { showToast('Please select a color / يرجى اختيار اللون', 'error'); return; }
     if (qty > currentVariantStock) {
       setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}. / عذراً، تتوفر ${currentVariantStock} قطع فقط للمقاس: ${selSize} / اللون: ${selColor}.` });
@@ -197,7 +198,7 @@ export default function ProductPage() {
             animate={{ opacity: 1, x: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            aria-label="Back to Products"
+            aria-label={lang === 'ar' ? 'العودة للمنتجات' : 'Back to Products'}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -328,12 +329,6 @@ export default function ProductPage() {
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
     <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>{t.size}: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-      <button 
-        onClick={() => { setSizeRecommenderOpen(true); setRecommendationResult(null); setRecommenderForm({ height: '', weight: '', fit: 'regular' }); }}
-        style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4 }}
-      >
-        <Ruler size={12} /> {t.findMySizeBtn}
-      </button>
       <button 
         onClick={() => setSizeGuideOpen(true)}
         style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1 }}
@@ -469,7 +464,7 @@ export default function ProductPage() {
         {/* Related */}
         {related.length > 0 && (
           <div style={{ marginTop: 80 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 400, marginBottom: 32, textAlign: 'center', letterSpacing: 2 }}>You May Also Like</h2>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 400, marginBottom: 32, textAlign: 'center', letterSpacing: 2 }}>{lang === 'ar' ? 'قد يعجبك أيضًا' : 'You May Also Like'}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 24 }}>
               {related.map((rp, i) => <ProductCard key={rp.id} product={rp} index={i} />)}
             </div>
@@ -630,156 +625,6 @@ export default function ProductPage() {
         )}
       </AnimatePresence>
 
-      {/* ─── 3. مودال Smart Size Recommendation ─── */}
-      <AnimatePresence>
-        {sizeRecommenderOpen && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 9999, padding: 20
-          }} onClick={() => setSizeRecommenderOpen(false)}>
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }}
-              transition={{ duration: 0.3 }}
-              style={{
-                background: '#111111', border: '1px solid var(--gold, #c9a84c)', borderRadius: 4,
-                width: '100%', maxWidth: 420, padding: '32px 24px', position: 'relative',
-                boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,168,76,0.1)'
-              }} onClick={e => e.stopPropagation()}
-            >
-              <button onClick={() => setSizeRecommenderOpen(false)}
-                style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: '#888', cursor: 'pointer', zIndex: 10 }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--gold, #c9a84c)'}
-                onMouseLeave={e => e.currentTarget.style.color = '#888'}
-              >
-                <X size={18} />
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, justifyContent: 'center', direction: isAr ? 'rtl' : 'ltr' }}>
-                <Ruler size={20} color="var(--gold)" />
-                <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 22, color: 'white', fontWeight: 400, letterSpacing: 1.5, margin: 0 }}>
-                  {t.findMySize}
-                </h3>
-              </div>
-              <p style={{ color: 'var(--text3, #888)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 24, textAlign: 'center', direction: isAr ? 'rtl' : 'ltr' }}>
-                {t.smartRecommendation}
-              </p>
-
-              {!recommendationResult ? (
-                <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5, textAlign: isAr ? 'right' : 'left' }}>{t.height} *</label>
-                    <input type="number" min="0" value={recommenderForm.height} 
-                      onChange={e => setRecommenderForm(f => ({ ...f, height: e.target.value }))}
-                      placeholder={isAr ? 'مثال: 175' : 'e.g. 175'}
-                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13, direction: 'ltr', textAlign: isAr ? 'right' : 'left' }} />
-                  </div>
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 6, letterSpacing: 0.5, textAlign: isAr ? 'right' : 'left' }}>{t.weight} *</label>
-                    <input type="number" min="0" value={recommenderForm.weight} 
-                      onChange={e => setRecommenderForm(f => ({ ...f, weight: e.target.value }))}
-                      placeholder={isAr ? 'مثال: 70' : 'e.g. 70'}
-                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 13, direction: 'ltr', textAlign: isAr ? 'right' : 'left' }} />
-                  </div>
-                  <div style={{ marginBottom: 20, opacity: 0.5 }}>
-                    <label style={{ fontSize: 11, color: 'var(--text3)', display: 'block', marginBottom: 6, letterSpacing: 0.5, textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'تفضيل المقاس (غير متاح)' : 'Fit Preference (Not available)'}</label>
-                    <select disabled value={recommenderForm.fit}
-                      onChange={e => setRecommenderForm(f => ({ ...f, fit: e.target.value }))}
-                      style={{ width: '100%', padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text3)', fontSize: 13, cursor: 'not-allowed', direction: isAr ? 'rtl' : 'ltr' }}>
-                      <option value="regular">Regular</option>
-                      <option value="slim">Slim</option>
-                      <option value="oversized">Oversized</option>
-                    </select>
-                    <p style={{ fontSize: 9, color: 'var(--text3)', marginTop: 4, textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'تعديلات المقاس غير مكونة في هذا المتجر.' : 'Fit adjustments are not configured for this store.'}</p>
-                  </div>
-                  <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 12 }}
-                    onClick={() => {
-                      const result = recommendSize(p, { 
-                        height: recommenderForm.height, 
-                        weight: recommenderForm.weight,
-                        fit: recommenderForm.fit,
-                        color: selColor,
-                        lang: lang
-                      });
-                      setRecommendationResult(result);
-                    }}>
-                    {t.getRecommendation}
-                  </button>
-                  <button onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}
-                    style={{ width: '100%', color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-                    {t.viewSizeGuide}
-                  </button>
-                </div>
-              ) : (
-                <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
-                  {recommendationResult.success ? (
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: recommendationResult.inStock === false ? 'rgba(243,156,18,0.1)' : 'rgba(39,174,96,0.1)', border: `2px solid ${recommendationResult.inStock === false ? '#f39c12' : '#27ae60'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                        <span style={{ fontSize: 24, fontWeight: 700, color: recommendationResult.inStock === false ? '#f39c12' : '#27ae60', direction: 'ltr', unicodeBidi: 'isolate' }}>{recommendationResult.size}</span>
-                      </div>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.8, whiteSpace: 'pre-line', textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr', unicodeBidi: 'plaintext' }}>{recommendationResult.message}</p>
-                      {recommendationResult.inStock !== false && (
-                        <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
-                          onClick={() => { 
-                            setSelSize(recommendationResult.size); 
-                            setQty(1); 
-                            setSizeRecommenderOpen(false); 
-                            toast.success(isAr ? `تم اختيار المقاس ${recommendationResult.size}!` : `Size ${recommendationResult.size} selected!`);
-                          }}>
-                          {t.selectThisSize}
-                        </button>
-                      )}
-                      {recommendationResult.alternatives && recommendationResult.alternatives.length > 0 && (
-                        <p style={{ color: 'var(--text3)', fontSize: 11, marginBottom: 10, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
-                          {t.alsoConsider} <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>{recommendationResult.alternatives.join(', ')}</span>
-                        </p>
-                      )}
-                    </div>
-                  ) : recommendationResult.reason === 'ambiguous' ? (
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(243,156,18,0.1)', border: '2px solid #f39c12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                        <AlertTriangle size={28} color="#f39c12" />
-                      </div>
-                      <h4 style={{ color: 'white', fontSize: 16, marginBottom: 8, fontFamily: 'var(--font-display)' }}>{t.ambiguousMatch}</h4>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 12, lineHeight: 1.6, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr', unicodeBidi: 'plaintext' }}>{recommendationResult.message || t.ambiguousDesc}</p>
-                      {recommendationResult.matchingSizes && recommendationResult.matchingSizes.length > 0 && (
-                        <p style={{ color: 'var(--gold)', fontSize: 12, marginBottom: 16, fontWeight: 600, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr' }}>
-                          {t.matchingSizes} <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>{recommendationResult.matchingSizes.join(', ')}</span>
-                        </p>
-                      )}
-                      {recommendationResult.showSizeGuide && (
-                        <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
-                          onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}>
-                          {t.viewSizeGuideBtn}
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(243,156,18,0.1)', border: '2px solid #f39c12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                        <AlertTriangle size={28} color="#f39c12" />
-                      </div>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, marginBottom: 20, lineHeight: 1.6, textAlign: isAr ? 'right' : 'left', direction: isAr ? 'rtl' : 'ltr', unicodeBidi: 'plaintext' }}>{recommendationResult.message}</p>
-                      {recommendationResult.showSizeGuide && (
-                        <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, marginBottom: 10 }}
-                          onClick={() => { setSizeRecommenderOpen(false); setSizeGuideOpen(true); }}>
-                          {t.viewSizeGuideBtn}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <button onClick={() => setRecommendationResult(null)}
-                    style={{ width: '100%', color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', marginTop: 8 }}>
-                    {t.tryAgain}
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
