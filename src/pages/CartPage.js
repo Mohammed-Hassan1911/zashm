@@ -407,43 +407,20 @@ export function CheckoutPage() {
               style={{
                 position: 'fixed',
                 top: '40px',
-                backgroundColor: 'var(--gold, #D4AF37)',
-                color: '#000000',
-                padding: '12px 24px',
-                borderRadius: '30px',
-                fontWeight: '600',
-                fontSize: '14px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-                zIndex: 9999,
-                direction: 'rtl'
-              }}
-            >
-              {'Order ID copied successfully! 🎉'}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {copied && (
-            <motion.div 
-              initial={{ opacity: 0, y: -20 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0, y: -20 }}
-              style={{
-                position: 'fixed',
-                top: '40px',
+                left: '50%',
+                transform: 'translateX(-50%)',
                 backgroundColor: '#b9a06c',
                 color: '#000000',
-                padding: '10px 20px',
+                padding: '10px 24px',
                 borderRadius: '30px',
                 fontWeight: '600',
                 fontSize: '13px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
                 zIndex: 9999,
                 direction: 'rtl'
               }}
             >
-              {'تم نسخ رقم الطلب!'}
+              {'تم نسخ رقم الطلب بنجاح!'}
             </motion.div>
           )}
         </AnimatePresence>
@@ -453,24 +430,25 @@ export function CheckoutPage() {
             style={{ textAlign: 'center', padding: '50px 30px 40px', background: '#151515', border: '1px solid rgba(185, 160, 108, 0.4)', borderRadius: 12, maxWidth: 555, width: '100%', margin: '0 auto', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
             
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }}>
-              <CheckCircle size={92} color="#b9a06c" style={{ margin: '0 auto 28px', strokeWidth: 1.3 }} />
+              <CheckCircle size={98} color="#c9b07a" style={{ margin: '0 auto 32px', strokeWidth: 1.2 }} />
             </motion.div>      
             
             <div style={{ marginBottom: 26 }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8, color: '#b9a06c', fontWeight: 700, direction: 'rtl', letterSpacing: 0.5 }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 10, color: '#c9b07a', fontWeight: 700, direction: 'rtl', letterSpacing: 0.3 }}>
                 تم تسجيل طلبك بنجاح !
               </h2>
-              <p style={{ color: '#9b9b9b', fontSize: 13, marginBottom: 0, direction: 'rtl', textAlign: 'center', lineHeight: 1.8 }}>
+              <p style={{ color: '#a8a8a8', fontSize: 14, marginBottom: 0, direction: 'rtl', textAlign: 'center', lineHeight: 1.9, letterSpacing: 0.2 }}>
                 يسعدنا دائمًا اختيارك ZASHM
               </p>
             </div>
             
-            <div style={{ background: '#1f1f1f', border: '1px dashed rgba(185, 160, 108, 0.7)', borderRadius: 10, padding: '16px 18px', marginBottom: 28 }}>
-              <p style={{ color: '#b9a06c', fontSize: 12, marginBottom: 10, direction: 'rtl', textAlign: 'center', letterSpacing: 0.5 }}>
-                رقم المرجع للطلب
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <span style={{ color: '#b9a06c', fontSize: 18, fontWeight: 600, letterSpacing: 2, fontFamily: 'monospace' }}>
+            <div style={{ background: '#1a1a1a', border: '1px dashed rgba(185, 160, 108, 0.75)', borderRadius: 10, padding: '18px 22px', marginBottom: 34 }}>
+              <div style={{ color: '#c9b07a', fontSize: 11, marginBottom: 12, textAlign: 'center', letterSpacing: 2, textTransform: 'uppercase' }}>
+                ORDER REFERENCE<br />
+                <span style={{ direction: 'rtl', display: 'inline-block', marginTop: 4 }}>رقم المرجع للطلب</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                <span style={{ color: '#c9b07a', fontSize: 20, fontWeight: 600, letterSpacing: 3, fontFamily: 'monospace' }}>
                   {success.id}
                 </span>
                 <button 
@@ -479,10 +457,12 @@ export function CheckoutPage() {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  style={{ background: 'none', border: 'none', color: '#b9a06c', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                  style={{ background: 'none', border: 'none', color: '#c9b07a', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, transition: 'opacity 0.2s ease' }}
                   title="Copy Order ID"
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                   </svg>
@@ -490,38 +470,50 @@ export function CheckoutPage() {
               </div>
             </div>
 
-            <div style={{ height: 1, background: 'rgba(185, 160, 108, 0.4)', margin: '0 0 24px', width: '100%' }} />
+            <div style={{ height: 1, background: 'linear-gradient(90deg, transparent 0%, rgba(185, 160, 108, 0.55) 50%, transparent 100%)', margin: '0 0 30px', width: '100%' }} />
 
-            <div style={{ marginBottom: 28, textAlign: 'center' }}>
-              <h4 style={{ fontFamily: 'var(--font-display)', color: '#b9a06c', fontSize: 13, letterSpacing: 6, textTransform: 'uppercase', marginBottom: 10, fontWeight: 600 }}>
+            <div style={{ marginBottom: 34, textAlign: 'center' }}>
+              <h4 style={{ fontFamily: 'var(--font-display)', color: '#c9b07a', fontSize: 14, letterSpacing: 8, textTransform: 'uppercase', marginBottom: 12, fontWeight: 700 }}>
                 TRACK YOUR ORDER
               </h4>
-              <p style={{ color: '#9b9b9b', fontSize: 12, lineHeight: 1.9, margin: '0 auto 22px', maxWidth: '380px', direction: 'rtl' }}>
-                يمكنك تتبع طلبك من خلال صفحة <span style={{ color: '#b9a06c' }}>Track Your Order</span> باستخدام رقم الطلب أعلاه، أو من خلال التواصل مع فريق الدعم
+              <p style={{ color: '#a8a8a8', fontSize: 13, lineHeight: 2, margin: '0 auto 28px', maxWidth: '420px', direction: 'rtl' }}>
+                يمكنك تتبع طلبك من خلال صفحة <span style={{ color: '#c9b07a' }}>Track Your Order</span> باستخدام رقم الطلب أعلاه، أو من خلال التواصل مع فريق الدعم
               </p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: 20 }}>
                 <button 
                   onClick={() => {
                     const url = success.tracking_url || '/?track=' + encodeURIComponent(success.id);
                     window.location.assign(url);
                   }}
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '12px 32px', borderRadius: '50px', border: '1px solid #b9a06c', background: '#b9a06c', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', minWidth: '150px' }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '14px 38px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '12px', fontWeight: '700', letterSpacing: '2.5px', textTransform: 'uppercase', cursor: 'pointer', minWidth: '175px', boxShadow: '0 4px 18px rgba(185, 160, 108, 0.35)', transition: 'all 0.3s ease' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 50%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(185, 160, 108, 0.55)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(185, 160, 108, 0.35)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
+                  onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
                 >
-                  TRACK YOUR ORDER
+                  <span>🔍</span> TRACK YOUR ORDER
                 </button>
                 <a 
                   href={'https://wa.me/201013380313?text=' + encodeURIComponent('مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' + success.id)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '12px 32px', borderRadius: '50px', border: '1px solid #b9a06c', background: '#b9a06c', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textDecoration: 'none', textTransform: 'uppercase', cursor: 'pointer', minWidth: '150px' }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '14px 38px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '12px', fontWeight: '700', letterSpacing: '2.5px', textDecoration: 'none', textTransform: 'uppercase', cursor: 'pointer', minWidth: '175px', boxShadow: '0 4px 18px rgba(185, 160, 108, 0.35)', transition: 'all 0.3s ease' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 50%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(185, 160, 108, 0.55)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(185, 160, 108, 0.35)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
+                  onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
                 >
-                  CONTACT SUPPORT
+                  <span>💬</span> CONTACT SUPPORT
                 </a>
               </div>
             </div>
             <button 
-              style={{ width: '100%', padding: '14px', borderRadius: '50px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', background: 'linear-gradient(90deg, #b9a06c 0%, #d4b878 100%)', color: '#000000', border: 'none', fontSize: '11px', cursor: 'pointer' }} 
+              style={{ width: '100%', padding: '16px', borderRadius: '50px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', background: 'linear-gradient(90deg, #b9a06c 0%, #d4b878 50%, #b9a06c 100%)', color: '#000000', border: 'none', fontSize: '12px', cursor: 'pointer', boxShadow: '0 4px 22px rgba(185, 160, 108, 0.45)', transition: 'all 0.3s ease' }} 
               onClick={() => setPage('home')}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #d4b878 0%, #e6c98a 50%, #d4b878 100%)'; e.currentTarget.style.boxShadow = '0 6px 32px rgba(185, 160, 108, 0.65)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #b9a06c 0%, #d4b878 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = '0 4px 22px rgba(185, 160, 108, 0.45)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
+              onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
             >
               CONTINUE SHOPPING
             </button>
