@@ -139,10 +139,10 @@ export default function ProductPage() {
   };
 
   const handleAddToCart = () => {
-    if (!selSize) { showToast(lang === 'ar' ? 'يرجى اختيار المقاس' : 'Please select a size', 'error'); return; }
-    if (!selColor) { showToast('Please select a color / يرجى اختيار اللون', 'error'); return; }
+    if (!selSize) { showToast('Please select a size', 'error'); return; }
+    if (!selColor) { showToast('Please select a color', 'error'); return; }
     if (qty > currentVariantStock) {
-      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}. / عذراً، تتوفر ${currentVariantStock} قطع فقط للمقاس: ${selSize} / اللون: ${selColor}.` });
+      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.` });
       return;
     }
     
@@ -166,7 +166,7 @@ export default function ProductPage() {
             animate={{ opacity: 1, x: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            aria-label={lang === 'ar' ? 'العودة للمنتجات' : 'Back to Products'}
+            aria-label={'Back to Products'}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -432,7 +432,7 @@ export default function ProductPage() {
         {/* Related */}
         {related.length > 0 && (
           <div style={{ marginTop: 80 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 400, marginBottom: 32, textAlign: 'center', letterSpacing: 2 }}>{lang === 'ar' ? 'قد يعجبك أيضًا' : 'You May Also Like'}</h2>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 400, marginBottom: 32, textAlign: 'center', letterSpacing: 2 }}>{'You May Also Like'}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 24 }}>
               {related.map((rp, i) => <ProductCard key={rp.id} product={rp} index={i} />)}
             </div>
