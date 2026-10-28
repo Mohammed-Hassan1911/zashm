@@ -6,41 +6,10 @@ import ProductCard from '../components/shop/ProductCard';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
 
-const SIZE_I18N = {
-  en: {
-    findMySize: 'FIND MY SIZE',
-    smartRecommendation: 'SMART RECOMMENDATION',
-    height: 'Height (cm)',
-    weight: 'Weight (kg)',
-    getRecommendation: 'Get Recommendation',
-    viewSizeGuide: 'View Size Guide Instead',
-    recommendedSize: 'Recommended Size',
-    selectThisSize: 'Select This Size',
-    alsoConsider: 'Also consider:',
-    ambiguousMatch: 'Ambiguous Match',
-    ambiguousDesc: 'Multiple sizes match your measurements. We cannot reliably distinguish between them.',
-    matchingSizes: 'Matching sizes:',
-    viewSizeGuideBtn: 'View Size Guide',
-    outOfStock: 'Out of Stock',
-    tryAgain: 'Try Again',
-    backToProducts: 'Back to Products',
-    home: 'Home',
-    shop: 'Shop',
-    size: 'Size',
-    color: 'Color',
-    addToBag: 'ADD TO BAG',
-    outOfStockBtn: 'OUT OF STOCK',
-    findMySizeBtn: '',
-    sizeGuideBtn: 'Size Guide'
-  }
-};
-
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
 export default function ProductPage() {
   const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed } = useStore();
-  const t = SIZE_I18N.en;
-  const isAr = false;
   const [selSize, setSelSize] = useState('');
   const [selColor, setSelColor] = useState('');
   const [qty, setQty] = useState(1);
@@ -116,7 +85,7 @@ export default function ProductPage() {
   if (!p) return (
     <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>
       <p style={{ color: 'var(--text2)' }}>No product selected.</p>
-      <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>{isAr ? 'العودة للمتجر' : 'Back to Shop'}</button>
+      <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>Back to Shop</button>
     </div>
   );
 
@@ -184,15 +153,15 @@ export default function ProductPage() {
               touchAction: 'manipulation'
             }}
           >
-            <ChevronLeft size={15} /> {t.backToProducts}
+            <ChevronLeft size={15} /> Back to Products
           </motion.button>
         </div>
         {/* Breadcrumb */}
         <motion.div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-          <button onClick={() => setPage('home')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>{t.home}</button>
+          <button onClick={() => setPage('home')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>'Home'</button>
           <span style={{ color: 'var(--text3)' }}>/</span>
-          <button onClick={() => setPage('shop')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>{t.shop}</button>
+          <button onClick={() => setPage('shop')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>'Shop'</button>
           <span style={{ color: 'var(--text3)' }}>/</span>
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>{p.name}</span>
         </motion.div>
@@ -277,7 +246,7 @@ export default function ProductPage() {
 
             {/* Colors */}
             <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>{t.color}: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
+              <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>'Color': <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(p.colors || []).map(c => {
                   const isColorOOS = hasVariantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
@@ -295,13 +264,13 @@ export default function ProductPage() {
             {/* Sizes */}
 <div style={{ marginBottom: 28 }}>
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-    <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>{t.size}: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
+    <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>'Size': <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
       <button 
         onClick={() => setSizeGuideOpen(true)}
         style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1 }}
       >
-        {t.sizeGuideBtn}
+        'Size Guide'
       </button>
     </div>
   </div>
@@ -361,7 +330,7 @@ export default function ProductPage() {
                 disabled={isOutOfStock}
                 whileTap={isOutOfStock ? {} : { scale: 0.98 }}
               >
-                <ShoppingBag size={16} /> {isOutOfStock ? t.outOfStockBtn : t.addToBag}
+                <ShoppingBag size={16} /> {isOutOfStock ? 'OUT OF STOCK' : 'ADD TO BAG'}
               </motion.button>
 
               <motion.button
