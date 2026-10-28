@@ -430,7 +430,7 @@ export function CheckoutPage() {
               textAlign: 'center',
             }}
           >
-            🎉 تم نسخ رقم الطلب بنجاح!
+            🎉! تم نسخ رقم الطلب بنجاح 
           </motion.div>
         )}
       </AnimatePresence>
@@ -497,7 +497,7 @@ export function CheckoutPage() {
                 letterSpacing: 0,
               }}
             >
-              تم تسجيل طلبك بنجاح!
+              تم تسجيل طلبك بنجاح !
             </h2>
           </div>
 
@@ -1200,7 +1200,6 @@ export function CheckoutPage() {
               </motion.button>
               <div style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10, lineHeight: 1.6 }}>
                 <div>🔒 Secure order · Your order will be confirmed via the website</div>
-                <div style={{ direction: 'rtl', marginTop: 2 }}>طلب آمن · سيتم تأكيد طلبك عبر الموقع</div>
               </div>
             </div>
           </div>
