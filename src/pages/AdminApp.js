@@ -1282,8 +1282,8 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       colors: cleanColors,
       sizes: cleanSizes,
       images: form.images,
-      sizeGuide: finalSizeGuide,
-      label: finalLabel,
+      sizeGuide: form.sizeGuide || null,
+      label: form.label || '',
       tags: form.tags || '',
       active: form.active !== undefined ? form.active : true
     };
