@@ -418,21 +418,32 @@ export function CheckoutPage() {
               transform: 'translateX(-50%)',
               background: '#c9aa50',
               color: '#101010',
-              padding: '10px 24px',
+              padding: '14px 28px',
               borderRadius: 30,
-              fontWeight: 600,
-              fontSize: 13,
-              boxShadow: '0 5px 24px rgba(201,170,80,0.25)',
+              fontWeight: 700,
+              fontSize: 18,
+              boxShadow: '0 5px 24px rgba(201,170,80,0.3)',
               zIndex: 9999,
               textAlign: 'center',
-              lineHeight: 1.5,
+              lineHeight: 1.6,
+              width: 'max-content',
+              maxWidth: 'calc(100vw - 32px)',
+              boxSizing: 'border-box',
             }}
           >
-            <div style={{ direction: 'rtl' }}>🎉 تم نسخ رقم الطلب بنجاح!</div>
+            <div
+              style={{
+                direction: 'rtl',
+                textAlign: 'center',
+                whiteSpace: 'normal',
+              }}
+            >
+              🎉 تم نسخ رقم الطلب بنجاح!
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-
+      
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
