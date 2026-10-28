@@ -35,8 +35,8 @@ function extractError(status, payload) {
   if (payload && Array.isArray(payload.errors) && payload.errors.length) return payload.errors[0];
   if (status === 401) return 'Your session has expired. Please log in again. / انتهت جلستك، يرجى تسجيل الدخول من جديد.';
   if (status === 403) return 'You do not have permission to do that. / ليس لديك صلاحية لتنفيذ هذا الإجراء.';
-  if (status === 429) return 'Too many requests. Please try again shortly. / طلبات كثيرة جدًا، يرجى المحاولة بعد قليل.';
-  return 'Request failed. Please try again. / فشل الطلب، يرجى المحاولة مرة أخرى.';
+  if (status === 429) return 'Too many requests. Please try again shortly.\nطلبات كثيرة جدًا، يرجى المحاولة بعد قليل.';
+  return 'Request failed. Please try again.\nفشل الطلب، يرجى المحاولة مرة أخرى.';
 }
 
 export async function apiFetch(path, { method = 'GET', body, signal, timeoutMs = 45000 } = {}) {
@@ -71,7 +71,7 @@ export async function apiFetch(path, { method = 'GET', body, signal, timeoutMs =
   } catch (err) {
     if (timeoutId) clearTimeout(timeoutId);
     if (didTimeout) {
-      throw new ApiError(408, 'The server took too long to respond. Please try again. / استغرق الخادم وقتًا طويلًا للاستجابة، يرجى المحاولة مرة أخرى.');
+      throw new ApiError(408, 'The server took too long to respond. Please try again.\nاستغرق الخادم وقتًا طويلًا للاستجابة، يرجى المحاولة مرة أخرى.');
     }
     if (err && err.name === 'AbortError') throw err;
     throw new ApiError(0, 'Network error — could not reach the server. / خطأ في الشبكة — تعذر الوصول إلى الخادم.');

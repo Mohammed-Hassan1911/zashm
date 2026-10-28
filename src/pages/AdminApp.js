@@ -1190,7 +1190,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       }
     } catch (err) {
       console.error('confirmSingleDelete failed:', err && err.message);
-      toast.error('تعذر حذف المنتج، حاول مرة أخرى.');
+      toast.error('Could not delete product. Please try again.\nتعذر حذف المنتج، يرجى المحاولة مرة أخرى.');
     }
   };
 
@@ -1210,7 +1210,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       }
     } catch (err) {
       console.error('confirmBulkDelete failed:', err && err.message);
-      toast.error('تعذر حذف المنتجات، حاول مرة أخرى.');
+      toast.error('Could not delete products. Please try again.\nتعذر حذف المنتجات، يرجى المحاولة مرة أخرى.');
     }
   };
 
@@ -1328,7 +1328,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       setShowForm(false);
     } catch (err) {
       console.error("❌ [HandleSave Error]:", err);
-      toast.error("حدث خطأ أثناء الاتصال بقاعدة البيانات.");
+      toast.error("Database connection error.\nحدث خطأ أثناء الاتصال بقاعدة البيانات.");
     }
   };
 
@@ -1770,7 +1770,7 @@ function DiscountsPanel({ canEdit }) {
       await deleteDiscount(target.id);
       toast.success('تم حذف كود الخصم.');
     } catch (e) {
-      toast.error('تعذر حذف كود الخصم، حاول مرة أخرى.');
+      toast.error('Could not delete discount code. Please try again.\nتعذر حذف كود الخصم، يرجى المحاولة مرة أخرى.');
     }
   };
 

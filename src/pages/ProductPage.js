@@ -108,10 +108,11 @@ export default function ProductPage() {
   };
 
   const handleAddToCart = () => {
-    if (!selSize) { showToast('Please select a size', 'error'); return; }
-    if (!selColor) { showToast('Please select a color', 'error'); return; }
+    if (!selSize) { showToast('Please select a size.\nيرجى اختيار المقاس.', 'error'); return; }
+    if (!selColor) { showToast('Please select a color.\nيرجى اختيار اللون.', 'error'); return; }
     if (qty > currentVariantStock) {
-      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.` });
+      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.
+عذرًا، يتوفر ${currentVariantStock} قطعة فقط بالمقاس ${selSize} واللون ${selColor}.` });
       return;
     }
     

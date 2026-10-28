@@ -75,7 +75,8 @@ export function CartPage() {
     
     const result = applyDiscount(cleanCoupon);
     if (result.success) {
-      toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
+      toast(`Code ${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!
+تم تطبيق الكود بنجاح!`, 'success');
     } else {
       setCouponError(result.error ?? 'Invalid code');
     }
@@ -276,16 +277,16 @@ export function CheckoutPage() {
 
   const validateOrderFormCustom = (fields) => {
     const errs = {};
-    if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required';
-    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters)';
+    if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required.\nهذا الحقل مطلوب.';
+    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters).\nيرجى إدخال الاسم الكامل بشكل صحيح.';
     
     const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
     const normPhone = normalizeEgyptPhone(fields.phone);
     
     if (!fields.phone || !fields.phone.trim()) {
-      errs.phone = 'Phone number is required';
+      errs.phone = 'Phone number is required.\nهذا الحقل مطلوب.';
     } else if (!egyptianPhoneRegex.test(normPhone)) {
-      errs.phone = 'Invalid phone number. Must be 11 digits starting with 01';
+      errs.phone = 'Invalid phone number. Must be 11 digits starting with 01.\nرقم الهاتف غير صحيح، يجب أن يبدأ بـ 01 ويتكون من 11 رقمًا.';
     }
 
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
@@ -293,23 +294,23 @@ export function CheckoutPage() {
       const trimmedPhoneAlt = normalizeEgyptPhone(fields.phoneAlt);
 
       if (!egyptianPhoneRegex.test(trimmedPhoneAlt)) {
-        errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits';
+        errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits.\nرقم الهاتف البديل غير صحيح، يجب أن يتكون من 11 رقمًا.';
       } else if (trimmedPhone === trimmedPhoneAlt) {
-        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number';
+        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number.\nلا يمكن استخدام نفس رقم الهاتف الأساسي كرقم بديل.';
       }
     }
 
     if (fields.email && fields.email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(fields.email.trim())) {
-        errs.email = 'Please enter a valid email address';
+        errs.email = 'Please enter a valid email address.\nيرجى إدخال بريد إلكتروني صحيح.';
       }
     }
 
-    if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required';
-    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters)';
+    if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required.\nهذا الحقل مطلوب.';
+    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters).\nيرجى إدخال عنوان كامل (5 أحرف على الأقل).';
     if (!fields.city || !fields.city.trim() || fields.city === 'Select City' || !normalizeGovernorate(fields.city)) {
-      errs.city = 'Please select your governorate from the list';
+      errs.city = 'Please select your governorate from the list.\nيرجى اختيار المحافظة من القائمة.';
     }
     
     return errs;
@@ -429,39 +430,53 @@ export function CheckoutPage() {
             <CheckCircle size={72} color="#D4AF37" style={{ margin: '0 auto 20px' }} />
           </motion.div>      
           
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 12, color: 'var(--gold)', letterSpacing: 0.5 }}>
-             {'Order placed successfully!'}
-          </h2>
+          <div style={{ marginBottom: 12 }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8, color: 'var(--gold)', letterSpacing: 0.5 }}>
+              Order Placed Successfully!
+            </h2>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 0, color: 'var(--gold)', letterSpacing: 0.5, direction: 'rtl', textAlign: 'center' }}>
+              تم تأكيد طلبك بنجاح!
+            </h2>
+          </div>
           
-          <p style={{ color: 'var(--text2)', fontSize: 15, marginBottom: 24 }}>
-           {'Thank you for choosing ZASHM'}
-          </p>
+          <div style={{ color: 'var(--text2)', fontSize: 15, marginBottom: 16 }}>
+            <p style={{ marginBottom: 4 }}>Thank you for your order. You can track your shipment using the link below.</p>
+            <p style={{ marginBottom: 0, direction: 'rtl', textAlign: 'center' }}>شكرًا لطلبك. يمكنك تتبّع شحنتك من خلال الرابط الموضح أدناه.</p>
+          </div>
           <div style={{ background: 'rgba(212, 175, 55, 0.04)', border: '1px dashed var(--border-gold)', borderRadius: 8, padding: '20px', marginBottom: 28, position: 'relative' }}>
             <span style={{ 
               display: 'block', 
-              color: 'var(--text2)', // 🔥 غيرنا اللون لدرجة أنصع وأوضح
-              fontSize: 13,          // 📐 تكبير حجم الخط درجة واحدة لزيادة الوضوح
-              fontWeight: 700,       // 💪 جعل الخط Bold (عريض وقوي)
+              color: 'var(--text2)',
+              fontSize: 13,
+              fontWeight: 700,
               textTransform: 'uppercase', 
-              marginBottom: 8, 
+              marginBottom: 4, 
               letterSpacing: 1 
             }}>
-              {'Order Reference (Order ID)'}
+              Order Number: {success.id}
+            </span>
+            <span style={{ 
+              display: 'block', 
+              color: 'var(--text2)',
+              fontSize: 13,
+              fontWeight: 700,
+              marginBottom: 12, 
+              direction: 'rtl',
+              textAlign: 'center'
+            }}>
+              رقم الطلب: {success.id}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <h3 style={{ fontFamily: 'monospace', color: 'var(--gold)', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: 1 }}>
-                {success.id}
-              </h3>
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(success.id);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                style={{ background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, fontSize: '18px' }}
+                style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, fontSize: '14px', fontWeight: 600 }}
                 title="Copy Order ID"
               >
-                📋
+                Copy Order ID
               </button>
             </div>
           </div>
@@ -603,22 +618,33 @@ export function CheckoutPage() {
           {stockNotice.length > 0 && (
             <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
               style={{ background:'rgba(201,168,76,0.10)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'14px 18px', marginBottom:16 }}>
-              <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:8, fontSize:13 }}>
-                {'✅ Your bag quantities were adjusted automatically:'}
+              <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:4, fontSize:13 }}>
+                Your bag has been updated automatically.
               </p>
-              {stockNotice.map((e, i) => (
-                <p key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:4, lineHeight:1.7 }}>• {e}</p>
-              ))}
+              <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:8, fontSize:13, direction: 'rtl', textAlign: 'right' }}>
+                تم تحديث سلة التسوق تلقائيًا.
+              </p>
+              {stockNotice.map((e, i) => {
+                const lines = e.split('\n');
+                return (
+                  <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
+                    {lines.map((line, idx) => (
+                      <p key={idx} style={{ marginBottom:2, direction: idx % 2 === 1 ? 'rtl' : 'ltr', textAlign: idx % 2 === 1 ? 'right' : 'left' }}>{line}</p>
+                    ))}
+                  </div>
+                );
+              })}
             </motion.div>
           )}
 
           {stockErrors.length > 0 && (
             <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
               style={{ background:'rgba(192,57,43,0.08)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:6, padding:'14px 18px', marginBottom:24 }}>
-              <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13 }}>
-                {stockErrors.some(e => /stock|piece|remaining|available|مخزون|متبقى/i.test(e))
-                  ? ('⚠ Stock issues detected:')
-                  : ('⚠ Order could not be placed:')}
+              <p style={{ color:'var(--red)', fontWeight:600, marginBottom:4, fontSize:13 }}>
+                Stock availability issue:
+              </p>
+              <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13, direction: 'rtl', textAlign: 'right' }}>
+                مشكلة في توفر المخزون:
               </p>
               {stockErrors.map((e, i) => <p key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:2, lineHeight:1.6 }}>• {e}</p>)}
             </motion.div>

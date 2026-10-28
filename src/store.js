@@ -308,11 +308,14 @@ export const useStore = create((set, get) => ({
       const remainingToOrder = Math.max(0, available - currentInCart);
       let errorMsg = "";
       if (remainingToOrder === 0) {
-        errorMsg = `Sorry, this piece is out of stock in this variation (${size} - ${color}). You already have ${currentInCart} in your bag. / نفدت الكمية لهذا المقاس/اللون (${size} - ${color})، لديك ${currentInCart} قطعة بالفعل في السلة.`;
+        errorMsg = `Sorry, this product is currently unavailable in the selected variation (${size} - ${color}). You already have ${currentInCart} in your bag.
+هذا المنتج غير متوفر حاليًا بالمقاس واللون المحددين (${size} - ${color})، لديك ${currentInCart} قطعة بالفعل في السلة.`
       } else if (remainingToOrder === 1) {
-        errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}). / تبقت قطعة واحدة فقط من هذا الاختلاف (${size} - ${color}).`;
+        errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}).
+تبقت قطعة واحدة فقط بالمقاس واللون المحددين (${size} - ${color}).`
       } else {
-        errorMsg = `Sorry, only ${remainingToOrder} more pieces are remaining in stock for this variation (${size} - ${color}). / تبقت ${remainingToOrder} قطع فقط من هذا الاختلاف (${size} - ${color}).`;
+        errorMsg = `Sorry, only ${remainingToOrder} more pieces are remaining in stock for this variation (${size} - ${color}).
+تبقت ${remainingToOrder} قطع فقط بالمقاس واللون المحددين (${size} - ${color}).`
       }
       return { success: false, error: errorMsg };
     }
@@ -497,7 +500,7 @@ export const useStore = create((set, get) => ({
     } catch (err) {
       const errors = (err && Array.isArray(err.payload?.errors) && err.payload.errors.length)
         ? err.payload.errors
-        : [err && err.message ? err.message : 'Order failed. Please try again. / فشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.'];
+        : [err && err.message ? err.message : 'Order failed. Please try again.\nفشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.'];
       const stockIssues = (err && Array.isArray(err.payload?.stockIssues)) ? err.payload.stockIssues : [];
       return { success: false, error: errors[0], errors, stockIssues };
     }
