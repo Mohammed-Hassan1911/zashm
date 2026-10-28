@@ -418,7 +418,7 @@ export function CheckoutPage() {
               right: 0,
               margin: '0 auto',
               width: 'fit-content',
-              background: '#b9a06c',
+              background: '#d1b363',
               color: '#000000',
               padding: '10px 20px',
               borderRadius: 30,

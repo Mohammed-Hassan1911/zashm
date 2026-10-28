@@ -159,8 +159,8 @@ export default function AdminApp() {
   );
 
   if (!session) return (
-    <AdminLogin 
-      onSuccess={() => {}} 
+    <AdminLogin
+      onSuccess={() => {}}
     />
   );
 
@@ -234,7 +234,7 @@ export default function AdminApp() {
 
   return (
     <div className="admin-container" style={{ display:'flex', minHeight:'100vh', background:'var(--bg)', flexDirection: 'row' }}>
-      <motion.aside 
+      <motion.aside
         animate={{ width: collapsed ? 64 : 230 }}
         className="hidden-mobile"
         style={{ background:'var(--bg2)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', position:'sticky', top:0, height:'100vh', overflow:'hidden', flexShrink:0 }}
@@ -245,11 +245,11 @@ export default function AdminApp() {
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setMobileMenuOpen(false)}
-              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:2999, backdropFilter:'blur(4px)' }} 
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:2999, backdropFilter:'blur(4px)' }}
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
               transition={{ type:'spring', damping:25, stiffness:200 }}
               style={{ position:'fixed', left:0, top:0, bottom:0, width:260, background:'var(--bg2)', zIndex:3000, borderRight:'1px solid var(--border)', boxShadow:'10px 0 30px rgba(0,0,0,0.5)' }}
@@ -263,7 +263,7 @@ export default function AdminApp() {
       <main style={{ flex:1, overflow:'hidden', minWidth:0, display:'flex', flexDirection:'column' }}>
         <div style={{ position:'sticky', top:0, zIndex:100, background:'rgba(10,10,10,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid var(--border)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            <button 
+            <button
               className="show-mobile-flex" onClick={() => setMobileMenuOpen(true)}
               style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:36, height:36, borderRadius:8, alignItems:'center', justifyContent:'center', cursor:'pointer' }}
             >
@@ -271,7 +271,7 @@ export default function AdminApp() {
             </button>
             <h1 style={{ fontFamily:'var(--font-display)', fontSize:20, fontWeight:500, textTransform:'capitalize' }}>{adminPage}</h1>
           </div>
-          
+
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
             <AnimatePresence>
               {newOrderNotification && (
@@ -758,10 +758,10 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     <td style={{ padding:'11px 14px', verticalAlign: 'top', whiteSpace:'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <p style={{ fontSize:12, fontWeight:500 }}>{order.customer}</p>
-                        
+
                         {/* 🎯 الـ Badge الذهبي للعميل المتكرر */}
                         {orderCount > 1 && (
-                          <span 
+                          <span
                             onClick={() => handleShowCustomerHistory(order.phone)}
                             style={{
                               padding: '1px 6px',
@@ -786,7 +786,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                       <p style={{ fontSize:10, color:'var(--text3)', marginTop: 4 }}>📞 {order.phone}</p>
                       {order.phoneAlt && <p style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>📱 {order.phoneAlt} (بديل)</p>}
                     </td>
-                    
+
                     <td style={{ padding:'11px 14px', verticalAlign: 'top', minWidth: '220px' }}>
                       <div style={{ fontSize:11, color:'var(--gold)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         📦 {order.items?.length || 0} item{order.items?.length > 1 ? 's' : ''}:
@@ -902,11 +902,11 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
               </div>
 
               <div style={{ display:'flex', gap:10, direction: 'rtl' }}>
-  <a 
+  <a
     href={`https://wa.me/${(() => {
       // 1. تنظيف الرقم من أي رموز أو مسافات
       let cleaned = String(selectedCustomerPhone).replace(/[^0-9]/g, '');
-      
+
       // 2. لو الرقم مصري عادي بيبدأ بـ 01
       if (cleaned.startsWith('01') && cleaned.length === 11) {
         cleaned = '20' + cleaned.slice(1);
@@ -919,7 +919,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
       else if (cleaned.startsWith('1') && cleaned.length === 10) {
         cleaned = '20' + cleaned;
       }
-      
+
       return cleaned;
     })()}?text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم! 🎉')}`}
     target="_blank"
@@ -950,22 +950,22 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                 </div>
                 <button onClick={() => setSelected(null)} style={{ width:32, height:32, borderRadius:6, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
               </div>
-              
+
               <div style={{ padding:16 }}>
-                
+
                 {/* 🎯 قـسـم تـتـبـع الـطـلـب الـجـديـد (Tracking Link) */}
                 <div style={{ background: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: 6, padding: 14, marginBottom: 16 }}>
                   <p style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                     🔗 Customer Tracking Link
                   </p>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input 
-                      type="text" 
-                      readOnly 
-                      value={selected.tracking_url || trackingLinkFor(selected.id)} 
-                      style={{ flex: 1, padding: '8px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text2)', fontFamily: 'monospace' }} 
+                    <input
+                      type="text"
+                      readOnly
+                      value={selected.tracking_url || trackingLinkFor(selected.id)}
+                      style={{ flex: 1, padding: '8px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text2)', fontFamily: 'monospace' }}
                     />
-                    <button 
+                    <button
                       onClick={() => handleCopyLink(selected.tracking_url || trackingLinkFor(selected.id))}
                       style={{ padding: '8px 12px', background: copied ? '#27ae60' : 'var(--gold)', color: copied ? 'white' : 'var(--bg)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
                     >
@@ -1010,7 +1010,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     ].map(([k,v]) => (
                       <div key={k} style={{ gridColumn: k === 'Address' ? '1 / -1' : 'auto' }}>
                         <p style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>{k}</p>
-                        <p style={{ fontSize: 12, color: 'var(--text1)', wordBreak:'break-word' }}>{v}</p>                     
+                        <p style={{ fontSize: 12, color: 'var(--text1)', wordBreak:'break-word' }}>{v}</p>
                       </div>
                     ))}
                   </div>
@@ -1225,10 +1225,10 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
 
   const openEdit = (p) => {
     setEditing(p);
-    setForm({ 
-      ...p, 
-      salePrice: p.salePrice || '', 
-      sizes: Array.isArray(p.sizes) ? p.sizes.join(',') : (p.sizes || ''), 
+    setForm({
+      ...p,
+      salePrice: p.salePrice || '',
+      sizes: Array.isArray(p.sizes) ? p.sizes.join(',') : (p.sizes || ''),
       colors: Array.isArray(p.colors) ? p.colors.join(',') : (p.colors || ''),
       variantStock: p.variantStock || {},
 
@@ -1262,12 +1262,12 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       return;
     }
 
-    const cleanSizes = typeof form.sizes === 'string' 
-      ? form.sizes.split(',').map(s => s.trim()).filter(Boolean) 
+    const cleanSizes = typeof form.sizes === 'string'
+      ? form.sizes.split(',').map(s => s.trim()).filter(Boolean)
       : (Array.isArray(form.sizes) ? form.sizes : []);
 
-    const cleanColors = typeof form.colors === 'string' 
-      ? form.colors.split(',').map(c => c.trim()).filter(Boolean) 
+    const cleanColors = typeof form.colors === 'string'
+      ? form.colors.split(',').map(c => c.trim()).filter(Boolean)
       : (Array.isArray(form.colors) ? form.colors : []);
 
     const productData = {
@@ -1347,7 +1347,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
         </div>
         <div style={{ display:'flex', gap:6, width: '100%', justifyContent:'flex-end', flexWrap:'wrap' }}>
           {selected.size > 0 && (
-            <button 
+            <button
               onClick={() => setConfirmBulk(selected.size)}
               style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', color:'var(--red)', borderRadius:6, cursor:'pointer', fontSize:12, transition:'all 0.2s ease-in-out' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
@@ -1403,7 +1403,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
               <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)}
                 style={{ accentColor:'var(--gold)', width:16, height:16 }} />
             </div>
-            
+
             <div style={{ position:'relative', aspectRatio:'3/4', overflow:'hidden' }} className="product-card-img-wrapper">
               <img src={p.images?.[0]} alt={p.name} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
               {p.stock <= 5 && (
@@ -1411,13 +1411,13 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                   {p.stock === 0 ? 'OUT' : `${p.stock} left`}
                 </div>
               )}
-              
+
               <div className="product-card-actions" style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                 {canEdit && (
                   <>
                     <button onClick={() => openEdit(p)} style={{ width:32, height:32, borderRadius:'50%', background:'var(--gold)', border:'none', color:'#000000', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Edit size={12} /></button>
-                    <button 
-                      onClick={() => setProductToDelete(p)} 
+                    <button
+                      onClick={() => setProductToDelete(p)}
                       style={{ width:32, height:32, borderRadius:'50%', background:'#111111', border:'1px solid #333333', color:'#ffffff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'all 0.2s' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = '#111111'; e.currentTarget.style.borderColor = '#333333'; e.currentTarget.style.color = '#ffffff'; }}
@@ -1461,7 +1461,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                 <button onClick={handleCancel} style={{ color:'var(--text3)', background:'none', border:'none', cursor:'pointer', fontSize:20 }}>✕</button>
               </div>
               <div style={{ flex:1, overflowY:'auto', padding:'16px' }}>
-                
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 12 }}>
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Product Name *</label>
@@ -1478,11 +1478,11 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Category *</label>
                     {form._isAddingNewCat ? (
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <input 
-                          type="text" required value={form.category || ''} onChange={e => update('category', e.target.value)} placeholder="Write new category name..." 
-                          style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} 
+                        <input
+                          type="text" required value={form.category || ''} onChange={e => update('category', e.target.value)} placeholder="Write new category name..."
+                          style={{ flex: 1, padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
                         />
-                        <button 
+                        <button
                           type="button" onClick={() => { update('_isAddingNewCat', false); update('category', ''); }}
                           style={{ padding: '0 12px', background: 'none', border: '1px solid var(--border)', color: 'var(--text3)', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
                         >
@@ -1518,7 +1518,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                   </div>
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Product Label (Filter) 🎯</label>
-                    <select 
+                    <select
                       value={form.label || ''} onChange={e => update('label', e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: form.label ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', height: '37px' }}
                     >
@@ -1545,7 +1545,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                 {form.salePrice && form.price && Number(form.salePrice) > Number(form.price) && (
                   <p style={{ color: '#ef4444', fontSize: 11, marginTop: 0, marginBottom: 12, direction: 'rtl', textAlign: 'right' }}>* سعر الخصم لا يمكن أن يكون أكبر من السعر الأصلي.</p>
                 )}
-                
+
                 <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12, marginTop:12 }}>
                   <div>
                     <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:1, textTransform:'uppercase' }}>Sizes (comma-separated)</label>
@@ -1563,7 +1563,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                     {(() => {
                       const currentSizes = typeof form.sizes === 'string' ? form.sizes.split(',').map(s => s.trim()).filter(Boolean) : (Array.isArray(form.sizes) ? form.sizes : []);
                       const currentColors = typeof form.colors === 'string' ? form.colors.split(',').map(c => c.trim()).filter(Boolean) : (Array.isArray(form.colors) ? form.colors : []);
-                      
+
                       if (currentSizes.length === 0 || currentColors.length === 0) {
                         return <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'10px 0' }}>Enter sizes and colors above to generate stock fields</p>;
                       }
@@ -1587,7 +1587,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                         currentColors.forEach(color => {
                           const matrixKey = `${size}-${color}`;
                           const currentStock = form.variantStock ? (form.variantStock[matrixKey] || 0) : 0;
-                          
+
                           rows.push(
                             <div key={matrixKey} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8, background:'var(--surface)', padding:'8px 12px', borderRadius:4, border:'1px solid var(--border)' }}>
                               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -1637,9 +1637,9 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                 </div>
               </div>
               <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:8, flexShrink:0 }}>
-                <button 
-                  className="gold-btn" 
-                  style={{ flex:1, opacity: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 0.4 : 1, cursor: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 'not-allowed' : 'pointer' }} 
+                <button
+                  className="gold-btn"
+                  style={{ flex:1, opacity: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 0.4 : 1, cursor: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 'not-allowed' : 'pointer' }}
                   onClick={() => {
                     if (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) {
                       toast.error('عذراً، لا يمكن أن يكون سعر الخصم أكبر من السعر الأصلي'); return;
@@ -1648,7 +1648,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                   }}
                 >
                   {editing ? 'Save' : 'Create'}
-                </button>          
+                </button>
                 <button className="outline-btn" onClick={handleCancel}>Cancel</button>
               </div>
             </div>
@@ -1670,7 +1670,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
         {productToDelete && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setProductToDelete(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.85)', zIndex: 3000, backdropFilter: 'blur(10px)' }} />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
               style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(201, 168, 76, 0.3)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
@@ -1681,7 +1681,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
               <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>تأكيد الحذف النهائي</h3>
               <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>هل أنت متأكد من حذف منتج <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>؟ هذا الإجراء سيؤدي إلى إزالته نهائياً.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                <button 
+                <button
                   onClick={confirmSingleDelete}
                   style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
@@ -1698,7 +1698,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
         {confirmBulk !== null && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setConfirmBulk(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.85)', zIndex: 3000, backdropFilter: 'blur(10px)' }} />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
               style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(201, 168, 76, 0.3)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
@@ -1713,7 +1713,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                   : 'هل تريد حذف المنتجات التي اخترتها؟'}
               </p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                <button 
+                <button
                   onClick={confirmBulkDelete}
                   style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
@@ -1740,24 +1740,41 @@ function DiscountsPanel({ canEdit }) {
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   const today = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
 
-  const handleAdd = () => {
-    if (!form.code || !form.code.trim()) { toast.error('يرجى إدخال كود الخصم.'); return; }
+  const handleAdd = async () => {
+    const code = (form.code || '').trim().toUpperCase();
+    if (!code) { toast.error('يرجى إدخال كود الخصم.'); return; }
+    if (!/^[A-Za-z0-9_-]{3,30}$/.test(code)) { toast.error('كود الخصم يجب أن يكون 3-30 حرفًا ويحتوي على أحرف وأرقام و_ أو - فقط.'); return; }
     const value = Number(form.value);
-    if (!form.value || !Number.isFinite(value) || value <= 0) { toast.error('يرجى إدخال قيمة خصم صحيحة أكبر من صفر.'); return; }
+    if (form.value === '' || form.value === null || form.value === undefined || !Number.isFinite(value) || value <= 0) { toast.error('يرجى إدخال قيمة خصم صحيحة أكبر من صفر.'); return; }
     if (form.type === 'percentage' && value > 100) { toast.error('نسبة الخصم لا يمكن أن تتجاوز 100%.'); return; }
+    if (form.type !== 'percentage' && form.type !== 'fixed') { toast.error('نوع الخصم غير صحيح.'); return; }
     if (!form.startDate || !form.endDate) { toast.error('يرجى تحديد تاريخ البداية والنهاية.'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(form.endDate)) { toast.error('صيغة التاريخ غير صحيحة.'); return; }
     if (form.endDate < form.startDate) { toast.error('تاريخ النهاية يجب أن يكون بعد تاريخ البداية.'); return; }
+    if (form.usageLimit === '' || form.usageLimit === null || form.usageLimit === undefined) { toast.error('يرجى إدخال حد استخدام.'); return; }
+    const usageLimit = Number(form.usageLimit);
+    if (!Number.isFinite(usageLimit) || !Number.isInteger(usageLimit) || usageLimit < 0 || usageLimit > 1000000) { toast.error('يرجى إدخال حد استخدام صحيح.'); return; }
 
-    addDiscount({ 
-      ...form, 
-      value, 
-      usageLimit: +form.usageLimit, 
-      usageCount: 0, 
-      code: form.code.trim().toUpperCase() 
-    });
-    
-    setShowForm(false);
-    setForm({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
+    try {
+      await addDiscount({
+        ...form,
+        type: form.type === 'fixed' ? 'fixed' : 'percentage',
+        value,
+        usageLimit,
+        usageCount: 0,
+        code,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        description: form.description || '',
+        active: form.active === undefined ? true : Boolean(form.active)
+      });
+      setShowForm(false);
+      setForm({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
+      toast.success('تم إنشاء كود الخصم بنجاح.');
+    } catch (err) {
+      const msg = err && err.message ? err.message : 'تعذر إنشاء كود الخصم. يرجى التحقق من البيانات والمحاولة مرة أخرى.';
+      toast.error(msg);
+    }
   };
 
   const handleDelete = (d) => setDiscountToDelete(d);
@@ -1802,7 +1819,7 @@ function DiscountsPanel({ canEdit }) {
           const isActive = d.active && d.startDate <= today && d.endDate >= today;
           const currentUsage = d.usageCount || 0;
           const pct = d.usageLimit ? Math.round((currentUsage / d.usageLimit) * 100) : 0;
-          
+
           const isExpiring = d.active && d.endDate && (new Date(d.endDate) - new Date()) < 7 * 24 * 60 * 60 * 1000 && (new Date(d.endDate) - new Date()) > 0;
           return (
             <motion.div key={d.id} initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
@@ -1825,7 +1842,7 @@ function DiscountsPanel({ canEdit }) {
                         style={{ padding:'4px 8px', background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', borderRadius:4, cursor:'pointer', fontSize:11 }}>
                         Toggle
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDelete(d)}
                         style={{ width:28, height:28, borderRadius:4, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', color:'var(--red)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.2s ease-in-out' }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
@@ -1855,7 +1872,7 @@ function DiscountsPanel({ canEdit }) {
         {showForm && (
           <>
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowForm(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
-            <motion.div 
+            <motion.div
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:500, overflowY:'auto', background:'var(--bg2)', borderLeft:'1px solid var(--border)', padding:20, zIndex:2001, boxSizing:'border-box' }}
             >

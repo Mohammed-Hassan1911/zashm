@@ -99,7 +99,7 @@ const APPLIED_DISCOUNT_KEY = 'zashm_applied_discount';
 function validateDiscountRecord(d) {
   if (!d) return null;
   const discounts = db.getAll('discounts') || [];
-  const today = getLocalTodayDate(); 
+  const today = getLocalTodayDate();
   const fresh = discounts.find(
     x => x.id === d.id &&
       x.code === d.code &&
@@ -194,7 +194,7 @@ export const useStore = create((set, get) => ({
           rating: p.rating || 0,
           reviews: p.reviews || 0
         }));
-        db.setAll('products', secureData); 
+        db.setAll('products', secureData);
         set({ products: secureData });
       }
     } catch (err) {
@@ -213,7 +213,7 @@ export const useStore = create((set, get) => ({
       console.error("Failed to fetch online coupons:", err);
     }
   },
-  
+
   updateProduct: async (id, updates) => {
     try {
       await api.patch('/admin/products', { id, updates });
@@ -224,7 +224,7 @@ export const useStore = create((set, get) => ({
       await get().refreshProducts();
     }
   },
-  
+
   deleteProduct: async (id) => {
     db.delete('products', id);
     set({ products: db.getAll('products') || [] });
@@ -234,7 +234,7 @@ export const useStore = create((set, get) => ({
       await get().refreshProducts();
     }
   },
-  
+
   bulkDeleteProducts: async (ids) => {
     if (!Array.isArray(ids) || ids.length === 0) return;
     ids.forEach(id => db.delete('products', id));
@@ -245,7 +245,7 @@ export const useStore = create((set, get) => ({
       await get().refreshProducts();
     }
   },
-  
+
   updateProductImages: async (id, images) => {
     const list = Array.isArray(images) ? images : [images];
     try {
@@ -255,7 +255,7 @@ export const useStore = create((set, get) => ({
     }
     await get().refreshProducts();
   },
-  
+
   addProduct: async (p) => {
     try {
       const payload = await api.post('/admin/products', { product: p });
@@ -272,24 +272,24 @@ export const useStore = create((set, get) => ({
   // ─── CART ──────────────────────────────────────────────────────────────────
   // Persisted in localStorage so the bag survives tab close / reload.
   cart: safeParseArray('zashm_cart', typeof localStorage !== 'undefined' ? localStorage : null),
-  _saveCart: (cart) => { 
+  _saveCart: (cart) => {
     try {
       const safeCart = (cart || []).filter(item => item && item.product && item.key);
-      localStorage.setItem('zashm_cart', JSON.stringify(safeCart)); 
+      localStorage.setItem('zashm_cart', JSON.stringify(safeCart));
       return safeCart;
     } catch(e) {
       console.error('Cart save error:', e);
       return (cart || []);
     }
   },
-  
+
   addToCart: (product, size, color, qty = 1) => {
     if (!product?.id) return { success: false, error: 'Invalid product / منتج غير صالح' };
-    
+
     const products = get().products;
     const freshProduct = products.find(p => p.id == product.id) || product;
     const variantKey = `${size}-${color}`;
-    
+
     let stockAmount = 99;
     const pv = freshProduct.variantStock;
     const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
@@ -299,11 +299,11 @@ export const useStore = create((set, get) => ({
     } else if (freshProduct.stock !== undefined && freshProduct.stock !== null) {
       stockAmount = Number(freshProduct.stock);
     }
-    
+
     const reservedAmount = Number(freshProduct.reservedStock || 0);
     const available = Math.max(0, stockAmount - reservedAmount);
     const currentInCart = (get().cart || []).find(i => i.product?.id == product.id && i.size === size && i.color === color)?.qty || 0;
-    
+
     if (currentInCart + qty > available && stockAmount !== 99) {
       const remainingToOrder = Math.max(0, available - currentInCart);
       let errorMsg = "";
@@ -319,20 +319,20 @@ export const useStore = create((set, get) => ({
       }
       return { success: false, error: errorMsg };
     }
-    
+
     set(s => {
       const key = `${product.id}-${size}-${color}`;
       const cart = s.cart || [];
       const exists = cart.find(i => i.key === key);
-      
-      const newCart = exists 
-        ? cart.map(i => i.key === key ? { ...i, qty: (i.qty || 0) + qty } : i) 
+
+      const newCart = exists
+        ? cart.map(i => i.key === key ? { ...i, qty: (i.qty || 0) + qty } : i)
         : [...cart, { key, product: freshProduct, size, color, qty }];
-        
+
       const saved = get()._saveCart(newCart);
       return { cart: saved };
     });
-    
+
     if (typeof trackEvent === 'function') {
       trackEvent('add_to_cart', { productId: product.id, qty });
     }
@@ -420,7 +420,7 @@ export const useStore = create((set, get) => ({
 
   recentlyViewed: safeParseArray('zashm_recently', typeof sessionStorage !== 'undefined' ? sessionStorage : null),
   addRecentlyViewed: (id) => set(s => { const recentlyViewed = [id, ...s.recentlyViewed.filter(i => i !== id)].slice(0, 8); sessionStorage.setItem('zashm_recently', JSON.stringify(recentlyViewed)); return { recentlyViewed }; }),
-  
+
   // ─── ORDERS & NOTIFICATIONS ────────────────────────────────────────────────
   refreshOrders: async (silent = false) => {
     const isSilent = silent === true;
@@ -520,7 +520,7 @@ export const useStore = create((set, get) => ({
 
     return { success: true, order: sanitizeOrder(order, products), duplicate: payload.duplicate === true };
   },
-  
+
   updateOrderStatus: async (id, newStatus) => {
     const orders = get().orders;
     const order = orders.find(o => o.id === id);
@@ -568,10 +568,10 @@ export const useStore = create((set, get) => ({
   getNotifications: () => (get().orders || [])
     .map(o => ({ id: o.id, type: 'new_order', orderId: o.id, customer: o.customer, total: o.total, timestamp: orderCreatedMs(o) }))
     .sort((a, b) => b.timestamp - a.timestamp),
-  
+
   // ─── DISCOUNTS (COUPONS) ────────────────────────────────────────────────────
   appliedDiscount: loadAppliedDiscount(),
-  
+
   refreshAppliedDiscount: () => {
     const currentDiscount = get().appliedDiscount;
     if (!currentDiscount) return;
@@ -582,7 +582,7 @@ export const useStore = create((set, get) => ({
       set({ appliedDiscount: validated });
     }
   },
-  
+
   addDiscount: async (d) => {
     const id = Date.now();
     const discount = { ...d, id, usageCount: 0, createdAt: new Date().toISOString() };
@@ -594,12 +594,16 @@ export const useStore = create((set, get) => ({
       if (payload && payload.discount) {
         db.update('discounts', id, payload.discount);
         set({ discounts: db.getAll('discounts') || [] });
+        return payload.discount;
       }
+      throw new Error('Failed to create discount');
     } catch (err) {
       console.error('addDiscount failed:', err.message);
+      db.delete('discounts', id);
+      set({ discounts: db.getAll('discounts') || [] });
       await get().refreshDiscounts();
+      throw err;
     }
-    return discount;
   },
 
   updateDiscount: async (id, updates) => {
@@ -648,14 +652,14 @@ export const useStore = create((set, get) => ({
       return { success: false, error: err.message || 'Import failed' };
     }
   },
-  
+
   applyDiscount: (code) => {
     const normalized = (code ?? '').trim().toUpperCase();
     if (!normalized) return { success: false, error: 'Please enter a discount code / يرجى إدخال كود الخصم' };
-    
+
     const discounts = get().discounts;
-    const today = getLocalTodayDate(); 
-    
+    const today = getLocalTodayDate();
+
     const d = discounts.find(
       x => (x.code || '').trim().toUpperCase() === normalized &&
         x.active &&
@@ -663,7 +667,7 @@ export const useStore = create((set, get) => ({
         x.endDate >= today &&
         Number(x.usageCount || 0) < Number(x.usageLimit || 0)
     );
-    
+
     if (d) {
       saveAppliedDiscount(d);
       set({ appliedDiscount: d });
