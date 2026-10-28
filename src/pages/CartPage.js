@@ -423,162 +423,110 @@ export function CheckoutPage() {
           )}
         </AnimatePresence>
 
-        <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
-          style={{ textAlign: 'center', padding: '60px 20px 40px', background: '#151515', border: 'none', borderRadius: 0, maxWidth: 400, width: '100%', margin: '0 auto' }}>
-          
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }}>
-            <CheckCircle size={90} color="#b9a06c" style={{ margin: '0 auto 26px', strokeWidth: 1.2 }} />
-          </motion.div>      
-          
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 21, marginBottom: 6, color: '#b9a06c', letterSpacing: 1.6, fontWeight: 600, direction: 'rtl' }}>
-              !تم تسجيل طلبك بنجاح
-            </h2>
-            <p style={{ color: '#8e8e8e', fontSize: 12, marginBottom: 0, direction: 'rtl', textAlign: 'center', letterSpacing: 0.3 }}>
-              يسعدنا دائمًا اختيارك ZASHM
-            </p>
-          </div>
-          
-          <div style={{ background: '#1a1a1a', border: '1px dashed #b9a06c', borderRadius: 6, padding: '14px 12px', marginBottom: 26 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <span style={{ color: '#b9a06c', fontSize: 16, fontWeight: 600, letterSpacing: 2 }}>
-                {success.id}
-              </span>
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(success.id);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                style={{ background: 'none', border: 'none', color: '#b9a06c', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
-                title="Copy Order ID"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
+        <AnimatePresence>
+          {copied && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -20 }}
+              style={{
+                position: 'fixed',
+                top: '40px',
+                backgroundColor: '#b9a06c',
+                color: '#000000',
+                padding: '10px 20px',
+                borderRadius: '30px',
+                fontWeight: '600',
+                fontSize: '13px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.4)',
+                zIndex: 9999,
+                direction: 'rtl'
+              }}
+            >
+              {'تم نسخ رقم الطلب!'}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <div style={{ height: 1, background: '#b9a06c', opacity: 0.4, margin: '0 0 22px', width: '100%' }} />
-
-          <div style={{ marginBottom: 28, textAlign: 'center' }}>
-            <h4 style={{ 
-              fontFamily: 'var(--font-display)', 
-              color: '#b9a06c', 
-              fontSize: 12, 
-              letterSpacing: 6, 
-              textTransform: 'uppercase', 
-              marginBottom: 8,
-              fontWeight: 600
-            }}>
-              TRACK YOUR ORDER
-            </h4>
+        <div style={{ background: '#000000', minHeight: 'calc(100vh - 90px)', padding: '40px 16px 60px' }}>
+          <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
+            style={{ textAlign: 'center', padding: '50px 30px 40px', background: '#151515', border: '1px solid rgba(185, 160, 108, 0.4)', borderRadius: 12, maxWidth: 555, width: '100%', margin: '0 auto', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
             
-            <p style={{ 
-              color: '#8e8e8e', 
-              fontSize: 11, 
-              lineHeight: 1.8, 
-              margin: '0 auto', 
-              maxWidth: '300px',
-              direction: 'rtl'
-            }}>
-              يمكنك تتبع طلبك باستخدام رقم الطلب أعلاه عبر صفحة تتبع الطلب أو بالتواصل مع فريق الدعم
-            </p>
-
-            {/* الأزرار التفاعلية المزدوجة */}
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              gap: '12px', 
-              flexWrap: 'wrap' 
-            }}>
-              {/* زر التوجيه لصفحة التتبع بالموقع */}
-              <button 
-                onClick={() => {
-                  const url = success.tracking_url || `/?track=${encodeURIComponent(success.id)}`;
-                  window.location.assign(url);
-                }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '12px 24px',
-                  borderRadius: '30px',
-                  border: '1px solid #B9A06C',
-                  background: '#B9A06C',
-                  color: '#000000',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  letterSpacing: '1px',
-                  textTransform: 'uppercase',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--gold)';
-                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 175, 55, 0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--gold)';
-                  e.currentTarget.style.color = '#000000';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                🔍 {'Track Your Order'}
-              </button>
-
-                            {/* زر التواصل الاحتياطي مع الدعم الفني */}
-                            {/* زر التواصل الاحتياطي مع الدعم الفني */}
-              <a 
-                href={`https://wa.me/201013380313?text=${encodeURIComponent(`مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ${success.id}`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '12px 24px',
-                  borderRadius: '30px',
-                  border: '1px solid var(--gold)',
-                  background: 'var(--gold)', // اللون الأصفر مثبت افتراضياً
-                  color: '#000000',          // الخط أسود افتراضياً
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  letterSpacing: '1px',
-                  textDecoration: 'none',
-                  textTransform: 'uppercase',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'transparent'; // يفرغ ويبقى شفاف لما تقف بالماوس
-                  e.currentTarget.style.color = 'var(--gold)';      // الخط يتحول للذهبي
-                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 175, 55, 0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--gold)'; // يرجع أصفر لما تشيل الماوس
-                  e.currentTarget.style.color = '#000000';          // الخط يرجع أسود
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                💬 {'Contact Support'}
-              </a>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }}>
+              <CheckCircle size={92} color="#b9a06c" style={{ margin: '0 auto 28px', strokeWidth: 1.3 }} />
+            </motion.div>      
+            
+            <div style={{ marginBottom: 26 }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8, color: '#b9a06c', fontWeight: 700, direction: 'rtl', letterSpacing: 0.5 }}>
+                تم تسجيل طلبك بنجاح !
+              </h2>
+              <p style={{ color: '#9b9b9b', fontSize: 13, marginBottom: 0, direction: 'rtl', textAlign: 'center', lineHeight: 1.8 }}>
+                يسعدنا دائمًا اختيارك ZASHM
+              </p>
             </div>
-          </div>
+            
+            <div style={{ background: '#1f1f1f', border: '1px dashed rgba(185, 160, 108, 0.7)', borderRadius: 10, padding: '16px 18px', marginBottom: 28 }}>
+              <p style={{ color: '#b9a06c', fontSize: 12, marginBottom: 10, direction: 'rtl', textAlign: 'center', letterSpacing: 0.5 }}>
+                رقم المرجع للطلب
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <span style={{ color: '#b9a06c', fontSize: 18, fontWeight: 600, letterSpacing: 2, fontFamily: 'monospace' }}>
+                  {success.id}
+                </span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(success.id);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#b9a06c', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                  title="Copy Order ID"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
 
-          <button 
-            className="gold-btn" 
-            style={{ width: '100%', padding: '12px', borderRadius: 0, fontWeight: 600, letterSpacing: 3, textTransform: 'uppercase', background: '#B9A06C', color: '#000000', border: '1px solid #B9A06C', fontSize: 12 }} 
-            onClick={() => setPage('home')}
-          >
-            CONTINUE SHOPPING
-          </button>
-        </motion.div>
+            <div style={{ height: 1, background: 'rgba(185, 160, 108, 0.4)', margin: '0 0 24px', width: '100%' }} />
+
+            <div style={{ marginBottom: 28, textAlign: 'center' }}>
+              <h4 style={{ fontFamily: 'var(--font-display)', color: '#b9a06c', fontSize: 13, letterSpacing: 6, textTransform: 'uppercase', marginBottom: 10, fontWeight: 600 }}>
+                TRACK YOUR ORDER
+              </h4>
+              <p style={{ color: '#9b9b9b', fontSize: 12, lineHeight: 1.9, margin: '0 auto 22px', maxWidth: '380px', direction: 'rtl' }}>
+                يمكنك تتبع طلبك من خلال صفحة <span style={{ color: '#b9a06c' }}>Track Your Order</span> باستخدام رقم الطلب أعلاه، أو من خلال التواصل مع فريق الدعم
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: 16 }}>
+                <button 
+                  onClick={() => {
+                    const url = success.tracking_url || '/?track=' + encodeURIComponent(success.id);
+                    window.location.assign(url);
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '12px 32px', borderRadius: '50px', border: '1px solid #b9a06c', background: '#b9a06c', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', minWidth: '150px' }}
+                >
+                  TRACK YOUR ORDER
+                </button>
+                <a 
+                  href={'https://wa.me/201013380313?text=' + encodeURIComponent('مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' + success.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '12px 32px', borderRadius: '50px', border: '1px solid #b9a06c', background: '#b9a06c', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textDecoration: 'none', textTransform: 'uppercase', cursor: 'pointer', minWidth: '150px' }}
+                >
+                  CONTACT SUPPORT
+                </a>
+              </div>
+            </div>
+            <button 
+              style={{ width: '100%', padding: '14px', borderRadius: '50px', fontWeight: 700, letterSpacing: '3px', textTransform: 'uppercase', background: 'linear-gradient(90deg, #b9a06c 0%, #d4b878 100%)', color: '#000000', border: 'none', fontSize: '11px', cursor: 'pointer' }} 
+              onClick={() => setPage('home')}
+            >
+              CONTINUE SHOPPING
+            </button>
+          </motion.div>
+        </div>
       </div>
     );
   }
