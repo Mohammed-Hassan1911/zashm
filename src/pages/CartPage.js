@@ -396,7 +396,7 @@ export function CheckoutPage() {
   
   if (success) {
     return (
-      <div style={{ paddingTop: 160, paddingBottom: 60, minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingLeft: '20px', paddingRight: '20px', position: 'relative' }}>
+      <div style={{ background: '#000000', minHeight: 'calc(100vh - 90px)', paddingTop: 150, paddingBottom: 80, paddingLeft: '16px', paddingRight: '16px', position: 'relative' }}>
         
         <AnimatePresence>
           {copied && (
