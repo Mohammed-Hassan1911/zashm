@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, Heart, Search } from 'lucide-react';
 import { useStore } from '../../store';
-import LanguageSwitcher from './LanguageSwitcher';
-import { getLanguage, t } from '../../lib/i18n';
 
 export default function Header() {
   const {
@@ -41,15 +39,9 @@ export default function Header() {
     };
   }, []);
 
-  const [lang, setLang] = useState(getLanguage());
-  useEffect(() => {
-    const handler = () => setLang(getLanguage());
-    window.addEventListener('languagechange', handler);
-    return () => window.removeEventListener('languagechange', handler);
-  }, []);
   const nav = [
-    { name: t('home', lang), page: 'home' },
-    { name: t('shop', lang), page: 'shop' },
+    { name: 'Home', page: 'home' },
+    { name: 'Shop', page: 'shop' },
   ];
 
   // استايل الأزرار والأيقونات باللون الجولد
@@ -183,10 +175,9 @@ export default function Header() {
                   marginRight: 4,
                 }}
               >
-                {t('shop', lang)}
+                Shop
               </motion.button>
             )}
-            {!isMobile && <LanguageSwitcher isMobile={false} />}
 
             {/* SEARCH */}
             <motion.button 

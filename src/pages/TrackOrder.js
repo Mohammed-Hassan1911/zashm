@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { useStore } from '../store'; 
 import { api } from '../lib/api';
 import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
-import { getLanguage } from '../lib/i18n';
 
 const STATUS_COLORS = {
   Pending: '#f39c12',
@@ -18,12 +17,6 @@ const STATUS_FLOW = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered
 
 export default function TrackOrder() {
   const storeSearchQuery = useStore((state) => state.searchQuery); // 🎯 استدعاء الـ ID المحقون من الـ Store
-  const [lang, setLang] = useState(getLanguage());
-  useEffect(() => {
-    const handler = () => setLang(getLanguage());
-    window.addEventListener('languagechange', handler);
-    return () => window.removeEventListener('languagechange', handler);
-  }, []);
   const [inputOrderId, setInputOrderId] = useState('');
   const [activeOrderId, setActiveOrderId] = useState('');
   const [currentOrder, setCurrentOrder] = useState(null);
@@ -102,10 +95,10 @@ export default function TrackOrder() {
       {/* ─── الهيدر والبحث ─── */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <h1 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 28, color: 'var(--gold)', marginBottom: 8, letterSpacing: 1 }}>
-          {lang === 'ar' ? 'تتبع طلبك' : 'Track Your Order'}
+          Track Your Order
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>
-          {lang === 'ar' ? 'أدخل رقم الطلب الذي تلقيته عبر واتساب لمتابعة حالة الشحن.' : 'Enter your Order ID received via WhatsApp to follow your live shipment status.'}
+          Enter your Order ID received via WhatsApp to follow your live shipment status.
         </p>
 
         <form onSubmit={handleSearchSubmit} style={{ position: 'relative', display: 'flex', gap: 8 }}>
@@ -114,7 +107,7 @@ export default function TrackOrder() {
             <input 
               value={inputOrderId} 
               onChange={e => setInputOrderId(e.target.value)} 
-              placeholder={lang === 'ar' ? 'مثال: ZSH-MQZUYMH6-HAD6' : 'e.g. ZSH-MQZUYMH6-HAD6'} 
+              placeholder="e.g. ZSH-MQZUYMH6-HAD6" 
               style={{ 
                 width: '100%', 
                 padding: '12px 14px 12px 40px', 
@@ -140,7 +133,7 @@ export default function TrackOrder() {
             alignItems: 'center',
             gap: 4
           }}>
-            {lang === 'ar' ? 'تتبع' : 'Track'} <ArrowRight size={14} />
+            Track <ArrowRight size={14} />
           </button>
         </form>
       </div>
@@ -149,14 +142,14 @@ export default function TrackOrder() {
       {!currentOrder && activeOrderId && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '30px 16px', background: 'var(--bg2)', borderRadius: 8, border: '1px solid var(--border)' }}>
 {loadingTrack ? (
-            <p style={{ color: 'var(--text3)', fontSize: 14 }}>{lang === 'ar' ? 'جارٍ تحميل الطلب...' : 'Loading your order...'}</p>
+            <p style={{ color: 'var(--text3)', fontSize: 14 }}>Loading your order...</p>
           ) : notFound ? (
             <>
-              <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 500 }}>⚠️ {lang === 'ar' ? 'لم نتمكن من العثور على طلب بالرقم:' : "We couldn't find an order with ID:"} <span style={{ color: 'var(--gold)', fontFamily: 'monospace' }}>{activeOrderId}</span></p>
-              <p style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>{lang === 'ar' ? 'يرجى التحقق من الرقم أو التواصل مع الدعم.' : 'Please double check the ID from your invoice or contact support.'}</p>
+              <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 500 }}>⚠️ We couldn't find an order with ID: <span style={{ color: 'var(--gold)', fontFamily: 'monospace' }}>{activeOrderId}</span></p>
+              <p style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>Please double check the ID from your invoice or contact support.</p>
             </>
           ) : (
-            <p style={{ color: 'var(--text3)', fontSize: 13 }}>{lang === 'ar' ? 'أدخل رقم الطلب أعلاه لتتبعه.' : 'Enter your order ID above to track it.'}</p>
+            <p style={{ color: 'var(--text3)', fontSize: 13 }}>Enter your order ID above to track it.</p>
           )}
         </motion.div>
       )}
@@ -180,7 +173,7 @@ export default function TrackOrder() {
                 <h2 style={{ fontSize: 16, color: 'var(--gold)', fontFamily: 'monospace', fontWeight: 700, marginTop: 2 }}>{currentOrder.id}</h2>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 1 }}>{lang === 'ar' ? 'الحالة الحالية' : 'Current Status'}</p>
+                <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 1 }}>Current Status</p>
                 <span style={{ 
                   display: 'inline-block',
                   fontSize: 12, 
@@ -265,14 +258,14 @@ export default function TrackOrder() {
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 14 }}>
             <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid var(--border)', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <MapPin size={14} style={{ color: 'var(--gold)' }} />
-              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{lang === 'ar' ? 'تفاصيل الشحن' : 'Shipping Details'}</span>
+              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Shipping Details</span>
             </div>
             <div>
               <p style={{ fontSize: 13, fontWeight: 500 }}>{currentOrder.customer || 'Valued Gentlemen'}</p>
               <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, lineHeight: '1.4' }}>{currentOrder.address || 'Address provided upon confirmation'}{currentOrder.city ? `, ${currentOrder.city}` : ''}</p>
             </div>
             <div>
-              <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> {lang === 'ar' ? 'تاريخ الطلب' : 'Order Date'}</p>
+              <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> Order Date</p>
               <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.date || '—'}</p>
             </div>
           </div>
@@ -281,7 +274,7 @@ export default function TrackOrder() {
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Package size={14} style={{ color: 'var(--gold)' }} />
-              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{lang === 'ar' ? 'منتجات الطلب' : 'Package Items'}</span>
+              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Package Items</span>
             </div>
             
             {Array.isArray(currentOrder.items) ? (
@@ -321,13 +314,13 @@ export default function TrackOrder() {
 
               {shippingAmount > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>{lang === 'ar' ? 'الشحن' : 'Shipping'}</span>
+                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>Shipping</span>
                   <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {shippingAmount.toLocaleString()}</span>
                 </div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{lang === 'ar' ? 'إجمالي المبلغ' : 'Total Amount'}</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Total Amount</span>
                 <span style={{ color: 'var(--gold)', fontSize: 16, fontWeight: 700 }}>
                   EGP {(currentOrder.total || currentOrder.subtotal || 0).toLocaleString()}
                 </span>

@@ -7,32 +7,6 @@ import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
 
 const SIZE_I18N = {
-  ar: {
-    findMySize: 'ابحث عن مقاسي',
-    smartRecommendation: 'توصية ذكية',
-    height: 'الطول (سم)',
-    weight: 'الوزن (كجم)',
-    getRecommendation: 'احصل على التوصية',
-    viewSizeGuide: 'عرض دليل المقاسات',
-    recommendedSize: 'المقاس المناسب',
-    selectThisSize: 'اختيار هذا المقاس',
-    alsoConsider: 'يمكنك أيضاً النظر في:',
-    ambiguousMatch: 'تطابق غامض',
-    ambiguousDesc: 'تطابق قياساتك مع أكثر من مقاس. لا يمكن التمييز بينهم بشكل دقيق.',
-    matchingSizes: 'المقاسات المطابقة:',
-    viewSizeGuideBtn: 'عرض دليل المقاسات',
-    outOfStock: 'غير متوفر',
-    tryAgain: 'حاول مرة أخرى',
-    backToProducts: 'العودة للمنتجات',
-    home: 'الرئيسية',
-    shop: 'المتجر',
-    size: 'المقاس',
-    color: 'اللون',
-    addToBag: 'أضف إلى السلة',
-    outOfStockBtn: 'نفذ المخزون',
-    findMySizeBtn: 'ابحث عن مقاسي',
-    sizeGuideBtn: 'دليل المقاسات'
-  },
   en: {
     findMySize: 'FIND MY SIZE',
     smartRecommendation: 'SMART RECOMMENDATION',
@@ -65,14 +39,8 @@ const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/sv
 
 export default function ProductPage() {
   const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed } = useStore();
-  const [lang, setLangState] = React.useState(typeof localStorage !== 'undefined' ? (localStorage.getItem('zashm_lang') || 'en') : 'en');
-  React.useEffect(() => {
-    const handler = () => setLangState(typeof localStorage !== 'undefined' ? (localStorage.getItem('zashm_lang') || 'en') : 'en');
-    window.addEventListener('languagechange', handler);
-    return () => window.removeEventListener('languagechange', handler);
-  }, []);
-  const t = SIZE_I18N[lang] || SIZE_I18N.ar;
-  const isAr = lang === 'ar';
+  const t = SIZE_I18N.en;
+  const isAr = false;
   const [selSize, setSelSize] = useState('');
   const [selColor, setSelColor] = useState('');
   const [qty, setQty] = useState(1);

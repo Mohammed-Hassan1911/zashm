@@ -3,20 +3,6 @@
 // Never invents missing data, never recommends unavailable sizes
 
 const MESSAGES = {
-  ar: {
-    invalid_input: 'يرجى إدخال قيم صحيحة للطول والوزن.',
-    sanity_range: 'يرجى إدخال قيم معقولة للطول (سم) والوزن (كجم).',
-    no_product: 'معلومات المنتج غير متاحة.',
-    no_stock: 'لا توجد مقاسات متاحة لهذا المنتج بالاختيار الحالي.',
-    no_data: 'لم يتم إعداد توصيات المقاسات لهذا المنتج. يرجى استخدام دليل المقاسات.',
-    no_data_suffix: 'يرجى استخدام دليل المقاسات.',
-    recommended_direct: (size) => `مقاسك المناسب هو ${size} 🎯`,
-    recommended_direct_with_unavailable: (size) => `مقاسك المناسب هو ${size} 🎯\nللأسف، المقاس ${size} غير متوفر حاليًا. تابعنا لمعرفة موعد توفره مرة تانية.`,
-    closest: (size) => `أقرب مقاس لبياناتك هو ${size}. يُرجى مراجعة دليل المقاسات للتأكد.`,
-    out_of_range: 'بياناتك خارج نطاق المقاسات المتاحة. يُرجى مراجعة دليل المقاسات لاختيار الأنسب.',
-    ambiguous: 'تطابق قياساتك مع أكثر من مقاس. لا يمكن التمييز بينهم بشكل دقيق. يرجى مراجعة دليل المقاسات أو الاختيار حسب تفضيلك.',
-    try_again: 'حاول مرة أخرى'
-  },
   en: {
     invalid_input: 'Please enter valid height and weight values.',
     sanity_range: 'Please enter reasonable height (cm) and weight (kg) values.',
@@ -34,13 +20,6 @@ const MESSAGES = {
 };
 
 function getLang(userInput) {
-  const lang = userInput?.lang || userInput?.language;
-  if (lang === 'ar' || lang === 'arabic') return 'ar';
-  if (lang === 'en' || lang === 'english') return 'en';
-  if (typeof localStorage !== 'undefined') {
-    const stored = localStorage.getItem('zashm_lang');
-    if (stored === 'ar' || stored === 'en') return stored;
-  }
   return 'en';
 }
 
@@ -99,7 +78,7 @@ export function getAvailableSizes(product, selectedColor = null) {
  */
 export function recommendSize(product, userInput) {
   const { height, weight, fit = 'regular', color = null } = userInput || {};
-  const lang = getLang(userInput);
+  const lang = 'en';
   const t = MESSAGES[lang];
   
   if (!product) {
