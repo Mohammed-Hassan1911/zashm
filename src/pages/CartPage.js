@@ -508,7 +508,6 @@ export function CheckoutPage() {
               lineHeight: 1.9,
             }}
           >
-            We are always pleased to have you choose ZASHM
             <br />
             <span style={{ direction: 'rtl' }}> ZASHM يسعدنا دائمًا اختيارك  </span>
           </p>

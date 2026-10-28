@@ -247,7 +247,7 @@ export default function ProductPage() {
 
             {/* Colors */}
             <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>'Color': <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
+              <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>Color: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
               <div style={{ display: 'flex', gap: 8 }}>
                 {(p.colors || []).map(c => {
                   const isColorOOS = hasVariantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
@@ -265,13 +265,13 @@ export default function ProductPage() {
             {/* Sizes */}
 <div style={{ marginBottom: 28 }}>
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-    <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>'Size': <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
+    <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>Size: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
       <button 
         onClick={() => setSizeGuideOpen(true)}
         style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1 }}
       >
-        'Size Guide'
+        Size Guide
       </button>
     </div>
   </div>
