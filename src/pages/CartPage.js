@@ -423,83 +423,69 @@ export function CheckoutPage() {
           )}
         </AnimatePresence>
 
-        <motion.div initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
-          style={{ textAlign: 'center', padding: '50px 30px', background: '#000000', border: '1px solid var(--gold)', borderRadius: 0, maxWidth: 520, width: '100%', boxShadow: 'none' }}>
+        <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
+          style={{ textAlign: 'center', padding: '40px 20px 30px', background: '#141414', border: 'none', borderRadius: 0, maxWidth: 420, width: '100%', margin: '0 auto' }}>
           
-          <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 0.6 }}>
-            <CheckCircle size={90} color="#D4AF37" style={{ margin: '0 auto 24px', strokeWidth: 1.5 }} />
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.4 }}>
+            <CheckCircle size={72} color="#D4AF37" style={{ margin: '0 auto 18px', strokeWidth: 1.5 }} />
           </motion.div>      
           
-          <div style={{ marginBottom: 16 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 6, color: 'var(--gold)', letterSpacing: 2, textTransform: 'uppercase', fontWeight: 400 }}>
-              Order Placed Successfully!
-            </h2>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 6, color: 'var(--gold)', letterSpacing: 1, direction: 'rtl', textAlign: 'center', fontWeight: 400 }}>
+          <div style={{ marginBottom: 18 }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 6, color: 'var(--gold)', letterSpacing: 1.5, fontWeight: 500, direction: 'rtl' }}>
               تم تسجيل طلبك بنجاح !
             </h2>
-            <p style={{ color: 'var(--gold)', fontSize: 14, marginBottom: 0, direction: 'rtl', textAlign: 'center', letterSpacing: 0.5 }}>
+            <p style={{ color: '#9b9b9b', fontSize: 12, marginBottom: 0, direction: 'rtl', textAlign: 'center', letterSpacing: 0.3 }}>
               يسعدنا دائمًا اختيارك ZASHM
             </p>
           </div>
           
-          <div style={{ background: 'transparent', border: '1px dashed var(--gold)', borderRadius: 0, padding: '18px 20px', marginBottom: 28, position: 'relative' }}>
-            <span style={{ 
-              display: 'block', 
-              color: 'var(--gold)',
-              fontSize: 12,
-              fontWeight: 600,
-              textTransform: 'uppercase', 
-              marginBottom: 6, 
-              letterSpacing: 2 
-            }}>
-              Order Reference
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: 18, fontWeight: 400, margin: 0, letterSpacing: 2 }}>
+          <div style={{ background: '#141414', border: '1px dashed rgba(212, 175, 55, 0.6)', borderRadius: 8, padding: '16px 14px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <span style={{ color: '#D4AF37', fontSize: 15, fontWeight: 600, letterSpacing: 1 }}>
                 {success.id}
-              </h3>
+              </span>
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(success.id);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, fontSize: '16px' }}
+                style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2, fontSize: '14px' }}
                 title="Copy Order ID"
               >
-                📋
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
               </button>
             </div>
           </div>
 
-                    {/* 📦 قسم تتبع الطلب */}
-          <div style={{ 
-            borderTop: '1px solid var(--gold)', 
-            paddingTop: 24, 
-            marginBottom: 28, 
-            textAlign: 'center' 
-          }}>
+          <div style={{ height: 1, background: 'rgba(212, 175, 55, 0.3)', margin: '0 0 18px', width: '100%' }} />
+
+          {/* تتبع الطلب */}
+          <div style={{ marginBottom: 24, textAlign: 'center' }}>
             <h4 style={{ 
               fontFamily: 'var(--font-display)', 
-              color: 'var(--gold)', 
-              fontSize: 14, 
-              letterSpacing: 3, 
+              color: '#D4AF37', 
+              fontSize: 13, 
+              letterSpacing: 4, 
               textTransform: 'uppercase', 
-              marginBottom: 12,
-              fontWeight: 400
+              marginBottom: 8,
+              fontWeight: 600
             }}>
               TRACK YOUR ORDER
             </h4>
             
             <p style={{ 
-              color: 'var(--gold)', 
-              fontSize: 13, 
-              lineHeight: 1.8, 
-              margin: '0 auto 20px', 
-              maxWidth: '460px',
+              color: '#9b9b9b', 
+              fontSize: 11, 
+              lineHeight: 1.7, 
+              margin: '0 auto', 
+              maxWidth: '320px',
               direction: 'rtl'
             }}>
-              يمكنك تتبع طلبك من خلال صفحة تتبع الطلب باستخدام رقم الطلب أعلاه، أو عن طريق التواصل مع فريق الدعم لدينا
+              يمكنك تتبع طلبك باستخدام رقم الطلب أعلاه عبر صفحة تتبع الطلب أو بالتواصل مع الدعم
             </p>
 
             {/* الأزرار التفاعلية المزدوجة */}
@@ -588,10 +574,10 @@ export function CheckoutPage() {
 
           <button 
             className="gold-btn" 
-            style={{ width: '100%', padding: '14px', borderRadius: 0, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', background: 'var(--gold)', color: '#000000', border: '1px solid var(--gold)' }} 
+            style={{ width: '100%', padding: '12px', borderRadius: 0, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', background: 'var(--gold)', color: '#000000', border: '1px solid var(--gold)', fontSize: 12 }} 
             onClick={() => setPage('home')}
           >
-            Continue Shopping
+            CONTINUE SHOPPING
           </button>
         </motion.div>
       </div>
