@@ -428,8 +428,7 @@ export function CheckoutPage() {
               lineHeight: 1.5,
             }}
           >
-            <div>Order ID copied successfully!</div>
-            <div style={{ direction: 'rtl' }}>تم نسخ رقم الطلب بنجاح!</div>
+            <div style={{ direction: 'rtl' }}>🎉 تم نسخ رقم الطلب بنجاح!</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -538,15 +537,13 @@ export function CheckoutPage() {
               lineHeight: 1.9,
             }}
           >
-            <div>ORDER REFERENCE</div>
             <div
               style={{
                 direction: 'rtl',
                 letterSpacing: 0,
-                marginTop: 4,
               }}
             >
-              الرقم المرجعي للطلب
+              الرقم المرجعي للطلب (ORDER ID)
             </div>
           </div>
 
@@ -685,7 +682,7 @@ export function CheckoutPage() {
             }}
           >
             <div>You can track your order using the order number above via the tracking page, or by contacting our support team.</div>
-            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك تتبع طلبك باستخدام رقم الطلب أعلاه من خلال صفحة التتبع، أو عن طريق التواصل مع فريق الدعم.</div>
+            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك الآن تتبع حالة شحنتك وخط سيرها بسهولة بالانتقال إلى صفحة <span style={{ color: '#d1b363', fontWeight: 600 }}>Track Your Order</span> باستخدام الرقم المرجعي الموضح أعلاه، أو عبر التواصل المباشر مع فريق الدعم الفني.</div>
           </div>
 
           {/* Two equal buttons on the same row */}
@@ -757,11 +754,7 @@ export function CheckoutPage() {
                 e.currentTarget.style.outline = 'none';
               }}
             >
-              <span aria-hidden="true">🔍</span>
-              <span style={{ textAlign: 'center', lineHeight: 1.2 }}>
-                <div>TRACK YOUR ORDER</div>
-                <div style={{ fontSize: '9px', letterSpacing: '0.8px', marginTop: 1 }}>تتبع الطلب</div>
-              </span>
+              <span aria-hidden="true">🔍</span> TRACK YOUR ORDER
             </button>
 
             <a
@@ -822,11 +815,7 @@ export function CheckoutPage() {
                 e.currentTarget.style.outline = 'none';
               }}
             >
-              <span aria-hidden="true">💬</span>
-              <span style={{ textAlign: 'center', lineHeight: 1.2 }}>
-                <div>CONTACT SUPPORT</div>
-                <div style={{ fontSize: '9px', letterSpacing: '0.8px', marginTop: 1 }}>تواصل مع الدعم</div>
-              </span>
+              <span aria-hidden="true">💬</span> CONTACT SUPPORT
             </a>
           </div>
         </div>
@@ -876,10 +865,7 @@ export function CheckoutPage() {
             e.currentTarget.style.outline = 'none';
           }}
         >
-          <span style={{ textAlign: 'center', lineHeight: 1.2, display: 'block' }}>
-            <div>CONTINUE SHOPPING</div>
-            <div style={{ fontSize: '9px', letterSpacing: '1px', marginTop: 2 }}>متابعة التسوق</div>
-          </span>
+          CONTINUE SHOPPING
         </button>
       </motion.div>
     </div>
