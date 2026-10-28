@@ -482,7 +482,6 @@ export function CheckoutPage() {
                 letterSpacing: 0,
               }}
             >
-              Order placed successfully!
             </h2>
             <h2
               style={{
@@ -496,7 +495,7 @@ export function CheckoutPage() {
                 letterSpacing: 0,
               }}
             >
-              تم تأكيد طلبك بنجاح!
+              تم تسجيل طلبك بنجاح!
             </h2>
           </div>
 
@@ -511,7 +510,7 @@ export function CheckoutPage() {
           >
             We are always pleased to have you choose ZASHM
             <br />
-            <span style={{ direction: 'rtl' }}>يسعدنا دائمًا اختيارك ZASHM</span>
+            <span style={{ direction: 'rtl' }}> ZASHM يسعدنا دائمًا اختيارك  </span>
           </p>
         </div>
 
@@ -681,7 +680,6 @@ export function CheckoutPage() {
               maxWidth: 420,
             }}
           >
-            <div>You can track your order using the order number above via the tracking page, or by contacting our support team.</div>
             <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك الآن تتبع حالة شحنتك وخط سيرها بسهولة بالانتقال إلى صفحة <span style={{ color: '#d1b363', fontWeight: 600 }}>Track Your Order</span> باستخدام الرقم المرجعي الموضح أعلاه، أو عبر التواصل المباشر مع فريق الدعم الفني.</div>
           </div>
 
