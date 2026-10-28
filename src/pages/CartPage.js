@@ -414,32 +414,23 @@ export function CheckoutPage() {
             style={{
               position: 'fixed',
               top: 30,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: '#c9aa50',
-              color: '#101010',
-              padding: '14px 28px',
+              left: 0,
+              right: 0,
+              margin: '0 auto',
+              width: 'fit-content',
+              background: '#b9a06c',
+              color: '#000000',
+              padding: '10px 20px',
               borderRadius: 30,
-              fontWeight: 700,
-              fontSize: 18,
-              boxShadow: '0 5px 24px rgba(201,170,80,0.3)',
+              fontWeight: 600,
+              fontSize: 16,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
               zIndex: 9999,
+              whiteSpace: 'nowrap',
               textAlign: 'center',
-              lineHeight: 1.6,
-              width: 'max-content',
-              maxWidth: 'calc(100vw - 32px)',
-              boxSizing: 'border-box',
             }}
           >
-            <div
-              style={{
-                direction: 'rtl',
-                textAlign: 'center',
-                whiteSpace: 'normal',
-              }}
-            >
-              🎉 تم نسخ رقم الطلب بنجاح!
-            </div>
+            🎉 تم نسخ رقم الطلب بنجاح!
           </motion.div>
         )}
       </AnimatePresence>
@@ -721,7 +712,7 @@ export function CheckoutPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 7,
-                padding: '15px 10px',
+                padding: '20px 10px',
                 minWidth: 0,
                 flex: '1 1 0',
                 borderRadius: 50,
@@ -729,7 +720,7 @@ export function CheckoutPage() {
                 background:
                   'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)',
                 color: '#101010',
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: 1.1,
                 lineHeight: 1.5,
@@ -781,7 +772,7 @@ export function CheckoutPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 7,
-                padding: '15px 10px',
+                padding: '20px 10px',
                 minWidth: 0,
                 flex: '1 1 0',
                 borderRadius: 50,
@@ -789,7 +780,7 @@ export function CheckoutPage() {
                 background:
                   'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)',
                 color: '#101010',
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: 1.1,
                 lineHeight: 1.5,
@@ -835,7 +826,7 @@ export function CheckoutPage() {
           style={{
             boxSizing: 'border-box',
             width: '100%',
-            padding: '16px 12px',
+            padding: '21px 12px',
             borderRadius: 50,
             fontWeight: 700,
             letterSpacing: 3,
@@ -845,7 +836,7 @@ export function CheckoutPage() {
               'linear-gradient(100deg, #b89a43 0%, #d1b363 55%, #e0c779 100%)',
             color: '#101010',
             border: '1px solid rgba(224,199,121,0.35)',
-            fontSize: 11,
+            fontSize: 12,
             cursor: 'pointer',
             boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
             transition:
