@@ -395,133 +395,474 @@ export function CheckoutPage() {
   };
   
   if (success) {
-    return (
-      <div style={{ background: '#000000', minHeight: 'calc(100vh - 90px)', paddingTop: 150, paddingBottom: 80, paddingLeft: '16px', paddingRight: '16px', position: 'relative' }}>
-        
-        <AnimatePresence>
-          {copied && (
-            <motion.div 
-              initial={{ opacity: 0, y: -20 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              exit={{ opacity: 0, y: -20 }}
+  return (
+    <div
+      style={{
+        background: '#080808',
+        minHeight: 'calc(100vh - 90px)',
+        padding: '85px 16px 70px',
+        position: 'relative',
+        boxSizing: 'border-box',
+      }}
+    >
+      <AnimatePresence>
+        {copied && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            style={{
+              position: 'fixed',
+              top: 30,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#c9aa50',
+              color: '#101010',
+              padding: '12px 24px',
+              borderRadius: 30,
+              fontWeight: 600,
+              fontSize: 13,
+              boxShadow: '0 5px 24px rgba(201,170,80,0.25)',
+              zIndex: 9999,
+              direction: 'rtl',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            تم نسخ رقم الطلب بنجاح!
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45 }}
+        style={{
+          boxSizing: 'border-box',
+          textAlign: 'center',
+          padding: '48px 30px 40px',
+          background: '#151515',
+          border: '1px solid rgba(190, 157, 70, 0.30)',
+          borderRadius: 12,
+          maxWidth: 555,
+          width: '100%',
+          margin: '0 auto',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.28)',
+          color: '#d0b56f',
+        }}
+      >
+        {/* Success icon */}
+        <motion.div
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <CheckCircle
+            size={76}
+            color="#c9aa50"
+            style={{
+              display: 'block',
+              margin: '0 auto 34px',
+              strokeWidth: 1.7,
+            }}
+          />
+        </motion.div>
+
+        {/* Arabic confirmation */}
+        <div style={{ marginBottom: 26 }}>
+          <h2
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 27,
+              lineHeight: 1.7,
+              margin: '0 0 8px',
+              color: '#d1b363',
+              fontWeight: 700,
+              direction: 'rtl',
+              letterSpacing: 0,
+            }}
+          >
+            تم تسجيل طلبك بنجاح !
+          </h2>
+
+          <p
+            style={{
+              color: '#999999',
+              fontSize: 14,
+              margin: 0,
+              direction: 'rtl',
+              textAlign: 'center',
+              lineHeight: 1.9,
+            }}
+          >
+            يسعدنا دائمًا اختيارك ZASHM
+          </p>
+        </div>
+
+        {/* Order reference */}
+        <div
+          style={{
+            boxSizing: 'border-box',
+            background: '#201e18',
+            border: '1px dashed rgba(190, 157, 70, 0.48)',
+            borderRadius: 10,
+            padding: '21px 16px',
+            marginBottom: 30,
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              color: '#c9aa50',
+              fontSize: 12,
+              marginBottom: 12,
+              textAlign: 'center',
+              letterSpacing: 2,
+              lineHeight: 1.9,
+            }}
+          >
+            <div>ORDER REFERENCE</div>
+            <div
               style={{
-                position: 'fixed',
-                top: '40px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                backgroundColor: '#b9a06c',
-                color: '#000000',
-                padding: '10px 24px',
-                borderRadius: '30px',
-                fontWeight: '600',
-                fontSize: '13px',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-                zIndex: 9999,
-                direction: 'rtl'
+                direction: 'rtl',
+                letterSpacing: 0,
+                marginTop: 4,
               }}
             >
-              {'تم نسخ رقم الطلب بنجاح!'}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div style={{ background: '#000000', minHeight: 'calc(100vh - 90px)', padding: '40px 16px 60px' }}>
-          <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
-            style={{ textAlign: 'center', padding: '50px 30px 40px', background: '#151515', border: '1px solid rgba(185, 160, 108, 0.4)', borderRadius: 12, maxWidth: 555, width: '100%', margin: '0 auto', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-            
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }}>
-              <CheckCircle size={98} color="#c9b07a" style={{ margin: '0 auto 32px', strokeWidth: 1.2 }} />
-            </motion.div>      
-            
-            <div style={{ marginBottom: 26 }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 10, color: '#c9b07a', fontWeight: 700, direction: 'rtl', letterSpacing: 0.3 }}>
-                تم تسجيل طلبك بنجاح !
-              </h2>
-              <p style={{ color: '#a8a8a8', fontSize: 14, marginBottom: 0, direction: 'rtl', textAlign: 'center', lineHeight: 1.9, letterSpacing: 0.2 }}>
-                يسعدنا دائمًا اختيارك ZASHM
-              </p>
+              الرقم المرجعي للطلب
             </div>
-            
-            <div style={{ background: '#1a1a1a', border: '1px dashed rgba(185, 160, 108, 0.75)', borderRadius: 10, padding: '18px 22px', marginBottom: 34 }}>
-              <div style={{ color: '#c9b07a', fontSize: 11, marginBottom: 12, textAlign: 'center', letterSpacing: 2, textTransform: 'uppercase' }}>
-                ORDER REFERENCE<br />
-                <span style={{ direction: 'rtl', display: 'inline-block', marginTop: 4 }}>رقم المرجع للطلب</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-                <span style={{ color: '#c9b07a', fontSize: 20, fontWeight: 600, letterSpacing: 3, fontFamily: 'monospace' }}>
-                  {success.id}
-                </span>
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(success.id);
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              direction: 'ltr',
+            }}
+          >
+            <span
+              style={{
+                color: '#d1b363',
+                fontSize: 'clamp(15px, 3.5vw, 21px)',
+                fontWeight: 700,
+                letterSpacing: 2,
+                fontFamily: 'monospace',
+                overflowWrap: 'anywhere',
+                lineHeight: 1.6,
+              }}
+            >
+              {success.id}
+            </span>
+
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(success.id);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                } catch (error) {
+                  const textArea = document.createElement('textarea');
+                  textArea.value = success.id;
+                  textArea.style.position = 'fixed';
+                  textArea.style.opacity = '0';
+                  document.body.appendChild(textArea);
+                  textArea.select();
+
+                  try {
+                    document.execCommand('copy');
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
-                  }}
-                  style={{ background: 'none', border: 'none', color: '#c9b07a', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, transition: 'opacity 0.2s ease' }}
-                  title="Copy Order ID"
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div style={{ height: 1, background: 'linear-gradient(90deg, transparent 0%, rgba(185, 160, 108, 0.55) 50%, transparent 100%)', margin: '0 0 30px', width: '100%' }} />
-
-            <div style={{ marginBottom: 34, textAlign: 'center' }}>
-              <h4 style={{ fontFamily: 'var(--font-display)', color: '#c9b07a', fontSize: 14, letterSpacing: 8, textTransform: 'uppercase', marginBottom: 12, fontWeight: 700 }}>
-                TRACK YOUR ORDER
-              </h4>
-              <p style={{ color: '#a8a8a8', fontSize: 13, lineHeight: 2, margin: '0 auto 28px', maxWidth: '420px', direction: 'rtl' }}>
-                يمكنك تتبع طلبك من خلال صفحة <span style={{ color: '#c9b07a' }}>Track Your Order</span> باستخدام رقم الطلب أعلاه، أو من خلال التواصل مع فريق الدعم
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: 20, width: '100%' }}>
-                <button 
-                  onClick={() => {
-                    const url = success.tracking_url || '/?track=' + encodeURIComponent(success.id);
-                    window.location.assign(url);
-                  }}
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 28px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', flex: '1 1 0', minWidth: '0', boxShadow: 'none', transition: 'all 0.3s ease' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 60%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(185, 160, 108, 0.4)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                  onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
-                  onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
-                >
-                  <span>🔍</span> TRACK YOUR ORDER
-                </button>
-                <a 
-                  href={'https://wa.me/201013380313?text=' + encodeURIComponent('مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' + success.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 28px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textDecoration: 'none', textTransform: 'uppercase', cursor: 'pointer', flex: '1 1 0', minWidth: '0', boxShadow: 'none', transition: 'all 0.3s ease' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 60%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(185, 160, 108, 0.4)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
-                  onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
-                  onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
-                >
-                  <span>💬</span> CONTACT SUPPORT
-                </a>
-              </div>
-            </div>
-            <button 
-              style={{ width: '100%', padding: '16px', borderRadius: '50px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', background: 'linear-gradient(90deg, #b9a06c 0%, #d4b878 100%)', color: '#000000', border: 'none', fontSize: '12px', cursor: 'pointer', boxShadow: 'none', transition: 'all 0.3s ease' }} 
-              onClick={() => setPage('home')}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #c9b07a 0%, #e6c98a 100%)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(185, 160, 108, 0.4)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #b9a06c 0%, #d4b878 100%)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
-              onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
-              onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
+                  } finally {
+                    document.body.removeChild(textArea);
+                  }
+                }
+              }}
+              aria-label="Copy order reference"
+              title="Copy Order ID"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#d1b363',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 6,
+                borderRadius: 5,
+                transition: 'color 0.25s ease, transform 0.25s ease',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#f0d78b';
+                e.currentTarget.style.transform = 'scale(1.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#d1b363';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.outline = '2px solid #c9aa50';
+                e.currentTarget.style.outlineOffset = '3px';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.outline = 'none';
+              }}
             >
-              CONTINUE SHOPPING
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
             </button>
-          </motion.div>
+          </div>
         </div>
-      </div>
-    );
-  }
+
+        {/* Divider */}
+        <div
+          style={{
+            height: 1,
+            background:
+              'linear-gradient(90deg, transparent, rgba(190,157,70,0.55), transparent)',
+            margin: '0 0 28px',
+            width: '100%',
+          }}
+        />
+
+        {/* Tracking section */}
+        <div style={{ marginBottom: 30, textAlign: 'center' }}>
+          <h4
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: '#c9aa50',
+              fontSize: 14,
+              letterSpacing: 5,
+              textTransform: 'uppercase',
+              margin: '0 0 14px',
+              fontWeight: 500,
+              lineHeight: 1.8,
+            }}
+          >
+            TRACK YOUR ORDER
+          </h4>
+
+          <p
+            style={{
+              color: '#a5a5a5',
+              fontSize: 13,
+              lineHeight: 2,
+              margin: '0 auto 25px',
+              maxWidth: 420,
+              direction: 'rtl',
+            }}
+          >
+            يمكنك تتبع طلبك من خلال صفحة{' '}
+            <span style={{ color: '#d1b363', fontWeight: 600 }}>
+              Track Your Order
+            </span>{' '}
+            باستخدام رقم الطلب أعلاه، أو من خلال التواصل مع فريق الدعم.
+          </p>
+
+          {/* Two equal buttons on the same row */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'stretch',
+              gap: 12,
+              marginBottom: 20,
+              width: '100%',
+              direction: 'ltr',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                const url =
+                  success.tracking_url ||
+                  '/?track=' + encodeURIComponent(success.id);
+
+                window.location.assign(url);
+              }}
+              style={{
+                boxSizing: 'border-box',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+                padding: '15px 10px',
+                minWidth: 0,
+                flex: '1 1 0',
+                borderRadius: 50,
+                border: '1px solid #c9aa50',
+                background:
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)',
+                color: '#101010',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 1.1,
+                lineHeight: 1.5,
+                whiteSpace: 'nowrap',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
+                transition:
+                  'background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #c9aa50 0%, #e0c779 55%, #d1b363 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 5px 18px rgba(201,170,80,0.22)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 3px 12px rgba(0,0,0,0.12)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.outline = '2px solid #e0c779';
+                e.currentTarget.style.outlineOffset = '3px';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.outline = 'none';
+              }}
+            >
+              <span aria-hidden="true">🔍</span>
+              <span>TRACK YOUR ORDER</span>
+            </button>
+
+            <a
+              href={
+                'https://wa.me/201013380313?text=' +
+                encodeURIComponent(
+                  'مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' +
+                    success.id
+                )
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                boxSizing: 'border-box',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+                padding: '15px 10px',
+                minWidth: 0,
+                flex: '1 1 0',
+                borderRadius: 50,
+                border: '1px solid #c9aa50',
+                background:
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)',
+                color: '#101010',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 1.1,
+                lineHeight: 1.5,
+                whiteSpace: 'nowrap',
+                textDecoration: 'none',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
+                transition:
+                  'background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #c9aa50 0%, #e0c779 55%, #d1b363 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 5px 18px rgba(201,170,80,0.22)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 3px 12px rgba(0,0,0,0.12)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.outline = '2px solid #e0c779';
+                e.currentTarget.style.outlineOffset = '3px';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.outline = 'none';
+              }}
+            >
+              <span aria-hidden="true">💬</span>
+              <span>CONTACT SUPPORT</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Continue shopping */}
+        <button
+          type="button"
+          onClick={() => setPage('home')}
+          style={{
+            boxSizing: 'border-box',
+            width: '100%',
+            padding: '16px 12px',
+            borderRadius: 50,
+            fontWeight: 700,
+            letterSpacing: 3,
+            lineHeight: 1.6,
+            textTransform: 'uppercase',
+            background:
+              'linear-gradient(100deg, #b89a43 0%, #d1b363 55%, #e0c779 100%)',
+            color: '#101010',
+            border: '1px solid rgba(224,199,121,0.35)',
+            fontSize: 11,
+            cursor: 'pointer',
+            boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
+            transition:
+              'background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background =
+              'linear-gradient(100deg, #c9aa50 0%, #e0c779 55%, #f0d78b 100%)';
+            e.currentTarget.style.boxShadow =
+              '0 5px 20px rgba(201,170,80,0.23)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background =
+              'linear-gradient(100deg, #b89a43 0%, #d1b363 55%, #e0c779 100%)';
+            e.currentTarget.style.boxShadow =
+              '0 3px 12px rgba(0,0,0,0.12)';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.outline = '2px solid #e0c779';
+            e.currentTarget.style.outlineOffset = '3px';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.outline = 'none';
+          }}
+        >
+          CONTINUE SHOPPING
+        </button>
+      </motion.div>
+    </div>
+  );
+}
 
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
