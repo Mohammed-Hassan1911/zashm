@@ -418,17 +418,18 @@ export function CheckoutPage() {
               transform: 'translateX(-50%)',
               background: '#c9aa50',
               color: '#101010',
-              padding: '12px 24px',
+              padding: '10px 24px',
               borderRadius: 30,
               fontWeight: 600,
               fontSize: 13,
               boxShadow: '0 5px 24px rgba(201,170,80,0.25)',
               zIndex: 9999,
-              direction: 'rtl',
-              whiteSpace: 'nowrap',
+              textAlign: 'center',
+              lineHeight: 1.5,
             }}
           >
-            تم نسخ رقم الطلب بنجاح!
+            <div>Order ID copied successfully!</div>
+            <div style={{ direction: 'rtl' }}>تم نسخ رقم الطلب بنجاح!</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -470,32 +471,48 @@ export function CheckoutPage() {
 
         {/* Arabic confirmation */}
         <div style={{ marginBottom: 26 }}>
-          <h2
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 27,
-              lineHeight: 1.7,
-              margin: '0 0 8px',
-              color: '#d1b363',
-              fontWeight: 700,
-              direction: 'rtl',
-              letterSpacing: 0,
-            }}
-          >
-            تم تسجيل طلبك بنجاح !
-          </h2>
+          <div style={{ marginBottom: 8 }}>
+            <h2
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 27,
+                lineHeight: 1.6,
+                margin: '0 0 4px',
+                color: '#d1b363',
+                fontWeight: 700,
+                letterSpacing: 0,
+              }}
+            >
+              Order placed successfully!
+            </h2>
+            <h2
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 27,
+                lineHeight: 1.6,
+                margin: 0,
+                color: '#d1b363',
+                fontWeight: 700,
+                direction: 'rtl',
+                letterSpacing: 0,
+              }}
+            >
+              تم تأكيد طلبك بنجاح!
+            </h2>
+          </div>
 
           <p
             style={{
               color: '#999999',
               fontSize: 14,
               margin: 0,
-              direction: 'rtl',
               textAlign: 'center',
               lineHeight: 1.9,
             }}
           >
-            يسعدنا دائمًا اختيارك ZASHM
+            We are always pleased to have you choose ZASHM
+            <br />
+            <span style={{ direction: 'rtl' }}>يسعدنا دائمًا اختيارك ZASHM</span>
           </p>
         </div>
 
@@ -658,22 +675,18 @@ export function CheckoutPage() {
             TRACK YOUR ORDER
           </h4>
 
-          <p
+          <div
             style={{
               color: '#a5a5a5',
               fontSize: 13,
               lineHeight: 2,
               margin: '0 auto 25px',
               maxWidth: 420,
-              direction: 'rtl',
             }}
           >
-            يمكنك تتبع طلبك من خلال صفحة{' '}
-            <span style={{ color: '#d1b363', fontWeight: 600 }}>
-              Track Your Order
-            </span>{' '}
-            باستخدام رقم الطلب أعلاه، أو من خلال التواصل مع فريق الدعم.
-          </p>
+            <div>You can track your order using the order number above via the tracking page, or by contacting our support team.</div>
+            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك تتبع طلبك باستخدام رقم الطلب أعلاه من خلال صفحة التتبع، أو عن طريق التواصل مع فريق الدعم.</div>
+          </div>
 
           {/* Two equal buttons on the same row */}
           <div
@@ -745,7 +758,10 @@ export function CheckoutPage() {
               }}
             >
               <span aria-hidden="true">🔍</span>
-              <span>TRACK YOUR ORDER</span>
+              <span style={{ textAlign: 'center', lineHeight: 1.2 }}>
+                <div>TRACK YOUR ORDER</div>
+                <div style={{ fontSize: '9px', letterSpacing: '0.8px', marginTop: 1 }}>تتبع الطلب</div>
+              </span>
             </button>
 
             <a
@@ -807,7 +823,10 @@ export function CheckoutPage() {
               }}
             >
               <span aria-hidden="true">💬</span>
-              <span>CONTACT SUPPORT</span>
+              <span style={{ textAlign: 'center', lineHeight: 1.2 }}>
+                <div>CONTACT SUPPORT</div>
+                <div style={{ fontSize: '9px', letterSpacing: '0.8px', marginTop: 1 }}>تواصل مع الدعم</div>
+              </span>
             </a>
           </div>
         </div>
@@ -857,7 +876,10 @@ export function CheckoutPage() {
             e.currentTarget.style.outline = 'none';
           }}
         >
-          CONTINUE SHOPPING
+          <span style={{ textAlign: 'center', lineHeight: 1.2, display: 'block' }}>
+            <div>CONTINUE SHOPPING</div>
+            <div style={{ fontSize: '9px', letterSpacing: '1px', marginTop: 2 }}>متابعة التسوق</div>
+          </span>
         </button>
       </motion.div>
     </div>
@@ -881,14 +903,34 @@ export function CheckoutPage() {
                 تم تحديث سلة التسوق تلقائيًا.
               </p>
               {stockNotice.map((e, i) => {
-                const lines = e.split('\n');
-                return (
-                  <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
-                    {lines.map((line, idx) => (
-                      <p key={idx} style={{ marginBottom:2, direction: idx % 2 === 1 ? 'rtl' : 'ltr', textAlign: idx % 2 === 1 ? 'right' : 'left' }}>{line}</p>
-                    ))}
-                  </div>
-                );
+                const s = String(e || '');
+                const hasArabic = /[\u0600-\u06FF]/.test(s);
+                if (hasArabic) {
+                  const parts = s.split(/\n+/);
+                  const en = parts.find(p => /^[A-Za-z]/.test(p.trim())) || parts[0];
+                  const ar = parts.find(p => /[\u0600-\u06FF]/.test(p.trim())) || parts[parts.length-1];
+                  return (
+                    <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
+                      <div>{en}</div>
+                      <div style={{ direction: 'rtl', textAlign: 'right' }}>{ar}</div>
+                    </div>
+                  );
+                } else {
+                  // English only - add Arabic if known
+                  if (s.includes('updated automatically') || s.includes('bag has been updated')) {
+                    return (
+                      <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
+                        <div>{s}</div>
+                        <div style={{ direction: 'rtl', textAlign: 'right' }}>تم تحديث سلة التسوق تلقائيًا.</div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
+                      <div>{s}</div>
+                    </div>
+                  );
+                }
               })}
             </motion.div>
           )}
@@ -902,7 +944,52 @@ export function CheckoutPage() {
               <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13, direction: 'rtl', textAlign: 'right' }}>
                 مشكلة في توفر المخزون:
               </p>
-              {stockErrors.map((e, i) => <p key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:2, lineHeight:1.6 }}>• {e}</p>)}
+              {stockErrors.map((e, i) => {
+                const s = String(e || '');
+                const hasArabic = /[\u0600-\u06FF]/.test(s);
+                if (hasArabic) {
+                  const parts = s.split(/\n+/);
+                  const en = parts.find(p => /^[A-Za-z]/.test(p.trim()));
+                  const ar = parts.find(p => /[\u0600-\u06FF]/.test(p.trim())) || parts[parts.length-1];
+                  if (en) {
+                    return (
+                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
+                        <div>• {en}</div>
+                        <div style={{ direction: 'rtl' }}>• {ar}</div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
+                        <div>• There was a problem with your order.</div>
+                        <div style={{ direction: 'rtl' }}>• {ar}</div>
+                      </div>
+                    );
+                  }
+                } else {
+                  if (s.includes('Order failed')) {
+                    return (
+                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
+                        <div>• {s}</div>
+                        <div style={{ direction: 'rtl' }}>• فشل الطلب. يرجى المحاولة مرة أخرى.</div>
+                      </div>
+                    );
+                  }
+                  if (s.includes('problem')) {
+                    return (
+                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
+                        <div>• {s}</div>
+                        <div style={{ direction: 'rtl' }}>• حدث خطأ في عملية الطلب.</div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
+                      <div>• {s}</div>
+                    </div>
+                  );
+                }
+              })}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1114,13 +1201,22 @@ export function CheckoutPage() {
                   <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                     <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}
                       style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
-                    جاري تنفيذ الطلب... / Placing Order...
+                    <div style={{ textAlign: 'center', lineHeight: 1.2 }}>
+                      <div>Placing Order…</div>
+                      <div style={{ fontSize: '11px', marginTop: 2, letterSpacing: '1px' }}>جاري تنفيذ الطلب…</div>
+                    </div>
                   </span>
-                ) : ('PLACE ORDER / تأكيد الطلب')}
+                ) : (
+                    <div style={{ textAlign: 'center', lineHeight: 1.2 }}>
+                      <div>PLACE ORDER</div>
+                      <div style={{ fontSize: '11px', marginTop: 2, letterSpacing: '1px' }}>تأكيد الطلب</div>
+                    </div>
+                  )}
               </motion.button>
-              <p style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10 }}>
-                {'🔒 Secure order · Your order will be confirmed via the website'}
-              </p>
+              <div style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10, lineHeight: 1.6 }}>
+                <div>🔒 Secure order · Your order will be confirmed via the website</div>
+                <div style={{ direction: 'rtl', marginTop: 2 }}>طلب آمن · سيتم تأكيد طلبك عبر الموقع</div>
+              </div>
             </div>
           </div>
         </div>
