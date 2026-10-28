@@ -479,15 +479,15 @@ export function CheckoutPage() {
               <p style={{ color: '#a8a8a8', fontSize: 13, lineHeight: 2, margin: '0 auto 28px', maxWidth: '420px', direction: 'rtl' }}>
                 يمكنك تتبع طلبك من خلال صفحة <span style={{ color: '#c9b07a' }}>Track Your Order</span> باستخدام رقم الطلب أعلاه، أو من خلال التواصل مع فريق الدعم
               </p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: 20, width: '100%' }}>
                 <button 
                   onClick={() => {
                     const url = success.tracking_url || '/?track=' + encodeURIComponent(success.id);
                     window.location.assign(url);
                   }}
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '14px 38px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '12px', fontWeight: '700', letterSpacing: '2.5px', textTransform: 'uppercase', cursor: 'pointer', minWidth: '175px', boxShadow: '0 4px 18px rgba(185, 160, 108, 0.35)', transition: 'all 0.3s ease' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 50%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(185, 160, 108, 0.55)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(185, 160, 108, 0.35)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 28px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', flex: '1 1 0', minWidth: '0', boxShadow: 'none', transition: 'all 0.3s ease' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 60%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(185, 160, 108, 0.4)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
                   onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
                 >
@@ -497,9 +497,9 @@ export function CheckoutPage() {
                   href={'https://wa.me/201013380313?text=' + encodeURIComponent('مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' + success.id)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '14px 38px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '12px', fontWeight: '700', letterSpacing: '2.5px', textDecoration: 'none', textTransform: 'uppercase', cursor: 'pointer', minWidth: '175px', boxShadow: '0 4px 18px rgba(185, 160, 108, 0.35)', transition: 'all 0.3s ease' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 50%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(185, 160, 108, 0.55)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(185, 160, 108, 0.35)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 28px', borderRadius: '50px', border: '1px solid #b9a06c', background: 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)', color: '#000000', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textDecoration: 'none', textTransform: 'uppercase', cursor: 'pointer', flex: '1 1 0', minWidth: '0', boxShadow: 'none', transition: 'all 0.3s ease' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #c9b07a 0%, #d4b878 60%, #c9b07a 100%)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(185, 160, 108, 0.4)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #b9a06c 0%, #c9b07a 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
                   onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
                 >
@@ -508,10 +508,10 @@ export function CheckoutPage() {
               </div>
             </div>
             <button 
-              style={{ width: '100%', padding: '16px', borderRadius: '50px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', background: 'linear-gradient(90deg, #b9a06c 0%, #d4b878 50%, #b9a06c 100%)', color: '#000000', border: 'none', fontSize: '12px', cursor: 'pointer', boxShadow: '0 4px 22px rgba(185, 160, 108, 0.45)', transition: 'all 0.3s ease' }} 
+              style={{ width: '100%', padding: '16px', borderRadius: '50px', fontWeight: 700, letterSpacing: '4px', textTransform: 'uppercase', background: 'linear-gradient(90deg, #b9a06c 0%, #d4b878 100%)', color: '#000000', border: 'none', fontSize: '12px', cursor: 'pointer', boxShadow: 'none', transition: 'all 0.3s ease' }} 
               onClick={() => setPage('home')}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #d4b878 0%, #e6c98a 50%, #d4b878 100%)'; e.currentTarget.style.boxShadow = '0 6px 32px rgba(185, 160, 108, 0.65)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #b9a06c 0%, #d4b878 50%, #b9a06c 100%)'; e.currentTarget.style.boxShadow = '0 4px 22px rgba(185, 160, 108, 0.45)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #c9b07a 0%, #e6c98a 100%)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(185, 160, 108, 0.4)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(90deg, #b9a06c 0%, #d4b878 100%)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
               onFocus={(e) => { e.currentTarget.style.outline = '2px solid rgba(185, 160, 108, 0.6)'; e.currentTarget.style.outlineOffset = '2px'; }}
               onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
             >
