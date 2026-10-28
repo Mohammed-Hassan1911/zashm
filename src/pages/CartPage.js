@@ -424,92 +424,82 @@ export function CheckoutPage() {
         </AnimatePresence>
 
         <motion.div initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
-          style={{ textAlign: 'center', padding: '50px 30px', background: 'var(--surface)', border: '1px solid var(--border-gold)', borderRadius: 12, maxWidth: 520, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+          style={{ textAlign: 'center', padding: '50px 30px', background: '#000000', border: '1px solid var(--gold)', borderRadius: 0, maxWidth: 520, width: '100%', boxShadow: 'none' }}>
           
-          <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 0.5 }}>
-            <CheckCircle size={72} color="#D4AF37" style={{ margin: '0 auto 20px' }} />
+          <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 0.6 }}>
+            <CheckCircle size={90} color="#D4AF37" style={{ margin: '0 auto 24px', strokeWidth: 1.5 }} />
           </motion.div>      
           
-          <div style={{ marginBottom: 12 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8, color: 'var(--gold)', letterSpacing: 0.5 }}>
+          <div style={{ marginBottom: 16 }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 6, color: 'var(--gold)', letterSpacing: 2, textTransform: 'uppercase', fontWeight: 400 }}>
               Order Placed Successfully!
             </h2>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 0, color: 'var(--gold)', letterSpacing: 0.5, direction: 'rtl', textAlign: 'center' }}>
-              تم تأكيد طلبك بنجاح!
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 6, color: 'var(--gold)', letterSpacing: 1, direction: 'rtl', textAlign: 'center', fontWeight: 400 }}>
+              تم تسجيل طلبك بنجاح !
             </h2>
+            <p style={{ color: 'var(--gold)', fontSize: 14, marginBottom: 0, direction: 'rtl', textAlign: 'center', letterSpacing: 0.5 }}>
+              يسعدنا دائمًا اختيارك ZASHM
+            </p>
           </div>
           
-          <div style={{ color: 'var(--text2)', fontSize: 15, marginBottom: 16 }}>
-            <p style={{ marginBottom: 4 }}>Thank you for your order. You can track your shipment using the link below.</p>
-            <p style={{ marginBottom: 0, direction: 'rtl', textAlign: 'center' }}>شكرًا لطلبك. يمكنك تتبّع شحنتك من خلال الرابط الموضح أدناه.</p>
-          </div>
-          <div style={{ background: 'rgba(212, 175, 55, 0.04)', border: '1px dashed var(--border-gold)', borderRadius: 8, padding: '20px', marginBottom: 28, position: 'relative' }}>
+          <div style={{ background: 'transparent', border: '1px dashed var(--gold)', borderRadius: 0, padding: '18px 20px', marginBottom: 28, position: 'relative' }}>
             <span style={{ 
               display: 'block', 
-              color: 'var(--text2)',
-              fontSize: 13,
-              fontWeight: 700,
+              color: 'var(--gold)',
+              fontSize: 12,
+              fontWeight: 600,
               textTransform: 'uppercase', 
-              marginBottom: 4, 
-              letterSpacing: 1 
+              marginBottom: 6, 
+              letterSpacing: 2 
             }}>
-              Order Number: {success.id}
+              Order Reference
             </span>
-            <span style={{ 
-              display: 'block', 
-              color: 'var(--text2)',
-              fontSize: 13,
-              fontWeight: 700,
-              marginBottom: 12, 
-              direction: 'rtl',
-              textAlign: 'center'
-            }}>
-              رقم الطلب: {success.id}
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: 18, fontWeight: 400, margin: 0, letterSpacing: 2 }}>
+                {success.id}
+              </h3>
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(success.id);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, fontSize: '14px', fontWeight: 600 }}
+                style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4, fontSize: '16px' }}
                 title="Copy Order ID"
               >
-                Copy Order ID
+                📋
               </button>
             </div>
           </div>
 
-                    {/* 📦 قسم تتبع الطلب الاحترافي المتكامل مع موقعك والدعم */}
+                    {/* 📦 قسم تتبع الطلب */}
           <div style={{ 
-            borderTop: '1px solid rgba(212, 175, 55, 0.15)', 
+            borderTop: '1px solid var(--gold)', 
             paddingTop: 24, 
-            marginBottom: 32, 
+            marginBottom: 28, 
             textAlign: 'center' 
           }}>
             <h4 style={{ 
               fontFamily: 'var(--font-display)', 
               color: 'var(--gold)', 
               fontSize: 14, 
-              letterSpacing: 1.5, 
+              letterSpacing: 3, 
               textTransform: 'uppercase', 
-              marginBottom: 10 
+              marginBottom: 12,
+              fontWeight: 400
             }}>
-              {'Track Your Order'}
+              TRACK YOUR ORDER
             </h4>
             
             <p style={{ 
-              color: 'var(--text2)', 
+              color: 'var(--gold)', 
               fontSize: 13, 
-              lineHeight: 1.6, 
+              lineHeight: 1.8, 
               margin: '0 auto 20px', 
-              maxWidth: '440px',
-              direction: 'ltr'
+              maxWidth: '460px',
+              direction: 'rtl'
             }}>
-              {'You can now track your order by going to the '}
-              <strong style={{ color: 'var(--gold)' }}>{'Track Your Order'}</strong>
-              {' page using the order reference above, or by contacting our support team.'}
+              يمكنك تتبع طلبك من خلال صفحة تتبع الطلب باستخدام رقم الطلب أعلاه، أو عن طريق التواصل مع فريق الدعم لدينا
             </p>
 
             {/* الأزرار التفاعلية المزدوجة */}
@@ -598,10 +588,10 @@ export function CheckoutPage() {
 
           <button 
             className="gold-btn" 
-            style={{ width: '100%', padding: '14px', borderRadius: 6, fontWeight: 600, letterSpacing: 0.5 }} 
+            style={{ width: '100%', padding: '14px', borderRadius: 0, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', background: 'var(--gold)', color: '#000000', border: '1px solid var(--gold)' }} 
             onClick={() => setPage('home')}
           >
-            {'Continue Shopping'}
+            Continue Shopping
           </button>
         </motion.div>
       </div>
