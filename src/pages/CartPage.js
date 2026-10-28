@@ -124,7 +124,7 @@ export function CartPage() {
                           </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                          <span style={{ color: 'var(--gold)', fontSize: 15, fontWeight: 600 }}>EGP {(((item?.product?.salePrice || item?.product?.price) ?? 0) * (item?.qty ?? 0)).toLocaleString()}</span>
+                          <span style={{ color: '#B9A06C', fontSize: 15, fontWeight: 600 }}>EGP {(((item?.product?.salePrice || item?.product?.price) ?? 0) * (item?.qty ?? 0)).toLocaleString()}</span>
                           <button onClick={() => removeFromCart(item?.key)}
                             style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
                             onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
@@ -424,24 +424,24 @@ export function CheckoutPage() {
         </AnimatePresence>
 
         <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
-          style={{ textAlign: 'center', padding: '40px 20px 30px', background: '#141414', border: 'none', borderRadius: 0, maxWidth: 420, width: '100%', margin: '0 auto' }}>
+          style={{ textAlign: 'center', padding: '50px 24px 40px', background: '#151515', border: 'none', borderRadius: 0, maxWidth: 480, width: '100%', margin: '0 auto' }}>
           
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.4 }}>
-            <CheckCircle size={72} color="#D4AF37" style={{ margin: '0 auto 18px', strokeWidth: 1.5 }} />
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }}>
+            <CheckCircle size={78} color="#B9A06C" style={{ margin: '0 auto 22px', strokeWidth: 1.5 }} />
           </motion.div>      
           
-          <div style={{ marginBottom: 18 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 6, color: 'var(--gold)', letterSpacing: 1.5, fontWeight: 500, direction: 'rtl' }}>
-              تم تسجيل طلبك بنجاح !
+          <div style={{ marginBottom: 22 }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8, color: '#B9A06C', letterSpacing: 1.8, fontWeight: 500, direction: 'rtl' }}>
+              !تم تسجيل طلبك بنجاح
             </h2>
-            <p style={{ color: '#9b9b9b', fontSize: 12, marginBottom: 0, direction: 'rtl', textAlign: 'center', letterSpacing: 0.3 }}>
+            <p style={{ color: '#a0a0a0', fontSize: 13, marginBottom: 0, direction: 'rtl', textAlign: 'center', letterSpacing: 0.4, lineHeight: 1.8 }}>
               يسعدنا دائمًا اختيارك ZASHM
             </p>
           </div>
           
-          <div style={{ background: '#141414', border: '1px dashed rgba(212, 175, 55, 0.6)', borderRadius: 8, padding: '16px 14px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <span style={{ color: '#D4AF37', fontSize: 15, fontWeight: 600, letterSpacing: 1 }}>
+          <div style={{ background: '#1a1a1a', border: '1px dashed rgba(185, 160, 108, 0.7)', borderRadius: 10, padding: '18px 16px', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ color: '#B9A06C', fontSize: 17, fontWeight: 600, letterSpacing: 1.5 }}>
                 {success.id}
               </span>
               <button 
@@ -450,10 +450,10 @@ export function CheckoutPage() {
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                style={{ background: 'none', border: 'none', color: '#D4AF37', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2, fontSize: '14px' }}
+                style={{ background: 'none', border: 'none', color: '#B9A06C', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2, fontSize: '16px' }}
                 title="Copy Order ID"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                 </svg>
@@ -461,31 +461,30 @@ export function CheckoutPage() {
             </div>
           </div>
 
-          <div style={{ height: 1, background: 'rgba(212, 175, 55, 0.3)', margin: '0 0 18px', width: '100%' }} />
+          <div style={{ height: 1, background: 'rgba(185, 160, 108, 0.4)', margin: '0 0 22px', width: '100%' }} />
 
-          {/* تتبع الطلب */}
-          <div style={{ marginBottom: 24, textAlign: 'center' }}>
+          <div style={{ marginBottom: 26, textAlign: 'center' }}>
             <h4 style={{ 
               fontFamily: 'var(--font-display)', 
-              color: '#D4AF37', 
+              color: '#B9A06C', 
               fontSize: 13, 
-              letterSpacing: 4, 
+              letterSpacing: 5, 
               textTransform: 'uppercase', 
-              marginBottom: 8,
+              marginBottom: 10,
               fontWeight: 600
             }}>
               TRACK YOUR ORDER
             </h4>
             
             <p style={{ 
-              color: '#9b9b9b', 
-              fontSize: 11, 
-              lineHeight: 1.7, 
+              color: '#a0a0a0', 
+              fontSize: 12, 
+              lineHeight: 1.8, 
               margin: '0 auto', 
-              maxWidth: '320px',
+              maxWidth: '340px',
               direction: 'rtl'
             }}>
-              يمكنك تتبع طلبك باستخدام رقم الطلب أعلاه عبر صفحة تتبع الطلب أو بالتواصل مع الدعم
+              يمكنك تتبع طلبك باستخدام رقم الطلب أعلاه عبر صفحة تتبع الطلب أو بالتواصل مع فريق الدعم
             </p>
 
             {/* الأزرار التفاعلية المزدوجة */}
@@ -508,8 +507,8 @@ export function CheckoutPage() {
                   gap: '8px',
                   padding: '12px 24px',
                   borderRadius: '30px',
-                  border: '1px solid var(--gold)',
-                  background: 'var(--gold)',
+                  border: '1px solid #B9A06C',
+                  background: '#B9A06C',
                   color: '#000000',
                   fontSize: '12px',
                   fontWeight: '700',
@@ -574,7 +573,7 @@ export function CheckoutPage() {
 
           <button 
             className="gold-btn" 
-            style={{ width: '100%', padding: '12px', borderRadius: 0, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', background: 'var(--gold)', color: '#000000', border: '1px solid var(--gold)', fontSize: 12 }} 
+            style={{ width: '100%', padding: '13px', borderRadius: 0, fontWeight: 600, letterSpacing: 2.5, textTransform: 'uppercase', background: '#B9A06C', color: '#000000', border: '1px solid #B9A06C', fontSize: 12 }} 
             onClick={() => setPage('home')}
           >
             CONTINUE SHOPPING
