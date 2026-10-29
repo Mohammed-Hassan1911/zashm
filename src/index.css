@@ -365,6 +365,8 @@ div[role="status"]:not(.zashm-toast) svg {
 
 .mobile-nav { display: none; }
 
+.back-to-top { display: flex; }
+
 .whatsapp-fab {
   position: fixed;
   bottom: 88px;
@@ -381,6 +383,7 @@ div[role="status"]:not(.zashm-toast) svg {
     right: auto;
   }
   .mobile-keyboard-open .whatsapp-fab { display: none; }
+  .mobile-keyboard-open .back-to-top { display: none; }
 
   footer.site-footer {
     padding-bottom: calc(12px + 64px + env(safe-area-inset-bottom, 0px)) !important;

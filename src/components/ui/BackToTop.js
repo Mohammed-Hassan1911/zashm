@@ -11,19 +11,20 @@ export function BackToTop() {
     window.addEventListener('scroll', handler);
     return () => window.removeEventListener('scroll', handler);
   }, []);
-  return (
+  return createPortal(
     <AnimatePresence>
       {visible && (
         <motion.button
           initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0 }}
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          style={{ position: 'fixed', bottom: 90, right: 24, width: 44, height: 44, borderRadius: '50%', background: 'var(--gold)', color: 'var(--bg)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 800, boxShadow: '0 4px 20px rgba(201,168,76,0.4)' }}
+          style={{ position: 'fixed', bottom: 90, right: 24, width: 44, height: 44, borderRadius: '50%', background: 'var(--gold)', color: 'var(--bg)', border: 'none', cursor: 'pointer', alignItems: 'center', justifyContent: 'center', zIndex: 800, boxShadow: '0 4px 20px rgba(201,168,76,0.4)' }}
           whileHover={{ scale: 1.1, boxShadow: '0 6px 30px rgba(201,168,76,0.6)' }}
           whileTap={{ scale: 0.9 }}
           className="back-to-top"
         ><ArrowUp size={18} /></motion.button>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
