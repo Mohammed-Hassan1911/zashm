@@ -20,9 +20,9 @@ export default function HomePage() {
       {/* ───── HERO — Old Money Menswear Editorial ───── */}
       <section ref={heroRef} style={{ height: '100vh', minHeight: 640, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* Black luxury backdrop — soft gold glow */}
-        <motion.div style={{ position: 'absolute', inset: 0, y }}>
+        <motion.div data-decor="true" style={{ position: 'absolute', inset: 0, y }}>
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #0a0a0a 0%, #14110a 48%, #0a0a0a 100%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 38%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse clamp(40%, 62vw, 80%) clamp(35%, 52vh, 70%) at 50% 44%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 38%, transparent 72%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 34%, rgba(0,0,0,0.72) 100%)' }} />
         </motion.div>
 
@@ -30,8 +30,8 @@ export default function HomePage() {
         {[...Array(28)].map((_, i) => {
           const size = 1 + (i % 3) * 0.7;
           return (
-            <motion.div key={i}
-              style={{ position: 'absolute', width: size, height: size, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 4px rgba(201,168,76,0.75)', left: `${(i * 37) % 100}%`, top: `${(i * 53) % 100}%`, zIndex: 2 }}
+            <motion.div data-decor="true" key={i}
+              style={{ position: 'absolute', width: `clamp(1px, ${size}px, 2px)`, height: `clamp(1px, ${size}px, 2px)`, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 4px rgba(201,168,76,0.75)', left: `${(i * 37) % 100}%`, top: `${(i * 53) % 100}%`, zIndex: 2, maxWidth: '2px', maxHeight: '2px' }}
               animate={{ opacity: [0.1, 0.85, 0.1], scale: [0.8, 1.15, 0.8] }}
               transition={{ duration: 3 + (i % 5), repeat: Infinity, delay: (i % 7) * 0.45, ease: 'easeInOut' }}
             />
@@ -131,17 +131,17 @@ export default function HomePage() {
 
       {/* ───── EDITORIAL BANNER ───── */}
       <section style={{ position: 'relative', height: 460, margin: '60px 0', overflow: 'hidden', background: '#0a0a0a' }}>
-        <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+        <div data-decor="true" aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #0a0a0a 0%, #14110a 50%, #0a0a0a 100%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 22% 50%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 40%, transparent 75%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse clamp(35%, 55vw, 75%) clamp(60%, 90vh, 95%) at 22% 50%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 40%, transparent 75%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)' }} />
         </div>
 
         {[...Array(16)].map((_, i) => {
           const size = 1 + (i % 3) * 0.6;
           return (
-            <motion.div key={i}
-              style={{ position: 'absolute', width: size, height: size, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 4px rgba(201,168,76,0.7)', left: `${(i * 29) % 100}%`, top: `${(i * 61) % 100}%`, zIndex: 2 }}
+            <motion.div data-decor="true" key={i}
+              style={{ position: 'absolute', width: `clamp(1px, ${size}px, 2px)`, height: `clamp(1px, ${size}px, 2px)`, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 4px rgba(201,168,76,0.7)', left: `${(i * 29) % 100}%`, top: `${(i * 61) % 100}%`, zIndex: 2, maxWidth: '2px', maxHeight: '2px' }}
               animate={{ opacity: [0.1, 0.8, 0.1], scale: [0.8, 1.15, 0.8] }}
               transition={{ duration: 3 + (i % 4), repeat: Infinity, delay: (i % 6) * 0.5, ease: 'easeInOut' }}
             />

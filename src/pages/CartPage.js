@@ -686,6 +686,7 @@ export function CheckoutPage() {
 
           {/* Two equal buttons on the same row */}
           <div
+            data-order-actions="true"
             style={{
               display: 'flex',
               flexDirection: 'row',

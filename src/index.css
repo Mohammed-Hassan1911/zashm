@@ -355,3 +355,107 @@ img, picture, video {
     min-height: 100vh;
   }
 }
+
+/* Responsive shapes - prevent overflow */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+section, main {
+  overflow-x: hidden;
+}
+
+[data-decor="true"], .decor-shape {
+  max-width: 100vw;
+  overflow: hidden;
+}
+
+/* Small phones - fix order action buttons */
+@media (max-width: 430px) {
+  [data-order-actions] {
+    gap: 8px !important;
+  }
+  [data-order-actions] button,
+  [data-order-actions] a {
+    padding: 16px 8px !important;
+    font-size: 10px !important;
+    letter-spacing: 0.8px !important;
+    gap: 6px !important;
+  }
+  [data-order-actions] button span,
+  [data-order-actions] a span {
+    font-size: 14px !important;
+    line-height: 1 !important;
+  }
+}
+
+@media (max-width: 390px) {
+  [data-order-actions] {
+    gap: 6px !important;
+  }
+  [data-order-actions] button,
+  [data-order-actions] a {
+    padding: 14px 6px !important;
+    font-size: 9px !important;
+    letter-spacing: 0.6px !important;
+    gap: 4px !important;
+  }
+  [data-order-actions] button span,
+  [data-order-actions] a span {
+    font-size: 12px !important;
+  }
+}
+
+@media (max-width: 375px) {
+  [data-order-actions] button,
+  [data-order-actions] a {
+    padding: 12px 4px !important;
+    font-size: 8.5px !important;
+    letter-spacing: 0.4px !important;
+    gap: 3px !important;
+  }
+  [data-order-actions] button span,
+  [data-order-actions] a span {
+    font-size: 11px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  [data-order-actions] button,
+  [data-order-actions] a {
+    padding: 11px 3px !important;
+    font-size: 8px !important;
+    letter-spacing: 0.3px !important;
+    gap: 2px !important;
+  }
+  [data-order-actions] button span,
+  [data-order-actions] a span {
+    font-size: 10px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  [data-order-actions] {
+    gap: 4px !important;
+  }
+  [data-order-actions] button,
+  [data-order-actions] a {
+    padding: 10px 2px !important;
+    font-size: 7.5px !important;
+    letter-spacing: 0.2px !important;
+    gap: 2px !important;
+    line-height: 1.3 !important;
+  }
+  [data-order-actions] button span,
+  [data-order-actions] a span {
+    font-size: 9px !important;
+  }
+}
+
+/* Extra small phones - prevent overflow */
+@media (max-width: 390px) {
+  html, body { overflow-x: hidden; }
+  * { max-width: 100vw; box-sizing: border-box; }
+  img, video { max-width: 100%; height: auto; }
+}
