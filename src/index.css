@@ -488,3 +488,38 @@ section, main {
     padding: 6px 10px !important;
   }
 }
+
+/* Product page - fix Size Guide and small elements at very small widths */
+@media (max-width: 390px) {
+  [data-size-guide] {
+    font-size: 10px !important;
+    letter-spacing: 0.8px !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 375px) {
+  [data-size-guide] {
+    font-size: 9.5px !important;
+    letter-spacing: 0.6px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  [data-size-guide] {
+    font-size: 9px !important;
+    letter-spacing: 0.4px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  [data-size-guide] {
+    font-size: 8.5px !important;
+    letter-spacing: 0.3px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  html, body { overflow-x: hidden; }
+  * { max-width: 100%; box-sizing: border-box; }
+}

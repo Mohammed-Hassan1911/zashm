@@ -268,8 +268,9 @@ export default function ProductPage() {
     <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>Size: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
       <button 
+        data-size-guide="true"
         onClick={() => setSizeGuideOpen(true)}
-        style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1 }}
+        style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1, whiteSpace: 'nowrap' }}
       >
         Size Guide
       </button>
