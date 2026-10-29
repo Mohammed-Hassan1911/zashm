@@ -631,3 +631,45 @@ main, [role="main"] {
     box-sizing: border-box !important;
   }
 }
+
+/* Product page - alignment fixes for small screens */
+@media (max-width: 430px) {
+  .product-grid {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+  }
+  .product-grid > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+  .product-grid img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .product-grid {
+    gap: 24px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .product-grid {
+    gap: 20px !important;
+  }
+}
+
+@media (max-width: 320px) {
+  .product-grid {
+    gap: 18px !important;
+  }
+  .product-grid > * {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}

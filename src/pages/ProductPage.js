@@ -127,7 +127,7 @@ export default function ProductPage() {
 
   return (
     <div style={{ paddingTop: 90 }}>
-      <div style={{ maxWidth: 1300, margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ maxWidth: 1300, margin: '0 auto', padding: '40px 24px', width: '100%', boxSizing: 'border-box' }}>
         <div style={{ marginBottom: 16 }}>
           <motion.button
             type="button"
