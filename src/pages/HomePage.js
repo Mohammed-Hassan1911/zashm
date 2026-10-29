@@ -46,11 +46,13 @@ export default function HomePage() {
           />
 
           <motion.p
+            className="hero-tagline"
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.8 }}
             style={{ fontSize: 11, letterSpacing: 8, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 32, fontWeight: 500 }}
           >Est. 2026 · Egypt</motion.p>
 
           <motion.h1
+            className="hero-brand"
             initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 1 }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(60px, 11vw, 140px)', fontWeight: 300, letterSpacing: 'clamp(8px, 1.5vw, 18px)', lineHeight: 0.95, marginBottom: 28, textShadow: '0 4px 60px rgba(0,0,0,0.7)', color: '#f5f0e8' }}
           >
@@ -63,11 +65,13 @@ export default function HomePage() {
           />
 
           <motion.p
+            className="hero-brand-subtitle"
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0, duration: 0.8 }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(18px, 2.2vw, 28px)', color: 'rgba(245,240,232,0.92)', fontStyle: 'italic', fontWeight: 300, letterSpacing: 3, marginBottom: 14, textShadow: '0 2px 20px rgba(0,0,0,0.5)' }}
           >Luxury Menswear</motion.p>
 
           <motion.p
+            className="hero-brand-copy"
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.8 }}
             style={{ fontSize: 13, color: 'rgba(245,240,232,0.65)', maxWidth: 480, margin: '0 auto 44px', letterSpacing: 3.5, lineHeight: 1.9, textTransform: 'uppercase' }}
           >Tailored for the discerning gentleman</motion.p>

@@ -1202,7 +1202,6 @@ export function CheckoutPage() {
                   )}
               </motion.button>
               <div style={{ color: 'var(--text3)', fontSize: 10, textAlign: 'center', marginTop: 10, lineHeight: 1.6 }}>
-                <div>🔒 Secure order · Your order will be confirmed via the website</div>
               </div>
             </div>
           </div>

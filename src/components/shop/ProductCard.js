@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, Eye } from 'lucide-react';
 import { useStore } from '../../store';
+import { toast } from '../ui/BackToTop';
 
 const LABEL_CLASS = {
   'New Arrival': 'label-new',
@@ -248,7 +249,15 @@ export default function ProductCard({ product, index = 0 }) {
             aria-pressed={isWished}
             onClick={(event) => {
               event.stopPropagation();
-              if (product?.id) toggleWishlist(product.id);
+              if (product?.id) {
+                toggleWishlist(product.id);
+                toast(
+                  isWished
+                    ? 'Removed from wishlist / تمت الإزالة من المفضلة'
+                    : 'Added to wishlist / تمت الإضافة إلى المفضلة',
+                  isWished ? 'info' : 'success'
+                );
+              }
             }}
             whileTap={{ scale: 0.92 }}
             style={{

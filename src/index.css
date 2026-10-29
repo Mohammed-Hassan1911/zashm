@@ -189,11 +189,11 @@ select option { background: var(--bg3); }
 }
 
 /* ─── ✨ تحديث الهوية البصرية الشاملة للإشعار (أسود الملكي × ذهبي ميتاليك) ─── */
-.toast, 
-[class*="toast"], 
-[class*="notification"], 
+.toast:not(.zashm-toast),
+[class*="toast"]:not([class*="zashm-toast"]),
+[class*="notification"]:not(.zashm-toast-viewport):not(.zashm-toast-stack),
 .react-hot-toast,
-div[role="status"] {
+div[role="status"]:not(.zashm-toast) {
   background-color: #111111 !important;
   color: #ffffff !important;
   border: 1px solid #c9a84c !important;
@@ -201,11 +201,11 @@ div[role="status"] {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(201, 168, 76, 0.2) !important;
 }
 
-[class*="success"],
-[class*="toast"] svg,
-[class*="toast"] button,
+[class*="success"]:not(.zashm-toast--success),
+[class*="toast"]:not([class*="zashm-toast"]) svg,
+[class*="toast"]:not([class*="zashm-toast"]) button,
 .toast-icon,
-div[role="status"] svg {
+div[role="status"]:not(.zashm-toast) svg {
   color: #c9a84c !important;
   fill: transparent !important;
 }
@@ -266,8 +266,65 @@ div[role="status"] svg {
 
 /* ─── RESPONSIVE RULES (was inline <style> blocks — moved here for CSP) ────── */
 
+/* Hero brand identity: keep ZASHM visually dominant on phones without changing desktop styling */
+.hero-brand {
+  display: block;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.hero-brand-subtitle,
+.hero-brand-copy,
+.hero-tagline {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 768px) {
   .product-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+
+  .hero-brand {
+    font-size: clamp(40px, 15vw, 68px) !important;
+    letter-spacing: clamp(2px, 1.1vw, 8px) !important;
+    line-height: 0.92 !important;
+    white-space: nowrap !important;
+  }
+
+  .hero-brand-subtitle {
+    font-size: clamp(16px, 4.9vw, 24px) !important;
+    letter-spacing: 1.5px !important;
+  }
+
+  .hero-brand-copy {
+    font-size: 11px !important;
+    letter-spacing: 2.2px !important;
+    line-height: 1.7 !important;
+    max-width: 320px !important;
+  }
+
+  .hero-tagline {
+    font-size: clamp(9px, 3.1vw, 11px) !important;
+    letter-spacing: 3px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .hero-brand {
+    font-size: clamp(34px, 14.5vw, 48px) !important;
+    letter-spacing: 1.5px !important;
+    white-space: nowrap !important;
+  }
+
+  .hero-brand-subtitle {
+    font-size: 15px !important;
+    letter-spacing: 1px !important;
+  }
+
+  .hero-brand-copy {
+    font-size: 10px !important;
+    letter-spacing: 1.5px !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -298,6 +355,10 @@ div[role="status"] svg {
 
 @media (max-width: 768px) {
   .mobile-nav { display: block !important; }
+
+  footer.site-footer {
+    padding-bottom: calc(40px + 64px + env(safe-area-inset-bottom, 0px)) !important;
+  }
 }
 
 /* ─── ADMIN DASHBOARD ───────────────────────────────────────────────────────── */
@@ -671,5 +732,184 @@ main, [role="main"] {
   .product-grid > * {
     padding-left: 0 !important;
     padding-right: 0 !important;
+  }
+}
+
+/* Product page: small-screen layout fixes */
+.product-page,
+.product-page-container,
+.product-grid,
+.product-grid > * {
+  min-width: 0;
+}
+
+.product-grid > * {
+  max-width: 100%;
+}
+
+.product-card-image img {
+  display: block;
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  .product-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 24px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .product-page {
+    padding-top: 76px !important;
+  }
+
+  .product-page-container {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .product-grid {
+    gap: 20px !important;
+  }
+
+  .product-grid h1 {
+    overflow-wrap: anywhere;
+  }
+}
+
+.zashm-toast-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: border-box;
+  padding:
+    calc(76px + env(safe-area-inset-top, 0px))
+    calc(16px + env(safe-area-inset-right, 0px))
+    calc(16px + env(safe-area-inset-bottom, 0px))
+    calc(16px + env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+
+.zashm-toast-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  pointer-events: none;
+}
+
+.zashm-toast {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2.5vw, 12px);
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: clamp(10px, 3vw, 14px) clamp(12px, 3.5vw, 18px);
+  border: 1px solid #e8c870;
+  border-radius: 8px;
+  background: #c9a84c;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.48), 0 0 18px rgba(201, 168, 76, 0.12);
+  color: #111;
+  pointer-events: auto;
+}
+
+.zashm-toast--success {
+  border-inline-start: 4px solid #111;
+}
+
+.zashm-toast--error {
+  border-inline-start: 4px solid #111;
+}
+
+.zashm-toast--warning {
+  border-inline-start: 4px solid #111;
+}
+
+.zashm-toast--info {
+  border-inline-start: 4px solid #111;
+}
+
+.zashm-toast-icon {
+  flex: 0 0 auto;
+}
+
+.zashm-toast-message {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  color: #111;
+  font-size: clamp(12px, 3.5vw, 14px);
+  line-height: 1.5;
+}
+
+.zashm-toast-dismiss {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin: -4px -6px -4px 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.zashm-toast-dismiss:hover,
+.zashm-toast-dismiss:focus-visible {
+  background: rgba(0, 0, 0, 0.1);
+  color: #000;
+  outline: none;
+}
+
+@media (max-width: 360px) {
+  .zashm-toast-viewport {
+    padding:
+      calc(68px + env(safe-area-inset-top, 0px))
+      calc(16px + env(safe-area-inset-right, 0px))
+      calc(12px + env(safe-area-inset-bottom, 0px))
+      calc(16px + env(safe-area-inset-left, 0px));
+  }
+
+  .zashm-toast {
+    gap: 8px;
+    padding: 9px 11px;
+  }
+
+  .zashm-toast-message {
+    font-size: 12px;
+  }
+
+  .zashm-toast-dismiss {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (min-width: 769px) {
+  .zashm-toast-viewport {
+    padding-top: calc(96px + env(safe-area-inset-top, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zashm-toast,
+  .zashm-toast-dismiss {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
   }
 }

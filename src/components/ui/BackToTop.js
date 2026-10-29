@@ -1,7 +1,7 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowUp, CheckCircle, AlertCircle, Info, X, ShoppingBag, Bell } from 'lucide-react';
-import { useStore } from '../../store';
+import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { ArrowUp, CheckCircle, AlertCircle, AlertTriangle, Info, X, ShoppingBag, Heart } from 'lucide-react';
 
 // Back to Top
 export function BackToTop() {
@@ -28,70 +28,116 @@ export function BackToTop() {
 }
 
 // Toast System
-const ToastContext = createContext(null);
 let toastId = 0;
 let addToastGlobal = null;
 
-export function Toaster() {
-  const [toasts, setToasts] = useState([]);
-  addToastGlobal = (toastItem) => {
-    const id = ++toastId;
-    setToasts(prev => [...prev, { ...toastItem, id }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
-  };
+const TOAST_DURATION = {
+  success: 3000,
+  error: 3500,
+  warning: 3500,
+  info: 3000,
+};
 
-  // الأيقونات حسب النوع
-  const icons = { success: CheckCircle, error: AlertCircle, info: Info };
-  
-  // توحيد الألوان كلياً لخدمة الطابع الأسود والذهبي للبراند
-  const themeGold = '#c9a84c';
+function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
+  const type = TOAST_DURATION[toastItem.type] ? toastItem.type : 'info';
+  const message = String(toastItem.message);
+  const normalizedMessage = message.toLowerCase();
+  const Icon = type === 'success'
+    ? (/wishlist|favorite|المفضلة/.test(normalizedMessage) ? Heart : /bag|cart|السلة/.test(normalizedMessage) ? ShoppingBag : CheckCircle)
+    : type === 'error'
+      ? AlertCircle
+      : type === 'warning'
+        ? AlertTriangle
+        : Info;
+  useEffect(() => {
+    const timer = window.setTimeout(() => onDismiss(toastItem.id), TOAST_DURATION[type]);
+    return () => window.clearTimeout(timer);
+  }, [onDismiss, toastItem.id, type]);
 
   return (
-    <div style={{ position: 'fixed', top: 90, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <AnimatePresence>
-        {toasts.map(t => {
-          const Icon = icons[t.type] || Info;
-          return (
-            <motion.div key={t.id}
-              initial={{ opacity: 0, x: 80, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 80, scale: 0.9 }}
-              style={{ 
-                background: '#111111', 
-                border: `1px solid ${themeGold}`, 
-                borderRadius: 4, 
-                padding: '12px 16px', 
-                minWidth: 260, 
-                maxWidth: 340, 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 10, 
-                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(201, 168, 76, 0.2)' 
-              }}>
-              <Icon size={16} color={themeGold} style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 13, flex: 1, color: '#ffffff' }}>{t.message}</span>
-              <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
-                style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={14} /></button>
-            </motion.div>
-          );
-        })}
-      </AnimatePresence>
-    </div>
+    <motion.div
+      className={`zashm-toast zashm-toast--${type}`}
+      role={type === 'error' ? 'alert' : 'status'}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -6 }}
+      transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
+    >
+      <Icon className="zashm-toast-icon" size={18} color="#111" aria-hidden="true" />
+      <span className="zashm-toast-message">{message}</span>
+      <button
+        type="button"
+        className="zashm-toast-dismiss"
+        onClick={() => onDismiss(toastItem.id)}
+        aria-label="Dismiss notification"
+      >
+        <X size={15} aria-hidden="true" />
+      </button>
+    </motion.div>
   );
 }
 
-// دالة الـ toast الأساسية الذكية والداعمة للصيغتين لحماية المتصفح من الكراش
+export function Toaster() {
+  const [toasts, setToasts] = useState([]);
+  const reduceMotion = useReducedMotion();
+  const addToast = useCallback((toastItem) => {
+    const normalizedType = TOAST_DURATION[toastItem.type] ? toastItem.type : 'info';
+    const normalizedMessage = String(toastItem.message);
+    const nextToast = { ...toastItem, type: normalizedType, message: normalizedMessage, id: ++toastId };
+
+    setToasts(prev => {
+      if (prev.some(item => item.type === normalizedType && item.message === normalizedMessage)) return prev;
+
+      return [...prev, nextToast].slice(-3);
+    });
+  }, []);
+  const dismissToast = useCallback((id) => {
+    setToasts(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  useEffect(() => {
+    addToastGlobal = addToast;
+    return () => {
+      if (addToastGlobal === addToast) addToastGlobal = null;
+    };
+  }, [addToast]);
+
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="zashm-toast-viewport">
+      <div className="zashm-toast-stack" role="region" aria-label="Notifications" aria-live="polite">
+        <AnimatePresence initial={false}>
+          {toasts.map(item => (
+            <ToastMessage
+              key={item.id}
+              toastItem={item}
+              onDismiss={dismissToast}
+              reduceMotion={reduceMotion}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// The same entry point supports both toast(message, type) and named methods.
 export function toast(message, type = 'info') {
   if (addToastGlobal) addToastGlobal({ message, type });
 }
 
-// ربط الصيغ المتقدمة (toast.success و toast.error) لتوفير الدعم الشامل للمشروع
 toast.success = (message) => {
   if (addToastGlobal) addToastGlobal({ message, type: 'success' });
 };
 
 toast.error = (message) => {
   if (addToastGlobal) addToastGlobal({ message, type: 'error' });
+};
+
+toast.warning = (message) => {
+  if (addToastGlobal) addToastGlobal({ message, type: 'warning' });
 };
 
 toast.info = (message) => {

@@ -262,7 +262,7 @@ function Footer({ setModal }) {
   };
 
   return (
-    <footer style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '60px 0 40px', marginTop: 80 }}>
+    <footer className="site-footer" style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '60px 0 40px', marginTop: 80 }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 48 }}>
           
@@ -373,7 +373,7 @@ function Footer({ setModal }) {
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 48, paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <p style={{ color: '#C9A84C', fontSize: 12 }}> © 2026 ZASHM Luxury Fashion. {'All rights reserved.'}</p> 
+          <p style={{ color: '#C9A84C', fontSize: 12 }}> © ZASHM Luxury Fashion 2026. {'All rights reserved.'}</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gold)', fontSize: 12 }}>
             <ShieldCheck size={14} />
             <span>{'Secured with 256-bit SSL encryption'}</span>

@@ -108,8 +108,8 @@ export default function ProductPage() {
   };
 
   const handleAddToCart = () => {
-    if (!selSize) { showToast('Please select a size.\nيرجى اختيار المقاس.', 'error'); return; }
-    if (!selColor) { showToast('Please select a color.\nيرجى اختيار اللون.', 'error'); return; }
+    if (!selSize) { showToast('Please select a size.\nيرجى اختيار المقاس.', 'warning'); return; }
+    if (!selColor) { showToast('Please select a color.\nيرجى اختيار اللون.', 'warning'); return; }
     if (qty > currentVariantStock) {
       setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.
 عذرًا، يتوفر ${currentVariantStock} قطعة فقط بالمقاس ${selSize} واللون ${selColor}.` });
@@ -126,8 +126,8 @@ export default function ProductPage() {
   };
 
   return (
-    <div style={{ paddingTop: 90 }}>
-      <div style={{ maxWidth: 1300, margin: '0 auto', padding: '40px 24px', width: '100%', boxSizing: 'border-box' }}>
+    <div className="product-page" style={{ paddingTop: 90, width: '100%', minWidth: 0 }}>
+      <div className="product-page-container" style={{ maxWidth: 1300, margin: '0 auto', padding: 'clamp(16px, 4vw, 40px) clamp(12px, 4vw, 24px)', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
         <div style={{ marginBottom: 16 }}>
           <motion.button
             type="button"
@@ -167,10 +167,19 @@ export default function ProductPage() {
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>{p.name}</span>
         </motion.div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64 }} className="product-grid">
+        <div
+          className="product-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 'clamp(20px, 5vw, 64px)',
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
           {/* Images */}
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
-            <div style={{ position: 'relative', aspectRatio: '3/4', overflow: 'hidden', borderRadius: 2, cursor: 'zoom-in' }}>
+            <div className="product-card-image" style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '3 / 4', overflow: 'hidden', borderRadius: 2, cursor: 'zoom-in' }}>
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
                   src={productImages[imgIdx]}
@@ -180,7 +189,13 @@ export default function ProductPage() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.4 }}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    objectPosition: 'center',
+                  }}
                 />
               </AnimatePresence>
               {p.label && (
@@ -233,7 +248,16 @@ export default function ProductPage() {
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 400, marginBottom: 16, lineHeight: 1.2 }}>{p.name}</h1>
 
             {/* Price */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginBottom: 24,
+                minWidth: 0,
+              }}
+            >
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: 'var(--gold)' }}>
                 EGP {(p.salePrice || p.price).toLocaleString()}
               </span>
@@ -248,7 +272,7 @@ export default function ProductPage() {
             {/* Colors */}
             <div style={{ marginBottom: 24 }}>
               <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>Color: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
                   const isColorOOS = hasVariantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
                   
@@ -310,7 +334,15 @@ export default function ProductPage() {
 </div>
 
             {/* Qty + Add */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginBottom: 16,
+                minWidth: 0,
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2, opacity: isOutOfStock ? 0.5 : 1, pointerEvents: isOutOfStock ? 'none' : 'auto' }}>
                 <button onClick={() => setQty(Math.max(1, qty - 1))}
                   style={{ width: 44, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>−</button>
@@ -336,7 +368,12 @@ export default function ProductPage() {
               </motion.button>
 
               <motion.button
-                onClick={() => toggleWishlist(p.id)}
+                aria-label={isWished ? 'Remove from wishlist' : 'Add to wishlist'}
+                aria-pressed={isWished}
+                onClick={() => {
+                  toggleWishlist(p.id);
+                  toast(isWished ? 'Removed from wishlist / تمت الإزالة من المفضلة' : 'Added to wishlist / تمت الإضافة إلى المفضلة', isWished ? 'info' : 'success');
+                }}
                 style={{ width: 52, height: 52, borderRadius: 2, border: `2px solid ${isWished ? '#e74c3c' : 'var(--border)'}`, background: 'transparent', color: isWished ? '#e74c3c' : 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Heart size={18} fill={isWished ? '#e74c3c' : 'none'} />
@@ -380,10 +417,33 @@ export default function ProductPage() {
 
             {/* Tabs */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
-              <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 0,
+                  borderBottom: '1px solid var(--border)',
+                  marginBottom: 16,
+                }}
+              >
                 {['description', 'details', 'care'].map(t => (
                   <button key={t} onClick={() => setTab(t)}
-                    style={{ padding: '10px 20px', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', background: 'none', border: 'none', borderBottom: `2px solid ${tab === t ? 'var(--gold)' : 'transparent'}`, color: tab === t ? 'var(--gold)' : 'var(--text2)', cursor: 'pointer', transition: 'all 0.2s', marginBottom: -1 }}>
+                    style={{
+                      flex: '1 1 80px',
+                      minWidth: 0,
+                      padding: '10px 6px',
+                      fontSize: 'clamp(9px, 2.8vw, 11px)',
+                      letterSpacing: 0.5,
+                      textTransform: 'uppercase',
+                      background: 'none',
+                      border: 'none',
+                      borderBottom: `2px solid ${tab === t ? 'var(--gold)' : 'transparent'}`,
+                      color: tab === t ? 'var(--gold)' : 'var(--text2)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      marginBottom: -1,
+                      overflowWrap: 'anywhere',
+                    }}>
                     {t}
                   </button>
                 ))}
@@ -454,16 +514,24 @@ export default function ProductPage() {
           <div style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 9999, padding: 20
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            zIndex: 9999, padding: 20, overflowY: 'auto'
           }} onClick={() => setSizeGuideOpen(false)}>
             
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }}
               transition={{ duration: 0.3 }}
               style={{
-                background: '#111111', border: '1px solid var(--gold, #c9a84c)', borderRadius: 4,
-                width: '100%', maxWidth: 650, padding: '40px 32px', position: 'relative',
+                background: '#111111',
+                border: '1px solid var(--gold, #c9a84c)',
+                borderRadius: 4,
+                width: '100%',
+                maxWidth: 650,
+                maxHeight: 'calc(100dvh - 24px)',
+                overflowY: 'auto',
+                padding: 'clamp(18px, 5vw, 40px) clamp(12px, 4vw, 32px)',
+                position: 'relative',
+                boxSizing: 'border-box',
                 boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,168,76,0.1)'
               }} onClick={e => e.stopPropagation()}
             >
@@ -494,7 +562,14 @@ export default function ProductPage() {
               ) : (
                 <>
                   <div style={{ overflowX: 'auto', marginBottom: 32 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'center', color: 'var(--text2, #ccc)' }}>
+                    <table style={{
+                      width: '100%',
+                      minWidth: 440,
+                      borderCollapse: 'collapse',
+                      fontSize: 13,
+                      textAlign: 'center',
+                      color: 'var(--text2, #ccc)',
+                    }}>
                       {(
                         ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short', 'بناطيل', 'بنطلون', 'شورت'].some(word => (p.category ?? '').toLowerCase().includes(word)) ||
                         ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short', 'بناطيل', 'بنطلون', 'شورت'].some(word => (p.name ?? '').toLowerCase().includes(word))
