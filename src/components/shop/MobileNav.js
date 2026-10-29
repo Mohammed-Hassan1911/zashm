@@ -89,6 +89,11 @@ export default function MobileNav() {
     };
   }, []);
 
+  React.useEffect(() => {
+    document.body.classList.toggle('mobile-keyboard-open', keyboardOpen);
+    return () => document.body.classList.remove('mobile-keyboard-open');
+  }, [keyboardOpen]);
+
   const items = [
     { icon: Home, label: 'Home', page: 'home' },
     { icon: Grid, label: 'Shop', page: 'shop' },
