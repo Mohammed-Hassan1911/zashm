@@ -1074,15 +1074,15 @@ export function CheckoutPage() {
               <input 
                 value={form.address ?? ''} 
                 onChange={e => update('address', e.target.value)} 
-                placeholder="Building no, Street name, Apartment..."
+                placeholder="District / neighborhood, street, building, floor or apartment..."
                 style={{ width:'100%', borderColor: errors.address ? 'var(--red)' : undefined }} 
               />
               {errors.address && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.address}</p>}
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
+            <div className="checkout-location-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
               <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'City *'}</label>
+                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Governorate *'}</label>
                 <CityAutocomplete
                   value={form.city}
                   onChange={v => update('city', v)}

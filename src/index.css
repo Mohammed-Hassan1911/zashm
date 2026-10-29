@@ -351,6 +351,16 @@ div[role="status"]:not(.zashm-toast) svg {
 
 @media (max-width: 768px) {
   .checkout-grid { grid-template-columns: 1fr !important; }
+
+  .checkout-grid input,
+  .checkout-grid textarea,
+  .checkout-grid select {
+    font-size: 16px;
+  }
+
+  .checkout-location-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }
 
 @media (max-width: 768px) {
