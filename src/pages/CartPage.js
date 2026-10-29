@@ -408,6 +408,7 @@ export function CheckoutPage() {
       <AnimatePresence>
         {copied && (
           <motion.div
+            data-copy-toast="true"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -418,6 +419,7 @@ export function CheckoutPage() {
               right: 0,
               margin: '0 auto',
               width: 'fit-content',
+              maxWidth: '90vw',
               background: '#d1b363',
               color: '#000000',
               padding: '10px 20px',
