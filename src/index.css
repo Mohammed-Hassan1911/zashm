@@ -367,7 +367,7 @@ div[role="status"]:not(.zashm-toast) svg {
   .mobile-nav { display: block !important; }
 
   footer.site-footer {
-    padding-bottom: calc(40px + 64px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(12px + 64px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 

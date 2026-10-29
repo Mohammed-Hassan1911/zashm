@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { Home, Grid, Heart, ShoppingBag } from 'lucide-react';
 import { useStore } from '../../store';
@@ -15,7 +16,7 @@ export default function MobileNav() {
     { icon: ShoppingBag, label: 'Bag', action: () => setCartOpen(true), badge: cartCount },
   ];
 
-  return (
+  return createPortal(
     <motion.nav
       initial={{ y: 80 }}
       animate={{ y: 0 }}
@@ -24,7 +25,11 @@ export default function MobileNav() {
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 900,
         background: 'rgba(17,17,17,0.96)', backdropFilter: 'blur(20px)',
         borderTop: '1px solid var(--border)',
-        display: 'none', padding: '8px 0 max(8px, env(safe-area-inset-bottom))',
+        display: 'none',
+        width: '100%',
+        maxWidth: '100vw',
+        boxSizing: 'border-box',
+        padding: '8px max(0px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(0px, env(safe-area-inset-left, 0px))',
       }}
       className="mobile-nav"
     >
@@ -53,6 +58,7 @@ export default function MobileNav() {
           );
         })}
       </div>
-    </motion.nav>
+    </motion.nav>,
+    document.body
   );
 }
