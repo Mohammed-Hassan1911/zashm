@@ -54,10 +54,11 @@ export default function MobileNav() {
 
       const baseline = viewportBaselineRef.current ?? height;
       if (height < baseline - 120) {
+        const keyboardWasClosed = !viewportShrunkRef.current;
         viewportShrunkRef.current = true;
         setKeyboardOpen(true);
         const activeElement = document.activeElement;
-        if (isEditable(activeElement)) {
+        if (keyboardWasClosed && isEditable(activeElement)) {
           window.requestAnimationFrame(() => {
             const viewportTop = visualViewport?.offsetTop ?? 0;
             const viewportBottom = viewportTop + getViewportHeight();
