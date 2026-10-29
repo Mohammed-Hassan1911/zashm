@@ -998,7 +998,7 @@ export function CheckoutPage() {
                   type="text" 
                   value={form.name ?? ''} 
                   onChange={e => update('name', e.target.value)} 
-                  placeholder="John Doe"
+                  placeholder="Mohammed Hassann"
                   style={{ width:'100%', borderColor: errors.name ? 'var(--red)' : undefined }} 
                 />
                 {errors.name && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.name}</p>}
