@@ -158,23 +158,24 @@ async function updateUser(req, res) {
 
     if (Object.keys(write).length === 0) return json(res, 200, { success: true, user: toPublicUser(existing) });
 
-    const { error: updErr } = await sb.from('users').update(write).eq('id', id);
+    const invalidatesSessions = Boolean(write.role || write.passwordhash);
+    const hasSessionVersion = Object.prototype.hasOwnProperty.call(existing, 'session_version')
+      || Object.prototype.hasOwnProperty.call(existing, 'sessionVersion');
+    const currentSv = Number(
+      existing.session_version != null
+        ? existing.session_version
+        : (existing.sessionVersion != null ? existing.sessionVersion : 0)
+    ) || 0;
+    const update = { ...write };
+    if (invalidatesSessions && hasSessionVersion) {
+      update.session_version = currentSv + 1;
+    }
+
+    const { error: updErr } = await sb.from('users').update(update).eq('id', id);
     if (updErr) throw updErr;
 
-    // Revoke existing sessions when the role or password changes. Best-effort:
-    // a no-op until supabase/session_revocation.sql adds the session_version
-    // column, and never blocks the profile update.
-    if (write.role || write.passwordhash) {
-      const currentSv = Number(
-        existing.session_version != null
-          ? existing.session_version
-          : (existing.sessionVersion != null ? existing.sessionVersion : 0)
-      ) || 0;
-      try {
-        await sb.from('users').update({ session_version: currentSv + 1 }).eq('id', id);
-      } catch (e) {
-        /* column not present yet — revocation is best-effort */
-      }
+    if (invalidatesSessions && !hasSessionVersion) {
+      console.warn('Session revocation skipped: session_version migration is not applied');
     }
 
     const { data: fresh } = await sb.from('users').select('*').eq('id', id).maybeSingle();

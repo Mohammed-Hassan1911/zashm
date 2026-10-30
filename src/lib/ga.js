@@ -1,11 +1,11 @@
 // Google Analytics 4 loader. Analytics is disabled entirely unless
-// REACT_APP_GA_ID is provided at build time (e.g. G-XXXXXXXXXX).
+// VITE_GA_ID is provided at build time (e.g. G-XXXXXXXXXX).
 //
 // The gtag bootstrap lives in this same-origin bundle (not an inline <script>)
 // so it satisfies the site's strict `script-src 'self'` CSP; only the external
 // gtag.js file is added to the page and its host is whitelisted in vercel.json.
 
-const GA_ID = process.env.REACT_APP_GA_ID;
+const GA_ID = import.meta.env.VITE_GA_ID || import.meta.env.REACT_APP_GA_ID;
 
 export function initGA() {
   if (!GA_ID || typeof window === 'undefined' || typeof document === 'undefined') return;

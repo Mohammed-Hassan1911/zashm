@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../store'; 
+import { useStore } from '../store';
 import { api } from '../lib/api';
 import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
 
@@ -57,7 +57,7 @@ export default function TrackOrder() {
         const payload = await api.get(qs);
         if (cancelled) return;
         if (payload && payload.found && payload.order) {
-          setCurrentOrder(payload.order);
+          setCurrentOrder({ ...payload.order, access: payload.access || 'full' });
         } else {
           setNotFound(true);
         }
@@ -84,13 +84,13 @@ export default function TrackOrder() {
   };
 
   return (
-    <div style={{ 
-      maxWidth: 600, 
+    <div style={{
+      maxWidth: 600,
       margin: '0 auto', // 🎯 تم التعديل ليكون التباعد معتمد كلياً على الـ paddingTop في الأعلى والأسفل
       padding: '150px 16px 60px', // 🎯 تم رفع الـ paddingTop لـ 150px لإعطاء مساحة تنفس تحت الـ Navbar الثابت
       minHeight: '80vh',
       fontFamily: 'sans-serif',
-      color: 'var(--text1)' 
+      color: 'var(--text1)'
     }}>
       {/* ─── الهيدر والبحث ─── */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
@@ -104,20 +104,20 @@ export default function TrackOrder() {
         <form onSubmit={handleSearchSubmit} style={{ position: 'relative', display: 'flex', gap: 8 }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-            <input 
-              value={inputOrderId} 
-              onChange={e => setInputOrderId(e.target.value)} 
-              placeholder="e.g. ZSH-MQZUYMH6-HAD6" 
-              style={{ 
-                width: '100%', 
-                padding: '12px 14px 12px 40px', 
-                background: 'var(--bg2)', 
-                border: '1px solid var(--border)', 
+            <input
+              value={inputOrderId}
+              onChange={e => setInputOrderId(e.target.value)}
+              placeholder="e.g. ZSH-MQZUYMH6-HAD6"
+              style={{
+                width: '100%',
+                padding: '12px 14px 12px 40px',
+                background: 'var(--bg2)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 color: 'var(--text1)',
                 fontSize: 14,
                 outline: 'none'
-              }} 
+              }}
             />
           </div>
           <button type="submit" style={{
@@ -157,13 +157,13 @@ export default function TrackOrder() {
       {/* ─── تفاصيل الطلب والتايم لاين ─── */}
       {currentOrder && (
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          
+
           {/* كارت الحالة السريعة */}
-          <div style={{ 
-            background: 'var(--bg2)', 
-            border: '1px solid var(--border)', 
-            borderRadius: 12, 
-            padding: 20, 
+          <div style={{
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 20,
             marginBottom: 20,
             boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
           }}>
@@ -174,13 +174,13 @@ export default function TrackOrder() {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 1 }}>Current Status</p>
-                <span style={{ 
+                <span style={{
                   display: 'inline-block',
-                  fontSize: 12, 
-                  padding: '4px 12px', 
-                  borderRadius: 20, 
-                  background: `${STATUS_COLORS[currentOrder.status] || 'var(--gold)'}1a`, 
-                  color: STATUS_COLORS[currentOrder.status] || 'var(--gold)', 
+                  fontSize: 12,
+                  padding: '4px 12px',
+                  borderRadius: 20,
+                  background: `${STATUS_COLORS[currentOrder.status] || 'var(--gold)'}1a`,
+                  color: STATUS_COLORS[currentOrder.status] || 'var(--gold)',
                   fontWeight: 700,
                   marginTop: 4
                 }}>
@@ -205,17 +205,17 @@ export default function TrackOrder() {
                     return (
                       <React.Fragment key={s}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, position: 'relative' }}>
-                          <motion.div 
+                          <motion.div
                             animate={isCurrent ? { scale: [1, 1.15, 1] } : {}}
                             transition={isCurrent ? { repeat: Infinity, duration: 2 } : {}}
-                            style={{ 
-                              width: 26, 
-                              height: 26, 
-                              borderRadius: '50%', 
-                              background: reached ? STATUS_COLORS[s] : 'var(--bg)', 
-                              border: `2px solid ${reached ? STATUS_COLORS[s] : 'var(--border)'}`, 
-                              display: 'flex', 
-                              alignItems: 'center', 
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: '50%',
+                              background: reached ? STATUS_COLORS[s] : 'var(--bg)',
+                              border: `2px solid ${reached ? STATUS_COLORS[s] : 'var(--border)'}`,
+                              display: 'flex',
+                              alignItems: 'center',
                               justifyContent: 'center',
                               boxShadow: isCurrent ? `0 0 10px ${STATUS_COLORS[s]}` : 'none'
                             }}
@@ -226,21 +226,21 @@ export default function TrackOrder() {
                               <span style={{ fontSize: 9, color: 'var(--text3)' }}>{i + 1}</span>
                             )}
                           </motion.div>
-                          <p style={{ 
-                            fontSize: 10, 
-                            color: reached ? 'var(--text1)' : 'var(--text3)', 
+                          <p style={{
+                            fontSize: 10,
+                            color: reached ? 'var(--text1)' : 'var(--text3)',
                             fontWeight: isCurrent ? 700 : 500,
-                            textAlign: 'center', 
-                            whiteSpace: 'nowrap' 
+                            textAlign: 'center',
+                            whiteSpace: 'nowrap'
                           }}>
                             {s}
                           </p>
                         </div>
                         {i < STATUS_FLOW.length - 1 && (
-                          <div style={{ 
-                            flex: 1, 
-                            height: 2, 
-                            background: indexCurrent > i ? 'var(--gold)' : 'var(--border)', 
+                          <div style={{
+                            flex: 1,
+                            height: 2,
+                            background: indexCurrent > i ? 'var(--gold)' : 'var(--border)',
                             marginBottom: 16,
                             marginLeft: 4,
                             marginRight: 4
@@ -254,79 +254,87 @@ export default function TrackOrder() {
             </div>
           </div>
 
-          {/* معلومات الشحن والتوصيل */}
-          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 14 }}>
-            <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid var(--border)', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <MapPin size={14} style={{ color: 'var(--gold)' }} />
-              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Shipping Details</span>
+          {currentOrder.access === 'status' ? (
+            <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, color: 'var(--text2)', fontSize: 13, lineHeight: 1.6 }}>
+              For privacy, order and delivery details are only available through the secure tracking link sent with your order confirmation.
             </div>
-            <div>
-              <p style={{ fontSize: 13, fontWeight: 500 }}>{currentOrder.customer || 'Valued Gentlemen'}</p>
-              <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, lineHeight: '1.4' }}>{currentOrder.address || 'Address provided upon confirmation'}{currentOrder.city ? `, ${currentOrder.city}` : ''}</p>
-            </div>
-            <div>
-              <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> Order Date</p>
-              <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.date || '—'}</p>
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* معلومات الشحن والتوصيل */}
+              <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 14 }}>
+                <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid var(--border)', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <MapPin size={14} style={{ color: 'var(--gold)' }} />
+                  <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Shipping Details</span>
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 500 }}>{currentOrder.customer || 'Valued Gentlemen'}</p>
+                  <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, lineHeight: '1.4' }}>{currentOrder.address || 'Address provided upon confirmation'}{currentOrder.city ? `, ${currentOrder.city}` : ''}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> Order Date</p>
+                  <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.date || '—'}</p>
+                </div>
+              </div>
 
-          {/* ملخص المنتجات والأسعار */}
-          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
-            <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Package size={14} style={{ color: 'var(--gold)' }} />
-              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Package Items</span>
-            </div>
-            
-            {Array.isArray(currentOrder.items) ? (
-              currentOrder.items.map((item, i) => (
-                <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < currentOrder.items.length - 1 ? '1px dashed var(--border)' : 'none' }}>
-                  {item.image && <img src={item.image} alt={item.name} style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</p>
-                    <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                      {[item.size, item.color].filter(Boolean).join(' · ')} · Qty: {item.qty || item.quantity || 1}
-                    </p>
+              {/* ملخص المنتجات والأسعار */}
+              <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+                <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Package size={14} style={{ color: 'var(--gold)' }} />
+                  <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Package Items</span>
+                </div>
+
+                {Array.isArray(currentOrder.items) ? (
+                  currentOrder.items.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < currentOrder.items.length - 1 ? '1px dashed var(--border)' : 'none' }}>
+                      {item.image && <img src={item.image} alt={item.name} style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</p>
+                        <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                          {[item.size, item.color].filter(Boolean).join(' · ')} · Qty: {item.qty || item.quantity || 1}
+                        </p>
+                      </div>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>EGP {item.price?.toLocaleString()}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ padding: '10px 0', fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+                    {String(currentOrder.items || 'Standard Package')}
                   </div>
-                  <p style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>EGP {item.price?.toLocaleString()}</p>
+                )}
+
+                {/* تفاصيل الحسابات النهائية */}
+                <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                  {currentOrder.subtotal && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ color: 'var(--text3)', fontSize: 12 }}>Subtotal</span>
+                      <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {currentOrder.subtotal.toLocaleString()}</span>
+                    </div>
+                  )}
+
+                  {currentOrder.discount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ color: '#27ae60', fontSize: 12 }}>Discount Applied</span>
+                      <span style={{ color: '#27ae60', fontSize: 12 }}>-EGP {currentOrder.discount.toLocaleString()}</span>
+                    </div>
+                  )}
+
+                  {shippingAmount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ color: 'var(--text3)', fontSize: 12 }}>Shipping</span>
+                      <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {shippingAmount.toLocaleString()}</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Total Amount</span>
+                    <span style={{ color: 'var(--gold)', fontSize: 16, fontWeight: 700 }}>
+                      EGP {(currentOrder.total || currentOrder.subtotal || 0).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
-              ))
-            ) : (
-              <div style={{ padding: '10px 0', fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
-                {String(currentOrder.items || 'Standard Package')}
               </div>
-            )}
-
-            {/* تفاصيل الحسابات النهائية */}
-            <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-              {currentOrder.subtotal && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>Subtotal</span>
-                  <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {currentOrder.subtotal.toLocaleString()}</span>
-                </div>
-              )}
-              
-              {currentOrder.discount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: '#27ae60', fontSize: 12 }}>Discount Applied</span>
-                  <span style={{ color: '#27ae60', fontSize: 12 }}>-EGP {currentOrder.discount.toLocaleString()}</span>
-                </div>
-              )}
-
-              {shippingAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text3)', fontSize: 12 }}>Shipping</span>
-                  <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {shippingAmount.toLocaleString()}</span>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>Total Amount</span>
-                <span style={{ color: 'var(--gold)', fontSize: 16, fontWeight: 700 }}>
-                  EGP {(currentOrder.total || currentOrder.subtotal || 0).toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
         </motion.div>
       )}

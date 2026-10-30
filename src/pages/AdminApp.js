@@ -546,7 +546,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                   {recentOrders.map((o) => (
                     <motion.div key={o.id} initial={{ opacity:0 }} animate={{ opacity:1 }}
                       style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 4px', borderBottom:'1px solid var(--border)', flexWrap:'wrap' }}>
-                      <div style={{ minWidth:0, flex:1, minWidth:150 }}>
+                      <div style={{ flex:1, minWidth:150 }}>
                         <p style={{ fontFamily:'monospace', fontSize:11, color:'var(--gold)', fontWeight:700 }}>{o.id}</p>
                         <p style={{ fontSize:11, color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:240 }}>{o.customer}</p>
                         <p style={{ fontSize:10, color:'var(--text3)' }}>{o.date}</p>

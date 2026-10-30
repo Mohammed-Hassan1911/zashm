@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { db, trackEvent } from './lib/security';
 import { supabase } from './lib/supabase'; // ربط سوبابيز الأونلاين
 import { api } from './lib/api';
+import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
 
 // دالة مساعدة موحدة لحساب تاريخ اليوم بالكامل بناءً على التوقيت المحلي (Local Time) لتجنب مشاكل الـ UTC
 function getLocalTodayDate() {
@@ -171,19 +172,24 @@ function initDB() {
   if (!db.getAll('notifications')) db.setAll('notifications', []);
 }
 initDB();
+const initialRoute = typeof window !== 'undefined' ? resolveRoute() : { page: 'home', productId: null };
 
 // ─── ZUSTAND STORE ──────────────────────────────────────────────────────────
 export const useStore = create((set, get) => ({
   products: db.getAll('products') || [],
+  productsLoading: false,
   discounts: db.getAll('discounts') || [],
   orders: getSanitizedOrders(),
   ordersLoading: false,
   ordersError: null,
 
   refreshProducts: async () => {
+    set({ productsLoading: true });
     try {
       const { data, error } = await supabase.from('products').select('*');
-      if (data && !error) {
+      if (error) {
+        console.error('Failed to fetch online products:', error);
+      } else if (data) {
         const secureData = data.map(p => ({
           ...p,
           images: p.images || (p.image ? [p.image] : []),
@@ -199,6 +205,8 @@ export const useStore = create((set, get) => ({
       }
     } catch (err) {
       console.error("Failed to fetch online products:", err);
+    } finally {
+      set({ productsLoading: false });
     }
   },
 
@@ -308,8 +316,8 @@ export const useStore = create((set, get) => ({
       const remainingToOrder = Math.max(0, available - currentInCart);
       let errorMsg = "";
       if (remainingToOrder === 0) {
-        errorMsg = `Sorry, this product is currently unavailable in the selected variation (${size} - ${color}). You already have ${currentInCart} in your bag.
-هذا المنتج غير متوفر حاليًا بالمقاس واللون المحددين (${size} - ${color})، لديك ${currentInCart} قطعة بالفعل في السلة.`
+        errorMsg = `This variation (${size} · ${color}) is currently out of stock. You already have ${currentInCart} in your bag.
+هذا الخيار (${size} · ${color}) غير متوفر حاليًا. الكمية الموجودة منه في سلتك: ${currentInCart}.`
       } else if (remainingToOrder === 1) {
         errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}).
 تبقت قطعة واحدة فقط بالمقاس واللون المحددين (${size} - ${color}).`
@@ -681,8 +689,15 @@ export const useStore = create((set, get) => ({
   },
 
   // Global UI States
-  currentPage: 'home',
-  setPage: (p) => set({ currentPage: p }),
+  currentPage: initialRoute.page,
+  setPage: (page) => {
+    const url = pageUrl(page, get().selectedProduct);
+    if (typeof window !== 'undefined' && `${window.location.pathname}${window.location.search}` !== url) {
+      window.history.pushState({ page }, '', url);
+    }
+    set({ currentPage: page });
+  },
+  syncPageFromLocation: () => syncLocationToStore(set),
   language: 'en',
   setLanguage: () => {
     if (typeof document !== 'undefined') {

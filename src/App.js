@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
 import './index.css';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store';
@@ -21,11 +21,6 @@ import {
 } from 'lucide-react';
 
 import Header from './components/shop/Header';
-import HomePage from './pages/HomePage';
-import ShopPage from './pages/ShopPage';
-import ProductPage from './pages/ProductPage';
-import TrackOrder from './pages/TrackOrder'; 
-import { CartPage, CheckoutPage, WishlistPage } from './pages/CartPage';
 import CartDrawer from './components/shop/CartDrawer';
 import MobileNav from './components/shop/MobileNav';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -33,9 +28,15 @@ import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/Ba
 import WhatsAppButton from './components/ui/WhatsAppButton';
 import { setPageMeta } from './lib/seo';
 import { trackPageView } from './lib/ga';
+import { resolveRoute } from './lib/routes';
 
-// The admin panel (recharts + papaparse, heavy) is split out of the customer
-// bundle and only downloaded when an admin actually opens /admin.
+const HomePage = React.lazy(() => import('./pages/HomePage'));
+const ShopPage = React.lazy(() => import('./pages/ShopPage'));
+const ProductPage = React.lazy(() => import('./pages/ProductPage'));
+const TrackOrder = React.lazy(() => import('./pages/TrackOrder'));
+const CartPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.CartPage })));
+const CheckoutPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.CheckoutPage })));
+const WishlistPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.WishlistPage })));
 const AdminApp = React.lazy(() => import('./pages/AdminApp'));
 
 if (typeof window !== 'undefined') {
@@ -53,7 +54,7 @@ export default function App() {
 }
 
 function AppInner() {
-  const { currentPage, setPage } = useStore();
+  const { currentPage, syncPageFromLocation, setSelectedProduct, products } = useStore();
   const { session, loading } = useAuth(); 
   
   const refreshProducts = useStore((state) => state.refreshProducts);
@@ -70,15 +71,19 @@ function AppInner() {
     }
   }, []);
 
-  // 🎯 لقط الأوردر وتحويل العميل لصفحة التتبع (يقرأ TrackOrder رقم الطلب من ?track مباشرة)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const trackId = params.get('track');
+    const handlePopState = () => {
+      const route = syncPageFromLocation();
+      if (route.page === 'product' && route.productId) {
+        const product = useStore.getState().products.find(item => String(item.id) === String(route.productId));
+        setSelectedProduct(product || null);
+      }
+    };
 
-    if (trackId) {
-      setPage('track'); // تحويل المتجر فوراً لصفحة التتبع
-    }
-  }, [setPage]);
+    handlePopState();
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [setSelectedProduct, syncPageFromLocation]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -101,7 +106,10 @@ function AppInner() {
 
     // The initial page_view is sent by gtag 'config'; track later navigations.
     if (trackedFirstView.current) {
-      trackPageView(currentPage === 'home' ? '/' : `/${currentPage}`, meta.title ? `${meta.title} — ZASHM` : undefined);
+      trackPageView(
+        `${window.location.pathname}${window.location.search}`,
+        meta.title ? `${meta.title} — ZASHM` : undefined
+      );
     } else {
       trackedFirstView.current = true;
     }
@@ -118,6 +126,13 @@ function AppInner() {
     }
     loadOnlineData();
   }, [session, refreshProducts, refreshDiscounts, refreshOrders]);
+
+  useEffect(() => {
+    const route = resolveRoute();
+    if (route.page !== 'product' || !route.productId) return;
+    const product = useStore.getState().products.find(item => String(item.id) === String(route.productId));
+    setSelectedProduct(product || null);
+  }, [currentPage, products, setSelectedProduct]);
 
   if (loading) {
     return (
@@ -155,13 +170,15 @@ function AppInner() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.35 }}
             >
-              {currentPage === 'home' && <HomePage />}
-              {currentPage === 'shop' && <ShopPage />}
-              {currentPage === 'product' && <ProductPage />}
-              {currentPage === 'cart' && <CartPage />}
-              {currentPage === 'checkout' && <CheckoutPage />}
-              {currentPage === 'wishlist' && <WishlistPage />}
-              {currentPage === 'track' && <TrackOrder />} 
+              <Suspense fallback={<PageLoading />}>
+                {currentPage === 'home' && <HomePage />}
+                {currentPage === 'shop' && <ShopPage />}
+                {currentPage === 'product' && <ProductPage />}
+                {currentPage === 'cart' && <CartPage />}
+                {currentPage === 'checkout' && <CheckoutPage />}
+                {currentPage === 'wishlist' && <WishlistPage />}
+                {currentPage === 'track' && <TrackOrder />}
+              </Suspense>
             </motion.div>
           </AnimatePresence>
 
@@ -173,6 +190,14 @@ function AppInner() {
           <InfoModal type={activeModal} onClose={() => setActiveModal(null)} />
         </>
       )}
+    </div>
+  );
+}
+
+function PageLoading() {
+  return (
+    <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: 2 }}>
+      Loading...
     </div>
   );
 }

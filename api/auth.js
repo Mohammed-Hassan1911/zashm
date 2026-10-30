@@ -13,6 +13,7 @@ const {
   signSession,
   hashPassword,
   verifyPassword,
+  EMAIL_RE,
 } = require('./_lib');
 
 /**
@@ -42,6 +43,9 @@ module.exports = async function handler(req, res) {
 
   if (!email || !password) {
     return json(res, 400, { error: 'Email and password are required' });
+  }
+  if (email.length > 200 || !EMAIL_RE.test(email) || password.length > 128) {
+    return json(res, 400, { error: 'Invalid email or password format' });
   }
 
   // Server-side rate limiting (per IP+email and per IP) — cannot be reset by reloading the page.

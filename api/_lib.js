@@ -113,8 +113,8 @@ function readBody(req, maxBytes = 1024 * 1024) {
 }
 
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (typeof fwd === 'string' && fwd.length) return fwd.split(',')[0].trim();
+  const vercelIp = req.headers['x-real-ip'];
+  if (typeof vercelIp === 'string' && vercelIp.trim()) return vercelIp.trim();
   return (req.socket && req.socket.remoteAddress) || 'unknown';
 }
 
@@ -150,6 +150,7 @@ function resetRateLimit(key) {
 }
 
 function tooMany(res, resetIn, extra) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil(resetIn || 60))));
   return json(res, 429, Object.assign({
     error: `Too many attempts. Try again in ${Math.ceil((resetIn || 60) / 60)} minute(s).`,
     rateLimited: true,

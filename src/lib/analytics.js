@@ -325,8 +325,7 @@ export function getItemLineRevenue(item) {
  * how order.date is written. `revenue` keeps the legacy "Delivered only" rule
  * but no longer lets the chart look empty when pending orders exist
  * (`orders` column is returned for callers that draw it). */
-export function computeLast7Days(orders) {
-  const now = new Date();
+export function computeLast7Days(orders, now = new Date()) {
   return computeSeries(orders || [], '7d', now).map((p) => {
     const dayOrders = (orders || []).filter((o) => orderDateKey(o, now) === p.key);
     const dayDelivered = dayOrders.filter((o) => String(o.status) === 'Delivered');

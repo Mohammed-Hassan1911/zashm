@@ -25,7 +25,7 @@ export default function Header() {
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40);
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
     
     // التشغيل المبدئي
     handleScroll();
@@ -82,6 +82,7 @@ export default function Header() {
   return (
     <>
       <motion.header
+        className="zashm-header"
         style={{
           position: 'fixed',
           top: 0,
@@ -92,129 +93,110 @@ export default function Header() {
           backdropFilter: scrolled ? 'blur(20px)' : 'none',
           borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent',
           transition: 'all 0.4s ease',
-          padding: isMobile ? '0 16px' : '0 24px', // تقليل البادينج على الموبايل
+          padding: isMobile ? '0 16px' : '0 24px',
         }}
       >
         <div
+          className="zashm-header-inner"
           style={{
             maxWidth: 1400,
             margin: '0 auto',
-            height: isMobile ? 60 : 70, // هيدر أنحف وأشيك على الموبايل
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            height: isMobile ? 60 : 70,
           }}
         >
-          {/* LOGO (ZASHM) */}
-          <motion.button
-            onClick={() => setPage('home')}
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: isMobile ? 20 : 26, // تصغير حجم اللوجو قليلاً ليناسب الشاشة
-              fontWeight: 600,
-              letterSpacing: isMobile ? 4 : 8, // تقليل المسافات بين الحروف على الموبايل
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#D4AF37',
-              padding: 0,
-              marginRight: 'auto', // يدفع باقي العناصر لليمين في الفليكس
-            }}
-            whileHover={{ scale: 1.02 }}
-          >
-            ZASHM
-          </motion.button>
+          <div className="zashm-header-brand">
+            <motion.button
+              className="zashm-header-logo"
+              onClick={() => setPage('home')}
+              aria-label="ZASHM home"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+              whileHover={{ scale: 1.02 }}
+            >
+              <img src="/zashm-z-monogram.png?v=3" alt="" />
+            </motion.button>
 
-          {/* NAV (يختفي على الموبايل تماماً لمنع الزحمة) */}
-          {!isMobile && (
-            <nav style={{ display: 'flex', gap: 40, margin: '0 auto' }}>
-              {nav.map((item) => (
-                <motion.button
-                  key={item.name}
-                  onClick={() => setPage(item.page)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    letterSpacing: 2.5,
-                    textTransform: 'uppercase',
-                    color: 'var(--text2)',
-                  }}
-                  whileHover={{ color: '#D4AF37' }}
-                >
-                  {item.name}
-                </motion.button>
-              ))}
-            </nav>
-          )}
+            {!isMobile && (
+              <nav className="zashm-header-nav">
+                {nav.map((item) => (
+                  <motion.button
+                    key={item.name}
+                    onClick={() => setPage(item.page)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      color: 'var(--text2)',
+                    }}
+                    whileHover={{ color: '#D4AF37' }}
+                  >
+                    {item.name}
+                  </motion.button>
+                ))}
+              </nav>
+            )}
+          </div>
 
           {/* ACTIONS */}
           <div
+            className="zashm-header-actions"
             style={{
               display: 'flex',
-              alignItems: 'center',
-              gap: isMobile ? 12 : 20, // مسافات متناسقة وآمنة للمس على الآيفون
-              marginLeft: isMobile ? '0' : 'auto',
             }}
           >
-            {/* زر SHOP يظهر ككلمة أنيقة فقط على الموبايل لسهولة التنقل */}
-            {isMobile && (
-              <motion.button
-                onClick={() => setPage('shop')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  letterSpacing: 1.5,
-                  textTransform: 'uppercase',
-                  color: '#D4AF37',
-                  marginRight: 4,
-                }}
-              >
-                Shop
-              </motion.button>
-            )}
-
-            {/* SEARCH */}
-            <motion.button 
-              onClick={() => setSearchOpen(!searchOpen)} 
+            <motion.button
+              className="zashm-header-search"
+              onClick={() => setSearchOpen(!searchOpen)}
               style={iconButtonStyle}
               whileHover={{ scale: 1.1 }}
+              aria-label="Search products"
             >
               <Search size={isMobile ? 18 : 20} />
             </motion.button>
 
-            {/* WISHLIST */}
-            <motion.button 
-              onClick={() => setPage('wishlist')} 
-              style={iconButtonStyle}
-              whileHover={{ scale: 1.1 }}
-            >
-              <Heart size={isMobile ? 18 : 20} />
-              {(wishlist?.length > 0) && (
-                <span style={badgeStyle}>
-                  {wishlist.length}
-                </span>
-              )}
-            </motion.button>
+            <div className="zashm-header-utilities">
+              {/* WISHLIST */}
+              <motion.button
+                onClick={() => setPage('wishlist')}
+                style={iconButtonStyle}
+                whileHover={{ scale: 1.1 }}
+                aria-label="Wishlist"
+              >
+                <Heart size={isMobile ? 18 : 20} />
+                {(wishlist?.length > 0) && (
+                  <span style={badgeStyle}>
+                    {wishlist.length}
+                  </span>
+                )}
+              </motion.button>
 
-            {/* BAG */}
-            <motion.button
-              onClick={() => setCartOpen(true)}
-              style={iconButtonStyle}
-              whileHover={{ scale: 1.1 }}
-            >
-              <ShoppingBag size={isMobile ? 18 : 20} />
-              {cartCount > 0 && (
-                <span style={badgeStyle}>
-                  {cartCount}
-                </span>
-              )}
-            </motion.button>
+              {/* BAG */}
+              <motion.button
+                onClick={() => setCartOpen(true)}
+                style={iconButtonStyle}
+                whileHover={{ scale: 1.1 }}
+                aria-label={`Shopping bag${cartCount > 0 ? `, ${cartCount} items` : ''}`}
+              >
+                <ShoppingBag size={isMobile ? 18 : 20} />
+                {cartCount > 0 && (
+                  <span
+                    style={{
+                      ...badgeStyle,
+                      top: isMobile ? -3 : -4,
+                      right: isMobile ? -2 : -3,
+                    }}
+                  >
+                    {cartCount}
+                  </span>
+                )}
+              </motion.button>
+            </div>
 
           </div>
         </div>

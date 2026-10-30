@@ -20,7 +20,7 @@ export default function WhatsAppButton() {
       whileTap={{ scale: 0.92 }}
       className="whatsapp-fab"
       style={{
-        width: 52, height: 52, borderRadius: '50%',
+        borderRadius: '50%',
         background: 'var(--bg)', color: 'var(--gold)', border: '1px solid var(--gold)',
         alignItems: 'center', justifyContent: 'center', zIndex: 800,
         boxShadow: '0 6px 24px rgba(201,168,76,0.3)',

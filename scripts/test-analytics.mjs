@@ -192,8 +192,11 @@ console.log('\n[11] formatting');
 
 console.log('\n[12] legacy computeLast7Days (timezone fixed)');
 {
-  const res = A.computeLast7Days([order({ date: '2026-10-10', total: 80 }), order({ total: 20 })]);
-  eq(res.find((p) => p.day === 'Sun' && p.revenue === 0 && p.orders === 1) ? true : false, true, 'yesterday slot present with 1 order');
+  const res = A.computeLast7Days(
+    [order({ date: '2026-10-10', total: 80 }), order({ total: 20 })],
+    new Date(NOW)
+  );
+  eq(res.find((p) => p.day === 'Sun' && p.revenue === 0 && p.orders === 1) ? true : false, true, 'today slot present with 1 pending order');
   eq(res.find((p) => p.revenue > 0 || p.orders > 0) !== undefined, true, 'data present (was previously misleading)');
 }
 

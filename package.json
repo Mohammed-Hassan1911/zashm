@@ -9,15 +9,18 @@
     "papaparse": "^5.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
     "recharts": "^2.12.0",
     "zustand": "^4.5.0"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "vite --port 3000 --strictPort",
     "dev": "vercel dev",
-    "build": "react-scripts build",
+    "build": "vite build",
     "test": "node scripts/test-analytics.mjs"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.0.0"
   },
   "browserslist": {
     "production": [

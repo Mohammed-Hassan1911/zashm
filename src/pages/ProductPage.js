@@ -5,11 +5,15 @@ import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
+import { resolveRoute } from '../lib/routes';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
 export default function ProductPage() {
-  const { selectedProduct: p, addToCart, toggleWishlist, wishlist, products, setPage, addRecentlyViewed } = useStore();
+  const { selectedProduct, addToCart, toggleWishlist, wishlist, products, productsLoading, setPage, addRecentlyViewed } = useStore();
+  const productId = resolveRoute().productId;
+  const p = (products || []).find(product => String(product.id) === String(productId)) ||
+    (productId == null ? selectedProduct : null);
   const [selSize, setSelSize] = useState('');
   const [selColor, setSelColor] = useState('');
   const [qty, setQty] = useState(1);
@@ -19,12 +23,34 @@ export default function ProductPage() {
   // ستايت التحكم في مودال المخزون ومودال دليل المقاسات
   const [stockModal, setStockModal] = useState({ open: false, message: '' });
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const imageSwipeStartRef = useRef(null);
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
 
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
+  const changeImage = (direction) => {
+    setImgIdx(index => (index + direction + productImages.length) % productImages.length);
+  };
+  const handleImagePointerDown = (event) => {
+    if (event.pointerType === 'mouse') return;
+    imageSwipeStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+  };
+  const handleImagePointerUp = (event) => {
+    const start = imageSwipeStartRef.current;
+    imageSwipeStartRef.current = null;
+    if (!start || start.pointerId !== event.pointerId || productImages.length < 2) return;
+
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
+    changeImage(deltaX < 0 ? 1 : -1);
+  };
 
   // 🎯 ذكاء اصطناعي لاختيار أول مقاس ولون متوفرين أول ما الصفحة تفتح - تم التأمين ضد الاختفاء المزدوج 🚀
   useEffect(() => {
@@ -84,7 +110,7 @@ export default function ProductPage() {
 
   if (!p) return (
     <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>
-      <p style={{ color: 'var(--text2)' }}>No product selected.</p>
+      <p style={{ color: 'var(--text2)' }}>{productsLoading ? 'Loading product...' : 'Product not found.'}</p>
       <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>Back to Shop</button>
     </div>
   );
@@ -179,11 +205,18 @@ export default function ProductPage() {
         >
           {/* Images */}
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
-            <div className="product-card-image" style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '3 / 4', overflow: 'hidden', borderRadius: 2, cursor: 'zoom-in' }}>
+            <div
+              className="product-card-image"
+              onPointerDown={handleImagePointerDown}
+              onPointerUp={handleImagePointerUp}
+              onPointerCancel={() => { imageSwipeStartRef.current = null; }}
+              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '3 / 4', overflow: 'hidden', borderRadius: 2, cursor: 'zoom-in', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+            >
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
                   src={productImages[imgIdx]}
                   alt={p.name}
+                  draggable={false}
                   onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
                   initial={{ opacity: 0, scale: 1.05 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -220,11 +253,11 @@ export default function ProductPage() {
               )}
               {productImages.length > 1 && (
                 <>
-                  <button onClick={() => setImgIdx((imgIdx - 1 + productImages.length) % productImages.length)}
+                  <button onClick={() => changeImage(-1)}
                     style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, borderRadius: '50%', background: 'rgba(10,10,10,0.7)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <ChevronLeft size={16} />
                   </button>
-                  <button onClick={() => setImgIdx((imgIdx + 1) % productImages.length)}
+                  <button onClick={() => changeImage(1)}
                     style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, borderRadius: '50%', background: 'rgba(10,10,10,0.7)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <ChevronRight size={16} />
                   </button>
@@ -484,24 +517,46 @@ export default function ProductPage() {
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
               style={{
-                background: '#111111', border: '1px solid var(--gold, #c9a84c)', borderRadius: 4,
-                width: '100%', maxWidth: 420, padding: '32px 24px', position: 'relative',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.7), 0 0 20px rgba(201,168,76,0.15)', textAlign: 'center'
+                background: 'linear-gradient(160deg, #17150f, #101010 58%)',
+                border: '1px solid rgba(201,168,76,0.55)',
+                borderRadius: 8,
+                width: '100%',
+                maxWidth: 440,
+                padding: 'clamp(24px, 6vw, 36px) clamp(18px, 5vw, 28px)',
+                position: 'relative',
+                boxShadow: '0 24px 64px rgba(0,0,0,0.72), 0 0 28px rgba(201,168,76,0.12)',
+                textAlign: 'center'
               }} onClick={e => e.stopPropagation()}
             >
               <button onClick={() => setStockModal({ open: false, message: '' })}
-                style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: 'var(--text3, #888)', cursor: 'pointer' }}>
+                aria-label="Close stock notice"
+                style={{ position: 'absolute', top: 12, right: 12, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '50%', color: 'var(--text3, #888)', cursor: 'pointer' }}>
                 <X size={18} />
               </button>
 
-              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold, #c9a84c)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+              <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', boxShadow: '0 0 24px rgba(201,168,76,0.12)' }}>
                 <AlertTriangle size={24} color="var(--gold, #c9a84c)" />
               </div>
 
-              <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 22, color: 'white', fontWeight: 400, letterSpacing: 1.5, marginBottom: 12 }}>STOCK NOTICE</h3>
-              <p style={{ color: 'var(--text2, #ccc)', fontSize: 13, lineHeight: 1.6, marginBottom: 28 }}>{stockModal.message}</p>
-              <button className="gold-btn" style={{ width: '100%', padding: '12px 0', fontSize: 12, letterSpacing: 2, textTransform: 'uppercase' }} onClick={() => setStockModal({ open: false, message: '' })}>
-                Acknowledge
+              <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 25, color: 'var(--gold, #c9a84c)', fontWeight: 500, letterSpacing: 0.6, marginBottom: 18 }}>Stock availability</h3>
+              <div style={{ display: 'grid', gap: 12, marginBottom: 26 }}>
+                {stockModal.message.split('\n').filter(Boolean).map((message, index) => (
+                  <p
+                    key={`${index}-${message}`}
+                    dir={index === 1 ? 'rtl' : 'ltr'}
+                    style={{
+                      color: index === 0 ? 'var(--text)' : 'var(--text2, #ccc)',
+                      fontSize: 14,
+                      lineHeight: 1.8,
+                      margin: 0,
+                    }}
+                  >
+                    {message}
+                  </p>
+                ))}
+              </div>
+              <button className="gold-btn" style={{ width: '100%', padding: '13px 0', fontSize: 12, letterSpacing: 1.8, textTransform: 'uppercase', borderRadius: 2 }} onClick={() => setStockModal({ open: false, message: '' })}>
+                Got it
               </button>
             </motion.div>
           </div>
@@ -511,16 +566,17 @@ export default function ProductPage() {
       {/* ─── 2. مودال دليل المقاسات ─── */}
       <AnimatePresence>
         {sizeGuideOpen && (
-          <div style={{
+          <div className="size-guide-overlay" style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            display: 'flex', justifyContent: 'center',
             zIndex: 9999, padding: 20, overflowY: 'auto'
           }} onClick={() => setSizeGuideOpen(false)}>
             
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }}
               transition={{ duration: 0.3 }}
+              className="size-guide-modal"
               style={{
                 background: '#111111',
                 border: '1px solid var(--gold, #c9a84c)',
@@ -535,7 +591,7 @@ export default function ProductPage() {
                 boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,168,76,0.1)'
               }} onClick={e => e.stopPropagation()}
             >
-              <button onClick={() => setSizeGuideOpen(false)}
+              <button className="size-guide-close" onClick={() => setSizeGuideOpen(false)}
                 style={{ position: 'absolute', top: 20, right: 20, background: 'none', border: 'none', color: '#888', cursor: 'pointer', zIndex: 10 }}
                 onMouseEnter={e => e.currentTarget.style.color = 'var(--gold, #c9a84c)'}
                 onMouseLeave={e => e.currentTarget.style.color = '#888'}
@@ -551,11 +607,12 @@ export default function ProductPage() {
               </p>
 
               {(p.sizeGuide || p.sizeguide || p.size_guide) ? (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', maxHeight: '60vh', overflowY: 'auto', borderRadius: 2, background: '#0a0a0a', padding: 12, border: '1px solid rgba(255,255,255,0.03)' }}>
+                <div className="size-guide-image-frame" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', maxHeight: '60vh', overflowY: 'auto', borderRadius: 2, background: '#0a0a0a', padding: 12, border: '1px solid rgba(255,255,255,0.03)' }}>
                   <img 
                     src={p.sizeGuide || p.sizeguide || p.size_guide} 
                     alt={`Size Guide Chart for ${p.name}`} 
                     onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
+                    className="size-guide-image"
                     style={{ width: '100%', height: 'auto', maxHeight: '50vh', objectFit: 'contain' }} 
                   />
                 </div>

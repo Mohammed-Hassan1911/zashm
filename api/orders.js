@@ -16,6 +16,7 @@ const {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   trackingUrlFor,
+  verifyTrackToken,
   EGYPT_PHONE_RE,
   cairoDateString,
 } = require('./_lib');
@@ -336,12 +337,14 @@ async function trackOrder(req, res) {
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   const trackId = String((req.query && req.query.track) || '').trim();
+  const token = String((req.query && req.query.tk) || '').trim();
 
   if (!trackId || !ORDER_ID_RE.test(trackId)) {
     return json(res, 200, { found: false });
   }
 
   try {
+    const hasFullAccess = verifyTrackToken(trackId, token);
     const sb = supabaseAdmin();
     const { data, error } = await sb.from('orders').select('*').eq('id', trackId).maybeSingle();
     if (error) {
@@ -350,7 +353,18 @@ async function trackOrder(req, res) {
     }
     if (!data) return json(res, 200, { found: false });
 
-    // Order ID and signed link now return the same (full) result.
+    if (!hasFullAccess) {
+      return json(res, 200, {
+        found: true,
+        access: 'status',
+        order: {
+          id: String(data.id),
+          status: String(data.status || 'Pending'),
+          date: String(data.date || ''),
+        },
+      });
+    }
+
     const order = parseOrderRow(data);
     order.tracking_url = trackingUrlFor(trackId);
     return json(res, 200, { found: true, access: 'full', order });
