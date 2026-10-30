@@ -48,7 +48,12 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 1 }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, calc(7vw + 22px), 140px)', fontWeight: 400, letterSpacing: 'clamp(4px, 1.6vw, 24px)', lineHeight: 0.95, marginBottom: 'clamp(12px, 2.8vw, 22px)' }}
           >
-            ZASHM
+            <span className="hero-brand-lockup">
+              <span className="hero-brand-word">ZASHM</span>
+              <span className="hero-brand-sparkle hero-brand-sparkle--one" aria-hidden="true" />
+              <span className="hero-brand-sparkle hero-brand-sparkle--two" aria-hidden="true" />
+              <span className="hero-brand-sparkle hero-brand-sparkle--three" aria-hidden="true" />
+            </span>
           </motion.h1>
 
           <motion.p
