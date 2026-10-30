@@ -15,7 +15,7 @@
   --text: #f5f0e8;
   --text1: #f5f0e8;
   --text2: #a0998a;
-  --text3: #6b6459;
+  --text3: #918a80;
   --white: #ffffff;
   --red: #c0392b;
   --green: #27ae60;
@@ -135,16 +135,21 @@ select option { background: var(--bg3); }
 .label-badge {
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
-  padding: 4px 10px;
+  padding: 6px 9px;
   border-radius: 2px;
+  background: rgba(10,10,10,0.9);
+  color: var(--gold-light);
+  border: 1px solid rgba(201,168,76,0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.label-new { background: rgba(201,168,76,0.15); color: var(--gold); border: 1px solid var(--border-gold); }
-.label-best { background: rgba(192,57,43,0.15); color: #e74c3c; border: 1px solid rgba(192,57,43,0.3); }
-.label-featured { background: rgba(39,174,96,0.15); color: #2ecc71; border: 1px solid rgba(39,174,96,0.3); }
-.label-limited { background: rgba(155,89,182,0.15); color: #9b59b6; border: 1px solid rgba(155,89,182,0.3); }
+.label-new,
+.label-best,
+.label-featured,
+.label-limited { background: rgba(10,10,10,0.9); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.65); }
 
 @keyframes shimmer {
   0% { background-position: -200% center; }
@@ -519,6 +524,11 @@ div[role="status"]:not(.zashm-toast) svg {
     right: auto;
     width: 42px;
     height: 42px;
+  }
+  .mobile-whatsapp-obstructed .whatsapp-fab,
+  .mobile-back-to-top-obstructed .back-to-top {
+    visibility: hidden;
+    pointer-events: none;
   }
   .mobile-keyboard-open .whatsapp-fab { display: none; }
   .mobile-keyboard-open .back-to-top { display: none; }

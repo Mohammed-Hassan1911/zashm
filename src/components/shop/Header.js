@@ -89,9 +89,11 @@ export default function Header() {
           left: 0,
           right: 0,
           zIndex: 1000,
-          background: scrolled ? 'rgba(10,10,10,0.96)' : 'transparent',
-          backdropFilter: scrolled ? 'blur(20px)' : 'none',
+          background: scrolled ? 'rgba(10,10,10,0.78)' : 'transparent',
+          backdropFilter: scrolled ? 'blur(22px) saturate(140%)' : 'none',
+          WebkitBackdropFilter: scrolled ? 'blur(22px) saturate(140%)' : 'none',
           borderBottom: scrolled ? '1px solid var(--border)' : '1px solid transparent',
+          boxShadow: scrolled ? '0 8px 24px rgba(0,0,0,0.18)' : 'none',
           transition: 'all 0.4s ease',
           padding: isMobile ? '0 16px' : '0 24px',
         }}

@@ -174,20 +174,34 @@ export default function ProductCard({ product, index = 0 }) {
             gap: 6,
             maxWidth: 'calc(100% - 56px)',
             minWidth: 0,
+            zIndex: 2,
             pointerEvents: 'none',
           }}
         >
-          {isSoldOut ? (
+          {product?.label && (
+            <span
+              className={`label-badge ${LABEL_CLASS[product.label] || ''}`}
+              style={{
+                display: 'inline-block',
+                maxWidth: '100%',
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {product.label}
+            </span>
+          )}
+
+          {isSoldOut && (
             <span
               style={{
                 display: 'inline-block',
                 maxWidth: '100%',
-                background: 'rgba(10, 10, 10, 0.88)',
-                color: '#e74c3c',
-                border: '1px solid #e74c3c',
-                fontSize: 10,
-                fontWeight: 600,
-                padding: '4px 8px',
+                background: 'rgba(10, 10, 10, 0.9)',
+                color: '#f0a09a',
+                border: '1px solid rgba(231,76,60,0.7)',
+                fontSize: 9,
+                fontWeight: 700,
+                padding: '5px 8px',
                 borderRadius: 2,
                 textTransform: 'uppercase',
                 letterSpacing: 1,
@@ -195,36 +209,6 @@ export default function ProductCard({ product, index = 0 }) {
               }}
             >
               Sold Out
-            </span>
-          ) : (
-            product?.label && (
-              <span
-                className={`label-badge ${
-                  LABEL_CLASS[product.label] || ''
-                }`}
-                style={{
-                  maxWidth: '100%',
-                  overflowWrap: 'anywhere',
-                }}
-              >
-                {product.label}
-              </span>
-            )
-          )}
-
-          {discount !== null && discount > 0 && !isSoldOut && (
-            <span
-              style={{
-                display: 'block',
-                background: 'var(--red)',
-                color: '#fff',
-                fontSize: 9,
-                padding: '3px 7px',
-                borderRadius: 2,
-                width: 'fit-content',
-              }}
-            >
-              -{discount}%
             </span>
           )}
         </div>
@@ -379,13 +363,31 @@ export default function ProductCard({ product, index = 0 }) {
           {discount !== null && discount > 0 && (
             <span
               style={{
-                color: 'var(--text3)',
+                color: 'var(--text2)',
                 fontSize: 'clamp(10px, 2.8vw, 12px)',
                 textDecoration: 'line-through',
                 overflowWrap: 'anywhere',
               }}
             >
               EGP {formatPrice(Number(product?.price) || 0)}
+            </span>
+          )}
+
+          {discount !== null && discount > 0 && !isSoldOut && (
+            <span
+              style={{
+                padding: '3px 6px',
+                borderRadius: 2,
+                background: 'rgba(201,168,76,0.14)',
+                border: '1px solid var(--border-gold)',
+                color: 'var(--gold-light)',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {discount}% OFF
             </span>
           )}
         </div>

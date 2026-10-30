@@ -232,19 +232,13 @@ export default function ProductPage() {
                 />
               </AnimatePresence>
               {p.label && (
-                <div style={{ position: 'absolute', top: 16, left: 16 }}>
-                  <span 
+                <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2, maxWidth: 'calc(100% - 32px)' }}>
+                  <span
+                    className="label-badge"
                     style={{
                       display: 'inline-block',
-                      background: 'rgba(10, 10, 10, 0.85)',
-                      color: p.label === 'Limited Edition' || p.label === 'Best Seller' ? '#e74c3c' : 'var(--gold, #c9a84c)',
-                      border: `1px solid ${p.label === 'Limited Edition' || p.label === 'Best Seller' ? '#e74c3c' : 'var(--gold, #c9a84c)'}`,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      padding: '4px 10px',
-                      borderRadius: 2,
-                      textTransform: 'uppercase',
-                      letterSpacing: 1
+                      maxWidth: '100%',
+                      overflowWrap: 'anywhere',
                     }}
                   >
                     {p.label}

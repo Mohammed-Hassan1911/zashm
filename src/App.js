@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store';
 import { AuthProvider, useAuth } from './lib/auth'; 
 import {
-  ShieldCheck,
   Instagram,
   Facebook,
   Ruler,
@@ -63,6 +62,63 @@ function AppInner() {
 
   const [activeModal, setActiveModal] = useState(null);
   const trackedFirstView = useRef(false);
+
+  useEffect(() => {
+    let frame = 0;
+
+    const updateFloatingActions = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+        if (!isMobile) {
+          document.body.classList.remove(
+            'mobile-whatsapp-obstructed',
+            'mobile-back-to-top-obstructed'
+          );
+          return;
+        }
+
+        const floatingActions = [
+          ['.whatsapp-fab', 'mobile-whatsapp-obstructed'],
+          ['.back-to-top', 'mobile-back-to-top-obstructed'],
+        ];
+        const content = document.querySelectorAll(
+          '[role="button"], button:not(.back-to-top), a:not(.whatsapp-fab), input, textarea, select, .site-footer p, .site-footer h4, .product-page p, .product-page h1, .product-page h2, .product-page .product-card-image'
+        );
+
+        floatingActions.forEach(([selector, className]) => {
+          const action = document.querySelector(selector);
+          const actionRect = action?.getBoundingClientRect();
+          const obstructed = actionRect && [...content].some((element) => {
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            return (
+              actionRect.left < rect.right &&
+              actionRect.right > rect.left &&
+              actionRect.top < rect.bottom &&
+              actionRect.bottom > rect.top
+            );
+          });
+
+          document.body.classList.toggle(className, Boolean(obstructed));
+        });
+      });
+    };
+
+    updateFloatingActions();
+    window.addEventListener('scroll', updateFloatingActions, { passive: true });
+    window.addEventListener('resize', updateFloatingActions);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', updateFloatingActions);
+      window.removeEventListener('resize', updateFloatingActions);
+      document.body.classList.remove(
+        'mobile-whatsapp-obstructed',
+        'mobile-back-to-top-obstructed'
+      );
+    };
+  }, [currentPage, products]);
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -244,8 +300,8 @@ function InfoModal({ type, onClose }) {
       title: 'Privacy Policy',
       text: (
         <div style={{ fontSize: 13, lineHeight: 1.6, display: 'grid', gap: 12 }}>
-          <p>At ZASHM, we highly respect your privacy. Your personal information (Name, Phone number, Delivery address) is exclusively used to process your orders and enhance your shopping experience.</p>
-          <p>We secure your data via end-to-end encrypted databases and we never share your details with any third-party marketing companies.</p>
+          <p>We use the information you provide, such as your name, phone number, email address, and delivery address, to process orders and provide customer support.</p>
+          <p>To deliver your order, the details needed for shipment may be shared with the courier or delivery provider. We limit this sharing to what is needed to complete delivery.</p>
         </div>
       )
     }
@@ -399,10 +455,6 @@ function Footer({ setModal }) {
 
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 48, paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <p style={{ color: '#C9A84C', fontSize: 12 }}> © ZASHM Luxury Fashion 2026. {'All rights reserved.'}</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gold)', fontSize: 12 }}>
-            <ShieldCheck size={14} />
-            <span>{'Secured with 256-bit SSL encryption'}</span>
-          </div>
         </div>
 
       </div>
