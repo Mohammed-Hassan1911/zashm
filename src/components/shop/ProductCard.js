@@ -161,57 +161,16 @@ export default function ProductCard({ product, index = 0 }) {
           transition={{ duration: 0.35 }}
         />
 
-        {/* PRODUCT LABELS */}
-        <div
-          className="product-card-labels"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            gap: 6,
-            maxWidth: 'calc(100% - 56px)',
-            minWidth: 0,
-            zIndex: 2,
-            pointerEvents: 'none',
-          }}
-        >
-          {product?.label && (
-            <span
-              className={`label-badge ${LABEL_CLASS[product.label] || ''}`}
-              style={{
-                display: 'inline-block',
-                maxWidth: '100%',
-                overflowWrap: 'anywhere',
-              }}
-            >
-              {product.label}
-            </span>
-          )}
-
-          {isSoldOut && (
-            <span
-              style={{
-                display: 'inline-block',
-                maxWidth: '100%',
-                background: 'rgba(10, 10, 10, 0.9)',
-                color: '#f0a09a',
-                border: '1px solid rgba(231,76,60,0.7)',
-                fontSize: 9,
-                fontWeight: 700,
-                padding: '5px 8px',
-                borderRadius: 2,
-                textTransform: 'uppercase',
-                letterSpacing: 1,
-                overflowWrap: 'anywhere',
-              }}
-            >
-              Sold Out
-            </span>
-          )}
-        </div>
+        {(product?.label || isSoldOut) && (
+          <div className="product-card-labels" aria-label="Product labels">
+            {product?.label && (
+              <span className={`label-badge ${LABEL_CLASS[product.label] || ''}`}>
+                {product.label}
+              </span>
+            )}
+            {isSoldOut && <span className="product-card-sold-out">Sold Out</span>}
+          </div>
+        )}
 
         {/* ACTION BUTTONS */}
         <div

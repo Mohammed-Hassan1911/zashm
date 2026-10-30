@@ -45,11 +45,25 @@ export default function HomePage() {
         <motion.div style={{ position: 'relative', textAlign: 'center', zIndex: 10, opacity, padding: '0 24px' }} className="hero-content">
           <motion.h1
             className="hero-brand"
+            aria-label="ZASHM"
             initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 1 }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, calc(7vw + 22px), 140px)', fontWeight: 400, letterSpacing: 'clamp(4px, 1.6vw, 24px)', lineHeight: 0.95, marginBottom: 'clamp(12px, 2.8vw, 22px)' }}
           >
             <span className="hero-brand-lockup">
-              <span className="hero-brand-word">ZASHM</span>
+              <span className="hero-brand-word" aria-hidden="true">
+                {'ZASHM'.split('').map((letter, index) => (
+                  <span
+                    className="hero-brand-letter"
+                    key={`${letter}-${index}`}
+                    style={{ '--letter-index': index }}
+                  >
+                    {letter}
+                    {index % 2 === 0 && (
+                      <span className="hero-brand-letter-sparkle" aria-hidden="true" />
+                    )}
+                  </span>
+                ))}
+              </span>
               <span className="hero-brand-sparkle hero-brand-sparkle--one" aria-hidden="true" />
               <span className="hero-brand-sparkle hero-brand-sparkle--two" aria-hidden="true" />
               <span className="hero-brand-sparkle hero-brand-sparkle--three" aria-hidden="true" />

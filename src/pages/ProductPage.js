@@ -24,12 +24,53 @@ export default function ProductPage() {
   const [stockModal, setStockModal] = useState({ open: false, message: '' });
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const imageSwipeStartRef = useRef(null);
+  const productImageContainerRef = useRef(null);
+  const productImageRef = useRef(null);
+  const [labelImageOffset, setLabelImageOffset] = useState({ top: 0, left: 0 });
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
 
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
+  useEffect(() => {
+    const container = productImageContainerRef.current;
+    const image = productImageRef.current;
+    if (!container || !image) return undefined;
+
+    const updateLabelPosition = () => {
+      const { width, height } = container.getBoundingClientRect();
+      if (!image.naturalWidth || !image.naturalHeight || !width || !height) return;
+
+      const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+      const nextOffset = {
+        left: Math.max(0, (width - image.naturalWidth * scale) / 2),
+        top: Math.max(0, (height - image.naturalHeight * scale) / 2),
+      };
+
+      setLabelImageOffset(current =>
+        Math.abs(current.left - nextOffset.left) < 0.5 && Math.abs(current.top - nextOffset.top) < 0.5
+          ? current
+          : nextOffset
+      );
+    };
+
+    updateLabelPosition();
+    window.addEventListener('resize', updateLabelPosition);
+    image.addEventListener('load', updateLabelPosition);
+
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(updateLabelPosition);
+    observer?.observe(container);
+
+    return () => {
+      window.removeEventListener('resize', updateLabelPosition);
+      image.removeEventListener('load', updateLabelPosition);
+      observer?.disconnect();
+    };
+  }, [imgIdx, p?.id]);
+
   const changeImage = (direction) => {
     setImgIdx(index => (index + direction + productImages.length) % productImages.length);
   };
@@ -207,6 +248,7 @@ export default function ProductPage() {
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
             <div
               className="product-card-image"
+              ref={productImageContainerRef}
               onPointerDown={handleImagePointerDown}
               onPointerUp={handleImagePointerUp}
               onPointerCancel={() => { imageSwipeStartRef.current = null; }}
@@ -214,6 +256,7 @@ export default function ProductPage() {
             >
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
+                  ref={productImageRef}
                   src={productImages[imgIdx]}
                   alt={p.name}
                   draggable={false}
@@ -232,17 +275,11 @@ export default function ProductPage() {
                 />
               </AnimatePresence>
               {p.label && (
-                <div className="product-detail-label" style={{ position: 'absolute', top: 0, left: 0, zIndex: 2, maxWidth: 'calc(100% - 24px)', display: 'flex', alignItems: 'flex-start' }}>
-                  <span
-                    className="label-badge"
-                    style={{
-                      display: 'inline-block',
-                      maxWidth: '100%',
-                      overflowWrap: 'anywhere',
-                    }}
-                  >
-                    {p.label}
-                  </span>
+                <div
+                  className="product-card-labels product-detail-label"
+                  style={{ top: labelImageOffset.top, left: labelImageOffset.left }}
+                >
+                  <span className="label-badge">{p.label}</span>
                 </div>
               )}
               {productImages.length > 1 && (
