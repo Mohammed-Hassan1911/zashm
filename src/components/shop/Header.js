@@ -190,8 +190,8 @@ export default function Header() {
                   <span
                     style={{
                       ...badgeStyle,
-                      top: isMobile ? -3 : -4,
-                      right: isMobile ? -2 : -3,
+                      top: isMobile ? -3 : -2,
+                      right: isMobile ? -2 : 0,
                     }}
                   >
                     {cartCount}

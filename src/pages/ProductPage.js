@@ -186,9 +186,9 @@ export default function ProductPage() {
         {/* Breadcrumb */}
         <motion.div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-          <button onClick={() => setPage('home')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>'Home'</button>
+          <button onClick={() => setPage('home')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>Home</button>
           <span style={{ color: 'var(--text3)' }}>/</span>
-          <button onClick={() => setPage('shop')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>'Shop'</button>
+          <button onClick={() => setPage('shop')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>Shop</button>
           <span style={{ color: 'var(--text3)' }}>/</span>
           <span style={{ color: 'var(--text2)', fontSize: 12 }}>{p.name}</span>
         </motion.div>
@@ -232,7 +232,7 @@ export default function ProductPage() {
                 />
               </AnimatePresence>
               {p.label && (
-                <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2, maxWidth: 'calc(100% - 32px)' }}>
+                <div className="product-detail-label" style={{ position: 'absolute', top: 24, left: 'clamp(6px, 2vw, 12px)', zIndex: 2, maxWidth: 'calc(100% - 24px)' }}>
                   <span
                     className="label-badge"
                     style={{
