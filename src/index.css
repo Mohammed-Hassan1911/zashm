@@ -2,6 +2,9 @@
   --gold: #c9a84c;
   --gold-light: #e8c870;
   --gold-dark: #9a7a2e;
+  --brand-gold: #a89568;
+  --brand-gold-light: #b6a579;
+  --brand-gold-dark: #8f7b50;
   --bg: #0a0a0a;
   --bg2: #111111;
   --bg3: #1a1a1a;
@@ -159,12 +162,10 @@ select option { background: var(--bg3); }
 }
 
 .shimmer-text {
-  background: linear-gradient(90deg, var(--gold-dark), var(--gold-light), var(--gold-dark));
-  background-size: 200% auto;
+  background: linear-gradient(110deg, var(--brand-gold-dark), var(--brand-gold-light) 52%, var(--brand-gold-dark));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: shimmer 3s linear infinite;
 }
 
 .card-surface {
@@ -272,11 +273,11 @@ div[role="status"]:not(.zashm-toast) svg {
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: normal;
-  background: linear-gradient(110deg, #98752e 0%, #b3954b 38%, #c0a55c 58%, #ad8d40 100%);
+  background: linear-gradient(110deg, var(--brand-gold-dark) 0%, var(--brand-gold) 42%, var(--brand-gold-light) 58%, var(--brand-gold-dark) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 5px 14px rgba(160, 126, 46, 0.12));
+  filter: drop-shadow(0 4px 10px rgba(143, 123, 80, 0.08));
 }
 
 .hero-brand-subtitle,
