@@ -178,18 +178,21 @@ const initialRoute = typeof window !== 'undefined' ? resolveRoute() : { page: 'h
 export const useStore = create((set, get) => ({
   products: db.getAll('products') || [],
   productsLoading: false,
+  productsLoadStatus: 'idle',
+  productsError: null,
   discounts: db.getAll('discounts') || [],
   orders: getSanitizedOrders(),
   ordersLoading: false,
   ordersError: null,
 
   refreshProducts: async () => {
-    set({ productsLoading: true });
+    set({ productsLoading: true, productsLoadStatus: 'loading', productsError: null });
     try {
       const { data, error } = await supabase.from('products').select('*');
       if (error) {
+        set({ productsLoadStatus: 'error', productsError: error.message || 'Could not load products' });
         console.error('Failed to fetch online products:', error);
-      } else if (data) {
+      } else if (Array.isArray(data)) {
         const secureData = data.map(p => ({
           ...p,
           images: p.images || (p.image ? [p.image] : []),
@@ -201,9 +204,12 @@ export const useStore = create((set, get) => ({
           reviews: p.reviews || 0
         }));
         db.setAll('products', secureData);
-        set({ products: secureData });
+        set({ products: secureData, productsLoadStatus: 'success', productsError: null });
+      } else {
+        set({ productsLoadStatus: 'error', productsError: 'No product data returned' });
       }
     } catch (err) {
+      set({ productsLoadStatus: 'error', productsError: err.message || 'Could not load products' });
       console.error("Failed to fetch online products:", err);
     } finally {
       set({ productsLoading: false });
@@ -224,7 +230,7 @@ export const useStore = create((set, get) => ({
 
   updateProduct: async (id, updates) => {
     try {
-      await api.patch('/admin/products', { id, updates });
+      return await api.patch('/admin/products', { id, updates });
     } catch (err) {
       console.error('updateProduct failed:', err.message);
       throw err;

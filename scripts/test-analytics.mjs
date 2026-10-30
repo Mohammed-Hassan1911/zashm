@@ -200,5 +200,147 @@ console.log('\n[12] legacy computeLast7Days (timezone fixed)');
   eq(res.find((p) => p.revenue > 0 || p.orders > 0) !== undefined, true, 'data present (was previously misleading)');
 }
 
+console.log('\n[Inventory] variant classification');
+{
+  const result = A.classifyInventory([{
+    id: 'variants',
+    stock: 4,
+    sizes: ['M', 'S'],
+    colors: ['Black', 'White'],
+    variantStock: { 'M-Black': 2, 'S-Black': 0, 'S-White': 6 },
+  }, {
+    id: 'general-stock',
+    stock: 8,
+    sizes: ['M'],
+    colors: ['Black'],
+  }]);
+  eq(result.productStock[0].stock, 4, 'keeps overall product stock');
+  eq(result.productStock[0].variants.length, 4, 'includes declared size/color combinations');
+  eq(result.variantOutOfStock.length, 2, 'classifies zero-stock variants');
+  eq(result.variantLowStock.length, 1, 'classifies low-stock variants');
+  eq(result.productStock[1].variants.length, 0, 'does not invent variants without variant stock');
+  eq(result.lowStock.map((p) => p.id), ['variants'], 'classifies overall product stock separately');
+}
+
+console.log('\n[Storage] cleanup safety with mocked Supabase only');
+{
+  const require = createRequire(import.meta.url);
+  const lib = require('../api/_lib.js');
+  const { deleteProductRows } = require('../api/admin/products.js');
+  const previousUrl = process.env.SUPABASE_URL;
+  process.env.SUPABASE_URL = 'https://zashm-test.supabase.co';
+  const image = (path) => `https://zashm-test.supabase.co/storage/v1/object/public/products/${path}`;
+  const makeSupabase = (rows, failingPaths = [], orderRows = []) => {
+    const state = {
+      rows: rows.map((row) => ({ ...row })),
+      orderRows: orderRows.map((row) => ({ ...row })),
+      attempts: [],
+      removed: [],
+      deleteCount: 0,
+      ranges: [],
+    };
+    const client = {
+      from(table) {
+        if (table !== 'products' && table !== 'orders') throw new Error(`Unexpected table: ${table}`);
+        const tableRows = () => table === 'products' ? state.rows : state.orderRows;
+        return {
+          select: () => ({
+            range: async (start, end) => {
+              state.ranges.push([start, end]);
+              return { data: tableRows().slice(start, end + 1).map((row) => ({ ...row })), error: null };
+            },
+          }),
+          delete: () => ({
+            in: async (_column, ids) => {
+              state.deleteCount += 1;
+              state.rows = state.rows.filter((row) => !ids.map(String).includes(String(row.id)));
+              return { error: null };
+            },
+          }),
+        };
+      },
+      storage: {
+        from(bucket) {
+          if (bucket !== 'products') throw new Error(`Unexpected bucket: ${bucket}`);
+          return {
+            remove: async (paths) => {
+              state.attempts.push(...paths);
+              if (paths.some((path) => failingPaths.includes(path))) return { error: { message: 'mock storage failure' } };
+              state.removed.push(...paths);
+              return { data: paths.map((name) => ({ name })), error: null };
+            },
+          };
+        },
+      },
+    };
+    return { client, state };
+  };
+
+  try {
+    eq(lib.filePathFromPublicUrl(image('nested/product%20image.webp')), 'nested/product image.webp', 'extracts a nested bucket path from the configured project URL');
+    eq(lib.filePathFromPublicUrl('https://another-project.supabase.co/storage/v1/object/public/products/x.webp'), null, 'rejects a URL from a different Supabase project');
+
+    const { client: singleClient, state: singleState } = makeSupabase([]);
+    const single = await lib.cleanupUnreferencedProductImages(singleClient, ['single.webp']);
+    eq(single.removed, ['single.webp'], 'deletes one unreferenced image');
+    eq(singleState.removed, ['single.webp'], 'uses the mock Storage bucket for single-image deletion');
+
+    const targetRows = [{
+      id: 'deleted',
+      images: [image('shared.webp'), image('front.webp'), image('back.webp')],
+      image: image('front.webp'),
+      sizeGuide: image('guide.webp'),
+    }];
+    const { client: deleteClient, state: deleteState } = makeSupabase([
+      ...targetRows,
+      { id: 'remaining', images: [image('shared.webp')], image: image('shared.webp') },
+    ]);
+    const deleted = await deleteProductRows(deleteClient, ['deleted'], targetRows);
+    eq(deleteState.deleteCount, 1, 'deletes product rows before storage cleanup');
+    eq(deleteState.removed.sort(), ['back.webp', 'front.webp', 'guide.webp'], 'cleans all unique product and size-guide images');
+    eq(deleted.shared, ['shared.webp'], 'keeps an image still used by another product');
+
+    const { client: replaceClient, state: replaceState } = makeSupabase([
+      { id: 'updated', images: [image('new.webp')], image: image('new.webp') },
+    ]);
+    const replaced = await lib.cleanupUnreferencedProductImages(replaceClient, ['old.webp']);
+    eq(replaced.removed, ['old.webp'], 'cleans a replaced image only after supplied rows reflect the saved replacement');
+    eq(replaceState.removed, ['old.webp'], 'removes the old image while preserving the new image');
+
+    const manyProducts = Array.from({ length: 1001 }, (_, index) => ({
+      id: `page-${index}`,
+      images: index === 1000 ? [image('late-shared.webp')] : [],
+    }));
+    const { client: pagedClient, state: pagedState } = makeSupabase(manyProducts);
+    const paged = await lib.cleanupUnreferencedProductImages(pagedClient, ['late-shared.webp']);
+    eq(paged.shared, ['late-shared.webp'], 'detects shared references beyond the first database page');
+    eq(pagedState.ranges.map(([start]) => start).slice(0, 2), [0, 1000], 'reads all product references using pagination');
+
+    const { client: orderClient } = makeSupabase([], [], [{ items: JSON.stringify([{ image: image('in-order.webp') }]) }]);
+    const orderShared = await lib.cleanupUnreferencedProductImages(orderClient, ['in-order.webp']);
+    eq(orderShared.shared, ['in-order.webp'], 'keeps images referenced by historical order items');
+
+    const { client: malformedOrderClient, state: malformedOrderState } = makeSupabase([], [], [{
+      items: `[{"image":"${image('unverified.webp')}"`,
+    }]);
+    let malformedOrderBlockedCleanup = false;
+    try {
+      await lib.cleanupUnreferencedProductImages(malformedOrderClient, ['unverified.webp']);
+    } catch {
+      malformedOrderBlockedCleanup = true;
+    }
+    eq(malformedOrderBlockedCleanup, true, 'refuses to delete when stored order references cannot be verified');
+    eq(malformedOrderState.removed, [], 'keeps storage files when order data parsing fails');
+
+    const { client: failureClient, state: failureState } = makeSupabase([], ['broken.webp']);
+    const failure = await lib.cleanupUnreferencedProductImages(failureClient, ['broken.webp']);
+    eq(failure.failed, ['broken.webp'], 'reports storage removal failure');
+    eq(failureState.attempts.length, 3, 'retries a failed removal a bounded number of times');
+  } finally {
+    if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = previousUrl;
+  }
+}
+
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);
 if (fail > 0) process.exit(1);

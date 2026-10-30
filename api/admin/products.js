@@ -12,8 +12,7 @@ const {
   supabaseAdmin,
   validateProductPayload,
   pathsFromProductImageFields,
-  storagePathsUsedByOtherProducts,
-  removeStorageFiles,
+  cleanupUnreferencedProductImages,
 } = require('../_lib');
 
 // Columns proven to exist (insert path). `label`/`tags`/`active` are sent when
@@ -170,7 +169,9 @@ async function updateProduct(req, res) {
         write[key] = normalized[key];
       }
     }
-    if (updates.image !== undefined && !write.image && updates.images && updates.images.length) {
+    if (updates.images !== undefined && updates.image === undefined) {
+      write.image = Array.isArray(normalized.images) ? (normalized.images[0] || '') : '';
+    } else if (updates.image !== undefined && !write.image && updates.images && updates.images.length) {
       write.image = updates.images[0];
     }
     if (Object.keys(write).length === 0) return json(res, 400, { error: 'Nothing to update' });
@@ -183,8 +184,28 @@ async function updateProduct(req, res) {
     }
     if (updErr) throw updErr;
 
-    const { data: fresh } = await sb.from('products').select('*').eq('id', id).maybeSingle();
-    return json(res, 200, { success: true, product: fresh });
+    const { data: fresh, error: freshError } = await sb.from('products').select('*').eq('id', id).maybeSingle();
+    if (freshError || !fresh) throw freshError || new Error('Could not verify updated product');
+
+    const previousPaths = new Set(pathsFromProductImageFields(existing));
+    const currentPaths = new Set(pathsFromProductImageFields(fresh));
+    const removedPaths = [...previousPaths].filter((path) => !currentPaths.has(path));
+    let cleanup = { removed: [], failed: [], shared: [] };
+    try {
+      cleanup = await cleanupUnreferencedProductImages(sb, removedPaths);
+    } catch (cleanupError) {
+      console.error('Product image reference check failed; files were kept:', cleanupError && cleanupError.message);
+      cleanup = {
+        removed: [],
+        failed: removedPaths,
+        shared: [],
+        error: 'Could not verify image references; files were kept.',
+      };
+    }
+    for (const failed of cleanup.failed) {
+      console.error(`Product image cleanup failed after retries — ${failed}`);
+    }
+    return json(res, 200, { success: true, product: fresh, cleanup });
   } catch (err) {
     console.error('Product update failed:', err && err.message);
     const status = err && err.status ? err.status : 500;
@@ -211,20 +232,21 @@ function deleteProductRows(sb, ids, rows) {
 
   const run = async () => {
     if (candidates.length > 0) {
-      const usedByOthers = await storagePathsUsedByOtherProducts(sb, ids);
-      const toRemove = candidates.filter((p) => !usedByOthers.has(p));
-      const shared = candidates.filter((p) => usedByOthers.has(p));
       const { error } = await sb.from('products').delete().in('id', ids);
       if (error) throw error;
-      if (toRemove.length > 0) {
-        const res = await removeStorageFiles(sb, toRemove);
-        cleanup.removed = res.removed;
-        cleanup.failed = res.failed;
-        for (const failed of res.failed) {
-          console.error(`Product delete: file still present after retries — ${failed}`);
-        }
+      try {
+        const result = await cleanupUnreferencedProductImages(sb, candidates);
+        cleanup.removed = result.removed;
+        cleanup.failed = result.failed;
+        cleanup.shared = result.shared;
+      } catch (cleanupError) {
+        console.error('Product image reference check failed after product deletion; files were kept:', cleanupError && cleanupError.message);
+        cleanup.failed = candidates;
+        cleanup.error = 'Could not verify image references; files were kept.';
       }
-      cleanup.shared = shared;
+      for (const failed of cleanup.failed) {
+        console.error(`Product delete: file still present after retries — ${failed}`);
+      }
       return cleanup;
     }
     const { error } = await sb.from('products').delete().in('id', ids);

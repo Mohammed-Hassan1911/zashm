@@ -13,6 +13,7 @@ const {
   supabaseAdmin,
   detectImageType,
   sanitizeStoragePath,
+  cleanupUnreferencedProductImages,
 } = require('../_lib');
 
 const MAX_BODY = 4 * 1024 * 1024; // ~3MB image after base64 expansion (Vercel caps at 4.5MB)
@@ -99,9 +100,18 @@ async function deleteImage(req, res) {
 
   try {
     const sb = supabaseAdmin();
-    const { error } = await sb.storage.from('products').remove([path]);
-    if (error) throw error;
-    return json(res, 200, { success: true });
+    const cleanup = await cleanupUnreferencedProductImages(sb, [path]);
+    if (cleanup.shared.length) {
+      return json(res, 409, {
+        error: 'Image is still referenced by a product and was kept.',
+        cleanup,
+      });
+    }
+    if (cleanup.failed.length) {
+      console.error(`Upload delete failed after retries — ${path}`);
+      return json(res, 500, { error: 'Could not delete image from storage', cleanup });
+    }
+    return json(res, 200, { success: true, cleanup });
   } catch (err) {
     console.error('Upload delete failed:', err && err.message);
     return json(res, 500, { error: 'Could not delete image' });

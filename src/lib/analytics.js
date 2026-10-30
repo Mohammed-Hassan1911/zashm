@@ -276,12 +276,43 @@ export function compactEGP(n) {
 export function classifyInventory(products = []) {
   const outOfStock = [];
   const lowStock = [];
+  const productStock = [];
+  const variantOutOfStock = [];
+  const variantLowStock = [];
+
   (Array.isArray(products) ? products : []).forEach((p) => {
     const stock = num(p.stock);
     if (stock <= 0) outOfStock.push(p);
     else if (stock <= 5) lowStock.push(p);
+
+    const sizes = Array.isArray(p.sizes) ? p.sizes.map(String) : [];
+    const colors = Array.isArray(p.colors) ? p.colors.map(String) : [];
+    const variantStock = p.variantStock && typeof p.variantStock === 'object' && !Array.isArray(p.variantStock)
+      ? p.variantStock
+      : {};
+    const keys = Object.keys(variantStock).length
+      ? new Set([
+        ...sizes.flatMap((size) => colors.map((color) => `${size}-${color}`)),
+        ...Object.keys(variantStock),
+      ])
+      : new Set();
+    const variants = [...keys].map((key) => {
+      const separator = key.indexOf('-');
+      const variant = {
+        key,
+        size: separator < 0 ? key : key.slice(0, separator),
+        color: separator < 0 ? '' : key.slice(separator + 1),
+        stock: num(variantStock[key]),
+      };
+      if (variant.stock <= 0) variantOutOfStock.push({ product: p, ...variant });
+      else if (variant.stock <= 5) variantLowStock.push({ product: p, ...variant });
+      return variant;
+    });
+
+    productStock.push({ product: p, stock, variants });
   });
-  return { outOfStock, lowStock };
+
+  return { outOfStock, lowStock, productStock, variantOutOfStock, variantLowStock };
 }
 
 // ─── LEGACY HELPERS (kept for AnalyticsPanel + compatibility) ────────────────

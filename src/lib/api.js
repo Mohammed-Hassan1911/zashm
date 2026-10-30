@@ -116,7 +116,7 @@ export function deleteStorageFile(path) {
   const existing = storageDeletePending.get(path);
   if (existing) return existing;
   const run = (async () => {
-    await api.del('/admin/upload', { path });
+    return api.del('/admin/upload', { path });
   })();
   storageDeletePending.set(path, run);
   run.then(() => storageDeletePending.delete(path)).catch(() => storageDeletePending.delete(path));

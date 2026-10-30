@@ -3,15 +3,41 @@ import { motion } from 'framer-motion';
 import { Upload, X, AlertCircle } from 'lucide-react';
 import { api, deleteStorageFile } from '../../lib/api';
 import { getOptimizedImageUrl } from '../../lib/security';
+import { supabase } from '../../lib/supabase';
 
 const RAW_DIRECT_LIMIT = 2.9 * 1024 * 1024; // files up to ~2.9MB are sent as-is
 const DATAURL_LIMIT = 3.9 * 1024 * 1024;   // server accepts bodies up to 4MB
 
 // استخراج مسار الملف فقط من داخل bucket products (لا شيء خارج البكت يُقبل)
-const STORAGE_PATH_RE = /\/storage\/v1\/object\/public\/products\/([A-Za-z0-9._-]+)$/;
 function storagePathFromUrl(url) {
-  const m = String(url || '').match(STORAGE_PATH_RE);
-  return m ? m[1] : null;
+  let parsed;
+  try {
+    parsed = new URL(String(url || ''));
+  } catch {
+    return null;
+  }
+  let configuredOrigin;
+  try {
+    configuredOrigin = new URL(supabase.supabaseUrl).origin;
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || parsed.origin !== configuredOrigin) return null;
+  const match = parsed.pathname.match(/^\/storage\/v1\/object\/public\/products\/(.+)$/);
+  if (!match) return null;
+
+  try {
+    const path = decodeURIComponent(match[1]);
+    const segments = path.split('/');
+    if (
+      path.length > 512 ||
+      segments.some(segment => !/^[A-Za-z0-9._ -]{1,120}$/.test(segment) || segment === '.' || segment === '..') ||
+      !/\.(jpg|jpeg|png|webp|gif|avif)$/i.test(path)
+    ) return null;
+    return path;
+  } catch {
+    return null;
+  }
 }
 export { storagePathFromUrl };
 
@@ -163,7 +189,18 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
           // أُغلق المحرر أثناء الرفع: نظّف الملف المرفوع فورًا حتى لا يبقى orphan
           // في Storage (أفضل مجهود، لا يكسر الواجهة أبدًا).
           if (payload && payload.path) {
-            deleteStorageFile(payload.path).catch(err => console.error('Post-cancel upload cleanup failed:', err && err.message));
+            deleteStorageFile(payload.path).catch(err => {
+              console.error('Post-cancel upload cleanup failed:', err && err.message);
+              if (typeof window.toast === 'function') {
+                const shared = err?.payload?.cleanup?.shared?.length;
+                window.toast(
+                  shared
+                    ? 'احتُفظ بالصورة المرفوعة لأنها ما زالت مستخدمة في مكان آخر.'
+                    : 'تعذر حذف صورة مرفوعة بعد إغلاق المحرر. لم تُحذف من التخزين.',
+                  'error'
+                );
+              }
+            });
           }
           return;
         }

@@ -783,19 +783,16 @@ function detectImageType(buf) {
 
 function sanitizeStoragePath(path) {
   const p = String(path || '');
-  if (!/^[A-Za-z0-9._-]{1,120}$/.test(p)) return null;
-  if (p.includes('..')) return null;
+  if (!p || p.length > 512 || p.startsWith('/') || p.includes('\\')) return null;
+  const segments = p.split('/');
+  if (segments.some((segment) => !/^[A-Za-z0-9._ -]{1,120}$/.test(segment) || segment === '.' || segment === '..')) return null;
   if (!/\.(jpg|jpeg|png|webp|gif|avif)$/i.test(p)) return null;
   return p;
 }
 
-// Only our own Supabase project host is trusted for storage cleanup. Public
-// URLs served by Supabase are: https://<project-ref>.supabase.co/storage/v1/
-// object/public/products/<file>. Anything else (Unsplash, Cloudinary, custom
-// hosts, other buckets, or any URL that merely contains "/products/") yields
-// null so it is NEVER guessed, removed or otherwise touched.
-const SUPABASE_HOST_RE = /\.supabase\.(co|in)$/i;
-const PRODUCT_STORAGE_URL_RE = /\/storage\/v1\/object\/public\/products\/([A-Za-z0-9._-]{1,120})(?:[?#].*)?$/;
+// Only public objects from this configured Supabase project and products bucket
+// can be cleaned up. External or similarly-shaped URLs are never guessed.
+const PRODUCT_STORAGE_URL_RE = /\/storage\/v1\/object\/public\/products\/(.+)$/;
 
 function filePathFromPublicUrl(url) {
   if (!url) return null;
@@ -805,10 +802,20 @@ function filePathFromPublicUrl(url) {
   } catch (e) {
     return null;
   }
-  if (!SUPABASE_HOST_RE.test(parsed.hostname)) return null;
+  let configuredHost;
+  try {
+    configuredHost = new URL(getSupabaseUrl()).hostname;
+  } catch (e) {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== configuredHost) return null;
   const m = PRODUCT_STORAGE_URL_RE.exec(parsed.pathname);
   if (!m) return null;
-  return sanitizeStoragePath(m[1]);
+  try {
+    return sanitizeStoragePath(decodeURIComponent(m[1]));
+  } catch (e) {
+    return null;
+  }
 }
 
 /** Collects every trusted storage path referenced by a product row. */
@@ -828,15 +835,61 @@ function pathsFromProductImageFields(row) {
 
 /** Paths referenced by products NOT in excludeIds (i.e. still owned by others). */
 async function storagePathsUsedByOtherProducts(sb, excludeIds) {
-  const { data, error } = await sb.from('products').select('id, images, image, sizeGuide');
-  if (error) throw error;
-  const excluded = new Set((excludeIds || []).map((v) => String(v)));
+  const excluded = new Set((excludeIds || []).map(String));
   const used = new Set();
-  for (const row of data || []) {
+  const productRows = await readAllRows(sb, 'products', 'id, images, image, sizeGuide');
+  for (const row of productRows) {
     if (excluded.has(String(row.id))) continue;
-    for (const p of pathsFromProductImageFields(row)) used.add(p);
+    for (const path of pathsFromProductImageFields(row)) used.add(path);
   }
+  const orders = await readAllRows(sb, 'orders', 'items');
+  for (const order of orders) collectStoragePaths(order.items, used);
   return used;
+}
+
+async function readAllRows(sb, table, columns) {
+  const rows = [];
+  const pageSize = 1000;
+  let offset = 0;
+  while (true) {
+    let query = sb.from(table).select(columns);
+    if (typeof query.order === 'function') query = query.order('id', { ascending: true });
+    const { data, error } = typeof query.range === 'function'
+      ? await query.range(offset, offset + pageSize - 1)
+      : await query;
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error(`Could not verify image references in ${table}.`);
+    const page = data;
+    rows.push(...page);
+    if (page.length < pageSize || typeof query.range !== 'function') return rows;
+    offset += page.length;
+  }
+}
+
+function collectStoragePaths(value, paths) {
+  if (typeof value === 'string') {
+    const path = filePathFromPublicUrl(value);
+    if (path) {
+      paths.add(path);
+      return;
+    }
+    const trimmed = value.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      let parsed;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        throw new Error('Could not parse stored order items; image references were not changed.');
+      }
+      collectStoragePaths(parsed, paths);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectStoragePaths(entry, paths));
+  } else if (value && typeof value === 'object') {
+    Object.values(value).forEach((entry) => collectStoragePaths(entry, paths));
+  }
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -876,6 +929,17 @@ async function removeStorageFiles(sb, paths, retries = 2) {
     else failed.push(path);
   }
   return { removed, failed };
+}
+
+async function cleanupUnreferencedProductImages(sb, candidatePaths) {
+  const candidates = [...new Set((candidatePaths || []).map(sanitizeStoragePath).filter(Boolean))];
+  if (!candidates.length) return { removed: [], failed: [], shared: [] };
+
+  const referenced = await storagePathsUsedByOtherProducts(sb, []);
+  const shared = candidates.filter((path) => referenced.has(path));
+  const unreferenced = candidates.filter((path) => !referenced.has(path));
+  const result = await removeStorageFiles(sb, unreferenced);
+  return { ...result, shared };
 }
 
 module.exports = {
@@ -920,6 +984,7 @@ module.exports = {
   pathsFromProductImageFields,
   storagePathsUsedByOtherProducts,
   removeStorageFiles,
+  cleanupUnreferencedProductImages,
   EMAIL_RE,
   EGYPT_PHONE_RE,
 };

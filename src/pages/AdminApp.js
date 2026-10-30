@@ -30,6 +30,12 @@ import { toast } from '../components/ui/BackToTop';
 const STATUS_COLORS = { Pending:'#f39c12', Confirmed:'#3498db', Processing:'#9b59b6', Shipped:'#c9a84c', Delivered:'#27ae60', Cancelled:'#e74c3c' };
 const STATUS_FLOW = ['Pending','Confirmed','Processing','Shipped','Delivered'];
 
+function cleanupPathSummary(paths) {
+  const unique = [...new Set(paths.filter(Boolean))];
+  const shown = unique.slice(0, 3).join(', ');
+  return unique.length > 3 ? `${shown}، و${unique.length - 3} ملفات أخرى` : shown;
+}
+
 // Build a customer tracking link on whatever host is actually serving the app,
 // instead of a hard-coded deployment domain.
 function trackingLinkFor(id) {
@@ -379,7 +385,10 @@ function DashSkeleton() {
 }
 
 function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
-  const { orders, products, refreshOrders, ordersLoading, ordersError } = useStore();
+  const {
+    orders, products, productsLoading, productsLoadStatus, productsError, refreshProducts,
+    refreshOrders, ordersLoading, ordersError,
+  } = useStore();
 
   const [range, setRange] = useState('7d');
 
@@ -406,7 +415,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
   const kpis = [
     { key: 'totalValue', labelAr: 'قيمة الطلبات الإجمالية', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${overview.orderCount} non-cancelled orders`, color: 'var(--gold)', icon: TrendingUp, delta: overview.totalDeltaPct },
     { key: 'delivered', labelAr: 'مبيعات الطلبات المسلّمة', labelEn: 'Delivered Sales', value: fmtEGP(overview.deliveredSales), sub: `${overview.deliveredCount} delivered`, color: '#27ae60', icon: CheckCircle },
-    { key: 'pending', labelAr: 'قيمة بانتظار التأكيد', labelEn: 'Pending Order Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: '#f39c12', icon: Clock },
+    { key: 'pending', labelAr: 'قيمة الطلبات قيد المعالجة', labelEn: 'Orders In Progress Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: '#f39c12', icon: Clock },
     { key: 'shipped', labelAr: 'قيمة الطلبات المشحونة', labelEn: 'Shipped Order Value', value: fmtEGP(overview.shippedValue), sub: `${overview.shippedCount} shipped`, color: '#3498db', icon: Truck },
     { key: 'orders', labelAr: 'إجمالي الطلبات', labelEn: 'Total Orders', value: String(overview.orderCount), sub: 'all statuses', color: 'var(--text)', icon: ShoppingCart, delta: overview.orderDeltaPct },
     { key: 'deliveredCount', labelAr: 'طلبات مسلّمة', labelEn: 'Delivered Orders', value: String(overview.deliveredCount), sub: `of ${overview.orderCount} total`, color: '#27ae60', icon: Package2 },
@@ -567,43 +576,52 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
 
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <Card title="صحة المخزون" titleEn="Store Health">
-                {inventory.outOfStock.length === 0 && inventory.lowStock.length === 0 ? (
+                {productsLoading || productsLoadStatus === 'idle' ? (
+                  <p role="status" style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>جارٍ تحميل بيانات المنتجات والمخزون…</p>
+                ) : productsLoadStatus === 'error' ? (
+                  <div role="alert" style={{ display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                    <p style={{ color:'#e74c3c', fontSize:12 }}>{`تعذّر تحميل المنتجات${productsError ? ` — ${productsError}` : ''}`}</p>
+                    <button onClick={refreshProducts} style={{ padding:'5px 10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>إعادة المحاولة</button>
+                  </div>
+                ) : products.length === 0 ? (
+                  <p style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>لا توجد منتجات لعرض حالة مخزونها.</p>
+                ) : inventory.outOfStock.length === 0 &&
+                  inventory.lowStock.length === 0 &&
+                  inventory.variantOutOfStock.length === 0 &&
+                  inventory.variantLowStock.length === 0 ? (
                   <div style={{ display:'flex', alignItems:'center', gap:8, color:'#27ae60', fontSize:12, padding:'4px 0' }}>
-                    <CheckCircle size={15} /> كل المنتجات متاحة بمخزون جيد
+                    <CheckCircle size={15} /> كل المنتجات والتوليفات متاحة بمخزون جيد
                   </div>
                 ) : (
-                  <div>
-                    {inventory.outOfStock.length > 0 && (
-                      <div style={{ marginBottom: 10 }}>
-                        <p style={{ fontSize:10, color:'var(--red)', fontWeight:600, marginBottom:4, textTransform:'uppercase', letterSpacing:0.5 }}>
-                          {inventory.outOfStock.length} نفدت من المخزون (Out of stock)
-                        </p>
-                        {inventory.outOfStock.slice(0,4).map((p) => (
-                          <div key={p.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:11 }}>
-                            <span style={{ color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginRight:8 }}>{p.name}</span>
-                            <span style={{ color:'var(--red)', fontWeight:700 }}>OUT</span>
+                  <div style={{ maxHeight:320, overflowY:'auto', paddingRight:2 }}>
+                    {inventory.productStock.map(({ product, stock, variants }) => (
+                      <div key={product.id} style={{ padding:'8px 0', borderBottom:'1px solid var(--border)' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:11, marginBottom:variants.length ? 6 : 0 }}>
+                          <span style={{ color:'var(--text2)', minWidth:0, overflowWrap:'anywhere' }}>{product.name}</span>
+                          <strong style={{ flexShrink:0, color:stock <= 0 ? 'var(--red)' : stock <= 5 ? '#f39c12' : '#27ae60' }}>
+                            الإجمالي: {stock}
+                          </strong>
+                        </div>
+                        {variants.length > 0 && (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                            {variants.map((variant) => {
+                              const color = variant.stock <= 0 ? 'var(--red)' : variant.stock <= 5 ? '#f39c12' : '#27ae60';
+                              const status = variant.stock <= 0 ? 'نفد' : variant.stock <= 5 ? 'منخفض' : 'متاح';
+                              return (
+                                <span key={variant.key} style={{ color, border:`1px solid ${color}55`, background:`${color}12`, borderRadius:4, padding:'3px 6px', fontSize:10, whiteSpace:'nowrap' }}>
+                                  {variant.size}{variant.color ? ` - ${variant.color}` : ''}: {status} ({variant.stock})
+                                </span>
+                              );
+                            })}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-                    {inventory.lowStock.length > 0 && (
-                      <div>
-                        <p style={{ fontSize:10, color:'#f39c12', fontWeight:600, marginBottom:4, textTransform:'uppercase', letterSpacing:0.5 }}>
-                          {inventory.lowStock.length} بكمية منخفضة (≤ 5)
-                        </p>
-                        {inventory.lowStock.slice(0,4).map((p) => (
-                          <div key={p.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0', fontSize:11 }}>
-                            <span style={{ color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginRight:8 }}>{p.name}</span>
-                            <span style={{ color:'#f39c12', fontWeight:700 }}>{p.stock} left</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    ))}
                   </div>
                 )}
 
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop:'1px solid var(--border)' }}>
-                  <p style={{ fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>بانتظار التأكيد</p>
+                  <p style={{ fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>الطلبات قيد المعالجة</p>
                   {attentionOrders.length === 0 ? (
                     <p style={{ fontSize:12, color:'#27ae60', display:'flex', alignItems:'center', gap:6 }}><CheckCircle size={14} /> لا توجد طلبات معلّقة</p>
                   ) : attentionOrders.map((o) => (
@@ -1158,16 +1176,27 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
 
     try {
       if (pending.length) {
-        let failed = false;
+        const failedPaths = [];
+        const sharedPaths = [];
         await Promise.all(pending.map(async (path) => {
           try {
-            await deleteStorageFile(path);
+            const result = await deleteStorageFile(path);
+            failedPaths.push(...(result?.cleanup?.failed || []));
+            sharedPaths.push(...(result?.cleanup?.shared || []));
           } catch (err) {
             console.error('Cancel cleanup delete failed:', err && err.message);
-            failed = true;
+            const cleanup = err?.payload?.cleanup;
+            failedPaths.push(...(cleanup?.failed || []));
+            sharedPaths.push(...(cleanup?.shared || []));
+            if (!cleanup?.failed?.length && !cleanup?.shared?.length) failedPaths.push(path);
           }
         }));
-        if (failed) toast.error('تعذر حذف بعض الصور المؤقتة من التخزين، أعد المحاولة لاحقاً.');
+        if (failedPaths.length || sharedPaths.length) {
+          const parts = [];
+          if (failedPaths.length) parts.push(`تعذر حذف: ${cleanupPathSummary(failedPaths)}`);
+          if (sharedPaths.length) parts.push(`احتُفظ بالصور المشتركة: ${cleanupPathSummary(sharedPaths)}`);
+          toast.error(`تم إغلاق المحرر. ${parts.join(' — ')}`);
+        }
       }
     } finally {
       cancelInFlightRef.current = false;
@@ -1183,8 +1212,11 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
     try {
       const payload = await deleteProduct(target.id);
       const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
+      const shared = (payload && payload.cleanup && payload.cleanup.shared) || [];
       if (failed.length) {
-        toast.error(`تم حذف المنتج، لكن فشل تنظيف ${failed.length} صورة من التخزين. حاول مرة أخرى لاحقاً.`);
+        toast.error(`تم حذف المنتج، وتعذر تنظيف الصور التالية: ${cleanupPathSummary(failed)}. حاول مرة أخرى لاحقاً.`);
+      } else if (shared.length) {
+        toast.error(`تم حذف المنتج، واحتُفظ بالصور المشتركة: ${cleanupPathSummary(shared)}.`);
       } else {
         toast.success('تم حذف المنتج بنجاح');
       }
@@ -1203,8 +1235,11 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
     try {
       const payload = await bulkDeleteProducts(ids);
       const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
+      const shared = (payload && payload.cleanup && payload.cleanup.shared) || [];
       if (failed.length) {
-        toast.error(`تم حذف المنتجات، لكن فشل تنظيف ${failed.length} صورة من التخزين. حاول مرة أخرى لاحقاً.`);
+        toast.error(`تم حذف المنتجات، وتعذر تنظيف الصور التالية: ${cleanupPathSummary(failed)}. حاول مرة أخرى لاحقاً.`);
+      } else if (shared.length) {
+        toast.error(`تم حذف المنتجات، واحتُفظ بالصور المشتركة: ${cleanupPathSummary(shared)}.`);
       } else {
         toast.success('تم حذف المنتجات بنجاح');
       }
@@ -1282,6 +1317,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       colors: cleanColors,
       sizes: cleanSizes,
       images: form.images,
+      image: form.images[0] || '',
       sizeGuide: form.sizeGuide || null,
       label: form.label || '',
       tags: form.tags || '',
@@ -1289,38 +1325,49 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
     };
 
     try {
+      let saveResult;
       if (editing && editing.id) {
-        await updateProduct(editing.id, productData);
-        toast.success('تم تعديل المنتج ومزامنة المخزون بنجاح! 🔄');
+        saveResult = await updateProduct(editing.id, productData);
       } else {
-        await addProduct(productData);
-        toast.success('تم إضافة المنتج الجديد للمتجر بنجاح! 🚀');
+        saveResult = await addProduct(productData);
       }
 
-      // نظّف من Storage الملفات التي لم تعد مرجّحة من المنتج: صور رُفعت في هذه
-      // الجلسة ثم أُزيلت، وصور أصلية محفوظة حُذفت من النموذج. أفضل مجهود — فشل
-      // التنظيف لا يلغي حفظ المنتج.
-      try {
-        const finalPaths = new Set();
-        (productData.images || []).forEach(u => { const ph = storagePathFromUrl(u); if (ph) finalPaths.add(ph); });
-        const guidePh = storagePathFromUrl(productData.sizeGuide || '');
-        if (guidePh) finalPaths.add(guidePh);
+      const finalPaths = new Set();
+      (productData.images || []).forEach(u => { const ph = storagePathFromUrl(u); if (ph) finalPaths.add(ph); });
+      const guidePh = storagePathFromUrl(productData.sizeGuide || '');
+      if (guidePh) finalPaths.add(guidePh);
 
-        const orphaned = new Set();
-        tempUploadsRef.current.forEach(ph => { if (!finalPaths.has(ph)) orphaned.add(ph); });
-        const originalUrls = [
-          ...((editing && editing.images) || []),
-          ...((editing && editing.sizeGuide) ? [editing.sizeGuide] : []),
-        ];
-        originalUrls.forEach(u => { const ph = storagePathFromUrl(u); if (ph && !finalPaths.has(ph)) orphaned.add(ph); });
-
-        if (orphaned.size) {
-          await Promise.all([...orphaned].map(ph =>
-            deleteStorageFile(ph).catch(err => console.error('Save cleanup delete failed:', err && err.message))
-          ));
+      const orphanedUploads = [...tempUploadsRef.current].filter(path => !finalPaths.has(path));
+      const tempCleanupFailedPaths = [];
+      const tempCleanupSharedPaths = [];
+      const tempCleanupResults = await Promise.all(orphanedUploads.map(async (path) => {
+        try {
+          return await deleteStorageFile(path);
+        } catch (err) {
+          console.error('Save cleanup delete failed:', err && err.message);
+          const cleanup = err?.payload?.cleanup;
+          if (cleanup?.failed?.length) tempCleanupFailedPaths.push(...cleanup.failed);
+          if (cleanup?.shared?.length) tempCleanupSharedPaths.push(...cleanup.shared);
+          if (!cleanup?.failed?.length && !cleanup?.shared?.length) tempCleanupFailedPaths.push(path);
+          return null;
         }
-      } catch (e) {
-        console.error('Save cleanup failed:', e && e.message);
+      }));
+      tempCleanupResults.forEach(result => {
+        tempCleanupFailedPaths.push(...(result?.cleanup?.failed || []));
+        tempCleanupSharedPaths.push(...(result?.cleanup?.shared || []));
+      });
+
+      const savedImageCleanup = saveResult?.cleanup || {};
+      const failedImagePaths = [...(savedImageCleanup.failed || []), ...tempCleanupFailedPaths];
+      const sharedImagePaths = [...(savedImageCleanup.shared || []), ...tempCleanupSharedPaths];
+      if (failedImagePaths.length) {
+        toast.error(`تم حفظ المنتج، لكن تعذر حذف الصور التالية: ${cleanupPathSummary(failedImagePaths)}. راجع التخزين وحاول لاحقاً.`);
+      } else if (sharedImagePaths.length) {
+        toast.error(`تم حفظ المنتج، واحتُفظ بالصور المشتركة التالية: ${cleanupPathSummary(sharedImagePaths)}.`);
+      } else if (editing && editing.id) {
+        toast.success('تم تعديل المنتج ومزامنة المخزون بنجاح! 🔄');
+      } else {
+        toast.success('تم إضافة المنتج الجديد للمتجر بنجاح! 🚀');
       }
 
       tempUploadsRef.current = new Set();
