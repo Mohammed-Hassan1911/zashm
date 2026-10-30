@@ -939,7 +939,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
       }
 
       return cleaned;
-    })()}?text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم! 🎉')}`}
+    })()}?text=${encodeURIComponent('شكراً لثقتك في ZASHM،  وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم صالح لمده شهرين! 🎉')}`}
     target="_blank"
     rel="noreferrer"
     style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
