@@ -166,8 +166,8 @@ export default function ProductCard({ product, index = 0 }) {
           className="product-card-labels"
           style={{
             position: 'absolute',
-            top: 'clamp(6px, 2vw, 12px)',
-            left: 'clamp(6px, 2vw, 12px)',
+            top: 0,
+            left: 0,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',

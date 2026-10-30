@@ -232,7 +232,7 @@ export default function ProductPage() {
                 />
               </AnimatePresence>
               {p.label && (
-                <div className="product-detail-label" style={{ position: 'absolute', top: 24, left: 'clamp(6px, 2vw, 12px)', zIndex: 2, maxWidth: 'calc(100% - 24px)' }}>
+                <div className="product-detail-label" style={{ position: 'absolute', top: 0, left: 0, zIndex: 2, maxWidth: 'calc(100% - 24px)' }}>
                   <span
                     className="label-badge"
                     style={{
