@@ -1397,7 +1397,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
             <button
               onClick={() => setConfirmBulk(selected.size)}
               style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', color:'var(--red)', borderRadius:6, cursor:'pointer', fontSize:12, transition:'all 0.2s ease-in-out' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.2)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = '#f07171'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.3)'; e.currentTarget.style.color = 'var(--red)'; }}
             >
               <Trash2 size={13} /> Delete {selected.size}
@@ -1466,7 +1466,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
                     <button
                       onClick={() => setProductToDelete(p)}
                       style={{ width:32, height:32, borderRadius:'50%', background:'#111111', border:'1px solid #333333', color:'#ffffff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'all 0.2s' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.2)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = '#f07171'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = '#111111'; e.currentTarget.style.borderColor = '#333333'; e.currentTarget.style.color = '#ffffff'; }}
                     >
                       <Trash2 size={12} />
@@ -1720,17 +1720,17 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
-              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(201, 168, 76, 0.3)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
+              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(192, 57, 43, 0.35)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
             >
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(201, 168, 76, 0.08)', border: '1px solid rgba(201, 168, 76, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <Trash2 size={28} style={{ color: 'var(--gold)' }} />
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(192, 57, 43, 0.1)', border: '1px solid rgba(192, 57, 43, 0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <Trash2 size={28} style={{ color: '#f07171' }} />
               </div>
               <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>تأكيد الحذف النهائي</h3>
               <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>هل أنت متأكد من حذف منتج <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>؟ هذا الإجراء سيؤدي إلى إزالته نهائياً.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button
                   onClick={confirmSingleDelete}
-                  style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                  style={{ flex: 1, padding: '10px 0', background: '#b83232', border: '1px solid #d65353', color: '#ffffff', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
                   حذف
                 </button>
@@ -1748,10 +1748,10 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
-              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(201, 168, 76, 0.3)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
+              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(192, 57, 43, 0.35)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
             >
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(201, 168, 76, 0.08)', border: '1px solid rgba(201, 168, 76, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <Trash2 size={28} style={{ color: 'var(--gold)' }} />
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(192, 57, 43, 0.1)', border: '1px solid rgba(192, 57, 43, 0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <Trash2 size={28} style={{ color: '#f07171' }} />
               </div>
               <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>{confirmBulk === 1 ? 'تأكيد الحذف' : 'تأكيد الحذف الجماعي'}</h3>
               <p style={{ color: '#dddddd', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>
@@ -1762,7 +1762,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button
                   onClick={confirmBulkDelete}
-                  style={{ flex: 1, padding: '10px 0', background: 'var(--gold)', border: 'none', color: '#000000', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                  style={{ flex: 1, padding: '10px 0', background: '#b83232', border: '1px solid #d65353', color: '#ffffff', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
                   Yes
                 </button>
@@ -1781,6 +1781,7 @@ function DiscountsPanel({ canEdit }) {
   const { discounts, addDiscount, deleteDiscount, updateDiscount } = useStore();
   const [showForm, setShowForm] = useState(false);
   const [discountToDelete, setDiscountToDelete] = useState(null);
+  const [updatingDiscountId, setUpdatingDiscountId] = useState(null);
   const [form, setForm] = useState({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -1825,6 +1826,20 @@ function DiscountsPanel({ canEdit }) {
   };
 
   const handleDelete = (d) => setDiscountToDelete(d);
+
+  const handleToggle = async (discount) => {
+    if (updatingDiscountId === discount.id) return;
+    setUpdatingDiscountId(discount.id);
+    try {
+      await updateDiscount(discount.id, { active: !discount.active });
+      toast.success(discount.active ? 'تم إيقاف كود الخصم.' : 'تم تفعيل كود الخصم.');
+    } catch (err) {
+      console.error('Failed to update discount status:', err);
+      toast.error('تعذر تحديث حالة كود الخصم. تحقق من الاتصال وحاول مرة أخرى.');
+    } finally {
+      setUpdatingDiscountId(null);
+    }
+  };
 
   const confirmDelete = async () => {
     if (!discountToDelete) return;
@@ -1885,14 +1900,16 @@ function DiscountsPanel({ canEdit }) {
                   </span>
                   {canEdit && (
                     <>
-                      <button onClick={() => updateDiscount(d.id, { active: !d.active })}
-                        style={{ padding:'4px 8px', background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', borderRadius:4, cursor:'pointer', fontSize:11 }}>
-                        Toggle
+                      <button
+                        onClick={() => handleToggle(d)}
+                        disabled={updatingDiscountId === d.id}
+                        style={{ padding:'4px 8px', background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', borderRadius:4, cursor:updatingDiscountId === d.id ? 'wait' : 'pointer', fontSize:11, opacity:updatingDiscountId === d.id ? 0.6 : 1 }}>
+                        {updatingDiscountId === d.id ? 'Saving…' : d.active ? 'Deactivate' : 'Activate'}
                       </button>
                       <button
                         onClick={() => handleDelete(d)}
                         style={{ width:28, height:28, borderRadius:4, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', color:'var(--red)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.2s ease-in-out' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--gold)'; e.currentTarget.style.color = '#111'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.2)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = '#f07171'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.2)'; e.currentTarget.style.color = 'var(--red)'; }}
                       >
                         <Trash2 size={12} />
@@ -1977,15 +1994,15 @@ function DiscountsPanel({ canEdit }) {
             <motion.div
               initial={{ opacity:0, scale:0.9, y:'-50%', x:'-50%' }} animate={{ opacity:1, scale:1, y:'-50%', x:'-50%' }} exit={{ opacity:0, scale:0.9, y:'-50%', x:'-50%' }}
               transition={{ type:'spring', damping:20, stiffness:300 }}
-              style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)', width:'90%', maxWidth:420, background:'linear-gradient(180deg, #111111 0%, #000000 100%)', border:'1px solid rgba(201, 168, 76, 0.3)', borderRadius:12, padding:'30px 20px', zIndex:3001, textAlign:'center' }}
+              style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)', width:'90%', maxWidth:420, background:'linear-gradient(180deg, #111111 0%, #000000 100%)', border:'1px solid rgba(192, 57, 43, 0.35)', borderRadius:12, padding:'30px 20px', zIndex:3001, textAlign:'center' }}
             >
-              <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(201, 168, 76, 0.08)', border:'1px solid rgba(201, 168, 76, 0.2)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
-                <Trash2 size={28} style={{ color:'var(--gold)' }} />
+              <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(192, 57, 43, 0.1)', border:'1px solid rgba(192, 57, 43, 0.28)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+                <Trash2 size={28} style={{ color:'#f07171' }} />
               </div>
               <h3 style={{ color:'#ffffff', fontSize:18, fontWeight:500, marginBottom:12, fontFamily:'var(--font-display)', letterSpacing:1 }}>تأكيد حذف الكوبون</h3>
               <p style={{ color:'#aaaaaa', fontSize:13, marginBottom:24, lineHeight:'1.6', direction:'rtl' }}>هل أنت متأكد من حذف كود الخصم <strong style={{ color:'#ffffff' }}>"{discountToDelete.code}"</strong>؟ لا يمكن التراجع عن هذا الإجراء.</p>
               <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
-                <button onClick={confirmDelete} style={{ flex:1, padding:'10px 0', background:'var(--gold)', border:'none', color:'#000000', borderRadius:6, fontWeight:600, cursor:'pointer', fontSize:13 }}>حذف</button>
+                <button onClick={confirmDelete} style={{ flex:1, padding:'10px 0', background:'#b83232', border:'1px solid #d65353', color:'#ffffff', borderRadius:6, fontWeight:600, cursor:'pointer', fontSize:13 }}>حذف</button>
                 <button onClick={() => setDiscountToDelete(null)} style={{ flex:1, padding:'10px 0', background:'transparent', border:'1px solid #333333', color:'#ffffff', borderRadius:6, cursor:'pointer', fontSize:13 }}>إلغاء</button>
               </div>
             </motion.div>

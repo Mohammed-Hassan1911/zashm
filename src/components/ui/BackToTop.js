@@ -41,7 +41,11 @@ const TOAST_DURATION = {
 
 function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
   const type = TOAST_DURATION[toastItem.type] ? toastItem.type : 'info';
-  const message = String(toastItem.message);
+  const message = String(toastItem.message)
+    .replace(/[⚠️🚀🔄🗑️✅]/gu, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .trim();
   const normalizedMessage = message.toLowerCase();
   const Icon = type === 'success'
     ? (/wishlist|favorite|المفضلة/.test(normalizedMessage) ? Heart : /bag|cart|السلة/.test(normalizedMessage) ? ShoppingBag : CheckCircle)
@@ -64,7 +68,7 @@ function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -6 }}
       transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
     >
-      <Icon className="zashm-toast-icon" size={18} color="#111" aria-hidden="true" />
+      <Icon className="zashm-toast-icon" size={18} aria-hidden="true" />
       <span className="zashm-toast-message">{message}</span>
       <button
         type="button"

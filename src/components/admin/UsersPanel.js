@@ -69,14 +69,14 @@ export default function UsersPanel() {
           if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء حفظ بيانات العضو.', 'error');
           return;
         }
-        if (typeof window.toast === 'function') window.toast('تم تحديث بيانات العضو بنجاح! 🔄');
+        if (typeof window.toast?.success === 'function') window.toast.success('تم تحديث بيانات العضو بنجاح.');
       } else {
         const res = await addUser(form);
         if (!res || res.success === false) {
           if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء إضافة العضو.', 'error');
           return;
         }
-        if (typeof window.toast === 'function') window.toast('تم إضافة عضو الفريق بنجاح! 🚀');
+        if (typeof window.toast?.success === 'function') window.toast.success('تم إضافة عضو الفريق بنجاح.');
       }
       
       setShowForm(false);
@@ -85,7 +85,7 @@ export default function UsersPanel() {
       setShowPassword(false);
     } catch (err) {
       console.error("Error saving user:", err);
-      if (typeof window.toast === 'function') window.toast('⚠️ حدث خطأ أثناء حفظ بيانات العضو.');
+      if (typeof window.toast?.error === 'function') window.toast.error('حدث خطأ أثناء حفظ بيانات العضو.');
     } finally {
       setLoading(false);
     }
@@ -100,10 +100,10 @@ export default function UsersPanel() {
         if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء الحذف', 'error');
         return;
       }
-      if (typeof window.toast === 'function') window.toast('تم حذف العضو بنجاح 🗑️');
+      if (typeof window.toast?.success === 'function') window.toast.success('تم حذف العضو بنجاح.');
     } catch (err) {
       console.error(err);
-      if (typeof window.toast === 'function') window.toast('⚠️ حدث خطأ أثناء الحذف');
+      if (typeof window.toast?.error === 'function') window.toast.error('حدث خطأ أثناء الحذف.');
     } finally {
       setUserToDelete(null);
     }
@@ -451,14 +451,14 @@ export default function UsersPanel() {
                   width: 56,
                   height: 56,
                   borderRadius: '50%',
-                  border: '1px solid var(--gold)',
+                  border: '1px solid rgba(192,57,43,0.45)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   margin: '0 auto 16px',
-                  background: 'rgba(201, 168, 76, 0.05)'
+                  background: 'rgba(192,57,43,0.08)'
                 }}>
-                  <Trash2 size={22} color="var(--gold)" />
+                  <Trash2 size={22} color="#f07171" />
                 </div>
 
                 <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#ffffff', marginBottom: 12 }}>
@@ -466,7 +466,7 @@ export default function UsersPanel() {
                 </h3>
                 
                 <p style={{ fontSize: 13, color: '#b3b3b3', lineHeight: 1.6, marginBottom: 24 }}>
-                  هل أنت متأكد من حذف عضو الفريق <span style={{ color: 'var(--gold)', fontWeight: 600 }}>"{userToDelete.name}"</span>؟ هذا الإجراء سيؤدي إلى إزالة صلاحياته نهائياً.
+                  هل أنت متأكد من حذف عضو الفريق <span style={{ color: '#f07171', fontWeight: 600 }}>"{userToDelete.name}"</span>؟ هذا الإجراء سيؤدي إلى إزالة صلاحياته نهائياً.
                 </p>
 
                 {/* أزرار الحذف والإلغاء المخصصة */}
@@ -476,10 +476,10 @@ export default function UsersPanel() {
                     style={{
                       flex: 1,
                       padding: '11px 20px',
-                      background: 'var(--gold)',
-                      border: 'none',
+                      background: '#b83232',
+                      border: '1px solid #d65353',
                       borderRadius: 6,
-                      color: '#111111',
+                      color: '#ffffff',
                       fontWeight: 600,
                       fontSize: 13,
                       cursor: 'pointer',

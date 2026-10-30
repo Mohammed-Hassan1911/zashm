@@ -194,34 +194,7 @@ select option { background: var(--bg3); }
   letter-spacing: 0.5px;
 }
 
-/* ─── ✨ تحديث الهوية البصرية الشاملة للإشعار (أسود الملكي × ذهبي ميتاليك) ─── */
-.toast:not(.zashm-toast),
-[class*="toast"]:not([class*="zashm-toast"]),
-[class*="notification"]:not(.zashm-toast-viewport):not(.zashm-toast-stack),
-.react-hot-toast,
-div[role="status"]:not(.zashm-toast) {
-  background-color: #111111 !important;
-  color: #ffffff !important;
-  border: 1px solid #c9a84c !important;
-  border-radius: 4px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(201, 168, 76, 0.2) !important;
-}
 
-[class*="success"]:not(.zashm-toast--success),
-[class*="toast"]:not([class*="zashm-toast"]) svg,
-[class*="toast"]:not([class*="zashm-toast"]) button,
-.toast-icon,
-div[role="status"]:not(.zashm-toast) svg {
-  color: #c9a84c !important;
-  fill: transparent !important;
-}
-
-.badge-discount,
-[class*="discount"] {
-  background-color: #111111 !important;
-  color: #c9a84c !important;
-  border: 1px solid #c9a84c !important;
-}
 
 /* ─── 📱 أحدث إصلاحات للتنظيم والتجاوب على الموبايل (Responsive Media Queries) ─── */
 @media (max-width: 768px) {
@@ -992,40 +965,48 @@ main, [role="main"] {
   max-height: 100%;
   box-sizing: border-box;
   padding: clamp(10px, 3vw, 14px) clamp(12px, 3.5vw, 18px);
-  border: 1px solid #e8c870;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-inline-start: 3px solid rgba(255, 255, 255, 0.24);
   border-radius: 8px;
-  background: #c9a84c;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.48), 0 0 18px rgba(201, 168, 76, 0.12);
-  color: #111;
+  background: rgba(20, 23, 28, 0.97);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+  color: var(--text);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   pointer-events: auto;
 }
 
 .zashm-toast--success {
-  border-inline-start: 4px solid #111;
+  border-inline-start-color: #39c98a;
 }
 
 .zashm-toast--error {
-  border-inline-start: 4px solid #111;
+  border-inline-start-color: #f07171;
 }
 
 .zashm-toast--warning {
-  border-inline-start: 4px solid #111;
+  border-inline-start-color: #e8ad55;
 }
 
 .zashm-toast--info {
-  border-inline-start: 4px solid #111;
+  border-inline-start-color: #68afe8;
 }
 
 .zashm-toast-icon {
   flex: 0 0 auto;
 }
 
+.zashm-toast--success .zashm-toast-icon { color: #39c98a; }
+.zashm-toast--error .zashm-toast-icon { color: #f07171; }
+.zashm-toast--warning .zashm-toast-icon { color: #e8ad55; }
+.zashm-toast--info .zashm-toast-icon { color: #68afe8; }
+
 .zashm-toast-message {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
   white-space: pre-line;
-  color: #111;
+  color: var(--text);
   font-size: clamp(12px, 3.5vw, 14px);
   line-height: 1.5;
 }
@@ -1041,15 +1022,15 @@ main, [role="main"] {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #111;
+  color: var(--text2);
   cursor: pointer;
   touch-action: manipulation;
 }
 
 .zashm-toast-dismiss:hover,
 .zashm-toast-dismiss:focus-visible {
-  background: rgba(0, 0, 0, 0.1);
-  color: #000;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
   outline: none;
 }
 

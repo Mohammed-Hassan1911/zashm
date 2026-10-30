@@ -623,33 +623,46 @@ export const useStore = create((set, get) => ({
   updateDiscount: async (id, updates) => {
     const discounts = get().discounts;
     const current = discounts.find(d => String(d.id) === String(id));
+    if (!current) throw new Error('Discount not found');
+
     const next = discounts.map(d => String(d.id) === String(id) ? { ...d, ...updates } : d);
     db.setAll('discounts', next);
     set({ discounts: next });
 
-    if (current) {
-      try {
-        const payload = await api.patch('/admin/coupons', { id, updates });
-        if (payload && payload.discount) {
-          const merged = get().discounts.map(d => String(d.id) === String(id) ? { ...d, ...payload.discount } : d);
-          db.setAll('discounts', merged);
-          set({ discounts: merged });
-        }
-      } catch (err) {
-        console.error('updateDiscount failed:', err.message);
-        await get().refreshDiscounts();
+    try {
+      const payload = await api.patch('/admin/coupons', { id, updates });
+      if (payload && payload.discount) {
+        const merged = get().discounts.map(d => String(d.id) === String(id) ? { ...d, ...payload.discount } : d);
+        db.setAll('discounts', merged);
+        set({ discounts: merged });
+        return payload.discount;
       }
+      return { ...current, ...updates };
+    } catch (err) {
+      console.error('updateDiscount failed:', err.message);
+      db.setAll('discounts', discounts);
+      set({ discounts });
+      await get().refreshDiscounts();
+      throw err;
     }
   },
 
   deleteDiscount: async (id) => {
+    const discounts = get().discounts;
+    const current = discounts.find(d => String(d.id) === String(id));
+    if (!current) throw new Error('Discount not found');
+
     db.delete('discounts', id);
     set({ discounts: db.getAll('discounts') || [] });
     try {
       await api.del('/admin/coupons', { id });
+      return true;
     } catch (err) {
       console.error('deleteDiscount failed:', err.message);
+      db.setAll('discounts', discounts);
+      set({ discounts });
       await get().refreshDiscounts();
+      throw err;
     }
   },
 

@@ -201,9 +201,6 @@ export default function AdminLogin({ onSuccess }) {
             </motion.button>
           </form>
 
-          <p style={{ color: 'var(--text3)', fontSize: 11, textAlign: 'center', marginTop: 20 }}>
-            🔒 Secured with SHA-256 hashing & rate limiting
-          </p>
         </div>
       </motion.div>
     </div>
