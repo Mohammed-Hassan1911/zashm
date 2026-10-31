@@ -987,4 +987,5 @@ module.exports = {
   cleanupUnreferencedProductImages,
   EMAIL_RE,
   EGYPT_PHONE_RE,
+  COUPON_CODE_RE,
 };

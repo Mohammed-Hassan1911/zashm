@@ -16,7 +16,7 @@
     "start": "vite --port 3000 --strictPort",
     "dev": "vercel dev",
     "build": "vite build",
-    "test": "node scripts/test-analytics.mjs"
+    "test": "node scripts/test-analytics.mjs && node scripts/test-coupons.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",

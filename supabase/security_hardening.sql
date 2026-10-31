@@ -2,32 +2,39 @@
 -- ZASHM · DATABASE SECURITY HARDENING (run once in Supabase SQL Editor)
 --
 -- The JavaS/API layer now talks to the database with the SERVICE ROLE key
--- (server-side only). The anon key is only used for PUBLIC reads (products,
--- active coupons). Rows that must never be readable by the anon key:
---   users(passwordhash), orders(PII). Confirm below — do not reopen RLS.
+-- (server-side only). The anon key is only used for PUBLIC reads (products).
+-- Coupons are server-only now: the storefront validates a code through
+-- POST /api/coupons/validate, and the console lists them through the
+-- authenticated /api/admin/coupons. Rows that must never be readable by the
+-- anon key: users(passwordhash), orders(PII), coupons(codes/usage). The exact
+-- coupons REVOKE/RLS statements and their pre/post checks live in
+-- supabase/coupons_lockdown.sql. Confirm below — do not reopen RLS on any of
+-- these tables.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- 1) VERIFY CURRENT RLS STATE ─────────────────────────────────────────────────
--- Expected output: products & coupons have policies (public reads) and the
--- is_enabled column is true for all four tables.
+-- Expected output: products has a policy for public reads; coupons, users and
+-- orders have no anon/authenticated read policy. The second query below shows
+-- whether RLS is enabled for each table (pg_policies has no is_enabled column).
 SELECT
   tablename,
   policyname,
   cmd,
   roles,
   qual,
-  with_check,
-  is_enabled
+  with_check
 FROM pg_policies
 WHERE schemaname = 'public'
 ORDER BY tablename, policyname;
 
 SELECT
-  tablename,
+  relname AS tablename,
   relrowsecurity AS rls_enabled,
   relforcerowsecurity AS force_rls
 FROM pg_class
-WHERE relname IN ('products', 'coupons', 'orders', 'users');
+WHERE relnamespace = 'public'::regnamespace
+  AND relname IN ('products', 'coupons', 'orders', 'users')
+ORDER BY relname;
 
 -- 2) HARDENED handle_new_user ─────────────────────────────────────────────────
 -- If your project uses a trigger function on auth.users (created by the Supabase
@@ -76,13 +83,17 @@ END $$;
 -- DROP FUNCTION IF EXISTS public.handle_new_user;
 
 -- 3) REVOKE EXECUTE ON EVERYTHING PUBLICLY UNLESS NEEDED ──────────────────────
--- Only the anon-key readable tables keep PUBLIC read access; functions are not
+-- Only products keeps PUBLIC read access; coupons/users/orders do not. Functions are not
 -- exposed. This revokes blanket PUBLIC execute introduced by some dashboard setups.
 REVOKE ALL ON FUNCTION public.handle_new_user_secure() FROM PUBLIC, anon, authenticated;
 
 -- 4) PERFORMANCE / INTEGRITY INDEXES (safe, additive) ─────────────────────────
 CREATE INDEX IF NOT EXISTS coupons_code_idx ON public.coupons (code);
-CREATE INDEX IF NOT EXISTS coupons_active_dates_idx ON public.coupons (active, start_date, end_date);
+-- NOTE: coupons uses quoted camelCase columns ("startDate"/"endDate"). The old
+-- start_date/end_date form fails on the real table. If an index with this name
+-- already exists on the wrong columns, verify it with pg_indexes and recreate it
+-- after review (IF NOT EXISTS will not replace an existing index).
+CREATE INDEX IF NOT EXISTS coupons_active_dates_idx ON public.coupons (active, "startDate", "endDate");
 CREATE INDEX IF NOT EXISTS orders_date_idx ON public.orders (date DESC);
 CREATE INDEX IF NOT EXISTS orders_status_idx ON public.orders (status);
 CREATE INDEX IF NOT EXISTS products_category_idx ON public.products (category);

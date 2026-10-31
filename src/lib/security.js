@@ -281,7 +281,10 @@ export function paginate(items, page, perPage) {
 // and customer PII). Legacy copies are purged on load. Server reads/writes go
 // through /api/* with the server session token.
 
-const FORBIDDEN_STORES = new Set(['users', 'orders']);
+// Coupons are deliberately included: the storefront must never cache the
+// coupon table. Codes are validated through POST /api/coupons/validate, and
+// the admin console loads them through the authenticated /api/admin/coupons.
+const FORBIDDEN_STORES = new Set(['users', 'orders', 'coupons', 'discounts']);
 
 class LocalDB {
   constructor() {
@@ -294,6 +297,10 @@ class LocalDB {
       // Legacy keys that may contain password hashes / customer PII.
       localStorage.removeItem('zashm_db_users');
       localStorage.removeItem('zashm_db_orders');
+      // Legacy coupon caches created by the old public table read.
+      localStorage.removeItem('zashm_db_coupons');
+      localStorage.removeItem('zashm_db_Coupons');
+      localStorage.removeItem('zashm_db_discounts');
       // Legacy plaintext-ish session side channels.
       localStorage.removeItem('csrf_token');
 
@@ -315,15 +322,7 @@ class LocalDB {
   _getKey(store) {
     const name = String(store || '').toLowerCase();
     if (name === 'notifications') return { key: 'zashm_notifications', storage: sessionStorage };
-    const map = { 'discounts': 'coupons', 'coupons': 'coupons' };
-    const actualStore = map[name] || name;
-    return { key: `${this.prefix}${actualStore}`, storage: localStorage };
-  }
-
-  _getRealTableName(store) {
-    const name = String(store || '').toLowerCase();
-    const map = { 'discounts': 'coupons', 'coupons': 'coupons' };
-    return map[name] || name;
+    return { key: `${this.prefix}${name}`, storage: localStorage };
   }
 
   getAll(store) {
@@ -342,12 +341,6 @@ class LocalDB {
     try {
       const { key, storage } = this._getKey(store);
       storage.setItem(key, JSON.stringify(data));
-      const name = String(store || '').toLowerCase();
-      if (name === 'discounts' || name === 'coupons') {
-        localStorage.setItem(`${this.prefix}Coupons`, JSON.stringify(data));
-        localStorage.setItem(`${this.prefix}discounts`, JSON.stringify(data));
-        localStorage.setItem(`${this.prefix}coupons`, JSON.stringify(data));
-      }
       return true;
     } catch (e) {
       console.error('Error inside setAll:', e);
@@ -355,32 +348,24 @@ class LocalDB {
     }
   }
 
-  // Refreshes the local cache with PUBLIC data only (products, active coupons).
+  // Refreshes the local cache with PUBLIC data only. Coupons are intentionally
+  // absent: they are validated server-side and listed only through the
+  // authenticated admin API, never read with the anon key.
   async syncFromServer() {
     try {
-      const stores = ['products', 'coupons'];
-      for (const store of stores) {
-        try {
-          const { data, error } = await supabase.from(store).select('*');
-          if (error || !data) continue;
-          let formatted = data;
-          if (store === 'products') {
-            formatted = data.map(p => ({
-              ...p,
-              images: p.images || (p.image ? [p.image] : []),
-              colors: p.colors || [],
-              sizes: p.sizes || [],
-              active: p.active ?? true,
-              reservedStock: p.reservedStock || 0,
-              rating: p.rating || 0,
-              reviews: p.reviews || 0,
-            }));
-          }
-          this.setAll(store, formatted);
-        } catch (tableErr) {
-          console.error(`Unexpected error syncing [${store}]:`, tableErr);
-        }
-      }
+      const { data, error } = await supabase.from('products').select('*');
+      if (error || !data) return;
+      const formatted = data.map(p => ({
+        ...p,
+        images: p.images || (p.image ? [p.image] : []),
+        colors: p.colors || [],
+        sizes: p.sizes || [],
+        active: p.active ?? true,
+        reservedStock: p.reservedStock || 0,
+        rating: p.rating || 0,
+        reviews: p.reviews || 0,
+      }));
+      this.setAll('products', formatted);
     } catch (err) {
       console.warn('Error syncing from server:', err);
     }

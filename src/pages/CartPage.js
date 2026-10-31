@@ -62,6 +62,7 @@ export function CartPage() {
   const { cart, removeFromCart, updateCartQty, cartTotal, cartSubtotal, cartDiscountAmount, setPage, appliedDiscount, applyDiscount, removeAppliedDiscount } = useStore();
   const [coupon, setCoupon] = useState('');
   const [couponError, setCouponError] = useState('');
+  const [couponApplying, setCouponApplying] = useState(false);
   const total = cartTotal() ?? 0;
   const subtotal = cartSubtotal() ?? 0;
   const discountAmount = cartDiscountAmount() ?? 0;
@@ -69,16 +70,26 @@ export function CartPage() {
 
   React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
 
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = async () => {
+    if (couponApplying) return;
     setCouponError('');
     const cleanCoupon = (coupon ?? '').trim().toUpperCase();
-    
-    const result = applyDiscount(cleanCoupon);
-    if (result.success) {
-      toast(`Code ${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!
+    if (!cleanCoupon) {
+      setCouponError('Please enter a discount code / يرجى إدخال كود الخصم');
+      return;
+    }
+
+    setCouponApplying(true);
+    try {
+      const result = await applyDiscount(cleanCoupon);
+      if (result.success) {
+        toast(`Code ${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!
 تم تطبيق الكود بنجاح!`, 'success');
-    } else {
-      setCouponError(result.error ?? 'Invalid code');
+      } else {
+        setCouponError(result.error ?? 'Invalid code');
+      }
+    } finally {
+      setCouponApplying(false);
     }
   };
 
@@ -170,11 +181,12 @@ export function CartPage() {
                         <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                         <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                           onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                          disabled={couponApplying}
                           placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                       </div>
-                      <button onClick={handleApplyCoupon}
-                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
-                        Apply
+                      <button onClick={handleApplyCoupon} disabled={couponApplying}
+                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'wait' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', opacity: couponApplying ? 0.65 : 1 }}>
+                        {couponApplying ? 'Checking…' : 'Apply'}
                       </button>
                     </div>
                     {couponError && (
@@ -219,6 +231,7 @@ export function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [coupon, setCoupon] = useState('');
   const [couponError, setCouponError] = useState('');
+  const [couponApplying, setCouponApplying] = useState(false);
   const [copied, setCopied] = useState(false); 
 
   // 🔒 الحارس الذري لمنع استدعاء الدالة مرتين بشكل متزامن في نفس الجزء من الثانية
@@ -258,15 +271,25 @@ export function CheckoutPage() {
     }
   }, [success]);
 
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = async () => {
+    if (couponApplying) return;
     setCouponError('');
     const cleanCoupon = (coupon ?? '').trim().toUpperCase();
-    
-    const result = applyDiscount(cleanCoupon);
-    if (result.success) {
-      toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
-    } else {
-      setCouponError(result.error ?? 'Invalid code');
+    if (!cleanCoupon) {
+      setCouponError('Please enter a discount code / يرجى إدخال كود الخصم');
+      return;
+    }
+
+    setCouponApplying(true);
+    try {
+      const result = await applyDiscount(cleanCoupon);
+      if (result.success) {
+        toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
+      } else {
+        setCouponError(result.error ?? 'Invalid code');
+      }
+    } finally {
+      setCouponApplying(false);
     }
   };
 
@@ -1132,11 +1155,12 @@ export function CheckoutPage() {
                       <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                       <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                         onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                        disabled={couponApplying}
                         placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                     </div>
-                    <button onClick={handleApplyCoupon}
-                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {'Apply'}
+                    <button onClick={handleApplyCoupon} disabled={couponApplying}
+                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'wait' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', opacity: couponApplying ? 0.65 : 1 }}>
+                      {couponApplying ? 'Checking…' : 'Apply'}
                     </button>
                   </div>
                   {couponError && (

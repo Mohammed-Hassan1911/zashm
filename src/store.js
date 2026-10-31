@@ -97,34 +97,40 @@ function sanitizeOrder(order, products = []) {
 
 const APPLIED_DISCOUNT_KEY = 'zashm_applied_discount';
 
-function validateDiscountRecord(d) {
+// The bag only ever keeps the three fields it needs to render/price the
+// discount. The coupon table (dates, usage counters, other codes) stays on the
+// server; api/orders.js is the authority when the order is placed.
+function normalizeClientDiscount(d) {
   if (!d) return null;
-  const discounts = db.getAll('discounts') || [];
-  const today = getLocalTodayDate();
-  const fresh = discounts.find(
-    x => x.id === d.id &&
-      x.code === d.code &&
-      x.active &&
-      x.startDate <= today &&
-      x.endDate >= today &&
-      (x.usageCount ?? 0) < (x.usageLimit ?? 0)
-  );
-  return fresh ?? null;
+  const code = String(d.code || '').trim().toUpperCase();
+  // Mirror api/orders.js: only 'percentage' is a percentage discount.
+  const type = d.type === 'percentage' ? 'percentage' : 'fixed';
+  const value = Number(d.value);
+  if (!code || !Number.isFinite(value) || value < 0) return null;
+  return { code, type, value };
 }
 
 function loadAppliedDiscount() {
   try {
     const raw = sessionStorage.getItem(APPLIED_DISCOUNT_KEY);
     if (!raw) return null;
-    return validateDiscountRecord(JSON.parse(raw));
+    const clean = normalizeClientDiscount(JSON.parse(raw));
+    if (clean) {
+      // Drop legacy copies that still carried usage/date metadata.
+      sessionStorage.setItem(APPLIED_DISCOUNT_KEY, JSON.stringify(clean));
+    } else {
+      sessionStorage.removeItem(APPLIED_DISCOUNT_KEY);
+    }
+    return clean;
   } catch {
     return null;
   }
 }
 
 function saveAppliedDiscount(discount) {
-  if (discount) {
-    sessionStorage.setItem(APPLIED_DISCOUNT_KEY, JSON.stringify(discount));
+  const clean = normalizeClientDiscount(discount);
+  if (clean) {
+    sessionStorage.setItem(APPLIED_DISCOUNT_KEY, JSON.stringify(clean));
   } else {
     sessionStorage.removeItem(APPLIED_DISCOUNT_KEY);
   }
@@ -168,7 +174,6 @@ let knownOrderIds = null;
 // ─── SAFE DB INITIALIZATION ──────────────────────────────────────────────────
 function initDB() {
   if (!db.getAll('products')) db.setAll('products', []);
-  if (!db.getAll('discounts')) db.setAll('discounts', []);
   if (!db.getAll('notifications')) db.setAll('notifications', []);
 }
 initDB();
@@ -180,7 +185,7 @@ export const useStore = create((set, get) => ({
   productsLoading: false,
   productsLoadStatus: 'idle',
   productsError: null,
-  discounts: db.getAll('discounts') || [],
+  discounts: [],
   orders: getSanitizedOrders(),
   ordersLoading: false,
   ordersError: null,
@@ -216,15 +221,19 @@ export const useStore = create((set, get) => ({
     }
   },
 
+  // Admin-only: requires a signed session with discounts.read. Visitors never
+  // call this, so no coupon rows are pulled into the storefront.
   refreshDiscounts: async () => {
     try {
-      const { data, error } = await supabase.from('coupons').select('*');
-      if (data && !error) {
-        db.setAll('discounts', data);
-        set({ discounts: data });
-      }
+      const payload = await api.get('/admin/coupons');
+      const data = Array.isArray(payload.discounts) ? payload.discounts : [];
+      set({ discounts: data });
     } catch (err) {
-      console.error("Failed to fetch online coupons:", err);
+      if (err && (err.status === 401 || err.status === 403)) {
+        set({ discounts: [] });
+        return;
+      }
+      console.error('Failed to fetch discounts:', err && err.message);
     }
   },
 
@@ -586,81 +595,72 @@ export const useStore = create((set, get) => ({
   // ─── DISCOUNTS (COUPONS) ────────────────────────────────────────────────────
   appliedDiscount: loadAppliedDiscount(),
 
-  refreshAppliedDiscount: () => {
+  refreshAppliedDiscount: async () => {
     const currentDiscount = get().appliedDiscount;
-    if (!currentDiscount) return;
-    const validated = validateDiscountRecord(currentDiscount);
-    if (!validated) {
+    if (!currentDiscount || !currentDiscount.code) return;
+    try {
+      const payload = await api.post('/coupons/validate', { code: currentDiscount.code });
+      const fresh = payload && payload.valid ? normalizeClientDiscount(payload.discount) : null;
+      if (fresh) {
+        saveAppliedDiscount(fresh);
+        set({ appliedDiscount: fresh });
+        return;
+      }
       get().removeAppliedDiscount();
-    } else {
-      set({ appliedDiscount: validated });
+    } catch (err) {
+      // A network/timeout/rate-limit error is not proof of expiry. Keep the code
+      // in the bag; placing the order still re-validates it server-side.
+      if (!err || err.status === 0 || err.status === 408 || err.status === 429 || err.status >= 500) return;
+      get().removeAppliedDiscount();
     }
   },
 
   addDiscount: async (d) => {
-    const id = Date.now();
-    const discount = { ...d, id, usageCount: 0, createdAt: new Date().toISOString() };
-    db.insert('discounts', discount);
-    set({ discounts: db.getAll('discounts') || [] });
-
+    const discount = { ...d, id: Date.now(), usageCount: 0, createdAt: new Date().toISOString() };
     try {
-      const payload = await api.post('/admin/coupons', { coupon: { ...discount } });
-      if (payload && payload.discount) {
-        db.update('discounts', id, payload.discount);
-        set({ discounts: db.getAll('discounts') || [] });
-        return payload.discount;
-      }
-      throw new Error('Failed to create discount');
+      const payload = await api.post('/admin/coupons', { coupon: discount });
+      if (!payload || !payload.discount) throw new Error('Failed to create discount');
+      set({ discounts: [payload.discount, ...get().discounts.filter(x => String(x.id) !== String(payload.discount.id))] });
+      return payload.discount;
     } catch (err) {
       console.error('addDiscount failed:', err.message);
-      db.delete('discounts', id);
-      set({ discounts: db.getAll('discounts') || [] });
-      await get().refreshDiscounts();
       throw err;
     }
   },
 
   updateDiscount: async (id, updates) => {
-    const discounts = get().discounts;
-    const current = discounts.find(d => String(d.id) === String(id));
+    const previous = get().discounts;
+    const current = previous.find(d => String(d.id) === String(id));
     if (!current) throw new Error('Discount not found');
 
-    const next = discounts.map(d => String(d.id) === String(id) ? { ...d, ...updates } : d);
-    db.setAll('discounts', next);
-    set({ discounts: next });
+    set({ discounts: previous.map(d => String(d.id) === String(id) ? { ...d, ...updates } : d) });
 
     try {
       const payload = await api.patch('/admin/coupons', { id, updates });
       if (payload && payload.discount) {
-        const merged = get().discounts.map(d => String(d.id) === String(id) ? { ...d, ...payload.discount } : d);
-        db.setAll('discounts', merged);
-        set({ discounts: merged });
+        set({ discounts: get().discounts.map(d => String(d.id) === String(id) ? { ...d, ...payload.discount } : d) });
         return payload.discount;
       }
       return { ...current, ...updates };
     } catch (err) {
       console.error('updateDiscount failed:', err.message);
-      db.setAll('discounts', discounts);
-      set({ discounts });
+      set({ discounts: previous });
       await get().refreshDiscounts();
       throw err;
     }
   },
 
   deleteDiscount: async (id) => {
-    const discounts = get().discounts;
-    const current = discounts.find(d => String(d.id) === String(id));
-    if (!current) throw new Error('Discount not found');
+    const previous = get().discounts;
+    if (!previous.some(d => String(d.id) === String(id))) throw new Error('Discount not found');
 
-    db.delete('discounts', id);
-    set({ discounts: db.getAll('discounts') || [] });
+    set({ discounts: previous.filter(d => String(d.id) !== String(id)) });
     try {
       await api.del('/admin/coupons', { id });
       return true;
     } catch (err) {
       console.error('deleteDiscount failed:', err.message);
-      db.setAll('discounts', discounts);
-      set({ discounts });
+      set({ discounts: previous });
       await get().refreshDiscounts();
       throw err;
     }
@@ -680,27 +680,31 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  applyDiscount: (code) => {
+  applyDiscount: async (code) => {
     const normalized = (code ?? '').trim().toUpperCase();
     if (!normalized) return { success: false, error: 'Please enter a discount code / يرجى إدخال كود الخصم' };
 
-    const discounts = get().discounts;
-    const today = getLocalTodayDate();
-
-    const d = discounts.find(
-      x => (x.code || '').trim().toUpperCase() === normalized &&
-        x.active &&
-        x.startDate <= today &&
-        x.endDate >= today &&
-        Number(x.usageCount || 0) < Number(x.usageLimit || 0)
-    );
-
-    if (d) {
-      saveAppliedDiscount(d);
-      set({ appliedDiscount: d });
-      return { success: true, discount: d };
+    try {
+      const payload = await api.post('/coupons/validate', { code: normalized }, { timeoutMs: 15000 });
+      const discount = payload && payload.valid ? normalizeClientDiscount(payload.discount) : null;
+      if (!discount) {
+        return {
+          success: false,
+          error: (payload && payload.error) || 'Invalid or expired discount code / كود خصم غير صالح أو منتهي الصلاحية',
+        };
+      }
+      saveAppliedDiscount(discount);
+      set({ appliedDiscount: discount });
+      return { success: true, discount };
+    } catch (err) {
+      if (err && err.status === 429) {
+        return { success: false, error: 'Too many attempts. Please wait a minute and try again.\nمحاولات كثيرة، يرجى المحاولة بعد دقيقة.' };
+      }
+      if (err && err.status === 400 && err.message) {
+        return { success: false, error: err.message };
+      }
+      return { success: false, error: 'Could not validate the discount code. Please try again.\nتعذر التحقق من كود الخصم، يرجى المحاولة مرة أخرى.' };
     }
-    return { success: false, error: 'Invalid or expired discount code / كود خصم غير صالح أو منتهي الصلاحية' };
   },
   removeAppliedDiscount: () => {
     saveAppliedDiscount(null);

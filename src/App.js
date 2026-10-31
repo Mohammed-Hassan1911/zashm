@@ -57,7 +57,6 @@ function AppInner() {
   const { session, loading } = useAuth(); 
   
   const refreshProducts = useStore((state) => state.refreshProducts);
-  const refreshDiscounts = useStore((state) => state.refreshDiscounts);
   const refreshOrders = useStore((state) => state.refreshOrders);
 
   const [activeModal, setActiveModal] = useState(null);
@@ -174,14 +173,15 @@ function AppInner() {
   useEffect(() => {
     async function loadOnlineData() {
       await refreshProducts();
-      await refreshDiscounts();
+      // الكوبونات لا تُجلب للواجهة إطلاقاً: تُتحقق عبر /api/coupons/validate
+      // وتُدار في لوحة التحكم عبر /api/admin/coupons بعد تسجيل الدخول.
       // الطلبات تتطلب جلسة أدمن — لا نجلبها أبداً لزوار المتجر.
       if (session) {
         await refreshOrders();
       }
     }
     loadOnlineData();
-  }, [session, refreshProducts, refreshDiscounts, refreshOrders]);
+  }, [session, refreshProducts, refreshOrders]);
 
   useEffect(() => {
     const route = resolveRoute();

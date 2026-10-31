@@ -18,6 +18,36 @@ function getId(req, body) {
   return String(q).trim();
 }
 
+// Log the error code only. Driver messages can embed coupon data, for example:
+// duplicate key value violates unique constraint ... Key (code)=(SAVE10).
+function logCouponError(action, err) {
+  console.error(action, (err && err.code) || 'unknown');
+}
+
+// ─── GET /api/admin/coupons ──────────────────────────────────────────────────
+// The only way the console can list coupons. It requires a signed session with
+// discounts.read, so the coupon table never has to be readable with the anon key.
+
+async function listCoupons(req, res) {
+  const session = await requirePerm(req, res, 'discounts.read');
+  if (!session) return;
+
+  const ip = clientIp(req);
+  const check = rateLimit(`admincouponread:${ip}`, 120, 60 * 1000);
+  if (!check.allowed) return tooMany(res, check.resetIn);
+
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb.from('coupons').select('*');
+    if (error) throw error;
+    return json(res, 200, { discounts: Array.isArray(data) ? data : [] });
+  } catch (err) {
+    logCouponError('Coupon list failed:', err);
+    return json(res, 500, { error: 'Could not load discounts' });
+  }
+}
+
 // ─── POST /api/admin/coupons ─────────────────────────────────────────────────
 
 async function createCoupon(req, res) {
@@ -58,7 +88,7 @@ async function createCoupon(req, res) {
     if (error) throw error;
     return json(res, 200, { success: true, discount: data });
   } catch (err) {
-    console.error('Coupon create failed:', err && err.message);
+    logCouponError('Coupon create failed:', err);
     const msg = /duplicate|unique/i.test(String(err.message)) ? 'A discount with this code already exists' : 'Could not save discount';
     return json(res, /duplicate|unique/i.test(String(err.message)) ? 409 : 500, { error: msg });
   }
@@ -110,7 +140,7 @@ async function updateCoupon(req, res) {
     const { data: fresh } = await sb.from('coupons').select('*').eq('id', id).maybeSingle();
     return json(res, 200, { success: true, discount: fresh });
   } catch (err) {
-    console.error('Coupon update failed:', err && err.message);
+    logCouponError('Coupon update failed:', err);
     return json(res, 500, { error: 'Could not update discount' });
   }
 }
@@ -141,7 +171,7 @@ async function deleteCoupon(req, res) {
     if (error) throw error;
     return json(res, 200, { success: true });
   } catch (err) {
-    console.error('Coupon delete failed:', err && err.message);
+    logCouponError('Coupon delete failed:', err);
     return json(res, 500, { error: 'Could not delete discount' });
   }
 }
@@ -149,6 +179,7 @@ async function deleteCoupon(req, res) {
 module.exports = async function handler(req, res) {
   applyCors(req, res);
   if (req.method === 'OPTIONS') return handleOptions(req, res);
+  if (req.method === 'GET') return listCoupons(req, res);
   if (req.method === 'POST') return createCoupon(req, res);
   if (req.method === 'PATCH') return updateCoupon(req, res);
   if (req.method === 'DELETE') return deleteCoupon(req, res);
