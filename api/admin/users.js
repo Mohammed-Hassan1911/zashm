@@ -6,7 +6,7 @@ const {
   handleOptions,
   readBody,
   clientIp,
-  rateLimit,
+  rateLimitShared,
   tooMany,
   requirePerm,
   supabaseAdmin,
@@ -25,6 +25,16 @@ function toPublicUser(row) {
     lastLogin: row.lastlogin || row.last_login || row.lastLogin || null,
   };
 }
+
+// Serialized by the DB trigger in supabase/admin_protection.sql; this JS check
+// exists to return a helpful 409 before hitting the trigger.
+async function countAdmins(sb) {
+  const { data, error } = await sb.from('users').select('id').eq('role', 'admin');
+  if (error) throw error;
+  return Array.isArray(data) ? data.length : 0;
+}
+
+const LAST_ADMIN_MESSAGE = 'Cannot remove the last admin. Promote another admin first.';
 
 async function insertUserWithFallback(sb, baseRecord) {
   const attempts = [
@@ -73,7 +83,7 @@ async function createUser(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminuser:${ip}`, 30, 15 * 60 * 1000);
+  const check = await rateLimitShared(`adminuser:${ip}`, 30, 15 * 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -85,7 +95,7 @@ async function createUser(req, res) {
 
   const input = (body && body.user) || body || {};
   const u = validateUserPayload(input, { requirePassword: true });
-  if (!u) return json(res, 422, { error: 'Invalid user data (name, email, role and a 6+ char password are required)' });
+  if (!u) return json(res, 422, { error: 'Invalid user data (name, email, role and a 12+ character password are required)' });
 
   try {
     const sb = supabaseAdmin();
@@ -116,7 +126,7 @@ async function updateUser(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminuser:${ip}`, 30, 15 * 60 * 1000);
+  const check = await rateLimitShared(`adminuser:${ip}`, 30, 15 * 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -143,7 +153,14 @@ async function updateUser(req, res) {
       password: updates.password || undefined,
     };
     const u = validateUserPayload(merged, { requirePassword: false });
-    if (!u) return json(res, 422, { error: 'Invalid user data' });
+    if (!u) return json(res, 422, { error: 'Invalid user data (a 12+ character password is required when changing it)' });
+
+    // SEC-C: never demote the only admin. The DB trigger is the real guard for
+    // concurrent requests; this pre-check gives a clear error.
+    if (String(existing.role) === 'admin' && String(u.role) !== 'admin') {
+      const admins = await countAdmins(sb);
+      if (admins <= 1) return json(res, 409, { error: LAST_ADMIN_MESSAGE });
+    }
 
     if (u.email !== existing.email) {
       const { data: dup } = await sb.from('users').select('id').eq('email', u.email).neq('id', id).maybeSingle();
@@ -182,6 +199,7 @@ async function updateUser(req, res) {
     return json(res, 200, { success: true, user: toPublicUser(fresh) });
   } catch (err) {
     console.error('User update failed:', err && err.message);
+    if (/last[_ ]?admin/i.test(String(err.message))) return json(res, 409, { error: LAST_ADMIN_MESSAGE });
     if (/duplicate|unique/i.test(String(err.message))) return json(res, 409, { error: 'Email already exists' });
     return json(res, 500, { error: 'Could not update user' });
   }
@@ -194,7 +212,7 @@ async function deleteUser(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminuser:${ip}`, 30, 15 * 60 * 1000);
+  const check = await rateLimitShared(`adminuser:${ip}`, 30, 15 * 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body = {};
@@ -212,11 +230,21 @@ async function deleteUser(req, res) {
 
   try {
     const sb = supabaseAdmin();
-    const { error } = await sb.from('users').delete().eq('id', id);
-    if (error) throw error;
+    const { data: target, error } = await sb.from('users').select('*').eq('id', id).maybeSingle();
+    if (error) return json(res, 500, { error: 'Could not load user' });
+    if (!target) return json(res, 404, { error: 'User not found' });
+
+    if (String(target.role) === 'admin') {
+      const admins = await countAdmins(sb);
+      if (admins <= 1) return json(res, 409, { error: LAST_ADMIN_MESSAGE });
+    }
+
+    const { error: delErr } = await sb.from('users').delete().eq('id', id);
+    if (delErr) throw delErr;
     return json(res, 200, { success: true });
   } catch (err) {
     console.error('User delete failed:', err && err.message);
+    if (/last[_ ]?admin/i.test(String(err.message))) return json(res, 409, { error: LAST_ADMIN_MESSAGE });
     return json(res, 500, { error: 'Could not delete user' });
   }
 }

@@ -38,10 +38,9 @@ function cleanupPathSummary(paths) {
 
 // Build a customer tracking link on whatever host is actually serving the app,
 // instead of a hard-coded deployment domain.
-function trackingLinkFor(id) {
-  const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
-  return `${origin}/?track=${encodeURIComponent(id)}`;
-}
+// SEC-16: a tracking link can only be produced by the server, because it needs
+// the HMAC token (SESSION_SECRET). The admin order API returns `tracking_url`
+// with every order, so there is no client-side fallback any more.
 
 function StatusBadge({ status, small }) {
   const key = String(status || '').toLowerCase();
@@ -984,11 +983,11 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     <input
                       type="text"
                       readOnly
-                      value={selected.tracking_url || trackingLinkFor(selected.id)}
+                      value={selected.tracking_url || ''}
                       style={{ flex: 1, padding: '8px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text2)', fontFamily: 'monospace' }}
                     />
                     <button
-                      onClick={() => handleCopyLink(selected.tracking_url || trackingLinkFor(selected.id))}
+                      onClick={() => handleCopyLink(selected.tracking_url || '')}
                       style={{ padding: '8px 12px', background: copied ? '#27ae60' : 'var(--gold)', color: copied ? 'white' : 'var(--bg)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
                     >
                       {copied ? 'Copied!' : 'Copy Link'}
@@ -1786,7 +1785,7 @@ function DiscountsPanel({ canEdit }) {
   const [showForm, setShowForm] = useState(false);
   const [discountToDelete, setDiscountToDelete] = useState(null);
   const [updatingDiscountId, setUpdatingDiscountId] = useState(null);
-  const [form, setForm] = useState({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
+  const [form, setForm] = useState({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, minOrderAmount:'', maxDiscount:'', description:'', active:true });
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
@@ -1807,12 +1806,19 @@ function DiscountsPanel({ canEdit }) {
     const usageLimit = Number(form.usageLimit);
     if (!Number.isFinite(usageLimit) || !Number.isInteger(usageLimit) || usageLimit < 0 || usageLimit > 1000000) { toast.error('يرجى إدخال حد استخدام صحيح.'); return; }
 
+    const minOrderAmount = form.minOrderAmount === '' ? 0 : Number(form.minOrderAmount);
+    if (!Number.isFinite(minOrderAmount) || minOrderAmount < 0 || minOrderAmount > 10000000) { toast.error('يرجى إدخال حد أدنى صحيح للطلب.'); return; }
+    const maxDiscount = form.maxDiscount === '' ? null : Number(form.maxDiscount);
+    if (maxDiscount !== null && (!Number.isFinite(maxDiscount) || maxDiscount < 0 || maxDiscount > 10000000)) { toast.error('يرجى إدخال سقف خصم صحيح.'); return; }
+
     try {
       await addDiscount({
         ...form,
         type: form.type === 'fixed' ? 'fixed' : 'percentage',
         value,
         usageLimit,
+        minOrderAmount,
+        maxDiscount: maxDiscount && maxDiscount > 0 ? maxDiscount : null,
         usageCount: 0,
         code,
         startDate: form.startDate,
@@ -1821,7 +1827,7 @@ function DiscountsPanel({ canEdit }) {
         active: form.active === undefined ? true : Boolean(form.active)
       });
       setShowForm(false);
-      setForm({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, description:'', active:true });
+      setForm({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, minOrderAmount:'', maxDiscount:'', description:'', active:true });
       toast.success('تم إنشاء كود الخصم بنجاح.');
     } catch (err) {
       const msg = err && err.message ? err.message : 'تعذر إنشاء كود الخصم. يرجى التحقق من البيانات والمحاولة مرة أخرى.';
@@ -1885,6 +1891,11 @@ function DiscountsPanel({ canEdit }) {
           const isActive = d.active && d.startDate <= today && d.endDate >= today;
           const currentUsage = d.usageCount || 0;
           const pct = d.usageLimit ? Math.round((currentUsage / d.usageLimit) * 100) : 0;
+          // `discountValue` is the legacy alias; both columns are kept in sync by
+          // the admin API but old rows may only have one.
+          const discountValue = Number(d.value ?? d.discountValue ?? 0);
+          const minOrderAmount = Number(d.minOrderAmount) || 0;
+          const maxDiscount = Number(d.maxDiscount) || 0;
 
           const isExpiring = d.active && d.endDate && (new Date(d.endDate) - new Date()) < 7 * 24 * 60 * 60 * 1000 && (new Date(d.endDate) - new Date()) > 0;
           return (
@@ -1900,7 +1911,7 @@ function DiscountsPanel({ canEdit }) {
                 </div>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                   <span style={{ background:'rgba(201,168,76,0.1)', color:'var(--gold)', padding:'4px 10px', borderRadius:4, fontSize:12, fontWeight:700 }}>
-                    {d.type === 'percentage' ? `${d.value}% OFF` : `EGP ${d.value}`}
+                    {d.type === 'percentage' ? `${discountValue}% OFF` : `EGP ${discountValue}`}
                   </span>
                   {canEdit && (
                     <>
@@ -1926,6 +1937,8 @@ function DiscountsPanel({ canEdit }) {
               <div style={{ display:'flex', gap:16, marginTop:12, flexWrap:'wrap' }}>
                 <span style={{ color:'var(--text3)', fontSize:11 }}>¼ {d.startDate} ➔ {d.endDate}</span>
                 <span style={{ color:'var(--text3)', fontSize:11 }}>¼ {currentUsage}/{d.usageLimit} used</span>
+                {minOrderAmount > 0 && <span style={{ color:'var(--text3)', fontSize:11 }}>Min order: EGP {minOrderAmount}</span>}
+                {maxDiscount > 0 && <span style={{ color:'var(--text3)', fontSize:11 }}>Max discount: EGP {maxDiscount}</span>}
               </div>
               <div style={{ marginTop:10, height:4, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
                 <motion.div initial={{ width:0 }} animate={{ width:`${pct}%` }} transition={{ delay:0.2, duration:0.8 }}
@@ -1971,6 +1984,16 @@ function DiscountsPanel({ canEdit }) {
                       <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>End</label>
                       <input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} style={{ width:'100%', fontSize:11 }} />
                     </div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Min Order (EGP)</label>
+                    <input type="number" min="0" value={form.minOrderAmount} onChange={e => update('minOrderAmount', e.target.value)} style={{ width:'100%' }} placeholder="0 = none" />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Max Discount (EGP)</label>
+                    <input type="number" min="0" value={form.maxDiscount} onChange={e => update('maxDiscount', e.target.value)} style={{ width:'100%' }} placeholder="0 = no cap" />
                   </div>
                 </div>
                 <div>

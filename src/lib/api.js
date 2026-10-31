@@ -3,6 +3,7 @@
 // order endpoints authenticate with the server-signed session token (Bearer).
 
 const SESSION_KEY = 'zashm_session';
+const CSRF_COOKIE = 'zashm_csrf';
 
 export class ApiError extends Error {
   constructor(status, message, payload) {
@@ -19,12 +20,35 @@ export function setUnauthorizedHandler(fn) {
   unauthorizedHandler = typeof fn === 'function' ? fn : null;
 }
 
+// Legacy sessions (created before the HttpOnly-cookie migration) still carry a
+// Bearer token. New sessions do not: the server reads the HttpOnly cookie.
 export function getSessionToken() {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw);
     return session && session.token ? String(session.token) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Double-submit CSRF token. The cookie is intentionally not HttpOnly so the
+// SPA can read it; the server compares it with the X-CSRF-Token header.
+export function getCsrfToken() {
+  try {
+    const raw = typeof document !== 'undefined' ? document.cookie : '';
+    for (const part of String(raw || '').split(';')) {
+      const idx = part.indexOf('=');
+      if (idx < 0) continue;
+      if (part.slice(0, idx).trim() !== CSRF_COOKIE) continue;
+      return decodeURIComponent(part.slice(idx + 1).trim());
+    }
+  } catch {
+    /* cookie access can be blocked */
+  }
+  try {
+    return sessionStorage.getItem('zashm_csrf') || null;
   } catch {
     return null;
   }
@@ -44,6 +68,12 @@ export async function apiFetch(path, { method = 'GET', body, signal, timeoutMs =
   const token = getSessionToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // The server rejects unsafe cookie-authenticated requests without a matching
+  // double-submit token.
+  if (method !== 'GET' && method !== 'HEAD') {
+    const csrf = getCsrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
 
   // Timeout افتراضي عشان الزرار ما يفضلش شغال لحد ما لا نهاية
   // لو السيرفر أخد وقت (cold start أو بطء شبكة).
@@ -65,6 +95,7 @@ export async function apiFetch(path, { method = 'GET', body, signal, timeoutMs =
     res = await fetch(`/api${path}`, {
       method,
       headers,
+      credentials: 'same-origin',
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller ? controller.signal : signal,
     });

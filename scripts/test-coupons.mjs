@@ -70,14 +70,42 @@ console.log('\n[1] input normalization / malformed input');
 console.log('\n[2] correct / active coupon');
 {
   const r = evaluateCoupon(coupon(), TODAY, 'SAVE10');
-  eq(r, { valid: true, discount: { code: 'SAVE10', type: 'percentage', value: 10 } }, 'percentage coupon valid');
-  eq(Object.keys(r.discount).sort(), ['code', 'type', 'value'], 'response contains only code/type/value');
+  eq(r.valid, true, 'percentage coupon valid');
+  eq(r.discount, {
+    code: 'SAVE10', type: 'percentage', value: 10, maxDiscount: null, minOrderAmount: 0,
+  }, 'percentage coupon returns code/type/value + constraints');
+  eq(Object.keys(r.discount).sort(), ['code', 'maxDiscount', 'minOrderAmount', 'type', 'value'],
+    'response contains only the fields the bag needs');
 
   const fixed = evaluateCoupon(coupon({ type: 'fixed', value: 250 }), TODAY, 'SAVE10');
-  eq(fixed, { valid: true, discount: { code: 'SAVE10', type: 'fixed', value: 250 } }, 'fixed coupon valid');
+  eq(fixed.discount, {
+    code: 'SAVE10', type: 'fixed', value: 250, maxDiscount: null, minOrderAmount: 0,
+  }, 'fixed coupon valid');
 
   const unknownType = evaluateCoupon(coupon({ type: 'weird' }), TODAY, 'SAVE10');
   eq(unknownType.discount.type, 'fixed', 'unknown type matches api/orders.js (fixed fallback)');
+
+  // SEC-06: discountValue is the legacy alias for value.
+  const legacy = evaluateCoupon(coupon({ value: null, discountValue: 15 }), TODAY, 'SAVE10');
+  eq(legacy.valid, true, 'discountValue-only row is accepted');
+  eq(legacy.discount.value, 15, 'discountValue is used when value is missing');
+
+  // Constraint metadata reaches the bag.
+  const constrained = evaluateCoupon(
+    coupon({ value: 20, maxDiscount: 100, minOrderAmount: 500 }), TODAY, 'SAVE10', 1000
+  );
+  eq(constrained.discount, {
+    code: 'SAVE10', type: 'percentage', value: 20, maxDiscount: 100, minOrderAmount: 500,
+  }, 'maxDiscount / minOrderAmount are returned to the client');
+
+  // SEC-06: minimum order amount is enforced when a subtotal is supplied...
+  const belowMin = evaluateCoupon(
+    coupon({ minOrderAmount: 500 }), TODAY, 'SAVE10', 499
+  );
+  eq(belowMin, { valid: false, error: INVALID_MESSAGE }, 'subtotal below minOrderAmount rejected');
+  // ...but the advisory endpoint stays usable when no subtotal is sent.
+  eq(evaluateCoupon(coupon({ minOrderAmount: 500 }), TODAY, 'SAVE10').valid, true,
+    'no subtotal ⇒ minimum is enforced at order time only');
 }
 
 console.log('\n[3] expired coupon (the real P0-1 row)');
@@ -122,6 +150,58 @@ console.log('\n[6] rate limiter');
   ok(blocked.resetIn > 0, 'Retry-After window is positive');
 }
 
+console.log('\n[6b] SEC-06 pricing matrix (api + SQL share one rule)');
+{
+  const { computeCouponDiscount, couponIsRedeemable, validateCouponPayload } = lib;
+  const price = (over, subtotal) => {
+    const r = computeCouponDiscount(coupon(over), subtotal);
+    return r.ok ? r.discount : `!${r.reason}`;
+  };
+
+  eq(price({ type: 'percentage', value: 10 }, 1000), 100, '10% of 1000 = 100');
+  eq(price({ type: 'percentage', value: 10 }, 999), 100, 'percentage rounds half-up (99.9 → 100)');
+  eq(price({ type: 'fixed', value: 250 }, 1000), 250, 'fixed 250 on 1000 = 250');
+  eq(price({ type: 'fixed', value: 5000 }, 1000), 1000, 'fixed discount never exceeds the cart');
+  eq(price({ type: 'percentage', value: 10, maxDiscount: 50 }, 1000), 50, 'maxDiscount caps a percentage');
+  eq(price({ type: 'fixed', value: 250, maxDiscount: 100 }, 1000), 100, 'maxDiscount caps a fixed coupon');
+  eq(price({ type: 'percentage', value: 10, maxDiscount: 0 }, 1000), 100, 'maxDiscount 0 = no cap');
+  eq(price({ type: 'percentage', value: 150 }, 100), 100, 'a corrupt >100% value cannot exceed the cart');
+  eq(price({ value: null, discountValue: 15, type: 'fixed' }, 1000), 15, 'discountValue fallback prices correctly');
+  eq(price({ value: '15', type: 'fixed' }, 1000), 15, 'numeric strings are accepted');
+  eq(price({ value: 'bad' }, 1000), '!invalid_value', 'corrupt value rejected');
+  eq(price({ value: 10, minOrderAmount: 500 }, 499), '!min_order_amount', 'below minimum rejected');
+  eq(price({ value: 10, minOrderAmount: 500 }, 500), 50, 'exactly at the minimum accepted');
+  eq(price({ value: 10 }, 0), '!invalid_subtotal', 'zero subtotal rejected');
+
+  eq(couponIsRedeemable(coupon(), TODAY), true, 'redeemable baseline');
+  eq(couponIsRedeemable(coupon({ active: false }), TODAY), false, 'inactive not redeemable');
+  eq(couponIsRedeemable(coupon({ usageCount: 100 }), TODAY), false, 'exhausted not redeemable');
+  eq(couponIsRedeemable(coupon({ value: null, discountValue: null }), TODAY), false, 'no value not redeemable');
+  eq(couponIsRedeemable(coupon({ value: null, discountValue: 5 }), TODAY), true, 'legacy value is redeemable');
+
+  const okPayload = validateCouponPayload(coupon({
+    value: 20, minOrderAmount: 500, maxDiscount: 150, usageLimit: 10,
+  }));
+  eq(okPayload.value, 20, 'validate: value kept');
+  eq(okPayload.discountValue, 20, 'validate: value mirrored into discountValue');
+  eq(okPayload.minOrderAmount, 500, 'validate: minOrderAmount kept');
+  eq(okPayload.maxDiscount, 150, 'validate: maxDiscount kept');
+
+  const legacyPayload = validateCouponPayload(coupon({
+    value: undefined, discountValue: 30, minOrderAmount: '', maxDiscount: '',
+  }));
+  eq(legacyPayload && legacyPayload.value, 30, 'validate: discountValue promoted to value');
+  eq(legacyPayload.minOrderAmount, 0, 'validate: empty minimum becomes 0');
+  eq(legacyPayload.maxDiscount, null, 'validate: empty cap becomes null');
+
+  eq(validateCouponPayload(coupon({ type: 'percentage', value: 101 })), null, 'validate: >100% rejected');
+  eq(validateCouponPayload(coupon({ value: 0 })), null, 'validate: zero value rejected');
+  eq(validateCouponPayload(coupon({ minOrderAmount: -1 })), null, 'validate: negative minimum rejected');
+  eq(validateCouponPayload(coupon({ maxDiscount: -1 })), null, 'validate: negative cap rejected');
+  eq(validateCouponPayload(coupon({ endDate: '2026-01-01', startDate: '2026-02-01' })), null,
+    'validate: end before start rejected');
+}
+
 console.log('\n[7] source scan: no storefront coupon reads');
 {
   const root = fileURLToPath(new URL('..', import.meta.url));
@@ -158,8 +238,16 @@ console.log('\n[7] source scan: no storefront coupon reads');
 
   const orders = readFileSync(`${root}/api/orders.js`, 'utf8');
   ok(/\.from\('coupons'\)/.test(orders), 'api/orders.js still validates coupons server-side');
-  ok(/usageCount\s*\|\|\s*0\)\s*<\s*Number\(c\.usageLimit/.test(orders), 'api/orders.js keeps the usage limit check');
-  ok(/c\.startDate/.test(orders) && /c\.endDate/.test(orders), 'api/orders.js keeps the date window check');
+  ok(/couponIsRedeemable\(c, today\)/.test(orders), 'api/orders.js uses the shared redeemability rule');
+  ok(/computeCouponDiscount\(c, subtotal\)/.test(orders), 'api/orders.js uses the shared pricing rule');
+  ok(!/\.select\('\*'\)[\s\S]{0,80}\.eq\('code'/.test(orders), 'order coupon lookup selects explicit columns');
+  ok(/c\.startDate/.test(orders) === false, 'order coupon lookup no longer hand-rolls the date window');
+
+  const placeSql = readFileSync(`${root}/supabase/atomic_place_order.sql`, 'utf8');
+  ok(/FOR UPDATE/.test(placeSql) && /coupon_changed/.test(placeSql), 'RPC recomputes and locks the coupon');
+  ok(/"minOrderAmount"/.test(placeSql) && /"maxDiscount"/.test(placeSql) && /"discountValue"/.test(placeSql),
+    'RPC applies minOrderAmount / maxDiscount / discountValue');
+  ok(/inactive_product/.test(placeSql), 'RPC rejects inactive products');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

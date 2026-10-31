@@ -54,6 +54,15 @@ function supabaseAdmin() {
 function json(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  // Authenticated/admin responses must never be cached by a browser or proxy.
+  // Setting it here covers every route, including error responses.
+  try {
+    if (typeof res.getHeader !== 'function' || !res.getHeader('Cache-Control')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+  } catch (e) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
   res.end(JSON.stringify(body));
 }
 
@@ -76,7 +85,8 @@ function applyCors(req, res) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-CSRF-Token');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Max-Age', '86400');
   }
 }
@@ -85,6 +95,100 @@ function handleOptions(req, res) {
   applyCors(req, res);
   res.statusCode = 204;
   res.end();
+}
+
+// ─── COOKIES + CSRF ──────────────────────────────────────────────────────────
+// The admin session lives in an HttpOnly, Secure, SameSite=Strict cookie so
+// JavaScript — and therefore XSS — cannot read or exfiltrate it. A companion
+// non-HttpOnly `zashm_csrf` cookie implements the double-submit check: unsafe
+// requests must echo its value in X-CSRF-Token. SameSite=Strict already blocks
+// cross-site sends in modern browsers; CSRF + Origin are defence in depth.
+const SESSION_COOKIE = 'zashm_session';
+const CSRF_COOKIE = 'zashm_csrf';
+const SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours (was 8)
+
+function parseCookies(req) {
+  const out = {};
+  const raw = req && req.headers && req.headers.cookie;
+  if (typeof raw !== 'string' || !raw) return out;
+  for (const part of raw.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    if (!key) continue;
+    let value = part.slice(idx + 1).trim();
+    try { value = decodeURIComponent(value); } catch (e) { /* keep raw */ }
+    out[key] = value;
+  }
+  return out;
+}
+
+function appendSetCookie(res, cookie) {
+  if (typeof res.appendHeader === 'function') {
+    res.appendHeader('Set-Cookie', cookie);
+    return;
+  }
+  let prev = null;
+  try { prev = typeof res.getHeader === 'function' ? res.getHeader('Set-Cookie') : null; } catch (e) { prev = null; }
+  const list = prev ? (Array.isArray(prev) ? prev.slice() : [prev]) : [];
+  list.push(cookie);
+  res.setHeader('Set-Cookie', list);
+}
+
+function cookieAttrs(maxAgeSeconds) {
+  return `Path=/; Secure; SameSite=Strict; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`;
+}
+
+function setSessionCookie(res, token, ttlMs = SESSION_TTL_MS) {
+  appendSetCookie(
+    res,
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; ${cookieAttrs(ttlMs / 1000)}; HttpOnly`
+  );
+}
+
+function setCsrfCookie(res, token, ttlMs = SESSION_TTL_MS) {
+  // Deliberately NOT HttpOnly: the SPA must read it to echo X-CSRF-Token.
+  appendSetCookie(
+    res,
+    `${CSRF_COOKIE}=${encodeURIComponent(token)}; ${cookieAttrs(ttlMs / 1000)}`
+  );
+}
+
+function clearSessionCookie(res) {
+  appendSetCookie(res, `${SESSION_COOKIE}=; ${cookieAttrs(0)}; HttpOnly`);
+}
+
+function clearCsrfCookie(res) {
+  appendSetCookie(res, `${CSRF_COOKIE}=; ${cookieAttrs(0)}`);
+}
+
+function safeEqualText(a, b) {
+  const ba = Buffer.from(String(a || ''), 'utf8');
+  const bb = Buffer.from(String(b || ''), 'utf8');
+  if (!ba.length || ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+function requestOriginAllowed(req) {
+  const origin = req && req.headers && req.headers.origin;
+  if (!origin) return true; // non-browser client; SameSite still protects cookies
+  return getAllowedOrigin(req) === origin;
+}
+
+function csrfHeaderValid(req) {
+  const cookies = parseCookies(req);
+  const cookieToken = cookies[CSRF_COOKIE] || '';
+  const headerToken = req.headers && req.headers['x-csrf-token'];
+  return safeEqualText(cookieToken, headerToken);
+}
+
+function isUnsafeMethod(req) {
+  const m = String((req && req.method) || 'GET').toUpperCase();
+  return m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS';
+}
+
+function newCsrfToken() {
+  return crypto.randomBytes(32).toString('hex');
 }
 
 function readBody(req, maxBytes = 1024 * 1024) {
@@ -149,6 +253,104 @@ function resetRateLimit(key) {
   rateBuckets.delete(key);
 }
 
+// ─── DURABLE RATE LIMITING (optional Upstash Redis, in-memory fallback) ─────
+// The in-memory buckets above only cover one warm serverless instance, so a
+// determined attacker can multiply attempts by hitting fresh instances. When
+// UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are configured, counters
+// move to Upstash over its REST API (no SDK dependency, works on the Edge and
+// Node runtimes). If the call fails or the variables are absent, we fall back
+// to the SAME in-memory limiter — the API never fails open completely and never
+// becomes unavailable just because Redis is down.
+function upstashConfig() {
+  const url = env('UPSTASH_REDIS_REST_URL');
+  const token = env('UPSTASH_REDIS_REST_TOKEN');
+  if (!url || !token) return null;
+  return { url: url.replace(/\/+$/, ''), token };
+}
+
+async function redisPipeline(cmds) {
+  const cfg = upstashConfig();
+  if (!cfg) return null;
+  const resp = await fetch(`${cfg.url}/pipeline`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(cmds),
+  });
+  if (!resp.ok) throw new Error(`Upstash HTTP ${resp.status}`);
+  const out = await resp.json();
+  if (!Array.isArray(out)) throw new Error('Upstash bad response');
+  return out.map((row) => (row && Object.prototype.hasOwnProperty.call(row, 'result') ? row.result : null));
+}
+
+function redisKey(key) {
+  return `zashm:rl:${String(key).slice(0, 200)}`;
+}
+
+/**
+ * Async, durable counterpart of rateLimit(). Always resolves to the same
+ * { allowed, remaining, resetIn } shape. Use this in HTTP handlers; rateLimit()
+ * stays synchronous for tests and as the fallback.
+ */
+async function rateLimitShared(key, maxAttempts, windowMs) {
+  if (!upstashConfig()) return rateLimit(key, maxAttempts, windowMs);
+  const windowSec = Math.max(1, Math.ceil(windowMs / 1000));
+  try {
+    const rk = redisKey(key);
+    const out = await redisPipeline([
+      ['INCR', rk],
+      ['EXPIRE', rk, String(windowSec), 'NX'],
+      ['TTL', rk],
+    ]);
+    const count = Number(out && out[0]);
+    if (!Number.isFinite(count)) throw new Error('Upstash INCR failed');
+    const ttl = Number(out && out[2]);
+    const resetIn = Number.isFinite(ttl) && ttl > 0 ? ttl : windowSec;
+    return {
+      allowed: count <= maxAttempts,
+      remaining: Math.max(0, maxAttempts - count),
+      resetIn,
+    };
+  } catch (e) {
+    // Redis outage must not take the store down. Keep the per-instance guard.
+    console.warn('Durable rate limit unavailable, using in-memory fallback');
+    return rateLimit(key, maxAttempts, windowMs);
+  }
+}
+
+/** Read a durable counter without incrementing it (used by the coupon lockout). */
+async function rateLimitPeekShared(key) {
+  if (!upstashConfig()) {
+    const b = rateBuckets.get(key);
+    if (!b || b.resetAt < Date.now()) return { count: 0, resetIn: 0 };
+    return { count: b.count, resetIn: Math.ceil((b.resetAt - Date.now()) / 1000) };
+  }
+  try {
+    const rk = redisKey(key);
+    const out = await redisPipeline([['GET', rk], ['TTL', rk]]);
+    const count = Number(out && out[0]) || 0;
+    const ttl = Number(out && out[1]);
+    return { count, resetIn: Number.isFinite(ttl) && ttl > 0 ? ttl : 0 };
+  } catch (e) {
+    const b = rateBuckets.get(key);
+    if (!b || b.resetAt < Date.now()) return { count: 0, resetIn: 0 };
+    return { count: b.count, resetIn: Math.ceil((b.resetAt - Date.now()) / 1000) };
+  }
+}
+
+/** Clear a counter in both stores (best effort). */
+async function resetRateLimitShared(key) {
+  rateBuckets.delete(key);
+  if (!upstashConfig()) return;
+  try {
+    await redisPipeline([['DEL', redisKey(key)]]);
+  } catch (e) {
+    /* best effort */
+  }
+}
+
 function tooMany(res, resetIn, extra) {
   res.setHeader('Retry-After', String(Math.max(1, Math.ceil(resetIn || 60))));
   return json(res, 429, Object.assign({
@@ -158,8 +360,7 @@ function tooMany(res, resetIn, extra) {
 }
 
 // ─── SESSION TOKENS (HMAC signed, stateless) ────────────────────────────────
-
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours — matches client session
+// SESSION_TTL_MS is defined with the cookie helpers above (4 hours).
 
 function b64url(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -222,6 +423,24 @@ function readBearer(req) {
   return verifySession(h.slice(7).trim());
 }
 
+/**
+ * Resolve the session from the HttpOnly cookie first, then from a legacy
+ * Authorization: Bearer token. Returns { session, source } or null.
+ * `source` is used by requirePerm to decide whether CSRF/Origin checks apply:
+ * a cookie is attached automatically by the browser, a Bearer token is not.
+ */
+function readSession(req) {
+  const cookies = parseCookies(req);
+  const cookieToken = cookies[SESSION_COOKIE];
+  if (cookieToken) {
+    const session = verifySession(cookieToken);
+    if (session) return { session, source: 'cookie' };
+  }
+  const session = readBearer(req);
+  if (session) return { session, source: 'bearer' };
+  return null;
+}
+
 // ─── PERMISSIONS (server-side, authoritative) ───────────────────────────────
 
 const PERMISSIONS = {
@@ -246,14 +465,29 @@ function can(session, permission) {
  * Re-reads the user row from the database on every privileged call so that a
  * role change, an account deletion, or (after applying
  * supabase/session_revocation.sql) a session-version bump takes effect
- * immediately instead of lingering for up to the 8h token TTL. The DB role is
+ * immediately instead of lingering for up to the 4h token TTL. The DB role is
  * authoritative — the role baked into the token is ignored. */
 async function requirePerm(req, res, permission) {
-  const token = readBearer(req);
-  if (!token) {
+  const auth = readSession(req);
+  if (!auth) {
     json(res, 401, { error: 'Authentication required' });
     return null;
   }
+
+  // Cookie-authenticated unsafe requests must pass Origin + double-submit CSRF.
+  // Bearer tokens are immune (a cross-site page cannot read or set them).
+  if (auth.source === 'cookie' && isUnsafeMethod(req)) {
+    if (!requestOriginAllowed(req)) {
+      json(res, 403, { error: 'Request origin is not allowed' });
+      return null;
+    }
+    if (!csrfHeaderValid(req)) {
+      json(res, 403, { error: 'CSRF validation failed' });
+      return null;
+    }
+  }
+
+  const token = auth.session;
 
   let row;
   try {
@@ -591,20 +825,124 @@ function validateProductPayload(p) {
   };
 }
 
+// ─── COUPON PRICING (single source of truth) ────────────────────────────────
+// The coupons table grew two value columns over its lifetime: `value` (written
+// by the console) and `discountValue` (legacy). Both are kept in sync by the
+// admin API, but rows written before this fix may only have one of them. Every
+// layer — admin validation, /api/coupons/validate, api/orders.js and the
+// atomic_place_order() RPC — must resolve the SAME number, otherwise the price
+// the customer sees can differ from the price that is charged. `value` wins
+// when it is a usable number; `discountValue` is the fallback. Never call
+// Number(row.value) directly.
+function couponDiscountValue(row) {
+  if (!row || typeof row !== 'object') return null;
+  const candidates = [row.value, row.discountValue];
+  for (const raw of candidates) {
+    if (raw === null || raw === undefined || raw === '') continue;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
+
+// Optional minimum cart subtotal (EGP). 0 / null / missing ⇒ no minimum.
+function couponMinOrderAmount(row) {
+  if (!row || typeof row !== 'object') return 0;
+  const n = Number(row.minOrderAmount);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// Optional absolute cap on the discount (EGP), mainly for percentage coupons.
+// null / 0 / missing ⇒ no cap.
+function couponMaxDiscount(row) {
+  if (!row || typeof row !== 'object') return null;
+  const n = Number(row.maxDiscount);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Compute the discount for a coupon row and an authoritative subtotal.
+ * Returns { ok: true, discount, type, value } or { ok: false, reason }.
+ * Mirrors supabase/atomic_place_order.sql exactly; keep them in sync.
+ */
+function computeCouponDiscount(coupon, subtotal) {
+  const sub = Number(subtotal);
+  if (!coupon || !Number.isFinite(sub) || sub <= 0) {
+    return { ok: false, reason: 'invalid_subtotal' };
+  }
+  const min = couponMinOrderAmount(coupon);
+  if (min > 0 && sub < min) return { ok: false, reason: 'min_order_amount' };
+
+  const type = coupon.type === 'percentage' ? 'percentage' : 'fixed';
+  const value = couponDiscountValue(coupon);
+  if (value === null || value <= 0) return { ok: false, reason: 'invalid_value' };
+
+  let discount = type === 'percentage'
+    ? Math.round(sub * value / 100)
+    : value;
+  const cap = couponMaxDiscount(coupon);
+  if (cap !== null) discount = Math.min(discount, cap);
+  discount = Math.min(discount, sub); // never discount more than the cart
+  discount = Math.max(0, Math.round(discount));
+  if (discount <= 0) return { ok: false, reason: 'invalid_value' };
+  return { ok: true, discount, type, value };
+}
+
+/**
+ * True when the coupon is currently usable, ignoring the cart subtotal.
+ * Kept in one place so /api/coupons/validate and api/orders.js can never
+ * disagree about active / date window / usage limit. `today` is a Cairo
+ * YYYY-MM-DD string.
+ */
+function couponIsRedeemable(row, today) {
+  if (!row || typeof row !== 'object') return false;
+  if (row.active !== true) return false;
+  const start = str(row.startDate);
+  const end = str(row.endDate);
+  if (!start || !end || !(start <= today && end >= today)) return false;
+  const used = Number(row.usageCount || 0);
+  const limit = Number(row.usageLimit || 0);
+  if (!Number.isFinite(used) || !Number.isFinite(limit) || !(used < limit)) return false;
+  return couponDiscountValue(row) !== null;
+}
+
 function validateCouponPayload(d) {
   const errors = [];
   const code = str(d.code).trim().toUpperCase();
   const type = str(d.type) === 'fixed' ? 'fixed' : 'percentage';
-  const value = numInRange(d.value, 0, 1000000);
+
+  // Accept either column name; the canonical `value` wins when both are given.
+  const rawValue = (d.value !== undefined && d.value !== null && d.value !== '')
+    ? d.value
+    : d.discountValue;
+  const value = numInRange(rawValue, 0, 1000000);
   const startDate = str(d.startDate);
   const endDate = str(d.endDate);
   const usageLimit = intInRange(d.usageLimit, 0, 1000000);
 
+  // Optional constraints. Missing / empty / 0 ⇒ disabled.
+  let minOrderAmount = 0;
+  if (d.minOrderAmount !== undefined && d.minOrderAmount !== null && d.minOrderAmount !== '') {
+    const n = numInRange(d.minOrderAmount, 0, 10000000);
+    if (n === null) errors.push('A valid minimum order amount is required');
+    else minOrderAmount = n;
+  }
+  let maxDiscount = null;
+  if (d.maxDiscount !== undefined && d.maxDiscount !== null && d.maxDiscount !== '') {
+    const n = numInRange(d.maxDiscount, 0, 10000000);
+    if (n === null) errors.push('A valid maximum discount is required');
+    else if (n > 0) maxDiscount = n;
+  }
+
   if (!COUPON_CODE_RE.test(code)) errors.push('A valid coupon code is required');
-  if (value === null) errors.push('A valid discount value is required');
+  if (value === null || value <= 0) errors.push('A valid discount value is required');
+  if (type === 'percentage' && value !== null && value > 100) {
+    errors.push('Percentage discount cannot exceed 100');
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
     errors.push('Valid start/end dates are required');
   }
+  if (endDate && startDate && endDate < startDate) errors.push('End date must be after the start date');
   if (usageLimit === null) errors.push('A valid usage limit is required');
   if (errors.length) return null;
 
@@ -612,9 +950,13 @@ function validateCouponPayload(d) {
     code,
     type,
     value,
+    // Mirror into the legacy column so every reader agrees.
+    discountValue: value,
     startDate,
     endDate,
     usageLimit,
+    minOrderAmount,
+    maxDiscount,
     active: d.active === undefined ? true : Boolean(d.active),
     description: str(d.description).replace(/[<>]/g, '').slice(0, 200),
   };
@@ -630,13 +972,20 @@ function validateUserPayload(u, { requirePassword }) {
   if (email.length > 200 || !EMAIL_RE.test(email)) errors.push('A valid email is required');
   if (!role) errors.push('A valid role is required');
 
+  // SEC-C: 12+ characters for every NEW or CHANGED password. Existing
+  // passwords are never forced to change — login does not use this validator.
+  const MIN_PASSWORD = 12;
   let password = null;
   if (requirePassword) {
     password = str(u.password);
-    if (password.length < 6 || password.length > 128) errors.push('Password must be 6-128 characters');
+    if (password.length < MIN_PASSWORD || password.length > 128) {
+      errors.push(`Password must be ${MIN_PASSWORD}-128 characters`);
+    }
   } else if (u.password !== undefined && u.password !== null && u.password !== '') {
     password = str(u.password);
-    if (password.length < 6 || password.length > 128) errors.push('Password must be 6-128 characters');
+    if (password.length < MIN_PASSWORD || password.length > 128) {
+      errors.push(`Password must be ${MIN_PASSWORD}-128 characters`);
+    }
   }
 
   if (errors.length) return null;
@@ -649,7 +998,8 @@ const ORDER_STATUSES = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delive
 
 function generateOrderId() {
   const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  // crypto randomness (not Math.random) so ids cannot be predicted/raced.
+  const random = crypto.randomBytes(4).toString('hex').toUpperCase();
   return `ZSH-${timestamp}-${random}`;
 }
 
@@ -691,7 +1041,14 @@ function maskOrderForLimitedAccess(order) {
 // ─── TELEGRAM (server-side, secret token) ───────────────────────────────────
 
 function mdSafe(v) {
-  return String(v == null ? '' : v).replace(/[_*`[\]]/g, '').slice(0, 400);
+  // Telegram uses Markdown: user-controlled text must not be able to inject
+  // markup OR new lines (a newline could fake extra order lines / prices).
+  return String(v == null ? '' : v)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[_*`[\]()~>#+=|{}.!-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 400);
 }
 
 /** Converts a phone to an international dial string for https://wa.me/ links
@@ -777,7 +1134,18 @@ function detectImageType(buf) {
   if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
   if (buf.length >= 6 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return 'image/gif';
   if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
-  if (buf.length >= 8 && buf.toString('ascii', 4, 8) === 'ftyp') return 'image/avif';
+  // ISO-BMFF: an MP4 also starts with `....ftyp`, so verify the actual brand
+  // instead of accepting any ftyp box. AVIF uses major brand avif/avis (or a
+  // compatible brand in the box's brand list).
+  if (buf.length >= 16 && buf.toString('ascii', 4, 8) === 'ftyp') {
+    const size = Math.min(Number(buf.readUInt32BE(0)) || 0, buf.length, 256);
+    const major = buf.toString('ascii', 8, 12);
+    if (major === 'avif' || major === 'avis') return 'image/avif';
+    for (let off = 16; off + 4 <= size; off += 4) {
+      const brand = buf.toString('ascii', off, off + 4);
+      if (brand === 'avif' || brand === 'avis') return 'image/avif';
+    }
+  }
   return null;
 }
 
@@ -953,10 +1321,24 @@ module.exports = {
   clientIp,
   rateLimit,
   resetRateLimit,
+  rateLimitShared,
+  rateLimitPeekShared,
+  resetRateLimitShared,
   tooMany,
   signSession,
   verifySession,
   readBearer,
+  readSession,
+  parseCookies,
+  setSessionCookie,
+  setCsrfCookie,
+  clearSessionCookie,
+  clearCsrfCookie,
+  newCsrfToken,
+  requestOriginAllowed,
+  SESSION_TTL_MS,
+  SESSION_COOKIE,
+  CSRF_COOKIE,
   can,
   requirePerm,
   hashPassword,
@@ -969,6 +1351,11 @@ module.exports = {
   cairoDateString,
   validateProductPayload,
   validateCouponPayload,
+  couponDiscountValue,
+  couponMinOrderAmount,
+  couponMaxDiscount,
+  computeCouponDiscount,
+  couponIsRedeemable,
   validateUserPayload,
   ORDER_STATUSES,
   EGYPT_GOVERNORATES,

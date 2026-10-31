@@ -34,8 +34,12 @@ export default function UsersPanel() {
     if (!form.email.trim()) e.email = 'Email required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Invalid email';
     
+    // SEC-C: 12+ characters for new/changed passwords (matches the server
+    // policy in api/_lib.js validateUserPayload). Existing passwords are never
+    // forced to change — only a NEW value has to meet the minimum.
     if (!editingId && !form.password) e.password = 'Password required';
-    if (form.password && form.password.length < 6) e.password = 'Min 6 characters';
+    if (form.password && form.password.length < 12) e.password = 'Min 12 characters';
+    if (form.password && form.password.length > 128) e.password = 'Max 128 characters';
     return e;
   };
 
@@ -358,7 +362,7 @@ export default function UsersPanel() {
                         border: `1px solid ${errors.password ? 'var(--red)' : 'var(--border)'}`,
                         outline: 'none'
                       }}
-                      placeholder={editingId ? "Leave blank to keep current password" : "Min 6 characters"}
+                      placeholder={editingId ? "Leave blank to keep current password" : "Min 12 characters"}
                     />
                     <button
                       type="button"

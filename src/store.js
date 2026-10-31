@@ -107,7 +107,32 @@ function normalizeClientDiscount(d) {
   const type = d.type === 'percentage' ? 'percentage' : 'fixed';
   const value = Number(d.value);
   if (!code || !Number.isFinite(value) || value < 0) return null;
-  return { code, type, value };
+  const maxRaw = Number(d.maxDiscount);
+  const minRaw = Number(d.minOrderAmount);
+  return {
+    code,
+    type,
+    value,
+    // Optional server-side constraints, mirrored so the bag total matches the
+    // order total. api/orders.js remains the authority.
+    maxDiscount: Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null,
+    minOrderAmount: Number.isFinite(minRaw) && minRaw > 0 ? minRaw : 0,
+  };
+}
+
+// The exact discount the server will compute for this subtotal.
+function discountAmountFor(subtotal, d) {
+  const sub = Number(subtotal) || 0;
+  if (!d || sub <= 0) return 0;
+  const min = Number(d.minOrderAmount) || 0;
+  if (min > 0 && sub < min) return 0;
+  let amount = d.type === 'percentage'
+    ? Math.round(sub * (Number(d.value) || 0) / 100)
+    : (Number(d.value) || 0);
+  const cap = Number(d.maxDiscount);
+  if (Number.isFinite(cap) && cap > 0) amount = Math.min(amount, cap);
+  amount = Math.min(amount, sub);
+  return Math.max(0, Math.round(amount));
 }
 
 function loadAppliedDiscount() {
@@ -193,7 +218,9 @@ export const useStore = create((set, get) => ({
   refreshProducts: async () => {
     set({ productsLoading: true, productsLoadStatus: 'loading', productsError: null });
     try {
-      const { data, error } = await supabase.from('products').select('*');
+      // SEC-27: read the sanitized view (no reservedStock). The server is the
+      // single source of truth for availability at checkout.
+      const { data, error } = await supabase.from('products_public').select('*');
       if (error) {
         set({ productsLoadStatus: 'error', productsError: error.message || 'Could not load products' });
         console.error('Failed to fetch online products:', error);
@@ -204,7 +231,6 @@ export const useStore = create((set, get) => ({
           colors: p.colors || [],
           sizes: p.sizes || [],
           active: p.active ?? true,
-          reservedStock: p.reservedStock || 0,
           rating: p.rating || 0,
           reviews: p.reviews || 0
         }));
@@ -323,6 +349,9 @@ export const useStore = create((set, get) => ({
       stockAmount = Number(freshProduct.stock);
     }
 
+    // reservedStock is no longer exposed (view), so this is always 0 here.
+    // The server re-checks real availability inside atomic_place_order, which
+    // is the authoritative gate; this is only a friendlier early warning.
     const reservedAmount = Number(freshProduct.reservedStock || 0);
     const available = Math.max(0, stockAmount - reservedAmount);
     const currentInCart = (get().cart || []).find(i => i.product?.id == product.id && i.size === size && i.color === color)?.qty || 0;
@@ -430,10 +459,7 @@ export const useStore = create((set, get) => ({
   cartTotal: () => {
     const sub = get().cartSubtotal();
     if (!get().appliedDiscount) return sub;
-    if (get().appliedDiscount.type === 'percentage') {
-      return Math.max(0, Math.round(sub * (1 - (get().appliedDiscount.value ?? 0) / 100)));
-    }
-    return Math.max(0, sub - (get().appliedDiscount.value ?? 0));
+    return Math.max(0, sub - discountAmountFor(sub, get().appliedDiscount));
   },
   cartSubtotal: () => (get().cart || []).reduce((sum, i) => sum + (((i.product?.salePrice || i.product?.price) ?? 0) * (i.qty ?? 0)), 0),
   cartDiscountAmount: () => Math.max(0, get().cartSubtotal() - get().cartTotal()),
@@ -599,7 +625,10 @@ export const useStore = create((set, get) => ({
     const currentDiscount = get().appliedDiscount;
     if (!currentDiscount || !currentDiscount.code) return;
     try {
-      const payload = await api.post('/coupons/validate', { code: currentDiscount.code });
+      const payload = await api.post('/coupons/validate', {
+        code: currentDiscount.code,
+        subtotal: get().cartSubtotal(),
+      });
       const fresh = payload && payload.valid ? normalizeClientDiscount(payload.discount) : null;
       if (fresh) {
         saveAppliedDiscount(fresh);
@@ -685,7 +714,10 @@ export const useStore = create((set, get) => ({
     if (!normalized) return { success: false, error: 'Please enter a discount code / يرجى إدخال كود الخصم' };
 
     try {
-      const payload = await api.post('/coupons/validate', { code: normalized }, { timeoutMs: 15000 });
+      const payload = await api.post('/coupons/validate', {
+        code: normalized,
+        subtotal: get().cartSubtotal(),
+      }, { timeoutMs: 15000 });
       const discount = payload && payload.valid ? normalizeClientDiscount(payload.discount) : null;
       if (!discount) {
         return {

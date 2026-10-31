@@ -706,7 +706,7 @@ export function CheckoutPage() {
               maxWidth: 420,
             }}
           >
-            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك الآن تتبع حالة شحنتك وخط سيرها بسهولة بالانتقال إلى صفحة <span style={{ color: '#d1b363', fontWeight: 600 }}>Track Your Order</span> باستخدام الرقم المرجعي الموضح أعلاه، أو عبر التواصل المباشر مع فريق الدعم الفني.</div>
+            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك الآن تتبع حالة شحنتك وخط سيرها بسهولة عبر زر <span style={{ color: '#d1b363', fontWeight: 600 }}>Track Your Order</span> الذي ينقلك إلى رابط التتبع الآمن الخاص بطلبك، أو عبر التواصل المباشر مع فريق الدعم الفني.</div>
           </div>
 
           {/* Two equal buttons on the same row */}
@@ -726,9 +726,7 @@ export function CheckoutPage() {
             <button
               type="button"
               onClick={() => {
-                const url =
-                  success.tracking_url ||
-                  '/?track=' + encodeURIComponent(success.id);
+                const url = success.tracking_url || '/track';
 
                 window.location.assign(url);
               }}

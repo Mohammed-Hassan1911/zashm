@@ -1,5 +1,24 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- ZASHM · H-02 · ATOMIC ORDER PLACEMENT + ATOMIC STOCK ADJUSTMENT
+-- REVISION 7 — non-variant aggregation + strict payload parsing. Demand for a
+-- product WITHOUT variants is now summed across ALL of its cart lines (any
+-- size/color) and compared once with global stock; products WITH variants are
+-- still checked per variant. JSON type checks are separate statements, so a
+-- non-array payload can never reach jsonb_array_length() (no raw SQL error).
+-- The coupon-usage helper now lives in atomic_order_lifecycle.sql, so its grants
+-- were removed from this file (this file is applied first and must not
+-- reference a function that does not exist yet).
+-- REVISION 6 — idempotency race hardening. The unique_violation handler now
+-- compares the stored cart signature before answering duplicate=true, so a
+-- racing request that reuses a key with a DIFFERENT cart is told
+-- `idempotency_conflict` (never a false duplicate). Coupon usageCount is only
+-- written AFTER the order INSERT succeeds, so a duplicate key or an INSERT
+-- failure can no longer consume a coupon. See scripts/test-sql-concurrency.mjs.
+-- REVISION 5 — coupon pricing is now RECOMPUTED inside this function from the
+-- locked coupon row (active/date/usage/minOrderAmount/maxDiscount plus the
+-- value↔discountValue alias) and compared with p_order->>'discount'; a mismatch
+-- returns `coupon_changed` and rolls back. Also rejects `inactive_product`
+-- (SEC-11). Mirrors api/_lib.js computeCouponDiscount() exactly.
 -- REVISION 4 — availability pass now AGGREGATES demand per (productId, size,
 -- color) before checking, so a cart that splits the same variation across
 -- multiple lines can no longer oversell it. Mirrors api/orders.js.
@@ -95,21 +114,53 @@ LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_items jsonb := COALESCE(p_order -> 'items', '[]'::jsonb);
+  v_items jsonb;
   v_line RECORD;
   v_prod products%ROWTYPE;
   v_id bigint;
   v_available integer;
   v_var jsonb;
+  v_has_variants boolean;
   v_total_qty integer;
   v_existing text;
   v_existing_items jsonb;
   v_sig text;
+  v_coupon public.coupons%ROWTYPE;
+  v_coupon_value numeric;
+  v_subtotal numeric;
+  v_discount numeric;
+  v_min_order numeric;
+  v_max_discount numeric;
+  v_today text;
 BEGIN
-  -- Defense-in-depth payload checks (the API validates first).
-  IF jsonb_typeof(p_order) <> 'object'
-     OR jsonb_typeof(v_items) <> 'array'
-     OR jsonb_array_length(v_items) = 0 THEN
+  -- Defense-in-depth payload checks (the API validates first). Every type test
+  -- is its own statement: PostgreSQL does not promise AND/OR short-circuiting,
+  -- so jsonb_array_length() must never be evaluated for a non-array.
+  IF p_order IS NULL OR jsonb_typeof(p_order) <> 'object' THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_payload');
+  END IF;
+  v_items := p_order -> 'items';
+  IF v_items IS NULL OR jsonb_typeof(v_items) <> 'array' THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_payload');
+  END IF;
+  IF jsonb_array_length(v_items) = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_payload');
+  END IF;
+  IF EXISTS (
+    SELECT 1
+      FROM jsonb_array_elements(v_items) AS it
+     WHERE jsonb_typeof(it) <> 'object'
+        OR COALESCE(it ->> 'productId', '') !~ '^[1-9][0-9]{0,17}$'
+        OR COALESCE(it ->> 'qty', '') !~ '^[1-9][0-9]{0,8}$'
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_line');
+  END IF;
+  -- Required scalars are validated before any cast, so a malformed string can
+  -- never raise `invalid input syntax for type numeric` from this function.
+  IF NULLIF(btrim(COALESCE(p_order ->> 'id', '')), '') IS NULL
+     OR COALESCE(p_order ->> 'subtotal', '') !~ '^[0-9]+([.][0-9]+)?$'
+     OR COALESCE(p_order ->> 'discount', '') !~ '^[0-9]+([.][0-9]+)?$'
+     OR COALESCE(p_order ->> 'total', '') !~ '^[0-9]+([.][0-9]+)?$' THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_payload');
   END IF;
   IF p_idempotency_key IS NOT NULL
@@ -170,68 +221,157 @@ BEGIN
   END IF;
 
   -- Availability pass — rows are locked, values are CURRENT/committed.
-  -- Demand is AGGREGATED per (productId, size, color) first: a cart that splits
-  -- the same variation across several lines must not collectively oversell it.
+  -- Demand is AGGREGATED before checking: variants are compared per
+  -- (product, size, color); products WITHOUT variants share one global stock
+  -- value, so ALL of their lines are summed per product and checked once.
   -- Mirrors the aggregate check in api/orders.js.
-  FOR v_line IN
-    SELECT
-      (it ->> 'productId')::bigint                                AS id,
-      SUM((it ->> 'qty')::int)                                    AS qty,
-      COALESCE(it ->> 'size', '') || '-' || COALESCE(it ->> 'color', '') AS vkey,
-      COALESCE(it ->> 'size', '')  AS size,
-      COALESCE(it ->> 'color', '') AS color
+  FOR v_id IN
+    SELECT DISTINCT (it ->> 'productId')::bigint AS id
     FROM jsonb_array_elements(v_items) AS it
-    GROUP BY (it ->> 'productId')::bigint,
-             COALESCE(it ->> 'size', '') || '-' || COALESCE(it ->> 'color', ''),
-             COALESCE(it ->> 'size', ''),
-             COALESCE(it ->> 'color', '')
-    ORDER BY (it ->> 'productId')::bigint
+    ORDER BY 1
   LOOP
-    SELECT * INTO v_prod FROM public.products WHERE id = v_line.id;
+    SELECT * INTO v_prod FROM public.products WHERE id = v_id;
 
-    -- Mirror api/orders.js exactly: when the product HAS variants (non-empty
-    -- variantStock object), availability comes ONLY from the variant key — a
-    -- missing key means 0. Only fall back to global stock for products with no
-    -- variants, else 99. COALESCE(null-cast, 0) mirrors Number(undefined)=0.
-    -- Columns are stored quoted-camelCase → MUST quote the identifiers.
-    IF v_prod."variantStock" IS NOT NULL
-       AND jsonb_typeof(v_prod."variantStock") = 'object'
-       AND v_prod."variantStock" <> '{}'::jsonb THEN
-      v_available := COALESCE((v_prod."variantStock" ->> v_line.vkey)::int, 0);
-    ELSIF v_prod.stock IS NOT NULL THEN
-      v_available := v_prod.stock;
+    -- SEC-11: a product deactivated in the console must not be sellable, even
+    -- if it is still sitting in a shopper's saved cart. api/orders.js rejects
+    -- it first; this is the authoritative check.
+    IF v_prod.active IS FALSE THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'inactive_product',
+                                'productId', v_id);
+    END IF;
+
+    -- A non-empty object is the ONLY source of truth for variant demand: a
+    -- missing key means 0. Only products without variants fall back to global
+    -- stock (legacy NULL → 99, mirroring Number(undefined) in the API).
+    -- Columns are quoted-camelCase → the identifiers MUST be quoted.
+    v_has_variants := v_prod."variantStock" IS NOT NULL
+      AND jsonb_typeof(v_prod."variantStock") = 'object'
+      AND v_prod."variantStock" <> '{}'::jsonb;
+
+    IF v_has_variants THEN
+      FOR v_line IN
+        SELECT
+          COALESCE(it ->> 'size', '') || '-' || COALESCE(it ->> 'color', '') AS vkey,
+          COALESCE(it ->> 'size', '')  AS size,
+          COALESCE(it ->> 'color', '') AS color,
+          SUM((it ->> 'qty')::int)::integer AS qty
+        FROM jsonb_array_elements(v_items) AS it
+        WHERE (it ->> 'productId')::bigint = v_id
+        GROUP BY 1, 2, 3
+        ORDER BY 1
+      LOOP
+        v_available := COALESCE((v_prod."variantStock" ->> v_line.vkey)::int, 0)
+                       - COALESCE(v_prod."reservedStock", 0);
+
+        IF v_line.qty > v_available THEN
+          RETURN jsonb_build_object(
+            'ok', false, 'reason', 'unavailable',
+            'productId', v_id,
+            'name', v_prod.name,
+            'size', v_line.size,
+            'color', v_line.color,
+            'available', GREATEST(v_available, 0),
+            'requested', v_line.qty
+          );
+        END IF;
+
+        INSERT INTO _zshm_stock_delta (id, vkey, qty)
+        VALUES (v_id, v_line.vkey, v_line.qty);
+      END LOOP;
+
     ELSE
-      v_available := 99;
-    END IF;
-    v_available := v_available - COALESCE(v_prod."reservedStock", 0);
+      -- Products without variants: every line competes for the same stock.
+      SELECT COALESCE(SUM((it ->> 'qty')::int), 0)::integer INTO v_total_qty
+        FROM jsonb_array_elements(v_items) AS it
+       WHERE (it ->> 'productId')::bigint = v_id;
 
-    IF v_line.qty > v_available THEN
-      RETURN jsonb_build_object('ok', false, 'reason', 'unavailable',
-        'productId', v_line.id,
-        'name',     v_prod.name,
-        'size',     v_line.size,
-        'color',    v_line.color,
-        'available', GREATEST(v_available, 0));
-    END IF;
+      v_available := COALESCE(v_prod.stock, 99)
+                     - COALESCE(v_prod."reservedStock", 0);
 
-    INSERT INTO _zshm_stock_delta (id, vkey, qty)
-    VALUES (v_line.id, v_line.vkey, v_line.qty);
+      IF v_total_qty > v_available THEN
+        RETURN jsonb_build_object(
+          'ok', false, 'reason', 'unavailable',
+          'productId', v_id,
+          'name', v_prod.name,
+          'available', GREATEST(v_available, 0),
+          'requested', v_total_qty
+        );
+      END IF;
+
+      INSERT INTO _zshm_stock_delta (id, vkey, qty)
+      VALUES (v_id, '', v_total_qty);
+    END IF;
   END LOOP;
 
-  -- Coupon consumption is atomic with the order. api/orders.js has already
-  -- validated the coupon (active + date window) and computed the discount; here
-  -- the coupon row is locked and incremented ONLY if still active and below its
-  -- usage limit. If it is exhausted, the whole transaction rolls back so the
-  -- discount cannot be applied for free (no overshoot, no lost updates).
-  IF NULLIF(p_order ->> 'discountCode', '') IS NOT NULL THEN
-    UPDATE public.coupons
-       SET "usageCount" = COALESCE("usageCount", 0) + 1
-     WHERE code = p_order ->> 'discountCode'
-       AND active = true
-       AND COALESCE("usageCount", 0) < COALESCE("usageLimit", 0);
+  -- Coupon consumption is atomic with the order. The coupon row is locked and
+  -- EVERY pricing rule is recomputed here from the locked row — active state,
+  -- Cairo date window, usage limit, minimum order, percentage cap and the
+  -- value/discountValue alias. The discount the API put in p_order->>'discount'
+  -- must equal the recomputed amount; otherwise `coupon_changed` rolls the
+  -- whole transaction back. A client (or a racing admin edit) can therefore
+  -- never grant a discount the database did not approve.
+  IF NULLIF(btrim(COALESCE(p_order ->> 'discountCode', '')), '') IS NOT NULL THEN
+    SELECT * INTO v_coupon
+      FROM public.coupons
+     WHERE code = btrim(p_order ->> 'discountCode')
+     FOR UPDATE;
+
     IF NOT FOUND THEN
       RETURN jsonb_build_object('ok', false, 'reason', 'coupon_unavailable');
     END IF;
+
+    v_today := to_char(now() AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD');
+    IF v_coupon.active IS NOT TRUE
+       OR v_coupon."startDate" IS NULL
+       OR v_coupon."endDate" IS NULL
+       OR (v_coupon."startDate")::text > v_today
+       OR (v_coupon."endDate")::text < v_today
+       OR COALESCE(v_coupon."usageCount", 0) >= COALESCE(v_coupon."usageLimit", 0) THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'coupon_unavailable');
+    END IF;
+
+    -- Canonical value is `value`; `discountValue` is the legacy alias.
+v_coupon_value := CASE
+  WHEN v_coupon.value IS NOT NULL
+   AND v_coupon.value::numeric >= 0
+  THEN v_coupon.value::numeric
+  ELSE v_coupon."discountValue"::numeric
+END;
+    IF v_coupon_value IS NULL OR v_coupon_value <= 0 THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'coupon_unavailable');
+    END IF;
+
+    v_subtotal := COALESCE((p_order ->> 'subtotal')::numeric, 0);
+    v_min_order := GREATEST(COALESCE(v_coupon."minOrderAmount"::numeric, 0), 0);
+    IF v_min_order > 0 AND v_subtotal < v_min_order THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'coupon_unavailable');
+    END IF;
+
+    IF v_coupon.type = 'percentage' THEN
+      v_discount := round(v_subtotal * v_coupon_value / 100);
+    ELSE
+      v_discount := v_coupon_value;
+    END IF;
+
+    v_max_discount := COALESCE(v_coupon."maxDiscount"::numeric, 0);
+    IF v_max_discount > 0 THEN
+      v_discount := LEAST(v_discount, v_max_discount);
+    END IF;
+    v_discount := GREATEST(LEAST(v_discount, v_subtotal), 0);
+
+    IF v_discount <= 0
+       OR v_discount <> COALESCE((p_order ->> 'discount')::numeric, -1) THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'coupon_changed',
+                                'discount', v_discount);
+    END IF;
+    -- NOTE: usageCount is NOT incremented here. It is incremented after the
+    -- order INSERT succeeds (below). If this transaction loses the idempotency
+    -- race or the INSERT fails, the coupon must remain untouched.
+  ELSIF COALESCE((p_order ->> 'discount')::numeric, 0) <> 0 THEN
+    -- No code, but a discount was requested: never trust a price the database
+    -- did not derive from a coupon row.
+    RETURN jsonb_build_object('ok', false, 'reason', 'coupon_changed',
+                              'discount', 0);
   END IF;
 
   -- INSERT the order FIRST: a duplicate idempotency key (or a bizarre orderId
@@ -263,42 +403,82 @@ BEGIN
       p_idempotency_key
     );
   EXCEPTION WHEN unique_violation THEN
-    IF p_idempotency_key IS NOT NULL
-       AND EXISTS (SELECT 1 FROM public.orders WHERE idempotency_key = p_idempotency_key) THEN
-      SELECT id INTO v_existing
+    -- A concurrent request won the INSERT. Re-read the winning row and compare
+    -- the canonical cart signature. Reusing a key with a DIFFERENT cart must be
+    -- `idempotency_conflict`, never a false duplicate=true. This is the only
+    -- path where two requests with the same key can both pass the earlier
+    -- checks (they locked different products), so it must be authoritative.
+    IF p_idempotency_key IS NOT NULL THEN
+      SELECT id, items INTO v_existing, v_existing_items
         FROM public.orders WHERE idempotency_key = p_idempotency_key LIMIT 1;
-      RETURN jsonb_build_object('ok', true, 'duplicate', true, 'orderId', v_existing);
+      IF v_existing IS NOT NULL THEN
+        v_sig := public.zshm_order_signature(COALESCE(v_existing_items, '[]'::jsonb));
+        IF v_sig = public.zshm_order_signature(v_items) THEN
+          RETURN jsonb_build_object('ok', true, 'duplicate', true, 'orderId', v_existing);
+        END IF;
+        RETURN jsonb_build_object('ok', false, 'reason', 'idempotency_conflict',
+                                  'orderId', v_existing);
+      END IF;
     END IF;
     RETURN jsonb_build_object('ok', false, 'reason', 'order_id_collision');
   END;
 
+  -- Coupon consumption happens ONLY after the order row exists. This is what
+  -- makes the insert, stock decrement and usageCount atomic as a group while a
+  -- failed/duplicate INSERT leaves usageCount untouched.
+  IF v_coupon.code IS NOT NULL THEN
+    UPDATE public.coupons
+       SET "usageCount" = COALESCE("usageCount", 0) + 1
+     WHERE code = v_coupon.code;
+  END IF;
+
   -- Decrement pass — atomic with the INSERT above (same transaction).
   FOR v_id IN SELECT DISTINCT id FROM _zshm_stock_delta ORDER BY id LOOP
     SELECT * INTO v_prod FROM public.products WHERE id = v_id;
-    v_var := v_prod."variantStock";
-    IF v_var IS NULL THEN v_var := '{}'::jsonb; END IF;
 
-    SELECT COALESCE(SUM(qty), 0)::integer INTO v_total_qty
-      FROM _zshm_stock_delta WHERE id = v_id;
+    v_has_variants := v_prod."variantStock" IS NOT NULL
+      AND jsonb_typeof(v_prod."variantStock") = 'object'
+      AND v_prod."variantStock" <> '{}'::jsonb;
 
-    -- Per-variant decrement (all variants of this product within one order).
-    FOR v_line IN
-      SELECT vkey, qty FROM _zshm_stock_delta
-      WHERE id = v_id AND vkey <> '' AND vkey <> '-'
-    LOOP
-      IF v_var ? v_line.vkey THEN
-        v_var := jsonb_set(
-          v_var,
-          ARRAY[v_line.vkey],
-          to_jsonb(GREATEST(COALESCE((v_var ->> v_line.vkey)::int, 0) - v_line.qty, 0))
-        );
-      END IF;
-    END LOOP;
+    IF v_has_variants THEN
+      v_var := v_prod."variantStock";
 
-    UPDATE public.products
-       SET stock        = GREATEST(COALESCE(products.stock, 0) - v_total_qty, 0),
-           "variantStock" = v_var
-     WHERE id = v_id;
+      -- All lines for the same variant were aggregated by the availability
+      -- pass, so each key is decremented exactly once.
+      FOR v_line IN
+        SELECT vkey, SUM(qty)::integer AS qty
+          FROM _zshm_stock_delta
+         WHERE id = v_id AND vkey <> ''
+         GROUP BY vkey
+      LOOP
+        IF v_var ? v_line.vkey THEN
+          v_var := jsonb_set(
+            v_var,
+            ARRAY[v_line.vkey],
+            to_jsonb(GREATEST(COALESCE((v_var ->> v_line.vkey)::int, 0) - v_line.qty, 0))
+          );
+        END IF;
+      END LOOP;
+
+      -- Invariant: global stock always equals the sum of variant stock.
+      UPDATE public.products
+         SET "variantStock" = v_var,
+             stock = (
+               SELECT COALESCE(SUM(value::integer), 0)::integer
+                 FROM jsonb_each_text(v_var)
+             )
+       WHERE id = v_id;
+
+    ELSE
+      -- No variantStock object: only the global counter moves, and the payload
+      -- below never turns a legacy NULL into '{}'.
+      SELECT COALESCE(SUM(qty), 0)::integer INTO v_total_qty
+        FROM _zshm_stock_delta WHERE id = v_id;
+
+      UPDATE public.products
+         SET stock = GREATEST(COALESCE(v_prod.stock, 99) - v_total_qty, 0)
+       WHERE id = v_id;
+    END IF;
   END LOOP;
 
   RETURN jsonb_build_object('ok', true, 'orderId', p_order ->> 'id');
@@ -321,78 +501,190 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_line RECORD;
-  v_prod products%ROWTYPE;
+  v_prod public.products%ROWTYPE;
   v_id bigint;
   v_var jsonb;
-  v_new integer;
+  v_total_qty integer;
+  v_has_variants boolean;
+  v_available integer;
 BEGIN
-  IF jsonb_typeof(p_lines) <> 'array' OR p_lines = '[]'::jsonb
-     OR p_delta NOT IN (-1, 1) THEN
+  -- Validate the payload. Type, length and line checks are separate statements
+  -- so a non-array can never reach jsonb_array_length() or a cast.
+  IF p_lines IS NULL OR jsonb_typeof(p_lines) IS DISTINCT FROM 'array' THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_payload');
   END IF;
+  IF p_delta IS NULL OR p_delta NOT IN (-1, 1) THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_payload');
+  END IF;
+  IF jsonb_array_length(p_lines) = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_payload');
+  END IF;
+  IF EXISTS (
+    SELECT 1
+      FROM jsonb_array_elements(p_lines) AS it
+     WHERE jsonb_typeof(it) <> 'object'
+        OR COALESCE(it ->> 'productId', '') !~ '^[1-9][0-9]{0,17}$'
+        OR COALESCE(it ->> 'qty', '') !~ '^[1-9][0-9]{0,8}$'
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'invalid_line');
+  END IF;
 
+  -- Lock all products in deterministic order
   FOR v_id IN
-    SELECT DISTINCT (it ->> 'productId')::bigint AS id
+    SELECT DISTINCT (it ->> 'productId')::bigint
     FROM jsonb_array_elements(p_lines) AS it
     ORDER BY 1
   LOOP
-    PERFORM 1 FROM public.products WHERE id = v_id FOR UPDATE;
+    PERFORM 1
+    FROM public.products
+    WHERE id = v_id
+    FOR UPDATE;
+
     IF NOT FOUND THEN
-      RETURN jsonb_build_object('ok', false, 'reason', 'missing_product',
-                                'productId', v_id);
+      RETURN jsonb_build_object(
+        'ok', false,
+        'reason', 'missing_product',
+        'productId', v_id
+      );
     END IF;
   END LOOP;
 
-  FOR v_line IN
-    SELECT (it ->> 'productId')::bigint AS id,
-           (it ->> 'qty')::int AS qty,
-           COALESCE(it ->> 'size', '') || '-' || COALESCE(it ->> 'color', '') AS vkey
+  -- Preflight: validate ALL requested stock changes before updating ANY row.
+  FOR v_id IN
+    SELECT DISTINCT (it ->> 'productId')::bigint
     FROM jsonb_array_elements(p_lines) AS it
-    ORDER BY (it ->> 'productId')::bigint
+    ORDER BY 1
   LOOP
-    SELECT * INTO v_prod FROM public.products WHERE id = v_line.id;
-    v_var := v_prod."variantStock";
-    IF v_var IS NULL THEN v_var := '{}'::jsonb; END IF;
+    SELECT * INTO v_prod
+    FROM public.products
+    WHERE id = v_id;
 
-    IF v_var ? v_line.vkey THEN
-      v_new := GREATEST(COALESCE((v_var ->> v_line.vkey)::int, 0) + p_delta * v_line.qty, 0);
-      v_var := jsonb_set(v_var, ARRAY[v_line.vkey], to_jsonb(v_new));
+    v_has_variants :=
+      v_prod."variantStock" IS NOT NULL
+      AND jsonb_typeof(v_prod."variantStock") = 'object'
+      AND v_prod."variantStock" <> '{}'::jsonb;
+
+    IF v_has_variants THEN
+      FOR v_line IN
+        SELECT
+          COALESCE(it ->> 'size', '') || '-' ||
+          COALESCE(it ->> 'color', '') AS vkey,
+          SUM((it ->> 'qty')::integer)::integer AS qty
+        FROM jsonb_array_elements(p_lines) AS it
+        WHERE (it ->> 'productId')::bigint = v_id
+        GROUP BY 1
+        ORDER BY 1
+      LOOP
+        IF v_line.vkey IN ('', '-')
+           OR NOT (v_prod."variantStock" ? v_line.vkey) THEN
+          RETURN jsonb_build_object(
+            'ok', false,
+            'reason', 'missing_variant',
+            'productId', v_id,
+            'variant', v_line.vkey
+          );
+        END IF;
+
+        -- A negative delta means stock is being deducted.
+        IF p_delta = -1 THEN
+          v_available :=
+            COALESCE((v_prod."variantStock" ->> v_line.vkey)::integer, 0);
+          IF v_line.qty > v_available THEN
+            RETURN jsonb_build_object(
+              'ok', false,
+              'reason', 'unavailable',
+              'productId', v_id,
+              'variant', v_line.vkey,
+              'available', v_available,
+              'requested', v_line.qty
+            );
+          END IF;
+        END IF;
+      END LOOP;
+
+    ELSE
+      -- Products without variants: ALL lines compete for the same global
+      -- stock, so aggregate them before comparing exactly once.
+      SELECT COALESCE(SUM((it ->> 'qty')::integer), 0)::integer
+        INTO v_total_qty
+        FROM jsonb_array_elements(p_lines) AS it
+       WHERE (it ->> 'productId')::bigint = v_id;
+
+      IF p_delta = -1 THEN
+        v_available := COALESCE(v_prod.stock, 0);
+        IF v_total_qty > v_available THEN
+          RETURN jsonb_build_object(
+            'ok', false,
+            'reason', 'unavailable',
+            'productId', v_id,
+            'available', v_available,
+            'requested', v_total_qty
+          );
+        END IF;
+      END IF;
     END IF;
+  END LOOP;
 
-    UPDATE public.products
-       SET stock        = GREATEST(COALESCE(products.stock, 0) + p_delta * v_line.qty, 0),
-           "variantStock" = v_var
-     WHERE id = v_line.id;
+  -- All lines passed validation. Apply the changes.
+  FOR v_id IN
+    SELECT DISTINCT (it ->> 'productId')::bigint
+    FROM jsonb_array_elements(p_lines) AS it
+    ORDER BY 1
+  LOOP
+    SELECT * INTO v_prod
+    FROM public.products
+    WHERE id = v_id;
+
+    v_var := v_prod."variantStock";
+    v_has_variants :=
+      v_var IS NOT NULL
+      AND jsonb_typeof(v_var) = 'object'
+      AND v_var <> '{}'::jsonb;
+
+    SELECT COALESCE(SUM((it ->> 'qty')::integer), 0)::integer
+    INTO v_total_qty
+    FROM jsonb_array_elements(p_lines) AS it
+    WHERE (it ->> 'productId')::bigint = v_id;
+
+    IF v_has_variants THEN
+      FOR v_line IN
+        SELECT
+          COALESCE(it ->> 'size', '') || '-' ||
+          COALESCE(it ->> 'color', '') AS vkey,
+          SUM((it ->> 'qty')::integer)::integer AS qty
+        FROM jsonb_array_elements(p_lines) AS it
+        WHERE (it ->> 'productId')::bigint = v_id
+        GROUP BY 1
+        ORDER BY 1
+      LOOP
+        v_var := jsonb_set(
+          v_var,
+          ARRAY[v_line.vkey],
+          to_jsonb(
+            COALESCE((v_var ->> v_line.vkey)::integer, 0)
+            + (p_delta * v_line.qty)
+          )
+        );
+      END LOOP;
+
+      -- Invariant: global stock always equals the sum of variant stock.
+      UPDATE public.products
+      SET
+        "variantStock" = v_var,
+        stock = (
+          SELECT COALESCE(SUM(value::integer), 0)::integer
+          FROM jsonb_each_text(v_var)
+        )
+      WHERE id = v_id;
+
+    ELSE
+      UPDATE public.products
+      SET stock = GREATEST(COALESCE(stock, 0) + (p_delta * v_total_qty), 0)
+      WHERE id = v_id;
+    END IF;
   END LOOP;
 
   RETURN jsonb_build_object('ok', true);
-END;
-$$;
-
--- ── 4b) ATOMIC COUPON USAGE ADJUSTMENT ───────────────────────────────────────
--- Single-statement signed delta (clamped at zero), used by order cancellation /
--- un-cancellation / deletion. Replaces the select-then-update read-modify-write
--- that could lose a concurrent placement increment. Best-effort by design:
--- usageCount is advisory, so callers ignore the result.
-CREATE OR REPLACE FUNCTION public.zshm_adjust_coupon_usage(
-  p_code text,
-  p_delta integer
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-  v_updated integer;
-BEGIN
-  IF p_code IS NULL OR btrim(p_code) = '' THEN
-    RETURN jsonb_build_object('ok', true, 'skipped', true);
-  END IF;
-  UPDATE public.coupons
-     SET "usageCount" = GREATEST(COALESCE("usageCount", 0) + p_delta, 0)
-   WHERE code = btrim(p_code);
-  GET DIAGNOSTICS v_updated = ROW_COUNT;
-  RETURN jsonb_build_object('ok', true, 'updated', v_updated);
 END;
 $$;
 
@@ -405,11 +697,9 @@ $$;
 REVOKE ALL ON FUNCTION public.atomic_place_order(jsonb, text)     FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.atomic_adjust_stock(jsonb, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.zshm_order_signature(jsonb)         FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.zshm_adjust_coupon_usage(text, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.atomic_place_order(jsonb, text)     TO service_role;
 GRANT EXECUTE ON FUNCTION public.atomic_adjust_stock(jsonb, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.zshm_order_signature(jsonb)         TO service_role;
-GRANT EXECUTE ON FUNCTION public.zshm_adjust_coupon_usage(text, integer) TO service_role;
 
 -- ── 6) POST-APPLY VERIFICATION (run after applying) ───────────────────────────
 -- SELECT proname, provolatile FROM pg_proc
@@ -418,11 +708,8 @@ GRANT EXECUTE ON FUNCTION public.zshm_adjust_coupon_usage(text, integer) TO serv
 --        has_function_privilege('service_role', 'public.atomic_place_order(jsonb, text)', 'EXECUTE') AS svc_can;
 -- SELECT indexdef FROM pg_indexes
 -- WHERE tablename = 'orders' AND indexname = 'orders_idempotency_key_unique';
-
--- ── 7) ROLLBACK (if anything regresses; order rows written AFTER apply keep the
---        new column — dropping it is safe and keeps data intact) ───────────────
--- DROP FUNCTION IF EXISTS public.atomic_place_order(jsonb, text);
--- DROP FUNCTION IF EXISTS public.atomic_adjust_stock(jsonb, integer);
--- DROP FUNCTION IF EXISTS public.zshm_order_signature(jsonb);
--- DROP INDEX IF EXISTS orders_idempotency_key_unique;
--- ALTER TABLE public.orders DROP COLUMN IF EXISTS idempotency_key;
+-- ── 7) ROLLBACK POLICY ───────────────────────────────────────────────────────
+-- Never drop idempotency_key or its unique index.
+-- Never drop deployed functions without a reviewed replacement.
+-- Restore previous function definitions only when a reviewed rollback
+-- procedure is available.

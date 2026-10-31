@@ -6,7 +6,7 @@ const {
   handleOptions,
   readBody,
   clientIp,
-  rateLimit,
+  rateLimitShared,
   resetRateLimit,
   tooMany,
   supabaseAdmin,
@@ -14,16 +14,34 @@ const {
   hashPassword,
   verifyPassword,
   EMAIL_RE,
+  setSessionCookie,
+  setCsrfCookie,
+  clearSessionCookie,
+  clearCsrfCookie,
+  newCsrfToken,
+  requestOriginAllowed,
+  SESSION_TTL_MS,
 } = require('./_lib');
+
+// A real scrypt hash used when the email does not exist, so "no such user" and
+// "wrong password" cost the same. Never matches a real password.
+const DUMMY_PASSWORD_HASH =
+  'scrypt$16384$8$1$9235e98da7b9db0c3908d02f9877f404$44031c67af6a4173a996c8a200fefd4358a05a676110367be48b9e20970e5bb1';
 
 /**
  * POST /api/auth  { action: 'login', email, password }
- * Server-side authentication. Never returns password hashes.
+ * POST /api/auth  { action: 'logout' }
+ * Server-side authentication. Never returns password hashes or the session
+ * token: the token is delivered in an HttpOnly cookie.
  */
 module.exports = async function handler(req, res) {
   applyCors(req, res);
   if (req.method === 'OPTIONS') return handleOptions(req, res);
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
+
+  if (!requestOriginAllowed(req)) {
+    return json(res, 403, { error: 'Request origin is not allowed' });
+  }
 
   const ip = clientIp(req);
 
@@ -34,8 +52,14 @@ module.exports = async function handler(req, res) {
     return json(res, e.status || 400, { error: e.message });
   }
 
-  if (!body || body.action !== 'login') {
+  if (!body || (body.action !== 'login' && body.action !== 'logout')) {
     return json(res, 400, { error: 'Invalid request' });
+  }
+
+  if (body.action === 'logout') {
+    clearSessionCookie(res);
+    clearCsrfCookie(res);
+    return json(res, 200, { success: true });
   }
 
   const email = String(body.email || '').trim().toLowerCase();
@@ -51,8 +75,8 @@ module.exports = async function handler(req, res) {
   // Server-side rate limiting (per IP+email and per IP) — cannot be reset by reloading the page.
   const emailKey = `login:${ip}:${email}`;
   const ipKey = `login:${ip}`;
-  const emailCheck = rateLimit(emailKey, 5, 15 * 60 * 1000);
-  const ipCheck = rateLimit(ipKey, 20, 15 * 60 * 1000);
+  const emailCheck = await rateLimitShared(emailKey, 5, 15 * 60 * 1000);
+  const ipCheck = await rateLimitShared(ipKey, 20, 15 * 60 * 1000);
   if (!emailCheck.allowed) return tooMany(res, emailCheck.resetIn);
   if (!ipCheck.allowed) return tooMany(res, ipCheck.resetIn);
 
@@ -70,8 +94,8 @@ module.exports = async function handler(req, res) {
     }
 
     // Constant-ish work even when the user does not exist (mitigates user enumeration timing).
-    const stored = data ? data.passwordhash : '';
-    const { valid, needsRehash } = await verifyPassword(password, stored || '');
+    const stored = data ? data.passwordhash : DUMMY_PASSWORD_HASH;
+    const { valid, needsRehash } = await verifyPassword(password, stored || DUMMY_PASSWORD_HASH);
 
     if (!data || !valid) {
       return json(res, 401, { error: 'Invalid credentials' });
@@ -96,10 +120,15 @@ module.exports = async function handler(req, res) {
       session_version: data.session_version,
     });
 
+    // HttpOnly session + JS-readable CSRF double-submit token.
+    const csrfToken = newCsrfToken();
+    setSessionCookie(res, token, SESSION_TTL_MS);
+    setCsrfCookie(res, csrfToken, SESSION_TTL_MS);
+
     return json(res, 200, {
       success: true,
-      token,
-      expiresAt: Date.now() + 8 * 60 * 60 * 1000,
+      expiresAt: Date.now() + SESSION_TTL_MS,
+      csrfToken,
       user: { id: data.id, name: data.name, email: data.email, role: data.role },
     });
   } catch (err) {

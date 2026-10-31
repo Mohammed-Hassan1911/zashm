@@ -7,7 +7,7 @@ const {
   handleOptions,
   readBody,
   clientIp,
-  rateLimit,
+  rateLimitShared,
   tooMany,
   requirePerm,
   supabaseAdmin,
@@ -26,7 +26,7 @@ async function uploadImage(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminupload:${ip}`, 30, 60 * 1000);
+  const check = await rateLimitShared(`adminupload:${ip}`, 30, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -84,7 +84,7 @@ async function deleteImage(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminupload:${ip}`, 30, 60 * 1000);
+  const check = await rateLimitShared(`adminupload:${ip}`, 30, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body = {};

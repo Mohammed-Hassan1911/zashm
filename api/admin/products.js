@@ -6,7 +6,7 @@ const {
   handleOptions,
   readBody,
   clientIp,
-  rateLimit,
+  rateLimitShared,
   tooMany,
   requirePerm,
   supabaseAdmin,
@@ -73,7 +73,7 @@ async function createProducts(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminwrite:${ip}`, 60, 60 * 1000);
+  const check = await rateLimitShared(`adminwrite:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -122,7 +122,8 @@ async function createProducts(req, res) {
   } catch (err) {
     console.error('Product create failed:', err && err.message);
     const status = err && err.status ? err.status : 500;
-    return json(res, status, { error: err && err.message ? err.message : 'Could not save product' });
+    // Never echo raw database errors (they can reveal column/table internals).
+    return json(res, status, { error: 'Could not save product' });
   }
 }
 
@@ -133,7 +134,7 @@ async function updateProduct(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminwrite:${ip}`, 60, 60 * 1000);
+  const check = await rateLimitShared(`adminwrite:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -209,7 +210,7 @@ async function updateProduct(req, res) {
   } catch (err) {
     console.error('Product update failed:', err && err.message);
     const status = err && err.status ? err.status : 500;
-    return json(res, status, { error: err && err.message ? err.message : 'Could not update product' });
+    return json(res, status, { error: 'Could not update product' });
   }
 }
 
@@ -262,7 +263,7 @@ async function deleteProducts(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminwrite:${ip}`, 60, 60 * 1000);
+  const check = await rateLimitShared(`adminwrite:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body = {};

@@ -6,7 +6,7 @@ const {
   handleOptions,
   readBody,
   clientIp,
-  rateLimit,
+  rateLimitShared,
   tooMany,
   supabaseAdmin,
   validateOrderPayload,
@@ -19,6 +19,8 @@ const {
   verifyTrackToken,
   EGYPT_PHONE_RE,
   cairoDateString,
+  couponIsRedeemable,
+  computeCouponDiscount,
 } = require('./_lib');
 
 const ORDER_ID_RE = /^ZSH-[A-Za-z0-9]{1,20}-[A-Za-z0-9]{1,8}$/;
@@ -42,7 +44,7 @@ function clampClientDate(value) {
 
 async function placeOrder(req, res) {
   const ip = clientIp(req);
-  const check = rateLimit(`placeorder:${ip}`, 10, 60 * 60 * 1000);
+  const check = await rateLimitShared(`placeorder:${ip}`, 10, 60 * 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -76,14 +78,21 @@ async function placeOrder(req, res) {
     }
     const productMap = new Map((products || []).map((p) => [Number(p.id), p]));
 
-    // 2. Aggregate demand per (product, size, color) BEFORE the availability
-    //    check. A cart that splits the same variation across several lines must
-    //    not collectively exceed what is in stock — otherwise each line passes
-    //    the per-line check and the variant is oversold. The RPC mirrors this.
-    const demand = new Map();
+    // 2. Aggregate demand BEFORE the availability check. A cart that splits the
+    //    same product/variant across several lines must not collectively exceed
+    //    what is in stock. Variant products are compared per variant; products
+    //    WITHOUT variants all share one global stock value, so their lines are
+    //    summed per product. The RPC mirrors this exactly.
+    const demandByVariant = new Map();
+    const demandByProduct = new Map();
     for (const item of items) {
+      const requestedQty = Number(item.qty);
+      demandByProduct.set(
+        item.productId,
+        (demandByProduct.get(item.productId) || 0) + requestedQty
+      );
       const key = `${item.productId}::${item.size}-${item.color}`;
-      demand.set(key, (demand.get(key) || 0) + Number(item.qty));
+      demandByVariant.set(key, (demandByVariant.get(key) || 0) + requestedQty);
     }
 
     // 2b. Rebuild line items from DB prices + validate stock availability.
@@ -93,7 +102,10 @@ async function placeOrder(req, res) {
     const stockIssues = [];
     for (const item of items) {
       const p = productMap.get(item.productId);
-      if (!p) {
+      // SEC-11: a product the admin deactivated must never be sellable, even if
+      // it is still in a shopper's saved cart. Treat it exactly like a product
+      // that disappeared so the client removes it.
+      if (!p || p.active === false) {
         stockErrors.push('A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.');
         stockIssues.push({
           productId: item.productId,
@@ -119,11 +131,17 @@ async function placeOrder(req, res) {
       }
       const reserved = Number(p.reservedStock || 0);
       const available = Math.max(0, stockAmount - reserved);
-      const requested = demand.get(`${item.productId}::${variantKey}`) || item.qty;
+      // Variant products compare the aggregate for this exact variant; products
+      // without variants compare the aggregate for the whole product, because
+      // size/color do not select a separate stock pool there.
+      const requested = hasVariantStock
+        ? (demandByVariant.get(`${item.productId}::${variantKey}`) ?? item.qty)
+        : (demandByProduct.get(item.productId) ?? item.qty);
       if (requested > available) {
+        const variationAr = hasVariantStock ? ` (${item.size} - ${item.color})` : '';
         const msg = available === 0
-          ? `Sorry, this piece is out of stock for this variation / هذا المنتج غير متوفر بهذا الاختلاف (${item.size} - ${item.color}).`
-          : `Only ${available} piece(s) remaining in stock for this variation / متبقى ${available} قطعة فقط من هذا المنتج (${item.size} - ${item.color}).`;
+          ? `Sorry, this piece is out of stock${hasVariantStock ? ' for this variation' : ''} / هذا المنتج غير متوفر${hasVariantStock ? ' بهذا الاختلاف' : ''}${variationAr}.`
+          : `Only ${available} piece(s) remaining in stock${hasVariantStock ? ' for this variation' : ''} / متبقى ${available} قطعة فقط من هذا المنتج${variationAr}.`;
         if (!stockErrors.includes(msg)) stockErrors.push(msg);
         const existing = stockIssues.find(
           (si) => si.productId === item.productId && si.size === (item.size || '') && si.color === (item.color || '')
@@ -168,27 +186,33 @@ async function placeOrder(req, res) {
     const subtotal = orderItems.reduce((s, i) => s + i.price, 0);
 
     let couponRow = null;
+    let discount = 0;
     const couponCode = body.couponCode ? String(body.couponCode).trim().toUpperCase() : '';
     if (couponCode) {
       const today = cairoDateString();
-      const { data: c } = await sb.from('coupons').select('*').eq('code', couponCode).maybeSingle();
-      if (
-        c &&
-        c.active &&
-        String(c.startDate || '') <= today &&
-        String(c.endDate || '') >= today &&
-        Number(c.usageCount || 0) < Number(c.usageLimit || 0)
-      ) {
-        couponRow = c;
+      const { data: c, error: couponErr } = await sb
+        .from('coupons')
+        .select('code, type, value, discountValue, minOrderAmount, maxDiscount, active, startDate, endDate, usageLimit, usageCount')
+        .eq('code', couponCode)
+        .maybeSingle();
+      if (couponErr) {
+        console.error('Order coupon lookup failed:', couponErr.code || 'unknown');
+        return json(res, 500, { success: false, error: 'Could not validate the discount code. Please try again.' });
       }
-    }
-
-    let discount = 0;
-    if (couponRow) {
-      discount =
-        couponRow.type === 'percentage'
-          ? Math.min(subtotal, Math.round(subtotal * (Number(couponRow.value) || 0) / 100))
-          : Math.min(subtotal, Number(couponRow.value) || 0);
+      // The customer asked for a discount, so never silently charge full price.
+      // If the code stopped being usable between validation and checkout, the
+      // whole order is rejected and the bag asks them to remove it.
+      if (!couponIsRedeemable(c, today)) {
+        const msg = 'This discount code is no longer available / كود الخصم لم يعد متاحًا. يرجى إزالته والمحاولة مرة أخرى.';
+        return json(res, 422, { success: false, error: msg, errors: [msg] });
+      }
+      const priced = computeCouponDiscount(c, subtotal);
+      if (!priced.ok) {
+        const msg = 'This discount code is not valid for this order / كود الخصم غير صالح لهذا الطلب. يرجى إزالته والمحاولة مرة أخرى.';
+        return json(res, 422, { success: false, error: msg, errors: [msg], reason: priced.reason });
+      }
+      couponRow = c;
+      discount = priced.discount;
     }
 
     const shippingCost = getShippingCost(customer.city);
@@ -276,6 +300,26 @@ async function placeOrder(req, res) {
           }],
         });
       }
+      if (reason === 'inactive_product') {
+        const inactiveMsg = 'A product in your cart is no longer available / أحد المنتجات في سلة التسوق لم يعد متوفرًا.';
+        return json(res, 422, {
+          success: false,
+          error: inactiveMsg,
+          errors: [inactiveMsg],
+          stockIssues: [{
+            productId: Number(r.productId) || 0,
+            size: '',
+            color: '',
+            requested: null,
+            available: 0,
+            missing: true,
+          }],
+        });
+      }
+      if (reason === 'coupon_changed') {
+        const msg = 'The discount conditions changed. Please review your bag and try again. / تغيرت شروط كود الخصم. يرجى مراجعة السلة والمحاولة مرة أخرى.';
+        return json(res, 409, { success: false, error: msg, errors: [msg] });
+      }
       if (reason === 'idempotency_conflict') {
         return json(res, 409, { success: false, error: 'Could not place the order. Please refresh your bag and try again. / تعذر إتمام الطلب. يرجى تحديث سلة التسوق والمحاولة مرة أخرى.' });
       }
@@ -333,18 +377,21 @@ async function placeOrder(req, res) {
 
 async function trackOrder(req, res) {
   const ip = clientIp(req);
-  const check = rateLimit(`track:${ip}`, 30, 60 * 1000);
+  const check = await rateLimitShared(`track:${ip}`, 30, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   const trackId = String((req.query && req.query.track) || '').trim();
   const token = String((req.query && req.query.tk) || '').trim();
 
-  if (!trackId || !ORDER_ID_RE.test(trackId)) {
+  // SEC-16: an order id alone is NOT a credential. The tracking token is an
+  // HMAC of the id with SESSION_SECRET and is only shared through the secure
+  // link. Without a valid token we return exactly the same response as an
+  // unknown id — before any database query, so ids cannot be probed at all.
+  if (!trackId || !ORDER_ID_RE.test(trackId) || !token || !verifyTrackToken(trackId, token)) {
     return json(res, 200, { found: false });
   }
 
   try {
-    const hasFullAccess = verifyTrackToken(trackId, token);
     const sb = supabaseAdmin();
     const { data, error } = await sb.from('orders').select('*').eq('id', trackId).maybeSingle();
     if (error) {
@@ -352,18 +399,6 @@ async function trackOrder(req, res) {
       return json(res, 500, { found: false, error: 'Tracking is temporarily unavailable' });
     }
     if (!data) return json(res, 200, { found: false });
-
-    if (!hasFullAccess) {
-      return json(res, 200, {
-        found: true,
-        access: 'status',
-        order: {
-          id: String(data.id),
-          status: String(data.status || 'Pending'),
-          date: String(data.date || ''),
-        },
-      });
-    }
 
     const order = parseOrderRow(data);
     order.tracking_url = trackingUrlFor(trackId);

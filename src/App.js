@@ -37,6 +37,7 @@ const CartPage = React.lazy(() => import('./pages/CartPage').then(module => ({ d
 const CheckoutPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.CheckoutPage })));
 const WishlistPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.WishlistPage })));
 const AdminApp = React.lazy(() => import('./pages/AdminApp'));
+const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
 
 if (typeof window !== 'undefined') {
   window.toast = toast;
@@ -155,6 +156,7 @@ function AppInner() {
       wishlist: { title: 'Wishlist', robots: 'noindex, nofollow' },
       track: { title: 'Track Your Order', robots: 'noindex, nofollow' },
       admin: { title: 'Admin', robots: 'noindex, nofollow' },
+      notfound: { title: 'Page Not Found', robots: 'noindex, nofollow' },
     };
     const meta = META[currentPage] || {};
     setPageMeta(meta);
@@ -234,6 +236,7 @@ function AppInner() {
                 {currentPage === 'checkout' && <CheckoutPage />}
                 {currentPage === 'wishlist' && <WishlistPage />}
                 {currentPage === 'track' && <TrackOrder />}
+                {currentPage === 'notfound' && <NotFoundPage />}
               </Suspense>
             </motion.div>
           </AnimatePresence>

@@ -67,19 +67,22 @@ export async function verifyPassword(password, stored) {
 
 // ─── SESSION MANAGEMENT ───────────────────────────────────────────────────────
 const SESSION_KEY = 'zashm_session';
-const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours (matches server TTL)
+const SESSION_DURATION = 4 * 60 * 60 * 1000; // 4 hours (matches server TTL)
 
 export function createSession(user, serverToken) {
+  // The real credential is the HttpOnly cookie set by /api/auth. This record is
+  // only UI state (who is signed in, when it expires) and contains no secret.
   const session = {
     userId: user.id,
     role: user.role,
     name: user.name,
     email: user.email,
-    token: serverToken || generateToken(),
     createdAt: Date.now(),
     expiresAt: Date.now() + SESSION_DURATION,
     lastActive: Date.now(),
   };
+  // Backward compatibility for a token issued by an older deployment.
+  if (serverToken) session.token = serverToken;
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   return session;
 }
@@ -103,6 +106,7 @@ export function getSession() {
 
 export function destroySession() {
   sessionStorage.removeItem(SESSION_KEY);
+  try { sessionStorage.removeItem('zashm_csrf'); } catch (e) { /* ignore */ }
 }
 
 export function hasPermission(session, permission) {
@@ -240,21 +244,41 @@ export function validateLoginForm(form) {
   return errors;
 }
 
-// ─── CSRF TOKEN (kept for interface compatibility) ────────────────────────────
+// ─── CSRF TOKEN (double-submit cookie) ───────────────────────────────────────
+// The server sets `zashm_csrf` on login; api.js reads it directly. These helpers
+// remain for interface compatibility and never fabricate a token that the
+// server would reject.
 export function generateCSRFToken() {
-  const token = generateToken();
-  sessionStorage.setItem('csrf_token', token);
-  return token;
+  return getCSRFToken();
 }
 
 export function getCSRFToken() {
-  return sessionStorage.getItem('csrf_token') || generateCSRFToken();
+  try {
+    const raw = typeof document !== 'undefined' ? document.cookie : '';
+    for (const part of String(raw || '').split(';')) {
+      const idx = part.indexOf('=');
+      if (idx < 0) continue;
+      if (part.slice(0, idx).trim() === 'zashm_csrf') {
+        return decodeURIComponent(part.slice(idx + 1).trim());
+      }
+    }
+  } catch (e) { /* cookie access can be blocked */ }
+  try { return sessionStorage.getItem('zashm_csrf') || ''; } catch (e) { return ''; }
 }
 
 // ─── ORDER ID GENERATOR (server generates real order ids) ─────────────────────
+// Kept only as a formatting helper; the authoritative id is always issued by
+// api/orders.js. Uses crypto (not Math.random) so no weak-id pattern remains.
 export function generateOrderId() {
   const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const bytes = new Uint8Array(4);
+  (typeof crypto !== 'undefined' && crypto.getRandomValues
+    ? crypto
+    : window.crypto
+  ).getRandomValues(bytes);
+  const random = Array.from(bytes, (b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
   return `ZSH-${timestamp}-${random}`;
 }
 
@@ -353,7 +377,8 @@ class LocalDB {
   // authenticated admin API, never read with the anon key.
   async syncFromServer() {
     try {
-      const { data, error } = await supabase.from('products').select('*');
+      // SEC-27: the anon key may only read the sanitized view.
+      const { data, error } = await supabase.from('products_public').select('*');
       if (error || !data) return;
       const formatted = data.map(p => ({
         ...p,
@@ -361,7 +386,6 @@ class LocalDB {
         colors: p.colors || [],
         sizes: p.sizes || [],
         active: p.active ?? true,
-        reservedStock: p.reservedStock || 0,
         rating: p.rating || 0,
         reviews: p.reviews || 0,
       }));

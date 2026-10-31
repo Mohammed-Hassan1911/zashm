@@ -92,8 +92,14 @@ export function AuthProvider({ children }) {
 
       resetRateLimit(rateLimitKey);
 
+      // The credential itself is the HttpOnly cookie set by the server. Keep
+      // only non-secret UI state; cache the CSRF fallback in case cookie access
+      // is restricted but the cookie is still sent.
+      try {
+        if (payload && payload.csrfToken) sessionStorage.setItem('zashm_csrf', payload.csrfToken);
+      } catch (e) { /* storage may be unavailable */ }
       const userForSession = payload.user;
-      const newSession = createSession(userForSession, payload.token);
+      const newSession = createSession(userForSession);
       setSession(newSession);
 
       if (['admin'].includes(newSession.role)) {
@@ -107,7 +113,14 @@ export function AuthProvider({ children }) {
     }
   }, [loadUsers]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Clear the server-side HttpOnly cookie first; never leave a live session
+    // behind just because the client navigated away.
+    try {
+      await api.post('/auth', { action: 'logout' });
+    } catch (e) {
+      /* the local state is still cleared below */
+    }
     destroySession();
     setSession(null);
     setUsers([]);
@@ -157,23 +170,32 @@ export function AuthProvider({ children }) {
       // لو الأدمن بيعدل بيانات نفسه، حدّث الجلسة الحالية فوراً عشان مترجعش قديمة
       if (String(id) === String(sessionRef.current?.userId)) {
         const updatedUser = payload.user || {};
-        const refreshedSession = createSession(
-          {
-            id: sessionRef.current.userId,
-            name: updatedUser.name || sessionRef.current.name,
-            email: updatedUser.email || sessionRef.current.email,
-            role: updatedUser.role || sessionRef.current.role,
-          },
-          sessionRef.current.token
-        );
+        const roleChanged = updatedUser.role && updatedUser.role !== sessionRef.current.role;
+        const passwordChanged = Boolean(updates && updates.password);
+
+        // Role/password changes bump session_version on the server, which
+        // revokes the current cookie. Sign out cleanly instead of keeping a
+        // dead token in memory.
+        if (roleChanged || passwordChanged) {
+          await logout();
+          return { success: true, user: payload.user, reauth: true };
+        }
+
+        const refreshedSession = {
+          ...sessionRef.current,
+          name: updatedUser.name || sessionRef.current.name,
+          email: updatedUser.email || sessionRef.current.email,
+          role: updatedUser.role || sessionRef.current.role,
+        };
         setSession(refreshedSession);
+        try { sessionStorage.setItem('zashm_session', JSON.stringify(refreshedSession)); } catch (e) { /* ignore */ }
       }
 
       return { success: true, user: payload.user };
     } catch (err) {
       return { success: false, error: err.message || 'Could not update user' };
     }
-  }, [hasPermission, loadUsers]);
+  }, [hasPermission, loadUsers, logout]);
 
   const deleteUser = useCallback(async (id) => {
     if (!hasPermission('users.write')) return { success: false, error: 'Unauthorized' };

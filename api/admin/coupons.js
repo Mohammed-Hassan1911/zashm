@@ -6,7 +6,7 @@ const {
   handleOptions,
   readBody,
   clientIp,
-  rateLimit,
+  rateLimitShared,
   tooMany,
   requirePerm,
   supabaseAdmin,
@@ -33,7 +33,7 @@ async function listCoupons(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`admincouponread:${ip}`, 120, 60 * 1000);
+  const check = await rateLimitShared(`admincouponread:${ip}`, 120, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   res.setHeader('Cache-Control', 'no-store');
@@ -55,7 +55,7 @@ async function createCoupon(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminwrite:${ip}`, 60, 60 * 1000);
+  const check = await rateLimitShared(`adminwrite:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -75,13 +75,18 @@ async function createCoupon(req, res) {
       id: Number.isFinite(Number(input.id)) && String(input.id).trim() !== '' ? Number(input.id) : Date.now(),
       code: c.code,
       type: c.type,
+      // Keep both value columns identical: `value` is canonical, `discountValue`
+      // is the legacy name still read by older rows/tools.
       value: c.value,
+      discountValue: c.discountValue,
       active: c.active,
       description: c.description || '',
       startDate: c.startDate,
       endDate: c.endDate,
       usageLimit: c.usageLimit,
       usageCount: Number(input.usageCount || 0),
+      minOrderAmount: c.minOrderAmount,
+      maxDiscount: c.maxDiscount,
       createdAt: input.createdAt || new Date().toISOString(),
     };
     const { data, error } = await sb.from('coupons').insert([record]).select().single();
@@ -101,7 +106,7 @@ async function updateCoupon(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminwrite:${ip}`, 60, 60 * 1000);
+  const check = await rateLimitShared(`adminwrite:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -112,8 +117,18 @@ async function updateCoupon(req, res) {
   }
 
   const id = getId(req, body);
-  const updates = (body && body.updates) || {};
+  let updates = (body && body.updates) || {};
   if (!id) return json(res, 400, { error: 'Discount id is required' });
+
+  // `value` and `discountValue` are the same field under two names. If the
+  // console edits the legacy name, promote it to the canonical one so the
+  // merge below cannot keep the old value by mistake.
+  if (
+    Object.prototype.hasOwnProperty.call(updates, 'discountValue') &&
+    !Object.prototype.hasOwnProperty.call(updates, 'value')
+  ) {
+    updates = { ...updates, value: updates.discountValue };
+  }
 
   try {
     const sb = supabaseAdmin();
@@ -125,12 +140,21 @@ async function updateCoupon(req, res) {
     const normalized = validateCouponPayload(merged);
     if (!normalized) return json(res, 422, { error: 'Invalid discount data' });
 
-    const allowedKeys = ['code', 'type', 'value', 'active', 'description', 'startDate', 'endDate', 'usageLimit', 'usageCount'];
+    const allowedKeys = [
+      'code', 'type', 'value', 'discountValue', 'active', 'description',
+      'startDate', 'endDate', 'usageLimit', 'usageCount', 'minOrderAmount', 'maxDiscount',
+    ];
     const write = {};
     for (const key of allowedKeys) {
       if (Object.prototype.hasOwnProperty.call(updates, key) && normalized[key] !== undefined) {
         write[key] = normalized[key];
       }
+    }
+    // Never let the two value columns drift apart.
+    if (Object.prototype.hasOwnProperty.call(write, 'value') ||
+        Object.prototype.hasOwnProperty.call(write, 'discountValue')) {
+      write.value = normalized.value;
+      write.discountValue = normalized.value;
     }
     if (Object.keys(write).length === 0) return json(res, 400, { error: 'Nothing to update' });
 
@@ -152,7 +176,7 @@ async function deleteCoupon(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = rateLimit(`adminwrite:${ip}`, 60, 60 * 1000);
+  const check = await rateLimitShared(`adminwrite:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body = {};

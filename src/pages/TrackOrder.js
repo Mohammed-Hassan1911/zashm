@@ -21,19 +21,17 @@ export default function TrackOrder() {
   const [activeOrderId, setActiveOrderId] = useState('');
   const [currentOrder, setCurrentOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  const [missingToken, setMissingToken] = useState(false);
   const [loadingTrack, setLoadingTrack] = useState(false);
-  // 🎯 لقط الأوردر أوتوماتيكياً سواء من الـ Store أو من رابط المتصفح مباشرة
+  // 🎯 لقط الأوردر أوتوماتيكياً: رابط التتبع الآمن (?track=...&tk=...) له الأولوية
+  // على أي قيمة قديمة في الـ store (مثل نص بحث المنتجات).
   useEffect(() => {
-    if (storeSearchQuery) {
-      setActiveOrderId(storeSearchQuery.trim());
-      setInputOrderId(storeSearchQuery.trim());
-    } else {
-      const params = new URLSearchParams(window.location.search);
-      const idFromUrl = params.get('track');
-      if (idFromUrl) {
-        setActiveOrderId(idFromUrl.trim());
-        setInputOrderId(idFromUrl.trim());
-      }
+    const params = new URLSearchParams(window.location.search);
+    const idFromUrl = params.get('track');
+    const id = (idFromUrl || storeSearchQuery || '').trim();
+    if (id) {
+      setActiveOrderId(id);
+      setInputOrderId(id);
     }
   }, [storeSearchQuery]);
 
@@ -42,18 +40,29 @@ export default function TrackOrder() {
     if (!activeOrderId) {
       setCurrentOrder(null);
       setNotFound(false);
+      setMissingToken(false);
       return;
     }
     const id = activeOrderId.trim();
+    // SEC-16: the token in the secure link (?tk=...) is the credential. An
+    // order id on its own is never enough to look anything up.
+    const tk = (new URLSearchParams(window.location.search).get('tk') || '').trim();
+    if (!tk) {
+      setCurrentOrder(null);
+      setNotFound(false);
+      setMissingToken(true);
+      setLoadingTrack(false);
+      return;
+    }
     let cancelled = false;
     setLoadingTrack(true);
     setNotFound(false);
+    setMissingToken(false);
     setCurrentOrder(null);
 
     (async () => {
       try {
-        const tk = (new URLSearchParams(window.location.search).get('tk') || '').trim();
-        const qs = `/orders?track=${encodeURIComponent(id)}${tk ? `&tk=${encodeURIComponent(tk)}` : ''}`;
+        const qs = `/orders?track=${encodeURIComponent(id)}&tk=${encodeURIComponent(tk)}`;
         const payload = await api.get(qs);
         if (cancelled) return;
         if (payload && payload.found && payload.order) {
@@ -98,7 +107,7 @@ export default function TrackOrder() {
           Track Your Order
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>
-          Enter your Order ID received via WhatsApp to follow your live shipment status.
+          Open the secure tracking link sent with your order confirmation to follow your live shipment status.
         </p>
 
         <form onSubmit={handleSearchSubmit} style={{ position: 'relative', display: 'flex', gap: 8 }}>
@@ -143,13 +152,18 @@ export default function TrackOrder() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '30px 16px', background: 'var(--bg2)', borderRadius: 8, border: '1px solid var(--border)' }}>
 {loadingTrack ? (
             <p style={{ color: 'var(--text3)', fontSize: 14 }}>Loading your order...</p>
+          ) : missingToken ? (
+            <>
+              <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 500 }}>🔒 A secure tracking link is required.</p>
+              <p style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>For your privacy, orders can only be tracked through the secure link sent with your order confirmation.</p>
+            </>
           ) : notFound ? (
             <>
               <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 500 }}>⚠️ We couldn't find an order with ID: <span style={{ color: 'var(--gold)', fontFamily: 'monospace' }}>{activeOrderId}</span></p>
-              <p style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>Please double check the ID from your invoice or contact support.</p>
+              <p style={{ color: 'var(--text3)', fontSize: 12, marginTop: 4 }}>The link may be incomplete or no longer valid. Please contact support.</p>
             </>
           ) : (
-            <p style={{ color: 'var(--text3)', fontSize: 13 }}>Enter your order ID above to track it.</p>
+            <p style={{ color: 'var(--text3)', fontSize: 13 }}>Open the secure tracking link from your order confirmation.</p>
           )}
         </motion.div>
       )}
@@ -254,12 +268,7 @@ export default function TrackOrder() {
             </div>
           </div>
 
-          {currentOrder.access === 'status' ? (
-            <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, color: 'var(--text2)', fontSize: 13, lineHeight: 1.6 }}>
-              For privacy, order and delivery details are only available through the secure tracking link sent with your order confirmation.
-            </div>
-          ) : (
-            <>
+          <>
               {/* معلومات الشحن والتوصيل */}
               <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 14 }}>
                 <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid var(--border)', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -333,8 +342,7 @@ export default function TrackOrder() {
                   </div>
                 </div>
               </div>
-            </>
-          )}
+          </>
 
         </motion.div>
       )}

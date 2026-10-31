@@ -31,7 +31,9 @@ export function resolveRoute(location = window.location) {
 
   const normalizedPath = pathname.replace(/\/+$/, '') || '/';
   const page = Object.keys(STATIC_ROUTES).find((key) => STATIC_ROUTES[key] === normalizedPath);
-  return { page: page || 'home', productId: null, trackId: null };
+  // Unknown paths are a real 404 (both on the server via vercel.json rewrites
+  // and in the SPA). Never silently render the home page under a wrong URL.
+  return { page: page || 'notfound', productId: null, trackId: null };
 }
 
 export function pageUrl(page, selectedProduct, currentLocation = typeof window !== 'undefined' ? window.location : null) {
@@ -51,15 +53,8 @@ export function pageUrl(page, selectedProduct, currentLocation = typeof window !
 
 export function syncLocationToStore(set) {
   const route = resolveRoute();
-  const isKnownPath =
-    route.page !== 'home' ||
-    window.location.pathname === '/' ||
-    window.location.pathname.replace(/\/+$/, '') === '';
-
-  if (!isKnownPath) {
-    window.history.replaceState({ page: 'home' }, '', '/');
-  }
-
+  // Keep the URL as-is: unknown paths render the NotFound page instead of
+  // being silently rewritten to "/" (soft 404).
   set({ currentPage: route.page });
   return route;
 }
