@@ -284,7 +284,7 @@ export function CheckoutPage() {
     try {
       const result = await applyDiscount(cleanCoupon);
       if (result.success) {
-        toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
+        toast(`${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% offer' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
       } else {
         setCouponError(result.error ?? 'Invalid code');
       }
@@ -1021,7 +1021,7 @@ export function CheckoutPage() {
                   type="text" 
                   value={form.name ?? ''} 
                   onChange={e => update('name', e.target.value)} 
-                  placeholder="Mohammed Hassann"
+                  placeholder="Mohammed Hassan"
                   style={{ width:'100%', borderColor: errors.name ? 'var(--red)' : undefined }} 
                 />
                 {errors.name && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.name}</p>}
