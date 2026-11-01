@@ -134,12 +134,11 @@ ON CONFLICT (name) DO NOTHING;
 ### 4.3 إعدادات Vercel (لم تُنفَّذ)
 
 - Project → Settings → Environment Variables، لكل من **Production** و**Preview**:
-  - `UPSTASH_REDIS_REST_URL` (اختياري لكن موصى به)
-  - `UPSTASH_REDIS_REST_TOKEN`
-  - `TRACKING_TOKEN_TTL_HOURS` (اختياري؛ اتركه فارغًا للسلوك القديم)
+  - `UPSTASH_REDIS_REST_URL` و`UPSTASH_REDIS_REST_TOKEN` (اختياريان؛ عند غيابهما يستخدم الكود RPC قاعدة البيانات بعد تطبيق migration `supabase/rate_limit_storage.sql`).
+  - `TRACKING_TOKEN_TTL_HOURS` (اختياري؛ الافتراضي للروابط الجديدة 720 ساعة/30 يومًا).
 - تأكد أن `SUPABASE_SERVICE_ROLE_KEY` و`SESSION_SECRET` سيرفر فقط، ولا توجد نسخة `VITE_`/`REACT_APP_` منهما.
 - أعد النشر بعد أي تغيير.
-- بعد النشر، راقب absence/presence رسالة `Durable rate limit unavailable, using per-instance fallback` في logs؛ غيابها يعني أن Upstash يعمل.
+- طبّق migration الـRPC قبل الاعتماد على fallback قاعدة البيانات. ظهور `Shared rate limit unavailable` في logs يعني أن Upstash وRPC غير متاحين وأن الحماية تراجعت إلى عدادات لكل نسخة.
 
 ### 4.4 Supabase Dashboard (لم تُنفَّذ)
 
@@ -205,6 +204,7 @@ ON CONFLICT (name) DO NOTHING;
 - `supabase/session_revocation.sql`
 - `supabase/storage_hardening.sql`
 - `supabase/products_public_view.sql` (Phase 1 ثم Phase 3)
+- `supabase/rate_limit_storage.sql` (shared rate-limit fallback)
 - `supabase/verify_production_security.sql` (قراءة فقط)
 
 **العلم الوحيد الذي يُدخَل يدويًا بعد النشر:**
@@ -229,7 +229,7 @@ ON CONFLICT (name) DO NOTHING;
 | `session_revocation.sql` | لا تحذف `users.session_version` | الكود يعمل بدونه، لكن الحذف يلغي إبطال الجلسات. |
 | Storage | `SELECT public.zshm_restore_storage_policies();` من دور يدير `storage.objects` | لا تغيّر الملكية ولا تعطّل RLS. |
 | Upstash | إزالة المتغيرين وإعادة النشر | يعود fallback لكل نسخة، وليس تعطيلًا كاملًا. |
-| توكن التتبع | إزالة `TRACKING_TOKEN_TTL_HOURS` | الروابط القديمة تبقى صالحة. تدوير `SESSION_SECRET` يُبطل كل الروابط. |
+| توكن التتبع | إزالة `TRACKING_TOKEN_TTL_HOURS` | الروابط الجديدة تعود إلى مهلة 720 ساعة؛ الروابط القديمة تبقى صالحة. تدوير `SESSION_SECRET` يُبطل كل الروابط. |
 
 ---
 
@@ -237,8 +237,8 @@ ON CONFLICT (name) DO NOTHING;
 
 1. **F-13:** اختبار المتصفح المحلي للمسارات الأساسية والمقاسات تم؛ ما زال يلزم Preview أو staging لفحص Console/Network/CSP وE2E.
 2. **S-13 / H-03:** إثبات أن العرض لا يتجاوز RLS الحقيقي يحتاج `pg_policies` من الإنتاج.
-3. **O-12 / L-10 (SEC-24):** `reservedStock` بلا كاتب/دورة حياة. القرار المطلوب: إزالته من حساب التوفر والجداول، أو إضافة كاتب ودورة حياة موثقة. لم يُخترع أي كاتب.
-4. **O-11 / M-02:** حذف طلب به منتج محذوف نهائيًا قد يمنع استعادة مخزون السطور الأخرى. القرار: منع حذف المنتج المرتبط بطلبات غير ملغاة، أو استعادة جزئية + تقرير فروقات إلزامي.
+3. **SEC-24 / O-12 / L-10:** `reservedStock` مستبعد من حساب التوفر في الكود وRevision 8 من migration الطلبات؛ Production state غير متحقق. أبقِ العمود دون كاتب أو lifecycle.
+4. **O-11 / M-02:** المعالجات المحلية تستعيد مخزون كل المنتجات الموجودة وتتجاوز المفقود مع تحذير؛ يلزم التحقق من تطبيق migration Revision 3 على Production.
 5. **S-01 / S-05:** `security_invoker=false` وRLS deny-all قرارات مقصودة؛ لا تُغيَّر.
 6. **S-12 / M-04:** إعدادات Supabase Auth يدوية بالكامل.
 7. **الفهارس:** لا حذف قبل `pg_stat_user_indexes`.
@@ -248,7 +248,7 @@ ON CONFLICT (name) DO NOTHING;
 
 ## 9. معايير تحويل الحكم إلى Go
 
-- [ ] `npm test` = 0 failed و`npm run build` PASS (منفّذ محليًا: 817/817 + PASS).
+- [ ] `npm test` = 0 failed و`npm run build` PASS (آخر تحقق محلي موثق: 968/968 + PASS).
 - [ ] Pre-flight و`verify_production_security.sql` مطابقان للمتوقع في §5.
 - [ ] كل ملفات SQL طُبّقت بالترتيب، وPhase 3 نُفّذ بعد النشر والتحقق الشبكي فقط.
 - [ ] `anon` لا يقرأ `products` ولا `reservedStock`، ويقرأ `products_public` فقط.
@@ -279,3 +279,38 @@ ON CONFLICT (name) DO NOTHING;
 - Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **922 passed, 0 failed**
   (SQL suite actually ran). `npm run build` → success. `npm audit` → 0
   vulnerabilities. No configured server-only secret values were found in `build/`.
+
+## 11. Checkout and shared-rate-limit follow-up (local only)
+
+- Checkout reuses a cryptographically random, storage-persisted idempotency key
+  for retries; the API rejects requests without a valid key. Checkout also
+  states bilingually that payment is cash on delivery and no online payment is
+  collected.
+- Coupon creation always starts `usageCount` at zero; updates cannot change
+  this server-maintained counter.
+- Rate limiting uses Upstash when configured, falls back to the server-only
+  `zshm_rate_limit` Supabase RPC, then to bounded per-instance counters. The
+  additive `supabase/rate_limit_storage.sql` is not applied to any environment;
+  without it or healthy Upstash, limits remain per-instance.
+- `storage_hardening.sql` now creates a restrictive browser SELECT policy to
+  prevent listing product object names when the migration executor can manage
+  `storage.objects`; otherwise it reports the required Dashboard action.
+- `reservedStock` remains deliberately unused. The revised atomic order
+  migration must be applied on Production for this invariant to hold there.
+- Latest local verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` →
+  **968 passed, 0 failed** (temporary PostgreSQL 17 suite ran);
+  `npm run build` → success; `npm audit --omit=dev` → **0 vulnerabilities**.
+  The build contained no server-only environment variable names.
+- This follow-up changed or added: `.env.example`, `api/_lib.js`,
+  `api/admin/coupons.js`, `api/orders.js`, `docs/production-remediation-handoff.md`,
+  `docs/security-production-checklist.md`, `package.json`,
+  `scripts/test-checkout-idempotency.mjs`, `scripts/test-coupons.mjs`,
+  `scripts/test-edge-transport.mjs`, `scripts/test-final-hardening.mjs`,
+  `scripts/test-order-pricing.mjs`, `scripts/test-sql-concurrency.mjs`,
+  `src/lib/orderIdempotency.mjs`, `src/pages/CartPage.js`,
+  `supabase/rate_limit_storage.sql`, `supabase/storage_hardening.sql`, and
+  `supabase/verify_production_security.sql`.
+- No migrations, Vercel/Supabase settings, production data, deployment, or Git
+  history were changed. Auth, Storage, migration and deployment state remains
+  NOT VERIFIED; production launch is blocked until the documented rollout and
+  live verification are completed.

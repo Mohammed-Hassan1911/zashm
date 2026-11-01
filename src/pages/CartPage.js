@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
 import { filterGovernorates, getShippingCost, GOVERNORATE_AR, toCanonicalGovernorate } from '../lib/egyptCities';
+import { clearCheckoutIdempotencyKey, getCheckoutIdempotencyKey } from '../lib/orderIdempotency.mjs';
 
 // يطابق المحافظة المكتوبة (عربي/إنجليزي، بأي حالة أحرف) مع القائمة الرسمية،
 // ويعيد '' لو مفيش تطابق — يمنع إرسال مدينة حرة يرفضها السيرفر.
@@ -247,15 +248,6 @@ export function CheckoutPage() {
   // 🔒 الحارس الذري لمنع استدعاء الدالة مرتين بشكل متزامن في نفس الجزء من الثانية
   const isPlacingOrder = React.useRef(false);
 
-  // 🔑 مفتاح idempotency ثابت لكل جلسة Checkout: يُعاد استخدامه عند إعادة
-  // المحاولة بعد فشل الشبكة حتى لا يتكرر الطلب، ويُجدَّد تلقائيًا عند فتح
-  // صفحة Checkout جديدة (أي سلة جديدة) — يمنع الازدواج على مستوى قاعدة البيانات.
-  const idempotencyKey = React.useRef(
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
-  ).current;
-
   const subtotal = cartSubtotal() ?? 0;
   const discountAmount = cartDiscountAmount() ?? 0;
   const safeCart = cart ?? []; 
@@ -365,6 +357,7 @@ export function CheckoutPage() {
     setStockNotice([]);
 
     try {
+      const idempotencyKey = getCheckoutIdempotencyKey(safeCart);
       const sanitizedCustomer = sanitizeInput(form.name.trim());
       const sanitizedPhone = normalizeEgyptPhone(form.phone);
       const sanitizedPhoneAlt = form.phoneAlt ? normalizeEgyptPhone(form.phoneAlt) : ''; 
@@ -418,6 +411,7 @@ export function CheckoutPage() {
       // 🛑 تم حذف وإلغاء كود تكرار إرسال التليجرام من هنا نهائياً
       // العملية الآن تتم بأمان من داخل الـ Store لضمان إرسال رسالة واحدة فقط!
 
+      clearCheckoutIdempotencyKey(idempotencyKey);
       setSuccess(result.order);
       setSubmitting(false);
 
@@ -1262,6 +1256,30 @@ export function CheckoutPage() {
                   <span style={{ fontSize:13 }}>Total</span>
                   <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 20 }}>EGP {(finalTotal ?? 0).toLocaleString()}</span>
                 </div>
+              </div>
+
+              <div
+                role="group"
+                aria-label="Payment method"
+                style={{
+                  marginTop: 14,
+                  padding: '12px',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  background: 'var(--bg2)',
+                  fontSize: 12,
+                  lineHeight: 1.7,
+                }}
+              >
+                <strong style={{ display: 'block', marginBottom: 4, color: 'var(--gold)' }}>
+                  Payment method / طريقة الدفع
+                </strong>
+                <span>
+                  Cash on delivery. Pay the courier when your order arrives, after inspection. No online payment is taken when placing this order.
+                </span>
+                <span dir="rtl" style={{ display: 'block', marginTop: 4 }}>
+                  الدفع عند الاستلام. ادفع للمندوب عند وصول الطلب بعد معاينته. لن يتم تحصيل أي مبلغ إلكتروني عند تأكيد الطلب.
+                </span>
               </div>
               
               <motion.button 

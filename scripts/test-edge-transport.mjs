@@ -36,7 +36,8 @@ const root = new URL('..', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
 
 // ─── Fake database (coupons only) ───────────────────────────────────────────
-const state = { coupons: new Map(), failQuery: false };
+const state = { coupons: new Map(), failQuery: false, rateLimitRpc: false };
+const rateCounters = new Map();
 
 function couponRow(over = {}) {
   return {
@@ -56,6 +57,45 @@ function couponRow(over = {}) {
 }
 
 const sb = {
+  async rpc(name, args) {
+    if (name !== 'zshm_rate_limit' || !state.rateLimitRpc) {
+      return { data: null, error: { code: 'RPC_UNAVAILABLE' } };
+    }
+    const now = Date.now();
+    let counter = rateCounters.get(args.p_key);
+    if (args.p_action === 'reset') {
+      rateCounters.delete(args.p_key);
+      return { data: { allowed: true, count: 0, remaining: args.p_max_attempts, resetIn: 0 }, error: null };
+    }
+    if (args.p_action === 'peek') {
+      if (!counter || counter.resetAt <= now) {
+        return { data: { allowed: true, count: 0, remaining: args.p_max_attempts, resetIn: 0 }, error: null };
+      }
+      return {
+        data: {
+          allowed: counter.count <= args.p_max_attempts,
+          count: counter.count,
+          remaining: Math.max(0, args.p_max_attempts - counter.count),
+          resetIn: Math.ceil((counter.resetAt - now) / 1000),
+        },
+        error: null,
+      };
+    }
+    if (!counter || counter.resetAt <= now) {
+      counter = { count: 0, resetAt: now + args.p_window_seconds * 1000 };
+    }
+    counter.count += 1;
+    rateCounters.set(args.p_key, counter);
+    return {
+      data: {
+        allowed: counter.count <= args.p_max_attempts,
+        count: counter.count,
+        remaining: Math.max(0, args.p_max_attempts - counter.count),
+        resetIn: Math.ceil((counter.resetAt - now) / 1000),
+      },
+      error: null,
+    };
+  },
   from(table) {
     const q = {
       _code: null,
@@ -183,6 +223,16 @@ console.log('\n[2] storage hardening migration');
     'removed policies are backed up verbatim');
   ok(/CREATE OR REPLACE FUNCTION public\.zshm_restore_storage_policies/.test(sql),
     'a restore function is provided');
+  ok(/CREATE POLICY zshm_products_no_public_listing[\s\S]{0,300}AS RESTRICTIVE[\s\S]{0,250}USING \(bucket_id <> 'products'\)/.test(sql),
+    'restrictive policy denies browser listing of product objects without affecting public downloads');
+  const rateLimitSql = read('supabase/rate_limit_storage.sql');
+  ok(/CREATE OR REPLACE FUNCTION public\.zshm_rate_limit/.test(rateLimitSql),
+    'shared database rate-limit RPC migration is present');
+  ok(/REVOKE ALL ON FUNCTION public\.zshm_rate_limit[\s\S]*GRANT EXECUTE ON FUNCTION public\.zshm_rate_limit[\s\S]*TO service_role/.test(rateLimitSql),
+    'shared rate-limit RPC is restricted to service_role');
+  const libSource = read('api/_lib.js');
+  ok(/databaseRateLimit\(key, maxAttempts, windowSec, 'consume'\)/.test(libSource),
+    'database rate limiter is used when Upstash is missing or fails');
   ok(/zshm_storage_policy_scope_is_products/.test(sql),
     'only provably products-only expressions qualify');
   ok(/IF v_required\s+AND v_scope_ok[\s\S]{0,3000}DROP POLICY/.test(sql),
@@ -211,6 +261,18 @@ const realFetch = globalThis.fetch;
   eq(blocked.allowed, false, 'fallback blocks over the limit');
   ok(blocked.resetIn > 0, 'fallback reports a reset window');
 
+  // The SQL RPC is the shared fallback when Upstash is missing or unavailable.
+  state.rateLimitRpc = true;
+  const dbKey = `database-fallback:${Date.now()}`;
+  const dbFirst = await lib.rateLimitShared(dbKey, 2, 60000);
+  const dbSecond = await lib.rateLimitShared(dbKey, 2, 60000);
+  const dbBlocked = await lib.rateLimitShared(dbKey, 2, 60000);
+  eq([dbFirst.allowed, dbSecond.allowed, dbBlocked.allowed], [true, true, false],
+    'database RPC enforces a shared limit when Upstash is absent');
+  eq((await lib.rateLimitPeekShared(dbKey)).count, 3, 'database RPC peek does not increment the counter');
+  await lib.resetRateLimitShared(dbKey);
+  eq((await lib.rateLimitPeekShared(dbKey)).count, 0, 'database RPC reset clears the shared counter');
+
   // Upstash path.
   process.env.UPSTASH_REDIS_REST_URL = 'https://redis.example/';
   process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
@@ -238,8 +300,11 @@ const realFetch = globalThis.fetch;
   eq(peek.resetIn, 0, 'peek reports an unknown TTL as 0');
 
   globalThis.fetch = async () => { throw new Error('redis down'); };
-  const fellBack = await lib.rateLimitShared(`redis-down:${Date.now()}`, 1, 60000);
-  eq(fellBack.allowed, true, 'Redis outage falls back to the in-memory limiter instead of failing');
+  const redisDownKey = `redis-down:${Date.now()}`;
+  const fellBack = await lib.rateLimitShared(redisDownKey, 1, 60000);
+  eq(fellBack.allowed, true, 'Redis outage falls back to the shared database limiter');
+  const fellBackAgain = await lib.rateLimitShared(redisDownKey, 1, 60000);
+  eq(fellBackAgain.allowed, false, 'database fallback retains the limit during a Redis outage');
 
   // A pipeline can return 200 with an error attached to one command (bad auth,
   // wrong type, ...). That must be treated as an outage, not as "no counter".
@@ -258,6 +323,7 @@ const realFetch = globalThis.fetch;
 
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  state.rateLimitRpc = false;
   globalThis.fetch = realFetch;
 }
 

@@ -61,7 +61,7 @@ async function placeOrder(req, res) {
 
   const rawKey = body && body.idempotencyKey;
   const idempotencyKey = typeof rawKey === 'string' && rawKey.trim() !== '' ? rawKey.trim() : null;
-  if (idempotencyKey !== null && !/^[A-Za-z0-9._-]{8,64}$/.test(idempotencyKey)) {
+  if (idempotencyKey === null || !/^[A-Za-z0-9._-]{8,64}$/.test(idempotencyKey)) {
     return json(res, 422, { success: false, error: 'Invalid order data', errors: ['Your checkout session expired. Please refresh the page and try again.'] });
   }
 

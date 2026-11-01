@@ -258,6 +258,23 @@ BEGIN
 
   IF NOT v_can_manage THEN
     RAISE WARNING 'Role % cannot manage storage.objects (not owner and no owner privileges). DROP POLICY will be skipped; products-only policies will be listed for manual removal.', current_user;
+    RAISE WARNING 'MANUAL ACTION REQUIRED: create restrictive SELECT policy zshm_products_no_public_listing for anon, authenticated with USING (bucket_id <> ''products'') in Supabase Dashboard > Storage > Policies.';
+  ELSE
+    IF NOT EXISTS (
+      SELECT 1
+        FROM pg_policies
+       WHERE schemaname = 'storage'
+         AND tablename = 'objects'
+         AND policyname = 'zshm_products_no_public_listing'
+    ) THEN
+      CREATE POLICY zshm_products_no_public_listing
+        ON storage.objects
+        AS RESTRICTIVE
+        FOR SELECT
+        TO anon, authenticated
+        USING (bucket_id <> 'products');
+      RAISE NOTICE 'Created restrictive policy zshm_products_no_public_listing: browser roles cannot list products objects; public object downloads remain available.';
+    END IF;
   END IF;
 
   FOR p IN
@@ -369,6 +386,7 @@ END $$;
 --   1. anon list  → must be 401/403/empty, not a list of filenames;
 --   2. existing product images still load via /storage/v1/object/public/products/...;
 --   3. admin upload from the console still succeeds (service role bypasses RLS).
+--   4. anon listing of storage.objects for bucket_id='products' returns no rows.
 
 -- ── ROLLBACK ─────────────────────────────────────────────────────────────────
 -- Recreate the exact policies backed up by this file (recommended):
@@ -378,3 +396,4 @@ END $$;
 --   UPDATE storage.buckets
 --      SET file_size_limit = NULL, allowed_mime_types = NULL
 --    WHERE id = 'products';
+--   DROP POLICY IF EXISTS zshm_products_no_public_listing ON storage.objects;

@@ -17,11 +17,11 @@ They are idempotent where possible and none of them delete rows.
 
 | # | File | What it changes |
 |---|------|-----------------|
-| 1 | `supabase/atomic_place_order.sql` (Revision 7) | Replaces order placement RPC: aggregates demand (per variant for variant products, per product for products without variants), stock decrement that keeps `stock = sum(variantStock)`, coupon lock/usage increment (only after a successful INSERT), `inactive_product` + `coupon_changed` rejects, safe JSON parsing (no raw SQL errors), and cart-signature comparison when an idempotency key races (`idempotency_conflict`, never a false duplicate). |
-| 2 | `supabase/atomic_order_lifecycle.sql` | Adds `atomic_set_order_status` / `atomic_delete_order` (status changes + stock/coupon restore inside one transaction), the legacy-safe item parsers and the strict `zshm_adjust_coupon_usage` helper (service-role grants are defined here). Apply after #1 because it calls `atomic_adjust_stock`. |
+| 1 | `supabase/atomic_place_order.sql` (Revision 8) | Replaces order placement RPC: aggregates demand (per variant for variant products, per product for products without variants), ignores unused `reservedStock`, keeps `stock = sum(variantStock)`, increments coupon usage only after a successful INSERT, rejects inactive products/changed coupons, safely parses JSON, and compares cart signatures for idempotent retries. |
+| 2 | `supabase/atomic_order_lifecycle.sql` | Adds `atomic_set_order_status` / `atomic_delete_order` (status changes + stock/coupon restore inside one transaction), legacy-safe item parsers, partial restore for missing products/variants, and the strict `zshm_adjust_coupon_usage` helper. Apply after #1 because it calls `atomic_adjust_stock`. |
 | 3 | `supabase/admin_protection.sql` | Trigger that refuses to demote/delete the last admin (transaction advisory lock; covered by a real two-connection test). |
 | 4 | `supabase/security_hardening.sql` | Function `search_path` pinning / privilege revokes; inspects every existing `auth.users` trigger and refuses to add a second provisioning trigger. It never drops/replaces an existing trigger and no longer defines a duplicate last-admin function. |
-| 5 | `supabase/storage_hardening.sql` | `products` bucket: 5 MB limit, image MIME allow-list, RLS. Drops only policies provably scoped to `products`; blanket/other-bucket policies are kept for manual review. If the SQL role does not own `storage.objects` (normal in Supabase), it never runs `ALTER TABLE`/`DROP POLICY`; it reports the exact products-only policies for removal in **Dashboard > Storage > Policies**. Every policy dropped by the script is backed up verbatim and restorable with `zshm_restore_storage_policies()`. |
+| 5 | `supabase/storage_hardening.sql` | `products` bucket: 5 MB limit, image MIME allow-list, RLS, and a restrictive policy preventing browser roles from listing product filenames while retaining public image downloads. Drops only policies provably scoped to `products`; blanket/other-bucket policies are kept for manual review. If the SQL role does not own `storage.objects` (normal in Supabase), it never runs `ALTER TABLE`/`DROP POLICY`; it reports the exact products-only policies for removal in **Dashboard > Storage > Policies**. Every policy dropped by the script is backed up verbatim and restorable with `zshm_restore_storage_policies()`. |
 | 6 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide`; `reservedStock` is not in it, and `active/tags/rating/reviews` are not selected), grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
 
 Two further files are required but are **not** counted in the six above:
@@ -34,7 +34,14 @@ Two further files are required but are **not** counted in the six above:
   copied cookie stops working immediately (all of that user's sessions are
   revoked). Without the migration, logout only clears cookies and a stolen
   cookie can live up to the 4-hour token TTL.
+- `supabase/rate_limit_storage.sql` — optional shared Supabase RPC fallback for
+  rate limiting when Upstash is absent or unavailable. Apply and verify it
+  before relying on database-backed limits. Without this migration and a
+  healthy Upstash instance, limits are per warm serverless instance.
 
+Deploy the updated frontend and `/api/orders` together: the API now requires
+the frontend's persistent idempotency key. Verify the atomic order-placement
+migration is applied before accepting production orders.
 
 After #6, verify with an **anon** key (not the service role):
 
@@ -79,38 +86,17 @@ Rollback for #6 is at the bottom of the file. If you roll it back, also revert
 
 ---
 
-## 2. SEC-24 — `reservedStock` has no lifecycle (DECISION REQUIRED)
+## 2. SEC-24 — `reservedStock` is intentionally unused
 
-**Status: not fixed. This is a schema/product decision, not a code bug.**
+**Local status: fixed and covered by tests. Production status: not verified.**
 
-What exists today:
-
-- `products.reservedStock` is read as "unavailable stock" by
-  `atomic_place_order` and by the cart (`stock - reservedStock`).
-- Admin product creation writes `reservedStock = 0`.
-- **No code ever increments it.** There is also no column recording when a
-  reservation started, so a stale reservation could never expire.
-- After the SEC-27 view, the storefront cannot read the field at all; the server
-  remains the only place it is used.
-
-Consequence: the counter is effectively always `0`, so it does not reserve
-anything. COD orders decrement real stock immediately; there is no "hold until
-delivery" step.
-
-Options (pick one before changing the schema):
-
-1. **Remove the concept** — drop `reservedStock` from the availability math and
-   delete the column in a later migration. Simplest; current behaviour already
-   matches this.
-2. **Implement real reservations** — add `reservedAt timestamptz`, increment on
-   order placement, decrement on delivery/cancel, and add a scheduled job that
-   releases reservations older than N hours. This needs a job runner (pg_cron
-   or an external cron) and a product decision on the timeout.
-3. **Leave as-is** — the column stays dormant. It is hidden from clients by
-   SEC-27, so it is no longer an information leak.
-
-No migration for this is included, because choosing (2) without the timeout and
-job infrastructure would silently strand stock.
+The storefront and order API do not subtract `reservedStock`; availability is
+based on `stock` or the selected `variantStock` entry. Nothing writes or expires
+reservations, so adding a reservation lifecycle would be a separate product
+decision. Keep the legacy column for compatibility and do not add a writer.
+`supabase/atomic_place_order.sql` Revision 8 must be applied and verified on
+Production before relying on this behavior there. COD orders deduct real stock
+atomically at placement; no inventory is held until delivery.
 
 ---
 
@@ -158,10 +144,12 @@ Preview as appropriate. Values are not stored in the repo.
 | `PUBLIC_BASE_URL` | recommended | Origin used in tracking links. Example: `https://<your-domain>`. |
 | `UPSTASH_REDIS_REST_URL` | optional | Enables the shared/durable rate limiter. |
 | `UPSTASH_REDIS_REST_TOKEN` | optional | Token for the above. |
-| `TRACKING_TOKEN_TTL_HOURS` | optional | Empty = legacy non-expiring 32-hex tracking tokens. Positive number = newly generated links expire after that many hours; old links keep working. Rotating `SESSION_SECRET` still invalidates all links. |
+| `TRACKING_TOKEN_TTL_HOURS` | optional | Unset/empty = new tracking links expire after 720 hours (30 days). A positive number overrides that lifetime. Previously issued legacy links remain valid; rotating `SESSION_SECRET` invalidates all links. |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional | Order notifications. |
 
-Without Upstash the limiter still works, but only per warm serverless instance.
+Upstash is the primary shared limiter when configured. The database RPC migration
+is used when Upstash is absent or unavailable. If neither shared provider is
+available, the bounded limiter is only per warm serverless instance.
 
 **Exact Upstash setup (manual, not performed):**
 
@@ -171,9 +159,10 @@ Without Upstash the limiter still works, but only per warm serverless instance.
 3. In Vercel: Project → Settings → Environment Variables → add both variables
    for **Production** and **Preview**, then redeploy.
 4. Verify no `VITE_`/`REACT_APP_` copy exists (it would ship to the browser).
-5. Check the Vercel function logs for `Durable rate limit unavailable` — it
-   should disappear after the redeploy. The limiter always falls back to the
-   per-instance guard instead of failing open completely.
+5. Apply `supabase/rate_limit_storage.sql` before relying on its database
+   fallback. Check Vercel logs for `Shared rate limit unavailable` and confirm
+   neither shared provider is failing; that warning means limits have degraded
+   to per-instance counters.
 
 Verification: log in as admin, open an order, copy its tracking link, and check
 that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
@@ -185,7 +174,7 @@ that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
 
 | ID | Status | Note |
 |----|--------|------|
-| SEC-24 | Open (decision) | `reservedStock` has no writer/expiry — see §2. |
+| SEC-24 | Fixed locally; production pending | `reservedStock` is intentionally unused — see §2; verify atomic migration Revision 8 on Production. |
 | SEC-28 | Open (manual) | Supabase Auth settings — see §3. |
 | SEC-07 | Mitigated | `/api/coupons/validate` still returns the discount value so the cart can show it. It is rate-limited (10/min/IP) and lockout-protected (5 failures/15 min per IP+code), and the server recomputes the discount at checkout. |
 | Public coupon metadata | Accepted | The endpoint reveals whether a code exists and its value. This is required for the cart UX and is bounded by the limits above. |
@@ -194,12 +183,12 @@ that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
 
 ## 6. Data-loss warnings before applying
 
-- **Deleting an order restores stock.** If a product row was permanently deleted,
-  `atomic_adjust_stock` validates all products before writing any, so **no line is
-  restored** for that order: `stockRestored = false` and the API returns a
-  `missing_product` warning. This is permanent inventory loss for the other
-  lines; reconcile manually. Prefer cancelling an order before deleting the
-  product when a later restore may be needed.
+- **Deleting an order with a missing product.** The current local migrations
+  partially restore stock for every existing product/variant and report a
+  `missing_product` / `missing_variant` warning for skipped lines. The removed
+  product's stock cannot be restored after its row is deleted. Verify
+  `atomic_order_lifecycle.sql` Revision 3 and the matching `atomic_place_order`
+  migration are applied before relying on partial restoration in Production.
 - **Storage policy backup.** `storage_hardening.sql` never drops a blanket policy
   (`USING (true)`) or a policy that mentions another bucket; it reports them with
   `NOTICE` for manual review. Only `products`-scoped policies are removed, after

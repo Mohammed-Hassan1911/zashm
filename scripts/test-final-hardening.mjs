@@ -16,6 +16,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import Module from 'node:module';
+import crypto from 'node:crypto';
 
 const require = createRequire(import.meta.url);
 
@@ -217,8 +218,12 @@ console.log('\n[4] secure order tracking');
     total: 100,
   }];
 
+  delete process.env.TRACKING_TOKEN_TTL_HOURS;
   const token = lib.trackToken(orderId);
-  ok(/^[0-9a-f]{32}$/.test(token), 'tracking token is 32 hex chars');
+  ok(/^v1\.\d{1,16}\.[0-9a-f]{32}$/.test(token), 'new tracking token is versioned by default');
+  const defaultExpiry = Number(token.split('.')[1]);
+  ok(defaultExpiry > Date.now() && defaultExpiry <= Date.now() + 30 * 24 * 60 * 60 * 1000 + 5000,
+    'default tracking token lifetime is 30 days');
   ok(lib.verifyTrackToken(orderId, token), 'correct token verifies');
   ok(!lib.verifyTrackToken(orderId, token.replace(/^./, (c) => (c === 'a' ? 'b' : 'a'))), 'wrong token rejected');
   ok(!lib.verifyTrackToken(orderId, ''), 'empty token rejected');
@@ -226,11 +231,12 @@ console.log('\n[4] secure order tracking');
 
   const url = lib.trackingUrlFor(orderId);
   ok(url.includes(`track=${encodeURIComponent(orderId)}`), 'tracking URL carries the id');
-  ok(url.includes(`tk=${token}`), 'tracking URL carries the token');
+  ok(lib.verifyTrackToken(orderId, new URL(url).searchParams.get('tk')), 'tracking URL carries a valid token');
 
-  // Optional expiring tokens (TRACKING_TOKEN_TTL_HOURS). Legacy links must keep
-  // working, and an explicit expiry must be honoured.
+  // Configured expiries are honoured, while legacy links remain compatible.
   {
+    const legacy = crypto.createHmac('sha256', process.env.SESSION_SECRET)
+      .update(`track:${orderId}`).digest('hex').slice(0, 32);
     const before = process.env.TRACKING_TOKEN_TTL_HOURS;
     process.env.TRACKING_TOKEN_TTL_HOURS = '24';
     const expiring = lib.trackToken(orderId);
@@ -240,7 +246,7 @@ console.log('\n[4] secure order tracking');
     ok(lib.verifyTrackToken(orderId, expiring), 'versioned token verifies');
     ok(!lib.verifyTrackToken(orderId, expiring.replace(/\.([a-f0-9])/, (m, c) => `.${c === 'a' ? 'b' : 'a'}`)),
       'tampered versioned token rejected');
-    ok(lib.verifyTrackToken(orderId, token), 'legacy token still verifies while TTL env is set');
+    ok(lib.verifyTrackToken(orderId, legacy), 'legacy token still verifies while TTL env is set');
 
     const expired = lib.trackToken(orderId, Date.now() - 1000);
     ok(/^v1\./.test(expired), 'explicit expiry creates a versioned token');
@@ -367,14 +373,15 @@ console.log('\n[7] products_public view');
 }
 
 // ─── [8] SEC-24 / SEC-28 documentation ──────────────────────────────────────
-console.log('\n[8] outstanding production decisions');
+console.log('\n[8] production rollout decisions');
 {
   const docPath = 'docs/security-production-checklist.md';
   ok(existsSync(new URL(docPath, root)), 'production checklist exists');
   const doc = read(docPath);
   ok(/SEC-24/.test(doc), 'SEC-24 is documented');
   ok(/SEC-28/.test(doc), 'SEC-28 is documented');
-  ok(/DECISION REQUIRED/i.test(doc), 'reservedStock needs an explicit schema decision');
+  ok(/reservedStock` is intentionally unused/.test(doc), 'reservedStock remains explicitly excluded from availability');
+  ok(/Production status: not verified/.test(doc), 'reservedStock production migration status is not assumed');
   ok(/sign ?ups?/i.test(doc) && /disable/i.test(doc), 'signup shutdown is documented');
   ok(/Nothing in this file has been applied/i.test(doc), 'the checklist states nothing was applied');
 
@@ -447,6 +454,9 @@ console.log('\n[10] public SEO and checkout accessibility');
   const cartPage = read('src/pages/CartPage.js');
   ok(/<h1[^>]*>Your bag is empty<\/h1>/.test(cartPage),
     'empty checkout state has a semantic page heading');
+  ok(/Cash on delivery/.test(cartPage) && /No online payment is taken/.test(cartPage),
+    'checkout states the real COD method and that online payment is not collected');
+  ok(/الدفع عند الاستلام/.test(cartPage), 'checkout payment terms are bilingual');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

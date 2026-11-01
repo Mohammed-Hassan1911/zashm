@@ -275,14 +275,12 @@ function resetRateLimit(key) {
   rateBuckets.delete(key);
 }
 
-// ─── DURABLE RATE LIMITING (optional Upstash Redis, in-memory fallback) ─────
+// ─── SHARED RATE LIMITING (Upstash Redis, Supabase RPC, local fallback) ─────
 // The in-memory buckets above only cover one warm serverless instance, so a
 // determined attacker can multiply attempts by hitting fresh instances. When
-// UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are configured, counters
-// move to Upstash over its REST API (no SDK dependency, works on the Edge and
-// Node runtimes). If the call fails or the variables are absent, we fall back
-// to the SAME in-memory limiter — the API never fails open completely and never
-// becomes unavailable just because Redis is down.
+// configured, Upstash is primary; the server-only Supabase RPC is the shared
+// fallback. If neither shared provider is available, the bounded local guard
+// keeps requests available while emitting a health warning.
 function upstashConfig() {
   const url = env('UPSTASH_REDIS_REST_URL');
   const token = env('UPSTASH_REDIS_REST_TOKEN');
@@ -318,7 +316,7 @@ async function redisPipeline(cmds) {
 
 // A failed command is returned per-command by the Upstash pipeline, so a
 // silent `null` would look like "no counter" and fail open. Treat it as an
-// outage and fall back to the in-memory guard instead.
+// outage and use the shared database fallback.
 function redisValue(row) {
   if (row && Object.prototype.hasOwnProperty.call(row, 'error')) {
     throw new Error('Upstash command failed');
@@ -330,18 +328,55 @@ function redisKey(key) {
   return `zashm:rl:${String(key).slice(0, 200)}`;
 }
 
+async function databaseRateLimit(key, maxAttempts, windowSec, action) {
+  const hashedKey = crypto.createHash('sha256').update(String(key)).digest('hex');
+  const { data, error } = await supabaseAdmin().rpc('zshm_rate_limit', {
+    p_key: hashedKey,
+    p_max_attempts: maxAttempts,
+    p_window_seconds: windowSec,
+    p_action: action,
+  });
+  if (error) throw error;
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result || typeof result !== 'object') throw new Error('Database rate limiter returned an invalid response');
+  return result;
+}
+
+function formatDatabaseRateLimit(result) {
+  const count = Number(result && result.count);
+  const resetIn = Number(result && result.resetIn);
+  if (!Number.isFinite(count) || !Number.isFinite(resetIn) ||
+      typeof result.allowed !== 'boolean') {
+    throw new Error('Database rate limiter returned invalid counters');
+  }
+  return {
+    allowed: result.allowed,
+    remaining: Math.max(0, Number(result.remaining) || 0),
+    resetIn,
+  };
+}
+
 /**
  * Async, durable counterpart of rateLimit(). Always resolves to the same
  * { allowed, remaining, resetIn } shape. Use this in HTTP handlers; rateLimit()
  * stays synchronous for tests and as the fallback.
  *
- * If Upstash is not configured, the values are NOT durable: they only protect
- * one warm serverless instance. See docs/security-production-checklist.md for
- * the exact Vercel environment variables that make this shared.
+ * Counters are shared when Upstash is configured or the Supabase RPC migration
+ * is applied. Without either provider, the bounded fallback is per-instance.
+ * See docs/security-production-checklist.md for rollout requirements.
  */
 async function rateLimitShared(key, maxAttempts, windowMs) {
-  if (!upstashConfig()) return rateLimit(key, maxAttempts, windowMs);
   const windowSec = Math.max(1, Math.ceil(windowMs / 1000));
+  if (!upstashConfig()) {
+    try {
+      const result = await databaseRateLimit(key, maxAttempts, windowSec, 'consume');
+      return formatDatabaseRateLimit(result);
+    } catch (e) {
+      warnRateLimitOnce('Shared rate limit unavailable, using per-instance fallback');
+      return rateLimit(key, maxAttempts, windowMs);
+    }
+  }
+
   try {
     const rk = redisKey(key);
     const out = await redisPipeline([
@@ -368,15 +403,33 @@ async function rateLimitShared(key, maxAttempts, windowMs) {
       resetIn,
     };
   } catch (e) {
-    // Redis outage must not take the store down. Keep the per-instance guard.
-    warnRateLimitOnce('Durable rate limit unavailable, using per-instance fallback');
-    return rateLimit(key, maxAttempts, windowMs);
+    try {
+      return formatDatabaseRateLimit(
+        await databaseRateLimit(key, maxAttempts, windowSec, 'consume')
+      );
+    } catch (databaseError) {
+      // Neither shared provider is available. Keep the store available, but
+      // retain a bounded per-instance guard and emit a health warning.
+      warnRateLimitOnce('Shared rate limit unavailable, using per-instance fallback');
+      return rateLimit(key, maxAttempts, windowMs);
+    }
   }
 }
 
 /** Read a durable counter without incrementing it (used by the coupon lockout). */
 async function rateLimitPeekShared(key) {
   if (!upstashConfig()) {
+    try {
+      const result = await databaseRateLimit(key, 1, 60, 'peek');
+      const count = Number(result.count);
+      const resetIn = Number(result.resetIn);
+      if (!Number.isFinite(count) || !Number.isFinite(resetIn)) {
+        throw new Error('Database rate limiter returned invalid counters');
+      }
+      return { count, resetIn };
+    } catch (e) {
+      warnRateLimitOnce('Shared rate limit unavailable, using per-instance fallback');
+    }
     const b = rateBuckets.get(key);
     if (!b || b.resetAt < Date.now()) return { count: 0, resetIn: 0 };
     return { count: b.count, resetIn: Math.ceil((b.resetAt - Date.now()) / 1000) };
@@ -388,23 +441,39 @@ async function rateLimitPeekShared(key) {
     const ttl = Number(redisValue(out && out[1]));
     return { count, resetIn: Number.isFinite(ttl) && ttl > 0 ? ttl : 0 };
   } catch (e) {
-    warnRateLimitOnce('Durable rate limit unavailable, using per-instance fallback');
-    const b = rateBuckets.get(key);
-    if (!b || b.resetAt < Date.now()) return { count: 0, resetIn: 0 };
-    return { count: b.count, resetIn: Math.ceil((b.resetAt - Date.now()) / 1000) };
+    try {
+      const result = await databaseRateLimit(key, 1, 60, 'peek');
+      const count = Number(result.count);
+      const resetIn = Number(result.resetIn);
+      if (!Number.isFinite(count) || !Number.isFinite(resetIn)) {
+        throw new Error('Database rate limiter returned invalid counters');
+      }
+      return { count, resetIn };
+    } catch (databaseError) {
+      warnRateLimitOnce('Shared rate limit unavailable, using per-instance fallback');
+      const b = rateBuckets.get(key);
+      if (!b || b.resetAt < Date.now()) return { count: 0, resetIn: 0 };
+      return { count: b.count, resetIn: Math.ceil((b.resetAt - Date.now()) / 1000) };
+    }
   }
 }
 
 /** Clear a counter in both stores (best effort). */
 async function resetRateLimitShared(key) {
   rateBuckets.delete(key);
-  if (!upstashConfig()) return;
-  try {
-    const out = await redisPipeline([['DEL', redisKey(key)]]);
-    redisValue(out && out[0]);
-  } catch (e) {
-    /* best effort */
+  let cleared = false;
+  if (upstashConfig()) {
+    try {
+      const out = await redisPipeline([['DEL', redisKey(key)]]);
+      redisValue(out && out[0]);
+      cleared = true;
+    } catch (e) { /* try the database fallback */ }
   }
+  try {
+    await databaseRateLimit(key, 1, 60, 'reset');
+    cleared = true;
+  } catch (e) { /* local counter was already cleared */ }
+  if (!cleared) warnRateLimitOnce('Shared rate limit reset unavailable; local counter was cleared');
 }
 
 function tooMany(res, resetIn, extra) {
@@ -666,10 +735,9 @@ async function verifyPassword(password, stored) {
 //
 // Legacy links are 32 hex chars: HMAC(`track:<id>`) truncated. They never
 // expire, which is why rotating SESSION_SECRET is the only way to invalidate
-// them. New links can opt into expiry with TRACKING_TOKEN_TTL_HOURS: the token
-// becomes `v1.<expiry-ms>.<hmac>` while every legacy token keeps verifying, so
-// already-sent WhatsApp links do not break. With the variable unset, behaviour
-// is byte-for-byte the previous format.
+// them. New links use `v1.<expiry-ms>.<hmac>` and expire after 30 days by
+// default; every legacy token keeps verifying so sent WhatsApp links do not
+// break. TRACKING_TOKEN_TTL_HOURS can set a different positive duration.
 function legacyTrackToken(orderId) {
   const secret = requireSecret('SESSION_SECRET');
   return hmac(`track:${orderId}`, secret).toString('hex').slice(0, 32);
@@ -682,9 +750,10 @@ function expiringTrackToken(orderId, expiresAt) {
 
 function trackingTtlMs() {
   const raw = env('TRACKING_TOKEN_TTL_HOURS');
-  if (!raw) return 0;
-  const hours = Number(raw);
-  if (!Number.isFinite(hours) || hours <= 0) return 0;
+  const configuredHours = raw ? Number(raw) : 720;
+  const hours = Number.isFinite(configuredHours) && configuredHours > 0
+    ? configuredHours
+    : 720;
   // Cap at ten years so a typo cannot create effectively-permanent tokens.
   return Math.min(Math.floor(hours * 60 * 60 * 1000), 10 * 365 * 24 * 60 * 60 * 1000);
 }

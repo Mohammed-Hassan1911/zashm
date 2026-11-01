@@ -84,7 +84,7 @@ async function createCoupon(req, res) {
       startDate: c.startDate,
       endDate: c.endDate,
       usageLimit: c.usageLimit,
-      usageCount: Number(input.usageCount || 0),
+      usageCount: 0,
       minOrderAmount: c.minOrderAmount,
       maxDiscount: c.maxDiscount,
       createdAt: input.createdAt || new Date().toISOString(),
@@ -142,7 +142,7 @@ async function updateCoupon(req, res) {
 
     const allowedKeys = [
       'code', 'type', 'value', 'discountValue', 'active', 'description',
-      'startDate', 'endDate', 'usageLimit', 'usageCount', 'minOrderAmount', 'maxDiscount',
+      'startDate', 'endDate', 'usageLimit', 'minOrderAmount', 'maxDiscount',
     ];
     const write = {};
     for (const key of allowedKeys) {

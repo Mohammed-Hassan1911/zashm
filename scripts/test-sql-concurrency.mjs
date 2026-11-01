@@ -1,5 +1,5 @@
 /**
- * Real-PostgreSQL harness for the six SQL migrations.
+ * Real-PostgreSQL harness for the SQL migrations.
  *
  *   node scripts/test-sql-concurrency.mjs
  *
@@ -25,8 +25,9 @@
  *     skipped-line warnings, missing product (no partial restore).
  *   - admin_protection.sql: two concurrent last-admin demotions.
  *   - products_public_view.sql: Phase 1 vs Phase 3 (PUBLIC/anon/authenticated).
- *   - storage_hardening.sql: only products-scoped policies are dropped, blanket
- *     and other-bucket policies are kept, and restore recreates them verbatim.
+ *   - storage_hardening.sql: only products-scoped policies are dropped, product
+ *     listing is denied, and removed policies can be restored verbatim.
+ *   - rate_limit_storage.sql: server-only shared counters and concurrent limits.
  *   - security_hardening.sql: existing provisioning trigger blocks a duplicate,
  *     unrelated triggers are preserved, re-runs do not duplicate.
  */
@@ -160,6 +161,23 @@ function runSql(db, sql) {
     stderr,
     out: `${stdout}${stderr}`,
   };
+}
+
+function runSqlAsync(db, sql) {
+  return new Promise((resolve) => {
+    const child = spawn(tools.psql, psqlArgs(db).concat(['-c', sql]), { encoding: 'utf8' });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', (error) => resolve({
+      status: 1,
+      stdout,
+      stderr: `${stderr}${error.message}`,
+      out: `${stdout}${stderr}${error.message}`,
+    }));
+    child.on('close', (status) => resolve({ status, stdout, stderr, out: `${stdout}${stderr}` }));
+  });
 }
 
 function apply(db, relativePath) {
@@ -519,6 +537,8 @@ function bootstrap(db) {
       FOR SELECT TO anon
       USING (bucket_id = ANY (ARRAY['products'::text, 'avatars'::text]));
 
+    GRANT SELECT ON storage.objects TO anon, authenticated;
+    GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
     GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
     -- Emulate the pre-migration Supabase grant the storefront relied on: anon
     -- could read the whole products table (including reservedStock).
@@ -582,6 +602,7 @@ async function main() {
   apply(DB, 'supabase/users_orders_lockdown.sql');
   const viewPhase1 = apply(DB, 'supabase/products_public_view.sql');
   apply(DB, 'supabase/storage_hardening.sql');
+  apply(DB, 'supabase/rate_limit_storage.sql');
 
   ok(/PHASE 3 SKIPPED/.test(viewPhase1), 'products view runs Phase 1 only before the deploy flag');
   ok(scalarNum(DB, `SELECT count(*) FROM pg_proc WHERE proname = 'atomic_place_order'`) === 1,
@@ -592,6 +613,70 @@ async function main() {
   ok(scalar(DB, `SELECT has_function_privilege('anon',
                     'public.atomic_place_order(jsonb, text)', 'EXECUTE')`) === 'f',
     'anon cannot execute atomic_place_order');
+
+  // ── Shared database rate limiter ────────────────────────────────────────
+  console.log('\n[1b] rate_limit_storage: server-only shared counter');
+  eq(scalar(DB, `SELECT has_table_privilege('anon', 'public.zshm_rate_limits', 'SELECT')`), 'f',
+    'anon cannot read shared rate-limit counters');
+  eq(scalar(DB, `SELECT has_function_privilege('anon',
+                    'public.zshm_rate_limit(text,integer,integer,text)', 'EXECUTE')`), 'f',
+    'anon cannot execute the rate-limit RPC');
+  eq(scalar(DB, `SELECT has_function_privilege('service_role',
+                    'public.zshm_rate_limit(text,integer,integer,text)', 'EXECUTE')`), 't',
+    'service_role can execute the rate-limit RPC');
+  const verification = runSql(DB, `
+    SELECT (
+             SELECT relrowsecurity FROM pg_class
+              WHERE oid = to_regclass('public.zshm_rate_limits')
+           ),
+           CASE WHEN to_regclass('public.zshm_rate_limits') IS NULL THEN NULL
+                ELSE has_table_privilege('anon', to_regclass('public.zshm_rate_limits'), 'SELECT')
+           END,
+           CASE WHEN to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NULL THEN NULL
+                ELSE has_function_privilege('anon',
+                  to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)'), 'EXECUTE')
+           END,
+           CASE WHEN to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NULL THEN NULL
+                ELSE has_function_privilege('service_role',
+                  to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)'), 'EXECUTE')
+           END;
+  `);
+  eq(verification.status, 0, 'production verification query runs against applied rate-limit migration');
+  eq(verification.stdout.trim(), 't|f|f|t',
+    'production verifier confirms RLS, browser denial, and service_role execution');
+  for (const [sql, label] of [
+    [`SELECT public.zshm_rate_limit('${'c'.repeat(64)}', NULL, 60, 'consume')`, 'null attempt limit is rejected'],
+    [`SELECT public.zshm_rate_limit('${'d'.repeat(64)}', 2, NULL, 'consume')`, 'null window is rejected'],
+    [`SELECT public.zshm_rate_limit('${'e'.repeat(64)}', 2, 60, NULL)`, 'null action is rejected'],
+  ]) {
+    eq(runSql(DB, sql).status !== 0, true, label);
+  }
+  {
+    const key = 'a'.repeat(64);
+    const consume = () => scalar(DB,
+      `SELECT public.zshm_rate_limit('${key}', 2, 60, 'consume')->>'allowed'`);
+    eq(consume(), 'true', 'first shared request is allowed');
+    eq(consume(), 'true', 'request at limit is allowed');
+    eq(consume(), 'false', 'request over limit is denied');
+    eq(scalar(DB, `SELECT public.zshm_rate_limit('${key}', 2, 60, 'peek')->>'count'`), '3',
+      'peek reads without incrementing');
+    runSql(DB, `UPDATE public.zshm_rate_limits SET reset_at = clock_timestamp() - interval '1 second'
+                 WHERE rate_key = '${key}';`);
+    eq(consume(), 'true', 'expired counter starts a new window');
+    eq(scalar(DB, `SELECT public.zshm_rate_limit('${key}', 2, 60, 'peek')->>'count'`), '1',
+      'new window count starts at one');
+    scalar(DB, `SELECT public.zshm_rate_limit('${key}', 2, 60, 'reset')->>'count'`);
+    eq(scalar(DB, `SELECT public.zshm_rate_limit('${key}', 2, 60, 'peek')->>'count'`), '0',
+      'reset removes the shared counter');
+  }
+  {
+    const key = 'b'.repeat(64);
+    const calls = await Promise.all(Array.from({ length: 12 }, () =>
+      runSqlAsync(DB, `SELECT public.zshm_rate_limit('${key}', 4, 60, 'consume')->>'allowed'`)));
+    eq(calls.every((result) => result.status === 0), true, 'concurrent RPC requests complete successfully');
+    eq(calls.filter((result) => result.stdout.trim() === 'true').length, 4,
+      'concurrent requests enforce the shared limit exactly once');
+  }
 
   // ── Products view: staged rollout ────────────────────────────────────────
   console.log('\n[2] products_public_view: allow-list + Phase 1/Phase 3');
@@ -1202,13 +1287,22 @@ async function main() {
 
   // ── storage_hardening: conservative policy removal + restore ─────────────
   console.log('\n[6] storage_hardening: conservative deletion + restore');
+  runSql(DB, `INSERT INTO storage.objects (bucket_id, name)
+              VALUES ('products', 'listed-product.jpg'), ('avatars', 'listed-avatar.jpg');`);
   const kept = scalar(DB, `SELECT string_agg(policyname, ',' ORDER BY policyname)
                              FROM pg_policies WHERE schemaname='storage' AND tablename='objects'`);
   const keptSet = kept.split(',').filter(Boolean);
-  eq(keptSet.sort(), ['avatars_read', 'blanket_read', 'shared_read'],
-    'blanket and other-bucket policies are kept');
+  eq(keptSet.sort(), ['avatars_read', 'blanket_read', 'shared_read', 'zshm_products_no_public_listing'],
+    'blanket and other-bucket policies are kept alongside the restrictive listing guard');
   ok(!keptSet.includes('products_read'), 'products-only SELECT policy was removed');
   ok(!keptSet.includes('products_all'), 'products-only ALL policy was removed');
+  eq(scalar(DB, `SET ROLE anon; SELECT count(*) FROM storage.objects WHERE bucket_id = 'products';`), '0',
+    'anon cannot list product-bucket objects despite other permissive policies');
+  {
+    const otherBucket = runSql(DB,
+      `SET ROLE anon; SELECT count(*) FROM storage.objects WHERE bucket_id = 'avatars';`);
+    eq(otherBucket.stdout.trim(), '1', 'other-bucket listing remains available under its existing policy');
+  }
   eq(scalarNum(DB, `SELECT count(*) FROM public.zshm_storage_policy_backup`), 2,
     'both removed policies were backed up');
   eq(scalarNum(DB, `SELECT count(*) FROM public.zshm_storage_policy_backup WHERE restored_at IS NOT NULL`), 0,
@@ -1250,6 +1344,7 @@ async function main() {
   console.log('\n[6b] storage_hardening: non-owner role skips storage.objects DDL');
   {
     const setup = runSql(DB, `
+      DROP POLICY IF EXISTS zshm_products_no_public_listing ON storage.objects;
       CREATE ROLE storage_owner NOLOGIN;
       CREATE ROLE storage_migrator NOLOGIN;
       GRANT USAGE ON SCHEMA storage TO storage_migrator;

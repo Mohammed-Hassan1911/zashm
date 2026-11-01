@@ -145,6 +145,28 @@ SELECT policyname, cmd, roles, qual, with_check
    AND (coalesce(qual, '') LIKE '%products%' OR coalesce(with_check, '') LIKE '%products%')
  ORDER BY policyname;
 
+SELECT policyname, permissive, roles, qual
+  FROM pg_policies
+ WHERE schemaname = 'storage'
+   AND tablename = 'objects'
+   AND policyname = 'zshm_products_no_public_listing';
+
+SELECT (
+         SELECT relrowsecurity FROM pg_class
+          WHERE oid = to_regclass('public.zshm_rate_limits')
+       ) AS rate_limits_rls_enabled,
+       CASE WHEN to_regclass('public.zshm_rate_limits') IS NULL THEN NULL
+            ELSE has_table_privilege('anon', to_regclass('public.zshm_rate_limits'), 'SELECT')
+       END AS anon_can_read_counters,
+       CASE WHEN to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NULL THEN NULL
+            ELSE has_function_privilege('anon',
+              to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)'), 'EXECUTE')
+       END AS anon_can_execute_limiter,
+       CASE WHEN to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NULL THEN NULL
+            ELSE has_function_privilege('service_role',
+              to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)'), 'EXECUTE')
+       END AS service_can_execute_limiter;
+
 -- ── 10) Functions (exact deployed names) ─────────────────────────────────────
 SELECT p.proname,
        pg_get_function_identity_arguments(p.oid) AS args,
@@ -164,7 +186,8 @@ SELECT p.proname,
      'zshm_order_lines',
      'zshm_order_skipped_lines',
      'zshm_protect_last_admin',
-     'zshm_guard_coupon_delete'
+     'zshm_guard_coupon_delete',
+     'zshm_rate_limit'
    )
  ORDER BY p.proname;
 

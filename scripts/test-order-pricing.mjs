@@ -280,6 +280,7 @@ function makeRes() {
 }
 
 const BASE_BODY = () => ({
+  idempotencyKey: 'test-order-key-123456',
   items: [{ productId: 1, qty: 2, size: 'M', color: 'Black', price: 1 }],
   customer: {
     name: 'Test Shopper',
@@ -303,6 +304,7 @@ const rpcOrder = () => {
   const call = state.rpcCalls.find((c) => c.name === 'atomic_place_order');
   return call ? call.args.p_order : null;
 };
+const orderRpcCalls = () => state.rpcCalls.filter((call) => call.name === 'atomic_place_order').length;
 
 // ─── [1] static contract ─────────────────────────────────────────────────────
 console.log('\n[1] static checks: the pricing rule has one source of truth');
@@ -318,6 +320,7 @@ console.log('\n[1] static checks: the pricing rule has one source of truth');
   ok(/p\.active === false/.test(ordersSrc), 'orders.js rejects inactive products (SEC-11)');
   ok(/reason === 'inactive_product'/.test(ordersSrc), 'orders.js maps inactive_product to 422');
   ok(/reason === 'coupon_changed'/.test(ordersSrc), 'orders.js maps coupon_changed to 409');
+  ok(/idempotencyKey === null \|\|/.test(ordersSrc), 'orders.js requires an idempotency key before creating orders');
   ok(!/Number\(couponRow\.value\)/.test(ordersSrc), 'orders.js never reads value directly');
 
   const sql = readFileSync(new URL('../supabase/atomic_place_order.sql', import.meta.url), 'utf8');
@@ -345,13 +348,21 @@ console.log('\n[1] static checks: the pricing rule has one source of truth');
   ), 'no coupon increment happens before the INSERT');
 }
 
+console.log('\n[1b] idempotency key is mandatory');
+{
+  seed();
+  const r = await place({ idempotencyKey: undefined });
+  eq(r.status, 422, 'missing idempotency key is rejected');
+  eq(orderRpcCalls(), 0, 'missing idempotency key never reaches the order RPC');
+}
+
 // ─── [2] SEC-11: inactive product ────────────────────────────────────────────
 console.log('\n[2] SEC-11: inactive product');
 {
   seed({ active: false });
   const r = await place();
   eq(r.status, 422, 'inactive product → 422');
-  eq(state.rpcCalls.length, 0, 'no order RPC is attempted');
+  eq(orderRpcCalls(), 0, 'no order RPC is attempted');
   eq(r.body.stockIssues[0].missing, true, 'client is told to remove the item');
 }
 
@@ -410,7 +421,7 @@ console.log('\n[5] SEC-06: minOrderAmount');
   seed({ coupon: couponRow({ minOrderAmount: 500 }) });
   let r = await place({ coupon: 'SAVE10' });
   eq(r.status, 422, 'subtotal below the minimum → 422 (never a silent full price)');
-  eq(state.rpcCalls.length, 0, 'no order is written');
+  eq(orderRpcCalls(), 0, 'no order is written');
   eq(r.body.reason, 'min_order_amount', 'reason is reported for diagnostics');
 
   seed({ coupon: couponRow({ minOrderAmount: 150 }) });
@@ -476,7 +487,7 @@ console.log('\n[8] stock availability');
   seed({ stock: 1 });
   let r = await place();
   eq(r.status, 422, 'requesting 2 with stock 1 → 422');
-  eq(state.rpcCalls.length, 0, 'no order written for an unavailable line');
+  eq(orderRpcCalls(), 0, 'no order written for an unavailable line');
 
   // DECISION: reservedStock has no writer/expiry, so it must not reduce the
   // sellable pool. It is retained in the schema but excluded from availability.
@@ -502,7 +513,7 @@ console.log('\n[8] stock availability');
     ],
   });
   eq(r.status, 422, 'non-variant split lines are aggregated (6 > 5) → 422');
-  eq(state.rpcCalls.length, 0, 'no order RPC is attempted for the aggregated oversell');
+  eq(orderRpcCalls(), 0, 'no order RPC is attempted for the aggregated oversell');
 
   seed({ stock: 6, reservedStock: 0 });
   r = await place({
@@ -524,7 +535,7 @@ console.log('\n[8] stock availability');
     ],
   });
   eq(r.status, 422, 'duplicate variant lines are aggregated (6 > 5) → 422');
-  eq(state.rpcCalls.length, 0, 'no order RPC is attempted for the variant oversell');
+  eq(orderRpcCalls(), 0, 'no order RPC is attempted for the variant oversell');
 }
 
 // ─── [9] idempotency race: one key, two carts, one coupon ──────────────────

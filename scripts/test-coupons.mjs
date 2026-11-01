@@ -229,11 +229,16 @@ console.log('\n[7] source scan: no storefront coupon reads');
   ok(/api\.post\('\/coupons\/validate'/.test(store), 'store uses the validation endpoint');
   ok(!/db\.setAll\('discounts'/.test(store), 'coupon list is never persisted locally');
 
+  const adminCouponsSrc = readFileSync(`${root}/api/admin/coupons.js`, 'utf8');
+  ok(/usageCount:\s*0/.test(adminCouponsSrc), 'coupon creation never accepts a caller-controlled usage count');
+  const updateKeys = adminCouponsSrc.match(/const allowedKeys = \[([\s\S]*?)\];/)?.[1] || '';
+  ok(!/\busageCount\b/.test(updateKeys), 'coupon updates cannot overwrite the server-maintained usage count');
+
   const endpointSrc = readFileSync(`${root}/api/coupons/validate.js`, 'utf8');
   ok(!/\.select\(\s*['"]\*['"]\s*\)/.test(endpointSrc), 'public endpoint selects explicit columns only');
   ok(/Cache-Control', 'no-store'/.test(endpointSrc), 'public endpoint responses are not cacheable');
 
-  const adminCoupons = readFileSync(`${root}/api/admin/coupons.js`, 'utf8');
+  const adminCoupons = adminCouponsSrc;
   ok(/requirePerm\(req, res, 'discounts\.read'\)/.test(adminCoupons), 'admin coupon list requires discounts.read');
   ok(/requirePerm\(req, res, 'discounts\.write'\)/.test(adminCoupons), 'admin coupon delete requires discounts.write');
   ok(/from\('orders'\)/.test(adminCoupons) && /openOrders/.test(adminCoupons),
