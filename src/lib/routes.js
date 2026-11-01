@@ -1,3 +1,5 @@
+import { productRoutePath } from './product-url.mjs';
+
 const STATIC_ROUTES = {
   home: '/',
   shop: '/shop',
@@ -38,8 +40,7 @@ export function resolveRoute(location = window.location) {
 
 export function pageUrl(page, selectedProduct, currentLocation = typeof window !== 'undefined' ? window.location : null) {
   if (page === 'product') {
-    const productId = selectedProduct?.id;
-    return productId == null ? '/product' : `/product/${encodeURIComponent(String(productId))}`;
+    return productRoutePath(selectedProduct);
   }
 
   const path = STATIC_ROUTES[page] || '/';

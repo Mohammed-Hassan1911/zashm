@@ -1,5 +1,6 @@
 // Lightweight SEO helpers for a state-routed SPA: keep <head> metadata and
 // structured data in sync as the user navigates, without pulling in a router.
+import { canonicalUrl } from './product-url.mjs';
 
 const BRAND = 'ZASHM';
 const DEFAULT_DESC =
@@ -42,7 +43,9 @@ export function setPageMeta({ title, description, image, url, robots } = {}) {
   if (typeof document === 'undefined') return;
   const fullTitle = title ? `${title} — ${BRAND}` : `${BRAND} — Luxury Fashion`;
   const desc = description || DEFAULT_DESC;
-  const canonical = url || (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '');
+  const canonical = url || (typeof window !== 'undefined'
+    ? canonicalUrl(window.location.pathname, window.location.origin)
+    : '');
 
   document.title = fullTitle;
   setNamed('description', desc);

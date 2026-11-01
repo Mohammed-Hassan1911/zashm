@@ -75,11 +75,12 @@
 
 | الأمر | النتيجة |
 |---|---|
-| `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **894 passed, 0 failed** — 9 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 127 + 248 |
+| `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **918 passed, 0 failed** — 10 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 126 + 25 + 248 |
 | `node scripts/test-admin-products.mjs` | **18 passed, 0 failed** |
 | `node scripts/test-sessions-admin.mjs` | **74 passed, 0 failed** |
 | `node scripts/test-edge-transport.mjs` | **97 passed, 0 failed** |
-| `node scripts/test-final-hardening.mjs` | **127 passed, 0 failed** |
+| `node scripts/test-final-hardening.mjs` | **126 passed, 0 failed** |
+| `node scripts/test-sitemap.mjs` | **25 passed, 0 failed** |
 | `node scripts/test-sql-concurrency.mjs` | **248 passed, 0 failed** — PostgreSQL 17 محلي مؤقت، لا اتصال بالإنتاج |
 | اختبار متصفح محلي | **PASS** — المسارات العامة و404 عند 320 و390 و1440px، بلا أخطاء صفحات أو overflow |
 | `npm run build` | **PASS** — Vite 7.3.7، 2555 module |
@@ -266,13 +267,15 @@ ON CONFLICT (name) DO NOTHING;
 - Floating buttons remain fixed on the storefront at z-index 30000 with
   safe-area offsets. WhatsApp stays visible; scroll-to-top appears after
   scrolling beyond 300px and hides near the top.
-- The public sitemap includes `/shop`; product URLs still require a dynamic
-  sitemap source. Empty checkout now exposes its empty-state message as an H1.
+- `/sitemap.xml` is dynamically generated from the public `products_public`
+  view using anon credentials; `/` and `/shop` remain included. Verify the
+  route after deployment and set `PUBLIC_BASE_URL` if the canonical domain differs
+  from the configured default. Empty checkout exposes its empty-state message as an H1.
 - `pageUrl('track')` preserves `track` and `tk` query params.
 - `updateCartQty` returns `{ success, error }`; callers toast stock limits.
 - Product image cursor set to `default`.
 - Admin a11y gaps fixed (labels, dialogs, drop zones, toggles).
 - `api/_lib.js` mask comment corrected.
-- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **894 passed, 0 failed**
+- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **918 passed, 0 failed**
   (SQL suite actually ran). `npm run build` → success. `npm audit` → 0
   vulnerabilities. No configured server-only secret values were found in `build/`.
