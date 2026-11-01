@@ -167,6 +167,11 @@ SELECT (
               to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)'), 'EXECUTE')
        END AS service_can_execute_limiter;
 
+SELECT pg_get_functiondef(
+         to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)')
+       ) AS rate_limit_function_definition
+ WHERE to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NOT NULL;
+
 -- ── 10) Functions (exact deployed names) ─────────────────────────────────────
 SELECT p.proname,
        pg_get_function_identity_arguments(p.oid) AS args,
@@ -189,6 +194,15 @@ SELECT p.proname,
      'zshm_guard_coupon_delete',
      'zshm_rate_limit'
    )
+ ORDER BY p.proname;
+
+SELECT p.oid::regprocedure AS function_signature,
+       pg_get_functiondef(p.oid) AS function_definition
+  FROM pg_proc p
+ WHERE p.oid IN (
+   to_regprocedure('public.atomic_place_order(jsonb,text)'),
+   to_regprocedure('public.atomic_adjust_stock(jsonb,integer)')
+ )
  ORDER BY p.proname;
 
 -- ── 11) Triggers that enforce invariants ─────────────────────────────────────

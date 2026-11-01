@@ -124,6 +124,11 @@ console.log('\n[3] public data source and pagination');
   ok(requests[1].options.headers.Range.startsWith('1000-'), 'requests the next page without skipping products');
   ok(response.body.includes(`${origin}/product/1001`), 'sitemap includes products from later pages');
   eq(response.headers['Content-Type'], 'application/xml; charset=utf-8', 'returns XML content type');
+  eq(response.statusCode, 200, 'successful sitemap request returns HTTP 200');
+  eq(response.headers['Cache-Control'], 'public, s-maxage=3600, stale-while-revalidate=86400',
+    'successful sitemap response advertises the one-hour cache policy');
+  eq(response.headers['Vercel-CDN-Cache-Control'], response.headers['Cache-Control'],
+    'Vercel CDN receives the same explicit successful cache policy');
 }
 
 console.log('\n[4] safe handling of source failures');
@@ -156,6 +161,8 @@ console.log('\n[4] safe handling of source failures');
     'fallback retains static public routes');
   eq((response.body.match(/<loc>/g) || []).length, 2, 'fallback does not claim unknown product URLs');
   ok(response.headers['Cache-Control'].includes('s-maxage=300'), 'failure fallback uses a short cache duration');
+  eq(response.headers['Vercel-CDN-Cache-Control'], response.headers['Cache-Control'],
+    'Vercel CDN receives the short fallback cache policy');
   eq(errors, 1, 'source failure is reported to server logs');
 }
 

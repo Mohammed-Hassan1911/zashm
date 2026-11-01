@@ -146,11 +146,10 @@ export default async function sitemapHandler(req, res) {
 
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  res.setHeader(
-    'Cache-Control',
-    sourceAvailable
-      ? 'public, s-maxage=3600, stale-while-revalidate=86400'
-      : 'public, s-maxage=300, stale-while-revalidate=3600'
-  );
+  const cacheControl = sourceAvailable
+    ? 'public, s-maxage=3600, stale-while-revalidate=86400'
+    : 'public, s-maxage=300, stale-while-revalidate=3600';
+  res.setHeader('Cache-Control', cacheControl);
+  res.setHeader('Vercel-CDN-Cache-Control', cacheControl);
   res.end(buildSitemapXml(products, siteOrigin));
 }
