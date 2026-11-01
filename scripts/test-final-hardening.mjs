@@ -441,5 +441,18 @@ console.log('\n[9] floating actions stay accessible');
     'mobile floating icons shrink proportionally');
 }
 
+// ─── [10] public SEO and empty checkout accessibility ────────────────────────
+console.log('\n[10] public SEO and checkout accessibility');
+{
+  const sitemap = read('public/sitemap.xml');
+  const cartPage = read('src/pages/CartPage.js');
+
+  ok(/<loc>https:\/\/za-shm\.vercel\.app\/<\/loc>/.test(sitemap) &&
+     /<loc>https:\/\/za-shm\.vercel\.app\/shop<\/loc>/.test(sitemap),
+    'sitemap includes the home and public shop routes');
+  ok(/<h1[^>]*>Your bag is empty<\/h1>/.test(cartPage),
+    'empty checkout state has a semantic page heading');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

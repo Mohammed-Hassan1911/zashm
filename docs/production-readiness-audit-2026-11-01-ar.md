@@ -132,11 +132,11 @@
 | F-06 | منخفض | `src/pages/HomePage.js:15`, `:18`; `src/pages/ShopPage.js:61`; `src/store.js:233` | بعد إزالة `active` من العرض، كل المنتجات تأتي `active: undefined` ثم `?? true`. فلاتر `p.active !== false` أصبحت dead code. | احذف الفلاتر أو أعد `active` فقط إن كان له معنى في الواجهة. | كود مضلل، لا أثر وظيفي. | **No issue / Low** |
 | F-07 | منخفض / محتمل | `src/lib/security.js:114-121`; `src/lib/auth.js:129-138`; `api/_lib.js:446-455` | توجد **ثلاث** خرائط صلاحيات. خريطة `security.js` المصدَّرة غير مستخدمة حاليًا وتفتقد `dashboard.read`، بينما `auth.js` والسيرفر متطابقان. أي استخدام مستقبلي لها سيسبب اختلافًا. | اجعل مصدرًا واحدًا (shared) أو احذف المصدَّر غير المستخدم. | خطأ صلاحيات مستقبلي محتمل. | **Potential / Low** |
 | F-08 | منخفض | `index.html:2` | `lang="en"` على موقع محتواه عربي/إنجليزي مختلط. | اضبط `lang="ar"` أو `lang="en"` مع `dir` مناسب حسب اللغة السائدة. | SEO/accessibility. | **Confirmed / Low** |
-| F-09 | منخفض | `public/sitemap.xml` | الـ sitemap يحتوي الصفحة الرئيسية فقط، ولا يحتوي `/shop` أو صفحات المنتجات. | أضف مسارات ثابتة على الأقل، وولّد صفحات المنتجات إن أمكن. | اكتشاف SEO أقل. | **Confirmed / Low** |
+| F-09 | منخفض | `public/sitemap.xml` | كان الـ sitemap يحتوي الصفحة الرئيسية فقط؛ أُضيف `/shop` محليًا، وتبقى صفحات المنتجات الديناميكية غير مُدرجة. | ولّد صفحات المنتجات النشطة من مصدر بيانات موثوق عند توفر مسار build آمن. | اكتشاف SEO أقل للمنتجات حتى إنشاء المصدر الديناميكي. | **Partially fixed locally** |
 | F-10 | منخفض | `src/pages/AdminApp.js:392-404` | `classifyInventory(products)` يستخدم نفس منتجات العرض العام، فلا يرى المنتجات غير النشطة ويصنّف المخزون على مجموعة ناقصة. | يُحل مع F-01 عبر مصدر إداري كامل. | تقارير مخزون مضللة. | **Confirmed / Medium** |
 | F-11 | لا مشكلة | `src/components/shop/ProductCard.js:124-137`, `:145-148` | بطاقة المنتج `role="button"` مع `tabIndex` و`onKeyDown`، وصور lazy/eager مع fallback. | لا شيء. | وصول أفضل. | **No issue** |
 | F-12 | لا مشكلة | `src/App.js:25`, `:48-53`; `src/components/ui/ErrorBoundary.js` | ErrorBoundary يمنع شاشة بيضاء عند خطأ render. | لا شيء. | متانة أفضل. | **No issue** |
-| F-13 | قيد مراجعة | لا يوجد اختبار متصفح | لم يتم فحص console/network/CSP/mobile فعليًا. | اختبر staging أو preview deployment. | لا يمكن تأكيد عدم وجود أخطاء runtime. | **Limitation** |
+| F-13 | قيد مراجعة | اختبار متصفح محلي | تم فحص مسارات المتجر الأساسية و404 ومقاسات responsive محليًا؛ لم تُفحص بيئة Preview/Production أو CSP/Network هناك. | اختبر staging أو preview deployment. | لا يمكن تأكيد عدم وجود أخطاء runtime في الإنتاج. | **Local checks done; production limitation** |
 
 ---
 
@@ -254,11 +254,12 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 
 | الاختبار | الأمر | النتيجة | ملاحظات |
 |---|---|---|---|
-| حزمة الاختبارات الكاملة (بعد المعالجة) | `npm test` | **817 passed, 0 failed** | 9 مجموعات: 81 + 83 + 78 + 78 + 74 + 18 + 97 + 106 + 202. |
-| SQL concurrency / RLS / grants | `node scripts/test-sql-concurrency.mjs` | **202 passed, 0 failed** | PostgreSQL 17 محلي مؤقت، يُدمَّر تلقائيًا. لا اتصال بالإنتاج. |
+| حزمة الاختبارات الكاملة (بعد المعالجة) | `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **894 passed, 0 failed** | 9 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 127 + 248. |
+| SQL concurrency / RLS / grants | `node scripts/test-sql-concurrency.mjs` | **248 passed, 0 failed** | PostgreSQL 17 محلي مؤقت، يُدمَّر تلقائيًا. لا اتصال بالإنتاج. |
 | اختبار مسار المنتجات الإداري (جديد) | `node scripts/test-admin-products.mjs` | **18 passed, 0 failed** | يثبت `GET /api/admin/products` والصلاحيات والصفوف الكاملة وعدم تسريب أخطاء DB. |
 | بناء الإنتاج | `npm run build` | **PASS** | Vite 7.3.7، 2555 module، 2.62s، 22 ملفًا. |
 | فحص الأسرار في البناء | سكربت قراءة فقط | **0** | لا قيم خدمة/تليجرام داخل `build/`. |
+| اختبار متصفح محلي | مسارات عامة و404 عند 320/390/1440px | **PASS** | لا أخطاء صفحات أو تجاوز أفقي؛ يلزم فحص Preview/Production منفصلًا. |
 | تطابق CSP مع Supabase | مقارنة ref | **match=yes** | بدون طباعة القيم. |
 | فحص الملفات المتعقبة | `git grep` لأنماط المفاتيح | **لا أنماط خطرة** | فقط placeholders. |
 
@@ -377,7 +378,7 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 13. اجمع `pg_stat_user_indexes` قبل أي حذف index.
 14. أصلح «Best Seller» وUX التتبع و`alt` وحالات الخطأ في المتجر (F-02/F-03/F-04/F-05).
 15. وحّد خرائط الصلاحيات (L-04) واحذف الكود الميت.
-16. حسّن sitemap/lang (L-06/L-07).
+16. أُضيف `/shop` إلى sitemap؛ أدرج صفحات المنتجات الديناميكية عند توفير مصدر آمن، وراجع اللغة السائدة (L-06/L-07).
 17. احسم SEC-24 (`reservedStock`) نهائيًا (O-12).
 18. نفّذ اختبار متصفح/Lighthouse/حمل على staging أو Preview.
 
@@ -397,8 +398,8 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 
 - **عُولجت محليًا واختُبرت:** H-01، M-01، M-03، M-05، M-06، M-07، M-08، F-02…F-07، F-10، L-01، L-02، L-04، L-05، إضافة إلى تقوية S-02/S-03/S-10/S-11/S-16/S-17.
 - **أُعِدّت لكنها تحتاج تنفيذًا إنتاجيًا يدويًا:** H-02، H-03/S-13، S-12/M-04، H-04/S-10، Phase 3 وكل ملفات SQL في `supabase/`.
-- **بقيت مفتوحة/مقبولة:** O-11/M-02، O-12/L-10، O-14، S-01، S-05، S-18/L-08، F-06/L-03، F-08/L-06، F-09/L-07، S-20/L-09.
-- **محجوبة محليًا:** F-13 (اختبار متصفح)، وأي استعلام على إنتاج حقيقي.
+- **بقيت مفتوحة/مقبولة:** O-11/M-02، O-12/L-10، O-14، S-01، S-05، S-18/L-08، F-06/L-03، F-08/L-06، صفحات المنتجات الديناميكية في F-09/L-07، S-20/L-09.
+- **محجوب إنتاجيًا:** فحص Preview/Production لـF-13 وأي استعلام على قاعدة الإنتاج.
 
 التفاصيل الكاملة والملفات والأوامر في **§11** وفي `docs/production-remediation-handoff.md`.
 
@@ -464,10 +465,10 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 | F-06 / L-03 | **ACCEPTED RISK / NO CHANGE** | التطبيع يعيد `active` افتراضيًا `true`، فالفلاتر الدفاعية تبقى صحيحة ولا تضر. | تنظيف اختياري لاحقًا. |
 | F-07 / L-04 | **FIXED LOCALLY AND TESTED** | `PERMISSIONS` و`hasPermission` أصبحا مصدرًا واحدًا مُصدَّرًا من `src/lib/security.js` ويستخدمهما `auth.js`، مع `dashboard.read`. | لا شيء. |
 | F-08 / L-06 | **ACCEPTED RISK** | `lang="en"` لم يُغيَّر لأن المحتوى مختلط عربي/إنجليزي والقرار محتوى/SEO. | قرار لغة/اتجاه لاحقًا. |
-| F-09 / L-07 | **ACCEPTED RISK** | sitemap لم يُوسَّع؛ يحتاج توليد مسارات ديناميكية أو قرارًا يدويًا. | إضافة `/shop` وصفحات المنتجات. |
+| F-09 / L-07 | **PARTIALLY FIXED LOCALLY** | أُضيف `/shop` إلى sitemap واختُبر؛ صفحات المنتجات الديناميكية ما زالت غير مُدرجة. | توليد روابط المنتجات النشطة بمصدر بيانات موثوق. |
 | F-10 / M-06 | **FIXED LOCALLY AND TESTED** | `Dashboard` يستخدم `adminProducts` (يشمل غير النشط) عند امتلاك `products.read`، مع fallback للمتجر لدور بلا صلاحية. | تحقق يدوي من تقرير المخزون. |
 | F-11 / F-12 | **ACCEPTED RISK / NO CHANGE** | ProductCard/ErrorBoundary سليمان (فُحصا). | لا شيء. |
-| F-13 | **BLOCKED** | لا متصفح/Staging متاح؛ لا يمكن إثبات console/network/CSP/mobile. | اختبار Preview/Production يدويًا (§11.8 و§11.10). |
+| F-13 | **PARTIALLY VERIFIED LOCALLY** | جرى اختبار مسارات المتجر و404 والاستجابة للمقاسات في متصفح محلي؛ لم يُختبر Preview/Production أو CSP/Network هناك. | اختبار Preview/Production يدويًا (§11.8 و§11.10). |
 
 ### 11.4 المشاكل العالية (H-01…H-04)
 
@@ -496,7 +497,7 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 | L-04 | **FIXED LOCALLY AND TESTED** | F-07. |
 | L-05 | **FIXED LOCALLY AND TESTED** | S-16. |
 | L-06 | **ACCEPTED RISK** | F-08. |
-| L-07 | **ACCEPTED RISK** | F-09. |
+| L-07 | **PARTIALLY FIXED LOCALLY** | F-09؛ أُدرج `/shop`، وتبقى روابط المنتجات الديناميكية. |
 | L-08 | **ACCEPTED RISK** | S-18. |
 | L-09 | **ACCEPTED RISK / NO CHANGE** | S-20. |
 | L-10 | **BLOCKED** | O-12 / SEC-24. |

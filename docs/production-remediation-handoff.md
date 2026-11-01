@@ -75,17 +75,18 @@
 
 | الأمر | النتيجة |
 |---|---|
-| `npm test` | **817 passed, 0 failed** — 9 مجموعات: 81 + 83 + 78 + 78 + 74 + 18 + 97 + 106 + 202 |
+| `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **894 passed, 0 failed** — 9 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 127 + 248 |
 | `node scripts/test-admin-products.mjs` | **18 passed, 0 failed** |
 | `node scripts/test-sessions-admin.mjs` | **74 passed, 0 failed** |
 | `node scripts/test-edge-transport.mjs` | **97 passed, 0 failed** |
-| `node scripts/test-final-hardening.mjs` | **106 passed, 0 failed** |
-| `node scripts/test-sql-concurrency.mjs` | **202 passed, 0 failed** — PostgreSQL 17 محلي مؤقت، لا اتصال بالإنتاج |
-| `npm run build` | **PASS** — Vite 7.3.7، 2555 module، 2.62s |
+| `node scripts/test-final-hardening.mjs` | **127 passed, 0 failed** |
+| `node scripts/test-sql-concurrency.mjs` | **248 passed, 0 failed** — PostgreSQL 17 محلي مؤقت، لا اتصال بالإنتاج |
+| اختبار متصفح محلي | **PASS** — المسارات العامة و404 عند 320 و390 و1440px، بلا أخطاء صفحات أو overflow |
+| `npm run build` | **PASS** — Vite 7.3.7، 2555 module |
 
 **خط الأساس قبل المعالجة:** 783 اختبارًا ناجحًا + build PASS. الزيادة 34 اختبارًا.
 
-**ما لا تثبته هذه الاختبارات:** أي سلوك إنتاجي، أي سياسة RLS حقيقية، أي تعريف عرض حقيقي، أو أي اختبار متصفح.
+**ما لا تثبته هذه الاختبارات:** أي سلوك إنتاجي، أو سياسة RLS/تعريف عرض حقيقي، أو مسارات API حية على Preview/Production.
 
 ---
 
@@ -233,7 +234,7 @@ ON CONFLICT (name) DO NOTHING;
 
 ## 8. ما بقي محجوبًا أو يحتاج قرارًا
 
-1. **F-13:** لا اختبار متصفح/E2E؛ يحتاج Preview أو staging وفحص Console/Network/CSP/جوال.
+1. **F-13:** اختبار المتصفح المحلي للمسارات الأساسية والمقاسات تم؛ ما زال يلزم Preview أو staging لفحص Console/Network/CSP وE2E.
 2. **S-13 / H-03:** إثبات أن العرض لا يتجاوز RLS الحقيقي يحتاج `pg_policies` من الإنتاج.
 3. **O-12 / L-10 (SEC-24):** `reservedStock` بلا كاتب/دورة حياة. القرار المطلوب: إزالته من حساب التوفر والجداول، أو إضافة كاتب ودورة حياة موثقة. لم يُخترع أي كاتب.
 4. **O-11 / M-02:** حذف طلب به منتج محذوف نهائيًا قد يمنع استعادة مخزون السطور الأخرى. القرار: منع حذف المنتج المرتبط بطلبات غير ملغاة، أو استعادة جزئية + تقرير فروقات إلزامي.
@@ -262,13 +263,16 @@ ON CONFLICT (name) DO NOTHING;
 
 ## 10. 追加更新 (2026-11-01 follow-up pass)
 
-- Floating buttons enforced always-visible (storefront only), z-index 30000,
-  safe-area offsets; scroll-to-top disabled (not hidden) at top.
+- Floating buttons remain fixed on the storefront at z-index 30000 with
+  safe-area offsets. WhatsApp stays visible; scroll-to-top appears after
+  scrolling beyond 300px and hides near the top.
+- The public sitemap includes `/shop`; product URLs still require a dynamic
+  sitemap source. Empty checkout now exposes its empty-state message as an H1.
 - `pageUrl('track')` preserves `track` and `tk` query params.
 - `updateCartQty` returns `{ success, error }`; callers toast stock limits.
 - Product image cursor set to `default`.
 - Admin a11y gaps fixed (labels, dialogs, drop zones, toggles).
 - `api/_lib.js` mask comment corrected.
-- Latest test run: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **888 passed, 0 failed**
-  (SQL suite actually ran). `npm run build` → success. `npm audit --omit=dev` →
-  0 vulnerabilities. Built bundle contains only the anon JWT.
+- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **894 passed, 0 failed**
+  (SQL suite actually ran). `npm run build` → success. `npm audit` → 0
+  vulnerabilities. No configured server-only secret values were found in `build/`.

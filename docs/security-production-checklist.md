@@ -421,7 +421,7 @@ test suite; they do not change the migration order above.
   keyboard-accessible upload/CSV drop zones, labelled password toggles.
 - `api/_lib.js` `maskOrderForLimitedAccess` comment corrected to match the
   implementation (all PII including `phone` is cleared without a secure token).
-- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 888 passed, 0
+- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 894 passed, 0
   failed (SQL suite actually ran on a temporary PostgreSQL 17 cluster);
   `npm run build` → success; `npm audit --omit=dev` → 0 vulnerabilities;
   built bundle contains only the anon JWT (no service-role key/secret).

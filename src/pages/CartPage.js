@@ -914,7 +914,7 @@ export function CheckoutPage() {
       <div style={{ paddingTop: 90, minHeight: '80vh' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
           <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px', display: 'block' }} />
-          <p style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</p>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</h1>
           <p style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 24 }}>
             Add a piece to your bag before checking out.
             <br />
