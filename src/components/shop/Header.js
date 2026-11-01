@@ -49,7 +49,7 @@ export default function Header() {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    color: '#D4AF37', 
+    color: 'var(--gold)', 
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -66,15 +66,15 @@ export default function Header() {
     minWidth: 15,
     height: 15,
     padding: '0 3px',
-    background: '#D4AF37',
-    color: '#000000',
+    background: 'var(--gold)',
+    color: 'var(--bg)',
     fontSize: 9,
     fontWeight: 700,
     borderRadius: '999px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: '1.5px solid #000000',
+    border: '1.5px solid var(--bg)',
     boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
     lineHeight: 1,
   };
@@ -136,7 +136,7 @@ export default function Header() {
                       textTransform: 'uppercase',
                       color: 'var(--text2)',
                     }}
-                    whileHover={{ color: '#D4AF37' }}
+                    whileHover={{ color: 'var(--gold)' }}
                   >
                     {item.name}
                   </motion.button>
@@ -213,13 +213,18 @@ export default function Header() {
               style={{ borderTop: '1px solid var(--border)', overflow: 'hidden' }}
             >
               <div style={{ maxWidth: 600, margin: '0 auto', padding: isMobile ? 12 : 16 }}>
+                <label htmlFor="site-search" className="sr-only">Search products</label>
                 <input
+                  id="site-search"
+                  type="search"
+                  name="search"
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     setPage('shop');
                   }}
                   placeholder="Search for products..."
+                  autoFocus
                   style={{
                     width: '100%',
                     padding: 12,

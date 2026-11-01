@@ -124,6 +124,8 @@ export default function MobileNav() {
             <motion.button
               key={label}
               onClick={action || (() => setPage(page))}
+              aria-label={label}
+              aria-current={active ? 'page' : undefined}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 16px', background: 'none', border: 'none', cursor: 'pointer', position: 'relative', color: active ? 'var(--gold)' : 'var(--text3)' }}
               whileTap={{ scale: 0.9 }}
             >

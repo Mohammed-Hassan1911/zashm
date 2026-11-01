@@ -117,14 +117,30 @@ async function updateOrder(req, res) {
         console.error('Order status reconcile failed: missing product', r.productId);
         return json(res, 409, { error: 'A product in this order no longer exists. Please review it manually.' });
       }
+      if (reason === 'missing_variant') {
+        console.error('Order status reconcile failed: missing variant', r.productId, r.variant);
+        return json(res, 409, { error: 'A product variation in this order no longer exists. Please review it manually.' });
+      }
+      if (reason === 'unavailable') {
+        return json(res, 409, {
+          error: 'There is not enough stock to re-open this cancelled order. Please review it manually.',
+        });
+      }
       console.error('Order status reconcile failed:', reason || 'unknown');
       return json(res, 500, { error: 'Could not update order' });
     }
 
+    // Cancellation restores stock for every existing line and reports any
+    // missing product/variant or deleted coupon instead of hiding it.
+    const warnings = Array.isArray(r.warnings) ? r.warnings : [];
+    if (warnings.length) {
+      console.warn('Order status changed with reconciliation warnings:', JSON.stringify(warnings));
+    }
     return json(res, 200, {
       success: true,
       status: r.status || newStatus,
       changed: r.changed !== false,
+      warnings,
     });
   } catch (err) {
     console.error('Order update error:', err && err.message);
@@ -171,8 +187,9 @@ async function deleteOrder(req, res) {
       return json(res, 500, { error: 'Could not delete order' });
     }
 
-    // Surface restore warnings instead of hiding permanent inventory loss:
-    // e.g. a deleted product means stockRestored=false and no line was restored.
+    // Surface partial-restore warnings instead of hiding them: existing lines
+    // are restored, while a permanently deleted product/variant is reported for
+    // manual reconciliation. stockRestored is true when anything was restored.
     const warnings = Array.isArray(r.warnings) ? r.warnings : [];
     if (warnings.length) {
       console.warn('Order deleted with restore warnings:', JSON.stringify(warnings));
@@ -181,6 +198,7 @@ async function deleteOrder(req, res) {
       success: true,
       stockRestored: r.stockRestored === true,
       wasCancelled: r.wasCancelled === true,
+      partial: warnings.length > 0,
       warnings,
     });
   } catch (err) {

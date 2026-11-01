@@ -385,5 +385,61 @@ console.log('\n[8] outstanding production decisions');
   eq(writerSql.length, 0, 'no migration invents a reservedStock lifecycle');
 }
 
+// ─── [9] floating actions ──────────────────────────────────────────────────
+console.log('\n[9] floating actions stay accessible');
+{
+  const css = read('src/index.css');
+  const app = read('src/App.js');
+  const backToTop = read('src/components/ui/BackToTop.js');
+  const whatsapp = read('src/components/ui/WhatsAppButton.js');
+
+  const floatingBlock = css.slice(css.indexOf('FLOATING ACTIONS'), css.indexOf('.size-guide-overlay'));
+  ok(/\.back-to-top,\s*\.whatsapp-fab\s*\{[^}]*position:\s*fixed/.test(floatingBlock),
+    'both floating buttons are position: fixed');
+  ok(/--floating-action-z:\s*30000/.test(floatingBlock),
+    'floating buttons use a z-index above every page layer');
+  ok(/z-index:\s*var\(--floating-action-z\)/.test(floatingBlock),
+    'the high z-index is actually applied to the buttons');
+  ok(/env\(safe-area-inset-bottom/.test(floatingBlock),
+    'floating buttons respect the bottom safe area');
+  ok(/env\(safe-area-inset-left/.test(floatingBlock) && /env\(safe-area-inset-right/.test(floatingBlock),
+    'floating buttons respect the horizontal safe areas');
+
+  ok(!/mobile-whatsapp-obstructed|mobile-back-to-top-obstructed/.test(css + app),
+    'no obstruction class can hide the floating buttons');
+  ok(!/mobile-keyboard-open\s+\.(whatsapp-fab|back-to-top)/.test(css),
+    'the on-screen keyboard never hides the floating buttons');
+  ok(!/\.whatsapp-fab\s*\{[^}]*display:\s*none/.test(css) &&
+     !/\.back-to-top\s*\{[^}]*display:\s*none/.test(css),
+    'CSS never sets display:none on the floating buttons');
+
+  ok(/createPortal\(/.test(whatsapp) && /document\.body/.test(whatsapp),
+    'WhatsApp button is portalled to document.body');
+  ok(/window\.scrollY > 300/.test(backToTop),
+    'scroll-to-top appears after scrolling beyond 300px');
+  ok(/<AnimatePresence/.test(backToTop) && /\{visible && \(/.test(backToTop),
+    'scroll-to-top fades/slides in and out with visibility');
+  ok(/useReducedMotion/.test(backToTop) &&
+     /reduceMotion \? 'auto' : 'smooth'/.test(backToTop),
+    'scroll-to-top respects reduced motion and scroll behavior');
+  ok(/window\.scrollTo\(\{ top: 0, behavior: reduceMotion \? 'auto' : 'smooth' \}\)/.test(backToTop),
+    'scroll-to-top returns the page to the top when clicked');
+  ok(/className="back-to-top"/.test(backToTop) && /className="whatsapp-fab"/.test(whatsapp),
+    'both components use the styled floating classes');
+  ok(/aria-label="Scroll back to top"/.test(backToTop) &&
+     /aria-label="Chat with ZASHM on WhatsApp"/.test(whatsapp),
+    'both floating buttons are accessible');
+
+  ok(/\.back-to-top\s*\{[^}]*width:\s*46px;[^}]*height:\s*46px/.test(floatingBlock) &&
+     /\.whatsapp-fab\s*\{[^}]*width:\s*52px;[^}]*height:\s*52px/.test(floatingBlock),
+    'desktop floating button sizes are unchanged');
+  ok(/@media \(max-width: 768px\)[\s\S]*?\.back-to-top\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css) &&
+     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css),
+    'mobile floating buttons retain 44px touch targets');
+  ok(/\.back-to-top svg\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px/.test(css) &&
+     /\.whatsapp-fab svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px/.test(css),
+    'mobile floating icons shrink proportionally');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

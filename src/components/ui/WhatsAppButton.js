@@ -13,16 +13,14 @@ export default function WhatsAppButton() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat with ZASHM on WhatsApp"
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: 1, type: 'spring', stiffness: 200 }}
+      title="Chat with ZASHM on WhatsApp"
+      initial={false}
       whileHover={{ scale: 1.08, backgroundColor: 'var(--gold)', color: 'var(--bg)' }}
       whileTap={{ scale: 0.92 }}
       className="whatsapp-fab"
       style={{
         borderRadius: '50%',
         background: 'var(--bg)', color: 'var(--gold)', border: '1px solid var(--gold)',
-        alignItems: 'center', justifyContent: 'center', zIndex: 800,
         boxShadow: '0 6px 24px rgba(201,168,76,0.3)',
       }}
     >

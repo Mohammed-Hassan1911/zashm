@@ -1,0 +1,117 @@
+---
+name: SEO & Performance
+description: Use when improving ZASHM search visibility, metadata, structured data, Core Web Vitals, bundle size, caching, image delivery, or runtime performance.
+---
+
+# ZASHM SEO & Performance
+
+## Mission
+
+Make ZASHM discoverable and fast without breaking the SPA routing, private-route
+noindex rules, or the luxury visual experience. Measure before and after.
+
+## SEO facts
+
+- Canonical origin: `https://za-shm.vercel.app`.
+- `index.html` holds the default title/description/OG/Twitter tags/canonical.
+- `src/lib/seo.js` updates title, description, OG/Twitter, canonical, robots, and
+  Product JSON-LD at runtime via `setPageMeta` / `setProductJsonLd`.
+- Private routes (`/admin`, `/cart`, `/checkout`, `/wishlist`, `/track`, `/api/*`)
+  send `X-Robots-Tag: noindex, nofollow, noarchive` from `vercel.json`; the SPA
+  should also set `robots: 'noindex, nofollow'` where applicable.
+- `public/robots.txt`, `public/sitemap.xml`, `public/404.html`, and
+  `public/og-image.jpg` are static assets.
+- `vercel.json` rewrites SPA paths to `/index.html`. Unknown paths render
+  `NotFoundPage`; do not turn 404s into soft redirects.
+
+## Per-page SEO contract
+
+| Page | Title intent | robots |
+|---|---|---|
+| Home | `ZASHM — Luxury Fashion` | index |
+| Shop | `Shop — ZASHM` | index |
+| Product | `<Product name> — ZASHM` + product JSON-LD | index if active/in stock; otherwise still indexable unless intentionally hidden |
+| Cart / Checkout / Wishlist | transactional | noindex |
+| Track | order tracking | noindex |
+| Admin | console | noindex |
+| 404 | not found | noindex |
+
+Rules:
+
+- One `<h1>` per page; headings descend in order. Product name is the h1.
+- Every product page: description, canonical (`/product/<id>`), OG image (first
+  HTTPS image), price/currency `EGP`, availability from `stock > 0`.
+- Use the effective price (`salePrice || price`) consistently in meta/JSON-LD.
+- Remove/replace stale JSON-LD when navigating away (`clearProductJsonLd`).
+- Never emit placeholder or fake ratings/reviews in structured data.
+- Keep `lang="en"`/`dir="ltr"` correct; if an Arabic view is added, update both
+  per-locale.
+- Sitemap must list only real public URLs; do not list private routes.
+
+## Performance baseline
+
+Build output is chunked in `vite.config.js`:
+
+- `vendor-react`, `vendor-motion`, `vendor-supabase`, `vendor-icons`
+- `admin-charts` (recharts, ~415 kB) and `admin-csv` (papaparse) — admin only
+- Pages are lazy-loaded with `React.lazy`/`Suspense` in `src/App.js`
+
+Rules:
+
+- Keep admin-only libraries out of the storefront path. Do not import recharts,
+  papaparse, or AdminApp from storefront modules.
+- Do not add a dependency without checking its gzip cost and whether an existing
+  library covers it.
+- Use explicit selectors with Zustand (`useStore(s => s.x)`) in new code to avoid
+  re-rendering on unrelated state changes; preserve existing behaviour when
+  refactoring.
+- Avoid synchronous heavy work in render; memoize expensive derived lists
+  (`useMemo`) only when measured.
+- Images: HTTPS, explicit dimensions/`aspect-ratio`, `loading="lazy"` +
+  `decoding="async"` below the fold; eager/preload only the LCP hero. Serve
+  appropriately sized assets (no multi-MB originals in cards).
+- Fonts: Cormorant Garamond + Montserrat are loaded from Google Fonts with
+  `preconnect` and `display=swap`. Do not add more families/weights.
+- Keep the initial JS path small; verify with `npm run build` output.
+
+## Core Web Vitals targets
+
+| Metric | Target |
+|---|---|
+| LCP | < 2.5 s on a mid-range mobile connection |
+| INP | < 200 ms |
+| CLS | < 0.1 |
+| TTFB | < 800 ms for static routes |
+
+Techniques that fit this codebase: reserve image space, avoid layout-shifting
+animations, defer non-critical work, keep the hero image optimized, and do not
+mount heavy admin code on public pages.
+
+## Caching and transport
+
+- API responses are `Cache-Control: no-store` (correct for auth/PII).
+- Public product reads may be cached by the browser/Supabase CDN; do not add
+  long-lived caches for user-specific data.
+- Security headers and CSP live in `vercel.json`; when adding a third-party
+  script/font/image domain, update the CSP explicitly and test the page.
+- Hashed build assets are immutable; `index.html` must not be cached long-term.
+
+## Measurement workflow
+
+1. `npm run build` — record chunk sizes and gzip sizes.
+2. Run the production build/preview (or deployed site) through Lighthouse
+   (mobile + desktop) for Home, Shop, Product, Cart, Checkout.
+3. Check the Network panel: no admin chunks on storefront pages, no oversized
+   images, no duplicate font requests.
+4. Re-run after changes and report before/after numbers; never claim improvement
+   without measurement.
+
+## Checklist
+
+- [ ] Unique title/description/canonical per public page.
+- [ ] Product JSON-LD matches visible price/stock and is cleared on navigation.
+- [ ] Private routes are noindex at both edge and SPA level.
+- [ ] No heading hierarchy or alt-text regressions.
+- [ ] Admin-only chunks absent from storefront network requests.
+- [ ] LCP image sized/preloaded; below-fold images lazy.
+- [ ] Build passes and bundle size did not regress without justification.

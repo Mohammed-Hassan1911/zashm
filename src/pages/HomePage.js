@@ -12,11 +12,17 @@ export default function HomePage() {
   const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
   // 🎯 إخفاء المنتجات غير النشطة عن العملاء (تُفلتر في الـ storefront فقط)
-  const featured = products.filter(p => p.active !== false && (p.label === 'Featured' || p.label === 'Best Seller')).slice(0, 4);
-  const featuredIds = new Set(featured.map(product => product.id));
-  const newArrivals = products
-    .filter(p => p.active !== false && p.label === 'New Arrival' && !featuredIds.has(p.id))
+  const activeProducts = products.filter(p => p.active !== false);
+  const featured = activeProducts
+    .filter(p => p.label === 'Featured' || p.label === 'Best Seller')
     .slice(0, 4);
+  const featuredIds = new Set(featured.map(product => product.id));
+  const newArrivals = activeProducts
+    .filter(p => p.label === 'New Arrival' && !featuredIds.has(p.id))
+    .slice(0, 4);
+  // لو مفيش منتجات مُصنّفة، اعرض أحدث المنتجات بدل صفحة فاضية تماماً.
+  const hasCuratedSections = featured.length > 0 || newArrivals.length > 0;
+  const fallbackProducts = !hasCuratedSections ? activeProducts.slice(0, 4) : [];
 
   return (
     <div style={{ paddingTop: 0 }}>
@@ -96,11 +102,13 @@ export default function HomePage() {
           </motion.div>
         </motion.div>
 
-        <motion.div
+        <motion.button
+          type="button"
+          aria-label="Scroll to the collection"
           animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}
-          style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', zIndex: 5 }}
+          style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', zIndex: 5, background: 'none', border: 'none', padding: 8 }}
           onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
-        ><ChevronDown size={24} /></motion.div>
+        ><ChevronDown size={24} aria-hidden="true" /></motion.button>
       </section>
 
       {productsLoadStatus === 'error' && (
@@ -141,6 +149,15 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* ───── LOADING / EMPTY STATE ───── */}
+      {activeProducts.length === 0 && productsLoadStatus !== 'error' && (
+        <div role="status" aria-live="polite" style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 24px', textAlign: 'center', color: 'var(--text3)', fontSize: 12, letterSpacing: 1 }}>
+          {productsLoadStatus === 'loading' || productsLoadStatus === 'idle'
+            ? 'Loading the collection… / جارٍ تحميل المجموعة…'
+            : 'New pieces are on their way. / قطع جديدة في الطريق.'}
+        </div>
+      )}
+
       {/* ───── FEATURED ───── */}
       {featured.length > 0 && (
         <section style={{ padding: '60px 24px 100px', maxWidth: 1400, margin: '0 auto' }}>
@@ -160,6 +177,19 @@ export default function HomePage() {
           <SectionHeader title="New Arrivals" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24, marginTop: 56 }}>
             {newArrivals.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+          </div>
+        </section>
+      )}
+
+      {/* ───── FALLBACK COLLECTION (no Featured/New Arrival labels) ───── */}
+      {fallbackProducts.length > 0 && (
+        <section style={{ padding: '60px 24px 100px', maxWidth: 1400, margin: '0 auto' }}>
+          <SectionHeader title="The Collection" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24, marginTop: 56 }}>
+            {fallbackProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 48 }}>
+            <button className="outline-btn" onClick={() => setPage('shop')}>View Full Collection</button>
           </div>
         </section>
       )}

@@ -13,20 +13,23 @@ function normalizeGovernorate(value) {
 }
 import { toast } from '../components/ui/BackToTop';
 
-function CityAutocomplete({ value, onChange, onSelect, error }) {
+function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate', describedBy }) {
   const [open, setOpen] = React.useState(false);
   const suggestions = React.useMemo(() => filterGovernorates(value), [value]);
 
   return (
     <div style={{ position: 'relative' }}>
       <input
+        id={id}
         value={value ?? ''}
         onChange={e => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={'Cairo'}
         style={{ width: '100%', borderColor: error ? 'var(--red)' : undefined }}
-        autoComplete="off"
+        autoComplete="address-level1"
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={describedBy}
       />
       {open && suggestions.length > 0 && (
         <div style={{
@@ -67,6 +70,13 @@ export function CartPage() {
   const subtotal = cartSubtotal() ?? 0;
   const discountAmount = cartDiscountAmount() ?? 0;
   const safeCart = cart ?? [];
+
+  const changeQty = (item, nextQty) => {
+    const result = updateCartQty(item?.key, nextQty);
+    if (result && result.success === false) {
+      toast(result.error || 'Maximum available quantity reached. / تم الوصول للحد الأقصى المتاح.', 'warning');
+    }
+  };
 
   React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
 
@@ -113,7 +123,7 @@ export function CartPage() {
                 {safeCart.map(item => (
                   <motion.div key={item?.key} layout initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0, height:0, overflow:'hidden' }}
                     style={{ display: 'flex', gap: 20, padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ position:'relative', cursor:'pointer' }}>
+                    <div style={{ position:'relative' }}>
                       <img src={item?.product?.images?.[0] ?? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'} alt={item?.product?.name ?? 'Product'}
                         onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'; }}
                         style={{ width: 110, height: 138, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} loading="lazy" />
@@ -124,12 +134,12 @@ export function CartPage() {
                       <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2 }}>
-                          <button onClick={() => (item?.qty ?? 0) > 1 ? updateCartQty(item?.key, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
+                          <button onClick={() => (item?.qty ?? 0) > 1 ? changeQty(item, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
                             style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
                             <Minus size={12} />
                           </button>
                           <span style={{ padding: '0 10px', fontSize: 13, minWidth: 28, textAlign: 'center' }}>{item?.qty ?? 0}</span>
-                          <button onClick={() => updateCartQty(item?.key, (item?.qty ?? 0) + 1)}
+                          <button onClick={() => changeQty(item, (item?.qty ?? 0) + 1)}
                             style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
                             <Plus size={12} />
                           </button>
@@ -199,7 +209,7 @@ export function CartPage() {
                 ) : (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                     <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                    <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</span>
+                    <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</button>
                   </div>
                 )}
 
@@ -341,6 +351,10 @@ export function CheckoutPage() {
 
   const handleOrder = async () => {
     if (isPlacingOrder.current || submitting) return;
+    if (safeCart.length === 0) {
+      setStockErrors(['Your bag is empty. Add a piece before placing an order.\nسلتك فارغة. أضف قطعة قبل تأكيد الطلب.']);
+      return;
+    }
 
     const errs = validateOrderFormCustom(form);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
@@ -895,6 +909,23 @@ export function CheckoutPage() {
   );
 }
 
+  if (safeCart.length === 0) {
+    return (
+      <div style={{ paddingTop: 90, minHeight: '80vh' }}>
+        <div style={{ maxWidth: 560, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
+          <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px', display: 'block' }} />
+          <p style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</p>
+          <p style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 24 }}>
+            Add a piece to your bag before checking out.
+            <br />
+            أضف قطعة إلى سلتك قبل إتمام الطلب.
+          </p>
+          <button className="gold-btn" onClick={() => setPage('shop')}>Explore Collection</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
       <div style={{ maxWidth: 940, margin: '0 auto', padding: '40px 24px' }}>
@@ -904,6 +935,7 @@ export function CheckoutPage() {
         <AnimatePresence>
           {stockNotice.length > 0 && (
             <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
+              role="status" aria-live="polite"
               style={{ background:'rgba(201,168,76,0.10)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'14px 18px', marginBottom:16 }}>
               <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:4, fontSize:13 }}>
                 Your bag has been updated automatically.
@@ -946,6 +978,7 @@ export function CheckoutPage() {
 
           {stockErrors.length > 0 && (
             <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
+              role="alert" aria-live="assertive"
               style={{ background:'rgba(192,57,43,0.08)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:6, padding:'14px 18px', marginBottom:24 }}>
               <p style={{ color:'var(--red)', fontWeight:600, marginBottom:4, fontSize:13 }}>
                 Stock availability issue:
@@ -1014,26 +1047,37 @@ export function CheckoutPage() {
               marginBottom: 14 
             }}>
               <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Full Name *'}</label>
+                <label htmlFor="checkout-name" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Full Name *'}</label>
                 <input 
+                  id="checkout-name"
+                  name="name"
                   type="text" 
+                  autoComplete="name"
                   value={form.name ?? ''} 
                   onChange={e => update('name', e.target.value)} 
                   placeholder="Mohammed Hassan"
+                  aria-invalid={errors.name ? 'true' : undefined}
+                  aria-describedby={errors.name ? 'checkout-name-error' : undefined}
                   style={{ width:'100%', borderColor: errors.name ? 'var(--red)' : undefined }} 
                 />
-                {errors.name && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.name}</p>}
+                {errors.name && <p id="checkout-name-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.name}</p>}
               </div>
               <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Phone Number *'}</label>
+                <label htmlFor="checkout-phone" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Phone Number *'}</label>
                 <input 
+                  id="checkout-phone"
+                  name="phone"
                   type="tel" 
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={form.phone ?? ''} 
                   onChange={e => update('phone', e.target.value)} 
                   placeholder="01XXXXXXXXX"
+                  aria-invalid={errors.phone ? 'true' : undefined}
+                  aria-describedby={errors.phone ? 'checkout-phone-error' : undefined}
                   style={{ width:'100%', borderColor: errors.phone ? 'var(--red)' : undefined }} 
                 />
-                {errors.phone && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.phone}</p>}
+                {errors.phone && <p id="checkout-phone-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.phone}</p>}
               </div>
             </div>
 
@@ -1044,7 +1088,7 @@ export function CheckoutPage() {
               marginBottom: 14,
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <label style={{ 
+                <label htmlFor="checkout-phone-alt" style={{ 
                   display:'flex', 
                   alignItems: 'center',
                   fontSize:10, 
@@ -1057,17 +1101,23 @@ export function CheckoutPage() {
                   {'Alternative Phone (Optional)'}
                 </label>
                 <input 
+                  id="checkout-phone-alt"
+                  name="phoneAlt"
                   type="tel" 
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={form.phoneAlt ?? ''} 
                   onChange={e => update('phoneAlt', e.target.value)} 
                   placeholder="01XXXXXXXXX"
+                  aria-invalid={errors.phoneAlt ? 'true' : undefined}
+                  aria-describedby={errors.phoneAlt ? 'checkout-phone-alt-error' : undefined}
                   style={{ width:'100%', borderColor: errors.phoneAlt ? 'var(--red)' : undefined }} 
                 />
-                {errors.phoneAlt && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.phoneAlt}</p>}
+                {errors.phoneAlt && <p id="checkout-phone-alt-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.phoneAlt}</p>}
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <label style={{ 
+                <label htmlFor="checkout-email" style={{ 
                   display:'flex', 
                   alignItems: 'center',
                   fontSize:10, 
@@ -1080,43 +1130,57 @@ export function CheckoutPage() {
                   {'Email Address (Optional)'}
                 </label>
                 <input 
+                  id="checkout-email"
+                  name="email"
                   value={form.email ?? ''} 
                   onChange={e => update('email', e.target.value)} 
                   placeholder="your@email.com" 
+                  aria-invalid={errors.email ? 'true' : undefined}
+                  aria-describedby={errors.email ? 'checkout-email-error' : undefined}
                   style={{ width:'100%', borderColor: errors.email ? 'var(--red)' : undefined }} 
                   type="email" 
+                  autoComplete="email"
                 />
-                {errors.email && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.email}</p>}
+                {errors.email && <p id="checkout-email-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.email}</p>}
               </div>
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Street Address *'}</label>
+              <label htmlFor="checkout-address" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Street Address *'}</label>
               <input 
+                id="checkout-address"
+                name="address"
                 value={form.address ?? ''} 
                 onChange={e => update('address', e.target.value)} 
                 placeholder="District / neighborhood, street, building, floor or apartment..."
+                autoComplete="street-address"
+                aria-invalid={errors.address ? 'true' : undefined}
+                aria-describedby={errors.address ? 'checkout-address-error' : undefined}
                 style={{ width:'100%', borderColor: errors.address ? 'var(--red)' : undefined }} 
               />
-              {errors.address && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.address}</p>}
+              {errors.address && <p id="checkout-address-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.address}</p>}
             </div>
 
             <div className="checkout-location-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
               <div>
-                <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Governorate *'}</label>
+                <label htmlFor="checkout-governorate" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Governorate *'}</label>
                 <CityAutocomplete
+                  id="checkout-governorate"
                   value={form.city}
                   onChange={v => update('city', v)}
                   onSelect={v => update('city', v)}
                   error={errors.city}
+                  describedBy={errors.city ? 'checkout-governorate-error' : undefined}
                 />
-                {errors.city && <p style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.city}</p>}
+                {errors.city && <p id="checkout-governorate-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.city}</p>}
               </div>
             </div>
 
             <div>
-              <label style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Order Notes (OPTIONAL)'}</label>
+              <label htmlFor="checkout-notes" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Order Notes (OPTIONAL)'}</label>
               <textarea 
+                id="checkout-notes"
+                name="notes"
                 value={form.notes ?? ''} 
                 onChange={e => update('notes', e.target.value)} 
                 rows={3}
@@ -1171,7 +1235,7 @@ export function CheckoutPage() {
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                   <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                  <span onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>{'Remove'}</span>
+                  <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>{'Remove'}</button>
                 </div>
               )}
 

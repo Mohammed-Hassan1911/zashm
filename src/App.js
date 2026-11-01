@@ -63,62 +63,8 @@ function AppInner() {
   const [activeModal, setActiveModal] = useState(null);
   const trackedFirstView = useRef(false);
 
-  useEffect(() => {
-    let frame = 0;
-
-    const updateFloatingActions = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const isMobile = window.matchMedia('(max-width: 768px)').matches;
-        if (!isMobile) {
-          document.body.classList.remove(
-            'mobile-whatsapp-obstructed',
-            'mobile-back-to-top-obstructed'
-          );
-          return;
-        }
-
-        const floatingActions = [
-          ['.whatsapp-fab', 'mobile-whatsapp-obstructed'],
-          ['.back-to-top', 'mobile-back-to-top-obstructed'],
-        ];
-        const content = document.querySelectorAll(
-          '[role="button"], button:not(.back-to-top), a:not(.whatsapp-fab), input, textarea, select, .site-footer p, .site-footer h4, .product-page p, .product-page h1, .product-page h2, .product-page .product-card-image'
-        );
-
-        floatingActions.forEach(([selector, className]) => {
-          const action = document.querySelector(selector);
-          const actionRect = action?.getBoundingClientRect();
-          const obstructed = actionRect && [...content].some((element) => {
-            const rect = element.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) return false;
-            return (
-              actionRect.left < rect.right &&
-              actionRect.right > rect.left &&
-              actionRect.top < rect.bottom &&
-              actionRect.bottom > rect.top
-            );
-          });
-
-          document.body.classList.toggle(className, Boolean(obstructed));
-        });
-      });
-    };
-
-    updateFloatingActions();
-    window.addEventListener('scroll', updateFloatingActions, { passive: true });
-    window.addEventListener('resize', updateFloatingActions);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', updateFloatingActions);
-      window.removeEventListener('resize', updateFloatingActions);
-      document.body.classList.remove(
-        'mobile-whatsapp-obstructed',
-        'mobile-back-to-top-obstructed'
-      );
-    };
-  }, [currentPage, products]);
+  // WhatsApp remains visible; scroll-to-top appears after scrolling down.
+  // Both are fixed above every page layer (see src/index.css).
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -263,6 +209,18 @@ function PageLoading() {
 
 /* ================= MODAL COMPONENT ================= */
 function InfoModal({ type, onClose }) {
+  const closeRef = useRef(null);
+
+  useEffect(() => {
+    if (!type) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    closeRef.current?.focus();
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [type, onClose]);
+
   if (!type) return null;
 
   const content = {
@@ -311,10 +269,16 @@ function InfoModal({ type, onClose }) {
   }[type];
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, width: 460, maxWidth: '100%', padding: 24, position: 'relative' }}>
-        <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer' }}><X size={18} /></button>
-        <h3 style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: 18, marginBottom: 16, letterSpacing: 1 }}>{content?.title}</h3>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="info-modal-title"
+        onClick={(event) => event.stopPropagation()}
+        style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, width: 460, maxWidth: '100%', padding: 24, position: 'relative' }}
+      >
+        <button ref={closeRef} type="button" onClick={onClose} aria-label="Close dialog" style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer' }}><X size={18} aria-hidden="true" /></button>
+        <h3 id="info-modal-title" style={{ fontFamily: 'var(--font-display)', color: 'var(--gold)', fontSize: 18, marginBottom: 16, letterSpacing: 1 }}>{content?.title}</h3>
         <div style={{ color: 'var(--text2)' }}>{content?.text}</div>
       </div>
     </div>

@@ -387,3 +387,41 @@ drop`.
 
   `initdb` refuses to run as root, so the CI job must run as an unprivileged
   user (GitHub-hosted runners already do).
+
+---
+
+## Recent repository changes (2026-11-01 follow-up pass)
+
+These are already in the working tree (uncommitted) and are covered by the local
+test suite; they do not change the migration order above.
+
+- `reservedStock` is retained but removed from all availability math (no
+  writer/expiry exists). Availability = `max(0, stock)` without variants, or
+  `variantStock["<size>-<color>"]` with variants.
+- `atomic_adjust_stock` now supports partial restore: cancellation and deletion
+  restore stock for every line whose product/variant still exists and report
+  `missing_product` / `missing_variant` warnings instead of aborting. Un-cancel
+  (deduction) stays strict.
+- Coupons: usage is incremented only after a successful order insert; a coupon
+  referenced by a non-cancelled order cannot be deleted (DB + API guard);
+  `coupon_not_found` is tolerated where appropriate.
+- `public.users` / `public.orders`: deny-all RLS + revoked grants (service role
+  only), matching the existing lockdown migration.
+- Floating actions are fixed on the storefront at `--floating-action-z: 30000`
+  with safe-area offsets. WhatsApp stays visible; scroll-to-top appears after
+  scrolling down and hides near the top. Admin panel intentionally excluded
+  (its content scrolls in an inner container).
+- `pageUrl('track')` now preserves both `?track=` and `?tk=` so secure tracking
+  links are not stripped on navigation; `TrackOrder` syncs the URL accordingly.
+- `updateCartQty` returns `{ success, error }`; cart UI toasts the bilingual
+  stock-limit message instead of silently ignoring it.
+- Product image container cursor changed to `default` (no zoom/lightbox).
+- Admin accessibility: linked labels, `aria-invalid`/`aria-describedby`,
+  `role="dialog"`/`aria-modal` with Escape close and focus management,
+  keyboard-accessible upload/CSV drop zones, labelled password toggles.
+- `api/_lib.js` `maskOrderForLimitedAccess` comment corrected to match the
+  implementation (all PII including `phone` is cleared without a secure token).
+- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 888 passed, 0
+  failed (SQL suite actually ran on a temporary PostgreSQL 17 cluster);
+  `npm run build` → success; `npm audit --omit=dev` → 0 vulnerabilities;
+  built bundle contains only the anon JWT (no service-role key/secret).

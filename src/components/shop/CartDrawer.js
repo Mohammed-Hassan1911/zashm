@@ -2,12 +2,29 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, Trash2, Plus, Minus } from 'lucide-react';
 import { useStore } from '../../store';
+import { toast } from '../ui/BackToTop';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="100"%3E%3Crect fill="%23222" width="80" height="100"/%3E%3C/svg%3E';
 
 export default function CartDrawer() {
   const { cart, cartOpen, setCartOpen, removeFromCart, updateCartQty, cartTotal, setPage, appliedDiscount, removeAppliedDiscount } = useStore();
   const total = cartTotal() ?? 0;
+
+  React.useEffect(() => {
+    if (!cartOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setCartOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [cartOpen, setCartOpen]);
+
+  const changeQty = (item, nextQty) => {
+    const result = updateCartQty(item.key, nextQty);
+    if (result && result.success === false) {
+      toast(result.error || 'Maximum available quantity reached. / تم الوصول للحد الأقصى المتاح.', 'warning');
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -19,6 +36,9 @@ export default function CartDrawer() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, backdropFilter: 'blur(4px)' }}
           />
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Shopping bag"
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             style={{ 
@@ -44,9 +64,9 @@ export default function CartDrawer() {
                   {cart.reduce((s, i) => s + i.qty, 0)}
                 </span>
               </div>
-              <button onClick={() => setCartOpen(false)} style={{ color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
+              <button onClick={() => setCartOpen(false)} aria-label="Close shopping bag" style={{ color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
                 onMouseEnter={e => e.target.style.color = 'var(--gold)'}
-                onMouseLeave={e => e.target.style.color = 'var(--text2)'}><X size={20} /></button>
+                onMouseLeave={e => e.target.style.color = 'var(--text2)'}><X size={20} aria-hidden="true" /></button>
             </div>
 
             {/* Items */}
@@ -93,23 +113,26 @@ export default function CartDrawer() {
                           
                           {/* كاونتر الكمية */}
                           <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2, background: 'rgba(0,0,0,0.1)', flexShrink: 0 }}>
-                            <button onClick={() => item.qty > 1 ? updateCartQty(item.key, item.qty - 1) : removeFromCart(item.key)}
+                            <button onClick={() => item.qty > 1 ? changeQty(item, item.qty - 1) : removeFromCart(item.key)}
+                              type="button" aria-label={`Decrease quantity of ${item.product?.name || 'item'}`}
                               style={{ width: 28, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Minus size={11} />
+                              <Minus size={11} aria-hidden="true" />
                             </button>
                             <span style={{ fontSize: 12, minWidth: 20, textAlign: 'center', color: 'var(--text)' }}>{item.qty}</span>
-                            <button onClick={() => updateCartQty(item.key, item.qty + 1)}
+                            <button onClick={() => changeQty(item, item.qty + 1)}
+                              type="button" aria-label={`Increase quantity of ${item.product?.name || 'item'}`}
                               style={{ width: 28, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Plus size={11} />
+                              <Plus size={11} aria-hidden="true" />
                             </button>
                           </div>
 
                           {/* زر الحذف مستقل وفي أقصى اليمين */}
                           <button onClick={() => removeFromCart(item.key)}
+                            type="button" aria-label={`Remove ${item.product?.name || 'item'} from bag`}
                             style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
                             onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}>
-                            <Trash2 size={14} />
+                            <Trash2 size={14} aria-hidden="true" />
                           </button>
 
                         </div>

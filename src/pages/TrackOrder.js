@@ -87,8 +87,16 @@ export default function TrackOrder() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault(); // 🎯 منع تحديث الصفحة أو الاتصال الخارجي نهائياً
-    if (inputOrderId.trim()) {
-      setActiveOrderId(inputOrderId.trim());
+    const id = inputOrderId.trim();
+    if (!id) return;
+    setActiveOrderId(id);
+    // حافظ على رقم الطلب في الرابط حتى لا يضيع عند التحديث (الـ tk يظل كما هو).
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('track', id);
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch (err) {
+      /* history may be unavailable in some embedded browsers */
     }
   };
 
@@ -117,6 +125,8 @@ export default function TrackOrder() {
               value={inputOrderId}
               onChange={e => setInputOrderId(e.target.value)}
               placeholder="Order ID from your secure link"
+              aria-label="Order ID"
+              autoComplete="off"
               style={{
                 width: '100%',
                 padding: '12px 14px 12px 40px',
@@ -306,7 +316,7 @@ export default function TrackOrder() {
                           {[item.size, item.color].filter(Boolean).join(' · ')} · Qty: {item.qty || item.quantity || 1}
                         </p>
                       </div>
-                      <p style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>EGP {item.price?.toLocaleString()}</p>
+                      <p style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>EGP {Number(item.price || 0).toLocaleString()}</p>
                     </div>
                   ))
                 ) : (
@@ -317,17 +327,17 @@ export default function TrackOrder() {
 
                 {/* تفاصيل الحسابات النهائية */}
                 <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-                  {currentOrder.subtotal && (
+                  {Number(currentOrder.subtotal) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ color: 'var(--text3)', fontSize: 12 }}>Subtotal</span>
-                      <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {currentOrder.subtotal.toLocaleString()}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text1)' }}>EGP {Number(currentOrder.subtotal).toLocaleString()}</span>
                     </div>
                   )}
 
-                  {currentOrder.discount > 0 && (
+                  {Number(currentOrder.discount) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ color: '#27ae60', fontSize: 12 }}>Discount Applied</span>
-                      <span style={{ color: '#27ae60', fontSize: 12 }}>-EGP {currentOrder.discount.toLocaleString()}</span>
+                      <span style={{ color: '#27ae60', fontSize: 12 }}>-EGP {Number(currentOrder.discount).toLocaleString()}</span>
                     </div>
                   )}
 
@@ -341,7 +351,7 @@ export default function TrackOrder() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>Total Amount</span>
                     <span style={{ color: 'var(--gold)', fontSize: 16, fontWeight: 700 }}>
-                      EGP {(currentOrder.total || currentOrder.subtotal || 0).toLocaleString()}
+                      EGP {Number(currentOrder.total || currentOrder.subtotal || 0).toLocaleString()}
                     </span>
                   </div>
                 </div>

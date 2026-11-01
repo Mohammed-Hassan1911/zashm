@@ -239,8 +239,12 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
       <motion.div
         onDragOver={e => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
+        role="button"
+        tabIndex={0}
+        aria-label="Upload product images"
         onDrop={handleDrop}
         onClick={() => fileRef.current?.click()}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); } }}
         style={{
           border: `2px dashed ${dragging ? 'var(--gold)' : 'var(--border)'}`,
           borderRadius: 6,
@@ -256,6 +260,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
           type="file"
           multiple
           accept="image/*"
+          aria-label="Product image file input"
           style={{ display: 'none' }}
           onChange={e => handleFileUpload(e.target.files)}
         />
@@ -296,7 +301,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
 
       {/* ERROR */}
       {error && (
-        <div style={{ color: 'red', display: 'flex', gap: 6 }}>
+        <div role="alert" style={{ color: 'red', display: 'flex', gap: 6 }}>
           <AlertCircle size={12} /> {error}
         </div>
       )}

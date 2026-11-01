@@ -235,6 +235,15 @@ console.log('\n[7] source scan: no storefront coupon reads');
 
   const adminCoupons = readFileSync(`${root}/api/admin/coupons.js`, 'utf8');
   ok(/requirePerm\(req, res, 'discounts\.read'\)/.test(adminCoupons), 'admin coupon list requires discounts.read');
+  ok(/requirePerm\(req, res, 'discounts\.write'\)/.test(adminCoupons), 'admin coupon delete requires discounts.write');
+  ok(/from\('orders'\)/.test(adminCoupons) && /openOrders/.test(adminCoupons),
+    'coupon delete refuses coupons referenced by open orders');
+  ok(/23503/.test(adminCoupons), 'the database delete-guard error is mapped to a safe conflict');
+
+  const lifecycle = readFileSync(`${root}/supabase/atomic_order_lifecycle.sql`, 'utf8');
+  ok(/zshm_guard_coupon_delete/.test(lifecycle), 'the lifecycle migration defines the coupon delete guard');
+  ok(/coupon_not_found/.test(lifecycle), 'a deleted coupon no longer blocks cancel/delete');
+  ok(/PARTIAL RESTORE/.test(lifecycle), 'partial stock restore is documented in the lifecycle migration');
 
   const orders = readFileSync(`${root}/api/orders.js`, 'utf8');
   ok(/\.from\('coupons'\)/.test(orders), 'api/orders.js still validates coupons server-side');
@@ -248,6 +257,8 @@ console.log('\n[7] source scan: no storefront coupon reads');
   ok(/"minOrderAmount"/.test(placeSql) && /"maxDiscount"/.test(placeSql) && /"discountValue"/.test(placeSql),
     'RPC applies minOrderAmount / maxDiscount / discountValue');
   ok(/inactive_product/.test(placeSql), 'RPC rejects inactive products');
+  ok(!/- COALESCE\(v_prod\."reservedStock", 0\)/.test(placeSql),
+    'availability math no longer subtracts reservedStock');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

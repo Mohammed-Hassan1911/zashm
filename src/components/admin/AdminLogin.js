@@ -121,7 +121,8 @@ export default function AdminLogin({ onSuccess }) {
             {serverError && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                style={{ background: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)', borderRadius: 6, padding: '10px 14px', marginBottom: 20, display: 'flex', gap: 8, alignItems: 'flex-start' }}
+                role="alert"
+                 style={{ background: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.3)', borderRadius: 6, padding: '10px 14px', marginBottom: 20, display: 'flex', gap: 8, alignItems: 'flex-start' }}
               >
                 <AlertTriangle size={14} color="var(--red)" style={{ flexShrink: 0, marginTop: 1 }} />
                 <p style={{ color: 'var(--red)', fontSize: 12 }}>{serverError}</p>
@@ -131,7 +132,7 @@ export default function AdminLogin({ onSuccess }) {
 
           {/* Rate limited */}
           {rateLimited && (
-            <div style={{ background: 'rgba(243,156,18,0.1)', border: '1px solid rgba(243,156,18,0.3)', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
+            <div role="status" aria-live="polite" style={{ background: 'rgba(243,156,18,0.1)', border: '1px solid rgba(243,156,18,0.3)', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
               <p style={{ color: '#f39c12', fontSize: 12 }}>🔒 Account temporarily locked due to too many failed attempts. Try again in {formatRemaining(lockRemaining)}.</p>
             </div>
           )}
@@ -139,39 +140,47 @@ export default function AdminLogin({ onSuccess }) {
           {/* Form */}
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 11, color: 'var(--text3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Email Address</label>
+              <label htmlFor="admin-email" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Email Address</label>
               <div style={{ position: 'relative' }}>
                 <Mail size={14} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: errors.email ? 'var(--red)' : 'var(--text3)' }} />
                 <input
                   type="email"
+                  id="admin-email"
                   value={form.email}
                   onChange={e => update('email', e.target.value)}
                   placeholder="admin@zashm.com"
                   style={{ width: '100%', paddingLeft: 40, borderColor: errors.email ? 'var(--red)' : undefined }}
                   autoComplete="email"
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'admin-email-error' : undefined}
                 />
               </div>
-              {errors.email && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{errors.email}</p>}
+              {errors.email && <p id="admin-email-error" role="alert" style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{errors.email}</p>}
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <label style={{ display: 'block', fontSize: 11, color: 'var(--text3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Password</label>
+              <label htmlFor="admin-password" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8 }}>Password</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={14} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: errors.password ? 'var(--red)' : 'var(--text3)' }} />
                 <input
+                  id="admin-password"
                   type={showPwd ? 'text' : 'password'}
                   value={form.password}
                   onChange={e => update('password', e.target.value)}
                   placeholder="••••••••"
                   style={{ width: '100%', paddingLeft: 40, paddingRight: 40, borderColor: errors.password ? 'var(--red)' : undefined }}
                   autoComplete="current-password"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? 'admin-password-error' : undefined}
                 />
                 <button type="button" onClick={() => setShowPwd(!showPwd)}
+                  aria-label={showPwd ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPwd}
                   style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer' }}>
                   {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
-              {errors.password && <p style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{errors.password}</p>}
+              {errors.password && <p id="admin-password-error" role="alert" style={{ color: 'var(--red)', fontSize: 11, marginTop: 4 }}>{errors.password}</p>}
             </div>
 
             {/* Attempt indicator */}

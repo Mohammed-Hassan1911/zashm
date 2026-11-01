@@ -413,7 +413,9 @@ function bootstrap(db) {
   const sql = `
     CREATE ROLE anon NOLOGIN;
     CREATE ROLE authenticated NOLOGIN;
-    CREATE ROLE service_role NOLOGIN;
+    -- Supabase's service_role has BYPASSRLS. The lockdown migrations abort if
+    -- this is false, so the test cluster must mirror production.
+    CREATE ROLE service_role NOLOGIN BYPASSRLS;
 
     CREATE SCHEMA auth;
     CREATE SCHEMA storage;
@@ -462,6 +464,7 @@ function bootstrap(db) {
     );
 
     CREATE TABLE public.coupons (
+      id              bigint,
       code            text PRIMARY KEY,
       type            text,
       value           numeric,
@@ -575,6 +578,8 @@ async function main() {
   apply(DB, 'supabase/atomic_place_order.sql');
   apply(DB, 'supabase/atomic_order_lifecycle.sql');
   apply(DB, 'supabase/admin_protection.sql');
+  apply(DB, 'supabase/coupons_lockdown.sql');
+  apply(DB, 'supabase/users_orders_lockdown.sql');
   const viewPhase1 = apply(DB, 'supabase/products_public_view.sql');
   apply(DB, 'supabase/storage_hardening.sql');
 
@@ -938,6 +943,57 @@ async function main() {
     eq(badLine.reason, 'invalid_line', 'adjust: invalid qty → invalid_line');
   }
 
+  // [3j] reservedStock is retained but excluded from availability.
+  console.log('\n[3j] reservedStock is ignored by availability');
+  seedShop(DB);
+  runSql(DB, `UPDATE public.products SET "reservedStock" = 999 WHERE id = 1;`);
+  {
+    const cart = [{ productId: 1, qty: 10, size: 'M', color: 'Black', price: 50 }];
+    const order = makeOrder({ id: 'ORD-RESERVED', items: cart, subtotal: 500, total: 500 });
+    const r = lastJson(runSql(DB, placeSql(order, 'reserved-ignored')).out);
+    eq(r.ok, true, 'reservedStock=999 does not block a 10-piece order');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 0,
+      'stock is deducted normally while reservedStock is ignored');
+  }
+
+  // [3k] partial restore: missing products/variants are skipped and reported.
+  console.log('\n[3k] atomic_adjust_stock: partial restore');
+  seedShop(DB);
+  {
+    const lines = [
+      { productId: 1, qty: 2, size: 'M', color: 'Black' },
+      { productId: 999, qty: 1, size: 'M', color: 'Black' },
+    ];
+    const r = lastJson(runSql(DB,
+      `SELECT public.atomic_adjust_stock(${dollar(JSON.stringify(lines))}::jsonb, 1);`).out);
+    eq(r.ok, true, 'restore succeeds with one missing product');
+    eq(Number(r.restored), 1, 'the existing product group is restored');
+    ok((r.warnings || []).some((w) =>
+      w.reason === 'missing_product' && Number(w.productId) === 999),
+      'the missing product is reported');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 12,
+      'the existing line is actually restored');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-Black')::int FROM public.products WHERE id=1`), 12,
+      'the existing variant is actually restored');
+  }
+  {
+    const lines = [{ productId: 1, qty: 1, size: 'X', color: 'Y' }];
+    const up = lastJson(runSql(DB,
+      `SELECT public.atomic_adjust_stock(${dollar(JSON.stringify(lines))}::jsonb, 1);`).out);
+    eq(up.ok, true, 'restoring a missing variant is tolerated');
+    eq(Number(up.restored), 0, 'nothing is restored for a missing variant');
+    ok((up.warnings || []).some((w) => w.reason === 'missing_variant' && w.variant === 'X-Y'),
+      'the missing variant is reported');
+    eq(scalarNum(DB, `SELECT count(*) FROM jsonb_object_keys(
+        (SELECT "variantStock" FROM public.products WHERE id=1)) k WHERE k = 'X-Y'`), 0,
+      'the missing variant is not resurrected');
+
+    const down = lastJson(runSql(DB,
+      `SELECT public.atomic_adjust_stock(${dollar(JSON.stringify(lines))}::jsonb, -1);`).out);
+    eq(down.ok, false, 'deducting a missing variant stays strict');
+    eq(down.reason, 'missing_variant', 'deduct reports missing_variant');
+  }
+
   // ── atomic_order_lifecycle: legacy data ──────────────────────────────────
   console.log('\n[4] atomic_order_lifecycle: legacy / non-standard orders');
 
@@ -1008,7 +1064,8 @@ async function main() {
       'stock is unchanged by deleting a cancelled order');
   }
 
-  // [4f] a permanently deleted product: delete proceeds, nothing is restored.
+  // [4f] a permanently deleted product: delete proceeds AND every existing line
+  // is restored (partial restore), with a warning for the vanished product.
   seedLegacyOrder(DB, {
     itemsJson: [
       { productId: 1, qty: 2, size: 'M', color: 'Black' },
@@ -1018,13 +1075,93 @@ async function main() {
   {
     const r = lastJson(runSql(DB, deleteOrderSql('ORD-LEGACY-1')).out);
     eq(r.ok, true, 'a missing product does not block deletion forever');
-    eq(r.stockRestored, false, 'stockRestored=false when any product is missing');
+    eq(r.stockRestored, true, 'stockRestored=true when at least one line is restored');
     ok((r.warnings || []).some((w) => w.reason === 'missing_product' && Number(w.productId) === 999),
       'the missing product is reported as a warning');
-    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 10,
-      'no partial restore happens for the other lines');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 12,
+      'the existing line is restored (partial restore)');
     eq(scalarNum(DB, `SELECT count(*) FROM public.orders WHERE id='ORD-LEGACY-1'`), 0,
       'the order is still deleted');
+  }
+
+  // [4g] coupon delete guard: open orders block deletion; cancelled ones do not.
+  console.log('\n[4g] coupon delete guard');
+  seedLegacyOrder(DB, {
+    id: 'ORD-GUARD',
+    status: 'Confirmed',
+    itemsJson: [{ productId: 1, qty: 2, size: 'M', color: 'Black' }],
+  });
+  {
+    const blocked = runSql(DB, `DELETE FROM public.coupons WHERE code='SAVE10';`);
+    ok(blocked.status !== 0 && /coupon_in_use/.test(blocked.out),
+      'deleting a coupon used by an open order is rejected');
+    eq(scalarNum(DB, `SELECT count(*) FROM public.coupons WHERE code='SAVE10'`), 1,
+      'the coupon still exists after the rejected delete');
+
+    const c = lastJson(runSql(DB, setStatusSql('ORD-GUARD', 'Confirmed', 'Cancelled')).out);
+    eq(c.ok, true, 'the order can still be cancelled');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 2,
+      'coupon usage is released on cancellation');
+
+    const allowed = runSql(DB, `DELETE FROM public.coupons WHERE code='SAVE10';`);
+    eq(allowed.status, 0, 'a coupon referenced only by a cancelled order can be deleted');
+    eq(scalarNum(DB, `SELECT count(*) FROM public.coupons WHERE code='SAVE10'`), 0,
+      'the coupon is deleted after cancellation');
+  }
+
+  // [4h] a coupon deleted before the guard existed must not block lifecycle ops.
+  console.log('\n[4h] coupon_not_found is tolerated');
+  seedLegacyOrder(DB, {
+    itemsJson: [{ productId: 1, qty: 2, size: 'M', color: 'Black' }],
+    code: 'GONE',
+  });
+  {
+    const r = lastJson(runSql(DB, deleteOrderSql('ORD-LEGACY-1')).out);
+    eq(r.ok, true, 'delete succeeds when the coupon no longer exists');
+    ok((r.warnings || []).some((w) => w.warning === 'coupon_not_found'),
+      'the missing coupon is reported as a warning');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 12,
+      'stock is still restored');
+  }
+  seedLegacyOrder(DB, {
+    status: 'Confirmed',
+    itemsJson: [{ productId: 1, qty: 2, size: 'M', color: 'Black' }],
+    code: 'GONE',
+  });
+  {
+    const r = lastJson(runSql(DB, setStatusSql('ORD-LEGACY-1', 'Confirmed', 'Cancelled')).out);
+    eq(r.ok, true, 'cancel succeeds when the coupon no longer exists');
+    ok((r.warnings || []).some((w) => w.warning === 'coupon_not_found'),
+      'cancel reports coupon_not_found');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 12,
+      'cancel still restores stock');
+  }
+
+  // [4i] users/orders/coupons lockdown: browser roles are denied, service_role works.
+  console.log('\n[4i] users/orders/coupons lockdown');
+  {
+    for (const table of ['users', 'orders', 'coupons']) {
+      eq(scalar(DB, `SELECT has_table_privilege('anon', 'public.${table}', 'SELECT')`), 'f',
+        `anon cannot SELECT ${table}`);
+      eq(scalar(DB, `SELECT has_table_privilege('authenticated', 'public.${table}', 'SELECT')`), 'f',
+        `authenticated cannot SELECT ${table}`);
+      eq(scalar(DB, `SELECT has_table_privilege('service_role', 'public.${table}', 'SELECT')`), 't',
+        `service_role can SELECT ${table}`);
+      eq(scalar(DB, `SELECT has_table_privilege('service_role', 'public.${table}', 'DELETE')`), 't',
+        `service_role can DELETE ${table}`);
+      eq(scalar(DB, `SELECT relrowsecurity FROM pg_class WHERE oid = 'public.${table}'::regclass`), 't',
+        `RLS is enabled on ${table}`);
+    }
+    const anonUsers = runSql(DB, 'SET ROLE anon; SELECT count(*) FROM public.users;');
+    ok(anonUsers.status !== 0 && /permission denied/i.test(anonUsers.out),
+      'anon SELECT on users actually fails');
+    const authOrders = runSql(DB, 'SET ROLE authenticated; SELECT count(*) FROM public.orders;');
+    ok(authOrders.status !== 0 && /permission denied/i.test(authOrders.out),
+      'authenticated SELECT on orders actually fails');
+    const svcUsers = runSql(DB, 'SET ROLE service_role; SELECT count(*) FROM public.users;');
+    eq(svcUsers.status, 0, 'service_role can still read users');
+    const svcOrders = runSql(DB, 'SET ROLE service_role; SELECT count(*) FROM public.orders;');
+    eq(svcOrders.status, 0, 'service_role can still read orders');
   }
 
   // ── admin_protection: concurrent last-admin demotions ────────────────────

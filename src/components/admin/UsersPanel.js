@@ -269,7 +269,10 @@ export default function UsersPanel() {
             />
 
             <motion.div
-              initial={{ x: '100%' }}
+              role="dialog"
+               aria-modal="true"
+               aria-label={editingId ? 'Edit user' : 'Add team member'}
+               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
@@ -367,6 +370,8 @@ export default function UsersPanel() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
+                       aria-label={showPassword ? 'Hide password' : 'Show password'}
+                       aria-pressed={showPassword}
                       style={{
                         position: 'absolute',
                         right: '10px',
@@ -434,7 +439,10 @@ export default function UsersPanel() {
               pointerEvents: 'none'
             }}>
               <motion.div
-                initial={{ opacity: 0, scale: 0.92 }}
+                role="dialog"
+               aria-modal="true"
+               aria-labelledby="delete-user-title"
+               initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.92 }}
                 transition={{ type: 'spring', duration: 0.3 }}
@@ -465,7 +473,7 @@ export default function UsersPanel() {
                   <Trash2 size={22} color="#f07171" />
                 </div>
 
-                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#ffffff', marginBottom: 12 }}>
+                <h3 id="delete-user-title" style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#ffffff', marginBottom: 12 }}>
                   تأكيد الحذف النهائي
                 </h3>
                 

@@ -1,5 +1,12 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- ZASHM · H-02 · ATOMIC ORDER PLACEMENT + ATOMIC STOCK ADJUSTMENT
+-- REVISION 8 — reservedStock is no longer subtracted from availability. No
+-- process writes or expires that column, so subtracting it permanently hid
+-- sellable stock. The column is retained but is not part of availability.
+-- atomic_adjust_stock() now supports PARTIAL RESTORE: when p_delta = +1, a
+-- product (or variant) that no longer exists is skipped and reported as a
+-- warning, so the remaining lines are still restored. Deduction (p_delta = -1)
+-- stays strict and returns missing_product / missing_variant.
 -- REVISION 7 — non-variant aggregation + strict payload parsing. Demand for a
 -- product WITHOUT variants is now summed across ALL of its cart lines (any
 -- size/color) and compared once with global stock; products WITH variants are
@@ -39,7 +46,8 @@
 --   orders.items/timestamps jsonb; orders.date text; orders.idempotency_key (new)
 --   products.id bigint PK; products.stock integer DEFAULT 0;
 --   products.variantStock jsonb (keys "<size>-<color>" → int);
---   products.reservedStock integer DEFAULT 0
+--   products.reservedStock integer DEFAULT 0 (retained, but NOT used for
+--     availability — verified all-zero in production on 2026-11-01)
 -- The two queries below must be run by you (they are blocked by PostgREST here),
 -- because triggers/constraints are NOT visible through the REST API:
 SELECT tgname, tgrelid::regclass, tgenabled
@@ -260,8 +268,10 @@ BEGIN
         GROUP BY 1, 2, 3
         ORDER BY 1
       LOOP
-        v_available := COALESCE((v_prod."variantStock" ->> v_line.vkey)::int, 0)
-                       - COALESCE(v_prod."reservedStock", 0);
+        -- DECISION (2026-11-01): reservedStock is NOT subtracted. It has no
+        -- writer and no expiry, so it would hide sellable stock forever. The
+        -- column is kept for compatibility; availability is the variant pool.
+        v_available := COALESCE((v_prod."variantStock" ->> v_line.vkey)::int, 0);
 
         IF v_line.qty > v_available THEN
           RETURN jsonb_build_object(
@@ -285,8 +295,8 @@ BEGIN
         FROM jsonb_array_elements(v_items) AS it
        WHERE (it ->> 'productId')::bigint = v_id;
 
-      v_available := COALESCE(v_prod.stock, 99)
-                     - COALESCE(v_prod."reservedStock", 0);
+      -- Same DECISION as the variant branch above: reservedStock is excluded.
+      v_available := COALESCE(v_prod.stock, 99);
 
       IF v_total_qty > v_available THEN
         RETURN jsonb_build_object(
@@ -491,6 +501,9 @@ $$;
 -- making it row-locked too closes the "cancel racing a concurrent order" hole
 -- (previously a JS read-modify-write with no lock could lose a decrement).
 --   p_lines: [{ productId, qty, size, color }]   p_delta: +1 restore | -1 deduct
+--   +1 (restore): missing products/variants are skipped and returned in
+--      `warnings`; every existing line is still restored (`restored` > 0).
+--   -1 (deduct):  missing products/variants are a hard error; nothing is written.
 CREATE OR REPLACE FUNCTION public.atomic_adjust_stock(
   p_lines jsonb,
   p_delta integer
@@ -507,6 +520,9 @@ DECLARE
   v_total_qty integer;
   v_has_variants boolean;
   v_available integer;
+  v_touched boolean;
+  v_restored integer := 0;
+  v_warnings jsonb := '[]'::jsonb;
 BEGIN
   -- Validate the payload. Type, length and line checks are separate statements
   -- so a non-array can never reach jsonb_array_length() or a cast.
@@ -529,7 +545,11 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_line');
   END IF;
 
-  -- Lock all products in deterministic order
+  -- Lock all products in deterministic order. A product that no longer exists
+  -- is a HARD error when deducting (p_delta = -1): an order must never silently
+  -- lose stock. On restore (p_delta = +1) it is skipped and reported, so the
+  -- remaining, still-existing lines can be restored. This is the partial-restore
+  -- contract used by cancellation and order deletion.
   FOR v_id IN
     SELECT DISTINCT (it ->> 'productId')::bigint
     FROM jsonb_array_elements(p_lines) AS it
@@ -541,18 +561,33 @@ BEGIN
     FOR UPDATE;
 
     IF NOT FOUND THEN
-      RETURN jsonb_build_object(
-        'ok', false,
-        'reason', 'missing_product',
-        'productId', v_id
-      );
+      IF p_delta = 1 THEN
+        v_warnings := v_warnings || jsonb_build_array(jsonb_build_object(
+          'code', 'missing_product',
+          'reason', 'missing_product',
+          'productId', v_id
+        ));
+      ELSE
+        RETURN jsonb_build_object(
+          'ok', false,
+          'reason', 'missing_product',
+          'productId', v_id
+        );
+      END IF;
     END IF;
   END LOOP;
 
   -- Preflight: validate ALL requested stock changes before updating ANY row.
+  -- Only products that still exist are examined; the missing ones were handled
+  -- above (restore: warning, deduct: returned). This keeps the "validate
+  -- everything, then write" guarantee for every row that will be touched.
   FOR v_id IN
     SELECT DISTINCT (it ->> 'productId')::bigint
     FROM jsonb_array_elements(p_lines) AS it
+    WHERE EXISTS (
+      SELECT 1 FROM public.products p
+       WHERE p.id = (it ->> 'productId')::bigint
+    )
     ORDER BY 1
   LOOP
     SELECT * INTO v_prod
@@ -577,6 +612,18 @@ BEGIN
       LOOP
         IF v_line.vkey IN ('', '-')
            OR NOT (v_prod."variantStock" ? v_line.vkey) THEN
+          -- Restoring a variant that no longer exists must not resurrect it or
+          -- block the whole restore; report it and skip that line. Deduction
+          -- stays strict: selling a vanished variant is a real error.
+          IF p_delta = 1 THEN
+            v_warnings := v_warnings || jsonb_build_array(jsonb_build_object(
+              'code', 'missing_variant',
+              'reason', 'missing_variant',
+              'productId', v_id,
+              'variant', v_line.vkey
+            ));
+            CONTINUE;
+          END IF;
           RETURN jsonb_build_object(
             'ok', false,
             'reason', 'missing_variant',
@@ -625,10 +672,15 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- All lines passed validation. Apply the changes.
+  -- All lines passed validation. Apply the changes, skipping the missing
+  -- products/variants that were reported above (restore only).
   FOR v_id IN
     SELECT DISTINCT (it ->> 'productId')::bigint
     FROM jsonb_array_elements(p_lines) AS it
+    WHERE EXISTS (
+      SELECT 1 FROM public.products p
+       WHERE p.id = (it ->> 'productId')::bigint
+    )
     ORDER BY 1
   LOOP
     SELECT * INTO v_prod
@@ -646,6 +698,7 @@ BEGIN
     FROM jsonb_array_elements(p_lines) AS it
     WHERE (it ->> 'productId')::bigint = v_id;
 
+    v_touched := false;
     IF v_has_variants THEN
       FOR v_line IN
         SELECT
@@ -657,6 +710,11 @@ BEGIN
         GROUP BY 1
         ORDER BY 1
       LOOP
+        -- Missing variant on a restore: already reported by the preflight.
+        IF v_line.vkey IN ('', '-')
+           OR NOT (v_var ? v_line.vkey) THEN
+          CONTINUE;
+        END IF;
         v_var := jsonb_set(
           v_var,
           ARRAY[v_line.vkey],
@@ -665,26 +723,36 @@ BEGIN
             + (p_delta * v_line.qty)
           )
         );
+        v_touched := true;
+        v_restored := v_restored + 1;
       END LOOP;
 
-      -- Invariant: global stock always equals the sum of variant stock.
-      UPDATE public.products
-      SET
-        "variantStock" = v_var,
-        stock = (
-          SELECT COALESCE(SUM(value::integer), 0)::integer
-          FROM jsonb_each_text(v_var)
-        )
-      WHERE id = v_id;
+      -- Invariant: global stock always equals the sum of variant stock. Only
+      -- write when at least one existing variant was actually adjusted.
+      IF v_touched THEN
+        UPDATE public.products
+        SET
+          "variantStock" = v_var,
+          stock = (
+            SELECT COALESCE(SUM(value::integer), 0)::integer
+            FROM jsonb_each_text(v_var)
+          )
+        WHERE id = v_id;
+      END IF;
 
     ELSE
       UPDATE public.products
       SET stock = GREATEST(COALESCE(stock, 0) + (p_delta * v_total_qty), 0)
       WHERE id = v_id;
+      v_restored := v_restored + 1;
     END IF;
   END LOOP;
 
-  RETURN jsonb_build_object('ok', true);
+  -- `restored` = number of product groups actually adjusted. Callers use
+  -- restored > 0 to decide stockRestored; warnings explain what was skipped.
+  RETURN jsonb_build_object('ok', true,
+                            'restored', v_restored,
+                            'warnings', v_warnings);
 END;
 $$;
 

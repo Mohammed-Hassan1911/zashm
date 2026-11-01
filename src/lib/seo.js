@@ -87,7 +87,16 @@ export function setProductJsonLd(product) {
   }
   const images = Array.isArray(product.images) ? product.images.filter(Boolean) : [];
   const price = Number(product.salePrice || product.price || 0);
-  const inStock = Number(product.stock || 0) > 0;
+  // Availability must mirror the storefront: a product with variants is only
+  // in stock when at least one variant has stock; the legacy `stock` column is
+  // the aggregate and is not updated per variant.
+  const variantStock = product.variantStock && typeof product.variantStock === 'object' && !Array.isArray(product.variantStock)
+    ? product.variantStock
+    : null;
+  const variantTotal = variantStock
+    ? Object.values(variantStock).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0)
+    : 0;
+  const inStock = variantStock ? variantTotal > 0 : Number(product.stock || 0) > 0;
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const data = {
     '@context': 'https://schema.org',

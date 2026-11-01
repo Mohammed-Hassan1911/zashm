@@ -30,6 +30,28 @@ export default function ProductPage() {
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
+  const stockCloseRef = useRef(null);
+  const sizeGuideCloseRef = useRef(null);
+
+  // كل مودالات الصفحة: Escape يقفل، والتركيز يبدأ على زر الإغلاق.
+  useEffect(() => {
+    if (!stockModal.open && !sizeGuideOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      if (stockModal.open) setStockModal({ open: false, message: '' });
+      if (sizeGuideOpen) setSizeGuideOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [stockModal.open, sizeGuideOpen]);
+
+  useEffect(() => {
+    if (stockModal.open) stockCloseRef.current?.focus();
+  }, [stockModal.open]);
+
+  useEffect(() => {
+    if (sizeGuideOpen) sizeGuideCloseRef.current?.focus();
+  }, [sizeGuideOpen]);
 
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
@@ -252,7 +274,7 @@ export default function ProductPage() {
               onPointerDown={handleImagePointerDown}
               onPointerUp={handleImagePointerUp}
               onPointerCancel={() => { imageSwipeStartRef.current = null; }}
-              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '3 / 4', overflow: 'hidden', borderRadius: 2, cursor: 'zoom-in', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '3 / 4', overflow: 'hidden', borderRadius: 2, cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
@@ -285,23 +307,29 @@ export default function ProductPage() {
               {productImages.length > 1 && (
                 <>
                   <button onClick={() => changeImage(-1)}
+                    type="button"
+                    aria-label="Previous image"
                     style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, borderRadius: '50%', background: 'rgba(10,10,10,0.7)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <ChevronLeft size={16} />
+                    <ChevronLeft size={16} aria-hidden="true" />
                   </button>
                   <button onClick={() => changeImage(1)}
+                    type="button"
+                    aria-label="Next image"
                     style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, borderRadius: '50%', background: 'rgba(10,10,10,0.7)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <ChevronRight size={16} />
+                    <ChevronRight size={16} aria-hidden="true" />
                   </button>
                 </>
               )}
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
               {productImages.length > 1 && productImages.map((img, i) => (
-                <motion.div key={i} onClick={() => setImgIdx(i)}
-                  style={{ width: 80, height: 100, cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
+                <motion.button key={i} type="button" onClick={() => setImgIdx(i)}
+                  aria-label={`View image ${i + 1} of ${productImages.length}`}
+                  aria-current={imgIdx === i ? 'true' : undefined}
+                  style={{ width: 80, height: 100, padding: 0, background: 'none', cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
                   whileHover={{ scale: 1.05 }}>
                   <img src={img} alt="" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </motion.div>
+                </motion.button>
               ))}
             </div>
           </motion.div>
@@ -342,6 +370,9 @@ export default function ProductPage() {
                   
                   return (
                     <button key={c} onClick={() => { setSelColor(c); setQty(1); }}
+                      type="button"
+                      aria-pressed={selColor === c}
+                      aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
                       style={{ padding: '6px 14px', borderRadius: 2, fontSize: 11, fontWeight: 500, border: `2px solid ${selColor === c ? 'var(--gold)' : 'var(--border)'}`, background: selColor === c ? 'rgba(201,168,76,0.1)' : 'transparent', color: selColor === c ? 'var(--gold)' : 'var(--text2)', cursor: 'pointer', transition: 'all 0.2s', opacity: isColorOOS ? 0.4 : 1 }}>
                       {c} {isColorOOS && '(OOS)'}
                     </button>
@@ -375,6 +406,8 @@ export default function ProductPage() {
           key={s} 
           type="button" // يمنع أي تعليق أو تداخل مع الفورم
           onClick={() => { setSelSize(s); setQty(1); }}
+          aria-pressed={isSelected}
+          aria-label={`Size ${s}${isSizeOOSWithSelectedColor ? ' (out of stock in the selected color)' : ''}`}
           style={{ 
             width: 48, height: 48, borderRadius: 2, fontSize: 12, fontWeight: 600, 
             border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`, 
@@ -409,9 +442,11 @@ export default function ProductPage() {
             >
               <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2, opacity: isOutOfStock ? 0.5 : 1, pointerEvents: isOutOfStock ? 'none' : 'auto' }}>
                 <button onClick={() => setQty(Math.max(1, qty - 1))}
+                  type="button" aria-label="Decrease quantity"
                   style={{ width: 44, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>−</button>
                 <span style={{ width: 40, textAlign: 'center', fontSize: 14, fontWeight: 600 }}>{qty}</span>
                 <button onClick={() => setQty(Math.min(currentVariantStock, qty + 1))}
+                  type="button" aria-label="Increase quantity"
                   style={{ width: 44, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>+</button>
               </div>
               
@@ -444,7 +479,7 @@ export default function ProductPage() {
               </motion.button>
             </div>
 
-            <p style={{ color: isOutOfStock ? '#e74c3c' : currentVariantStock > 5 ? 'var(--green)' : '#f39c12', fontSize: 12, marginBottom: 24, fontWeight: 600 }}>
+            <p role="status" aria-live="polite" style={{ color: isOutOfStock ? '#e74c3c' : currentVariantStock > 5 ? 'var(--green)' : '#f39c12', fontSize: 12, marginBottom: 24, fontWeight: 600 }}>
               {isOutOfStock 
                 ? `✕ This variant (${selSize} - ${selColor}) is currently sold out!` 
                 : currentVariantStock > 5 
@@ -546,6 +581,9 @@ export default function ProductPage() {
           }} onClick={() => setStockModal({ open: false, message: '' })}>
             
             <motion.div 
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="stock-availability-title"
               initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
               style={{
                 background: 'linear-gradient(160deg, #17150f, #101010 58%)',
@@ -560,16 +598,18 @@ export default function ProductPage() {
               }} onClick={e => e.stopPropagation()}
             >
               <button onClick={() => setStockModal({ open: false, message: '' })}
+                ref={stockCloseRef}
+                type="button"
                 aria-label="Close stock notice"
                 style={{ position: 'absolute', top: 12, right: 12, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '50%', color: 'var(--text3, #888)', cursor: 'pointer' }}>
-                <X size={18} />
+                <X size={18} aria-hidden="true" />
               </button>
 
               <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', boxShadow: '0 0 24px rgba(201,168,76,0.12)' }}>
                 <AlertTriangle size={24} color="var(--gold, #c9a84c)" />
               </div>
 
-              <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 25, color: 'var(--gold, #c9a84c)', fontWeight: 500, letterSpacing: 0.6, marginBottom: 18 }}>Stock availability</h3>
+              <h3 id="stock-availability-title" style={{ fontFamily: 'var(--font-display, serif)', fontSize: 25, color: 'var(--gold, #c9a84c)', fontWeight: 500, letterSpacing: 0.6, marginBottom: 18 }}>Stock availability</h3>
               <div style={{ display: 'grid', gap: 12, marginBottom: 26 }}>
                 {stockModal.message.split('\n').filter(Boolean).map((message, index) => (
                   <p
@@ -605,6 +645,9 @@ export default function ProductPage() {
           }} onClick={() => setSizeGuideOpen(false)}>
             
             <motion.div 
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="size-guide-title"
               initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }}
               transition={{ duration: 0.3 }}
               className="size-guide-modal"
@@ -623,14 +666,17 @@ export default function ProductPage() {
               }} onClick={e => e.stopPropagation()}
             >
               <button className="size-guide-close" onClick={() => setSizeGuideOpen(false)}
+                ref={sizeGuideCloseRef}
+                type="button"
+                aria-label="Close size guide"
                 style={{ position: 'absolute', top: 20, right: 20, background: 'none', border: 'none', color: '#888', cursor: 'pointer', zIndex: 10 }}
                 onMouseEnter={e => e.currentTarget.style.color = 'var(--gold, #c9a84c)'}
                 onMouseLeave={e => e.currentTarget.style.color = '#888'}
               >
-                <X size={20} />
+                <X size={20} aria-hidden="true" />
               </button>
 
-              <h3 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 24, color: 'white', fontWeight: 400, letterSpacing: 2, marginBottom: 8, textAlign: 'center' }}>
+              <h3 id="size-guide-title" style={{ fontFamily: 'var(--font-display, serif)', fontSize: 24, color: 'white', fontWeight: 400, letterSpacing: 2, marginBottom: 8, textAlign: 'center' }}>
                 SIZE GUIDE
               </h3>
               <p style={{ color: 'var(--text3, #888)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 24, textAlign: 'center' }}>

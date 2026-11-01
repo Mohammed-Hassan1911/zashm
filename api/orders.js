@@ -129,8 +129,12 @@ async function placeOrder(req, res) {
       } else if (p.stock !== undefined && p.stock !== null) {
         stockAmount = Number(p.stock);
       }
-      const reserved = Number(p.reservedStock || 0);
-      const available = Math.max(0, stockAmount - reserved);
+      // DECISION (2026-11-01): reservedStock is intentionally NOT part of
+      // availability. Nothing writes it and nothing expires it, so subtracting
+      // it would permanently hide sellable stock. The column is kept for schema
+      // compatibility; PostgreSQL only sees it in admin service-role rows.
+      // The authoritative check still runs inside atomic_place_order.
+      const available = Math.max(0, stockAmount);
       // Variant products compare the aggregate for this exact variant; products
       // without variants compare the aggregate for the whole product, because
       // size/color do not select a separate stock pool there.

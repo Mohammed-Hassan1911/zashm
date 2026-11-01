@@ -106,7 +106,7 @@ export default function CSVImport({ onClose }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>Bulk Import Products</h2>
-        <button onClick={onClose} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+        <button onClick={onClose} aria-label="Close" style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
       </div>
 
       {success ? (
@@ -133,11 +133,15 @@ export default function CSVImport({ onClose }) {
           {/* Drop Zone */}
           <div
             style={{ border: `2px dashed ${file ? 'var(--gold)' : 'var(--border)'}`, borderRadius: 6, padding: 32, textAlign: 'center', cursor: 'pointer', background: 'var(--bg3)', marginBottom: 16 }}
+            role="button"
+            tabIndex={0}
+            aria-label="Upload CSV file"
             onClick={() => fileRef.current?.click()}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click(); } }}
             onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
             onDragOver={e => e.preventDefault()}
           >
-            <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }}
+            <input ref={fileRef} type="file" accept=".csv" aria-label="CSV file input" style={{ display: 'none' }}
               onChange={e => handleFile(e.target.files[0])} />
             {file ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>

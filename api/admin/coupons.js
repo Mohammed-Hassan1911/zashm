@@ -191,8 +191,46 @@ async function deleteCoupon(req, res) {
 
   try {
     const sb = supabaseAdmin();
+
+    // Deleting a coupon that an open order still references makes coupon-usage
+    // reconciliation fail during cancellation/deletion. Block it here with a
+    // friendly 409; the zshm_guard_coupon_delete trigger enforces the same rule
+    // atomically at the database boundary (and catches the check-then-delete
+    // race). Cancelled orders no longer count: their usage was already released.
+    const { data: coupon, error: findErr } = await sb
+      .from('coupons')
+      .select('id,code')
+      .eq('id', id)
+      .maybeSingle();
+    if (findErr) throw findErr;
+    if (!coupon) return json(res, 404, { error: 'Discount not found' });
+
+    const { data: orders, error: ordersErr } = await sb
+      .from('orders')
+      .select('id,status')
+      .eq('discountCode', coupon.code);
+    if (ordersErr) throw ordersErr;
+
+    const openOrders = (orders || []).filter(
+      (o) => String(o.status || '').toLowerCase() !== 'cancelled'
+    );
+    if (openOrders.length > 0) {
+      return json(res, 409, {
+        error: 'This discount is used by open orders and cannot be deleted. Cancel those orders first.',
+        openOrders: openOrders.length,
+      });
+    }
+
     const { error } = await sb.from('coupons').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      // The database trigger uses SQLSTATE 23503 for the same condition.
+      if (error.code === '23503') {
+        return json(res, 409, {
+          error: 'This discount is used by open orders and cannot be deleted. Cancel those orders first.',
+        });
+      }
+      throw error;
+    }
     return json(res, 200, { success: true });
   } catch (err) {
     logCouponError('Coupon delete failed:', err);

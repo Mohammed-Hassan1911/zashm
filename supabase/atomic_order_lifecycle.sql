@@ -30,17 +30,18 @@
 --   * ignore only the invalid lines and process every valid line;
 --   * report the number of skipped lines in the `warnings` array.
 --
--- ⚠ PRODUCT-DELETION WARNING (read before deleting orders):
--- Deleting an order restores stock. If a product row was permanently deleted,
--- atomic_adjust_stock() reports `missing_product` and (by design) writes NO
--- stock at all, because it validates every product before mutating any. The
--- order is still deleted (so the console is never blocked forever) but:
---   * stockRestored = false;
---   * warnings contains the missing product;
---   * stock for the OTHER, still-existing lines is NOT restored.
--- This is permanent inventory loss for those lines. The API returns the
--- warnings so the operator can reconcile manually. Prefer cancelling orders
--- before deleting products when historical restores may be needed.
+-- PRODUCT-DELETION BEHAVIOUR (REVISION 3 — PARTIAL RESTORE):
+-- Deleting or cancelling an order restores stock for every line whose product
+-- still exists. A product or variant that was permanently deleted is skipped
+-- and reported, so one missing product can no longer block the whole restore:
+--   * stockRestored = true when at least one existing line was restored;
+--   * warnings contains { code/reason: 'missing_product', productId } or
+--     { code/reason: 'missing_variant', productId, variant };
+--   * un-cancelling still deducts STRICTLY: a missing product/variant returns
+--     missing_product / missing_variant and writes nothing.
+-- COUPON DELETION: zshm_guard_coupon_delete() rejects deleting a coupon that a
+-- non-cancelled order still references. A coupon that was deleted before this
+-- guard existed is tolerated at cancel/delete time (`coupon_not_found` warning).
 -- ══════════════════════════════════════════════════════════════════════════════
 
 -- ── 0) LEGACY-SAFE ITEM PARSERS (internal helpers) ───────────────────────────
@@ -154,8 +155,13 @@ BEGIN
 
   GET DIAGNOSTICS v_updated = ROW_COUNT;
 
-  IF v_updated <> 1 THEN
-    RAISE EXCEPTION 'Coupon not found during usage adjustment: %', p_code;
+  IF v_updated = 0 THEN
+    -- The coupon was deleted after the order was created. That must NOT block
+    -- cancellation or order deletion forever: report it so the caller can
+    -- surface a warning and continue. (The delete guard below prevents new
+    -- occurrences while an order is still open.)
+    RETURN jsonb_build_object('ok', true, 'updated', 0,
+                              'warning', 'coupon_not_found');
   END IF;
 
   RETURN jsonb_build_object('ok', true, 'updated', v_updated);
@@ -184,6 +190,7 @@ DECLARE
   v_going boolean;
   v_coming boolean;
   v_code text;
+  v_coupon_result jsonb;
   v_skipped integer := 0;
   v_warnings jsonb := '[]'::jsonb;
 BEGIN
@@ -238,15 +245,27 @@ BEGIN
     IF jsonb_array_length(v_lines) > 0 THEN
       v_stock := public.atomic_adjust_stock(v_lines, CASE WHEN v_going THEN 1 ELSE -1 END);
       IF COALESCE((v_stock ->> 'ok')::boolean, false) IS NOT TRUE THEN
-        -- atomic_adjust_stock validates/locks every product BEFORE writing, so
-        -- returning here leaves the transaction with no partial stock change.
-        RETURN v_stock || jsonb_build_object('warnings', v_warnings);
+        -- Deduction (un-cancel) is strict, and a real write failure rolls the
+        -- whole transaction back. No partial stock change can survive.
+        RETURN v_stock || jsonb_build_object(
+          'warnings',
+          v_warnings || COALESCE(v_stock -> 'warnings', '[]'::jsonb)
+        );
+      END IF;
+      -- Cancellation (restore) may have skipped products/variants that no
+      -- longer exist; keep those warnings instead of losing them.
+      IF jsonb_typeof(v_stock -> 'warnings') = 'array' THEN
+        v_warnings := v_warnings || (v_stock -> 'warnings');
       END IF;
     END IF;
 
     v_code := NULLIF(btrim(COALESCE(v_order."discountCode", '')), '');
     IF v_code IS NOT NULL THEN
-      PERFORM public.zshm_adjust_coupon_usage(v_code, CASE WHEN v_going THEN -1 ELSE 1 END);
+      v_coupon_result := public.zshm_adjust_coupon_usage(
+        v_code, CASE WHEN v_going THEN -1 ELSE 1 END);
+      IF (v_coupon_result ->> 'warning') IS NOT NULL THEN
+        v_warnings := v_warnings || jsonb_build_array(v_coupon_result);
+      END IF;
     END IF;
   END IF;
 
@@ -270,11 +289,9 @@ $$;
 -- restore) instead of blocking deletion forever; any other failure raises, which
 -- rolls the whole transaction back and keeps the order row intact.
 --
--- ⚠ Lost-product warning: atomic_adjust_stock() validates ALL products before
--- writing any. If one product row is missing, it returns missing_product and
--- writes nothing, so deletion proceeds with stockRestored=false and the OTHER
--- valid lines are NOT restored. The warning is returned to the admin API. This
--- is irreversible inventory loss for those lines; see §0 header.
+-- PARTIAL RESTORE: atomic_adjust_stock() restores every existing line and
+-- reports missing products/variants as warnings. stockRestored is true when at
+-- least one group was adjusted. See §0 header.
 CREATE OR REPLACE FUNCTION public.atomic_delete_order(p_id text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -289,6 +306,7 @@ DECLARE
   v_restored boolean := false;
   v_warnings jsonb := '[]'::jsonb;
   v_code text;
+  v_coupon_result jsonb;
   v_skipped integer := 0;
 BEGIN
   IF p_id IS NULL OR btrim(p_id) = '' THEN
@@ -316,9 +334,14 @@ BEGIN
     IF jsonb_array_length(v_lines) > 0 THEN
       v_stock := public.atomic_adjust_stock(v_lines, 1);
       IF COALESCE((v_stock ->> 'ok')::boolean, false) IS TRUE THEN
-        v_restored := true;
+        -- Partial restore: every existing line was restored. `restored` is the
+        -- number of product groups adjusted; missing products/variants are
+        -- returned in warnings instead of blocking the whole operation.
+        v_restored := COALESCE((v_stock ->> 'restored')::integer, 0) > 0;
+        v_warnings := v_warnings || COALESCE(v_stock -> 'warnings', '[]'::jsonb);
       ELSIF (v_stock ->> 'reason') = 'missing_product' THEN
-        -- See the ⚠ warning above: NO line is restored in this branch.
+        -- Compatibility with an older atomic_adjust_stock revision: it wrote
+        -- nothing when any product was missing.
         v_warnings := v_warnings || jsonb_build_array(v_stock);
       ELSE
         RAISE EXCEPTION 'atomic_delete_order: stock restore failed: %', v_stock;
@@ -327,7 +350,10 @@ BEGIN
 
     v_code := NULLIF(btrim(COALESCE(v_order."discountCode", '')), '');
     IF v_code IS NOT NULL THEN
-      PERFORM public.zshm_adjust_coupon_usage(v_code, -1);
+      v_coupon_result := public.zshm_adjust_coupon_usage(v_code, -1);
+      IF (v_coupon_result ->> 'warning') IS NOT NULL THEN
+        v_warnings := v_warnings || jsonb_build_array(v_coupon_result);
+      END IF;
     END IF;
   END IF;
 
@@ -339,6 +365,44 @@ BEGIN
                             'warnings', v_warnings);
 END;
 $$;
+
+-- ── 2.5) COUPON DELETE GUARD ─────────────────────────────────────────────────
+-- Deleting a coupon that an open (non-cancelled) order references used to make
+-- cancellation/delete fail at coupon-usage adjustment time. This trigger closes
+-- the race at the database boundary: any delete path (admin API, SQL editor,
+-- future code) is rejected while a non-cancelled order still uses the code.
+-- Cancelled orders are allowed: their usage was already released at cancel time.
+CREATE OR REPLACE FUNCTION public.zshm_guard_coupon_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_open integer;
+BEGIN
+  SELECT count(*) INTO v_open
+    FROM public.orders
+   WHERE btrim(COALESCE("discountCode", '')) = btrim(OLD.code)
+     AND lower(COALESCE(status, '')) <> 'cancelled';
+
+  IF v_open > 0 THEN
+    RAISE EXCEPTION
+      'coupon_in_use: % open order(s) still use coupon %', v_open, OLD.code
+      USING ERRCODE = '23503';
+  END IF;
+
+  RETURN OLD;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.zshm_guard_coupon_delete() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS zshm_guard_coupon_delete ON public.coupons;
+CREATE TRIGGER zshm_guard_coupon_delete
+  BEFORE DELETE ON public.coupons
+  FOR EACH ROW
+  EXECUTE FUNCTION public.zshm_guard_coupon_delete();
 
 -- ── 3) PRIVILEGES ─────────────────────────────────────────────────────────────
 -- SECURITY INVOKER (default) + service_role only, exactly like the other
@@ -356,6 +420,8 @@ REVOKE ALL ON FUNCTION public.zshm_order_skipped_lines(jsonb) FROM PUBLIC, anon,
 -- place-order file is applied first and must not reference it).
 REVOKE ALL ON FUNCTION public.zshm_adjust_coupon_usage(text, integer)
   FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.zshm_guard_coupon_delete()
+  FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.atomic_set_order_status(text, text, text, jsonb)
   TO service_role;
 GRANT EXECUTE ON FUNCTION public.atomic_delete_order(text)
@@ -369,7 +435,11 @@ GRANT EXECUTE ON FUNCTION public.zshm_adjust_coupon_usage(text, integer)
 -- ── 4) POST-APPLY VERIFICATION (read-only; run after applying) ───────────────
 -- SELECT proname, prosecdef, proconfig, proacl
 --   FROM pg_proc
---  WHERE proname IN ('atomic_set_order_status', 'atomic_delete_order');
+--  WHERE proname IN ('atomic_set_order_status', 'atomic_delete_order',
+--                    'zshm_adjust_coupon_usage', 'zshm_guard_coupon_delete');
+-- SELECT tgname, tgenabled
+--   FROM pg_trigger
+--  WHERE tgname = 'zshm_guard_coupon_delete';
 -- SELECT has_function_privilege('anon',
 --          'public.atomic_set_order_status(text,text,text,jsonb)', 'EXECUTE') AS anon_can,
 --        has_function_privilege('service_role',
@@ -379,3 +449,6 @@ GRANT EXECUTE ON FUNCTION public.zshm_adjust_coupon_usage(text, integer)
 -- Never drop deployed lifecycle functions without a reviewed replacement.
 -- Restore previous function definitions only through a reviewed rollback.
 -- Never remove shared helper functions used by other production functions.
+-- Coupon guard rollback (only if the guard must be removed):
+--   DROP TRIGGER IF EXISTS zshm_guard_coupon_delete ON public.coupons;
+--   DROP FUNCTION IF EXISTS public.zshm_guard_coupon_delete();

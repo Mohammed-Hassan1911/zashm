@@ -257,3 +257,18 @@ ON CONFLICT (name) DO NOTHING;
 - [ ] أي بند «Accepted Risk» موثّق ومقبول صراحةً من صاحب المنتج.
 
 عندها فقط يمكن تغيير الحكم من **Conditional Go** إلى **Go**.
+
+---
+
+## 10. 追加更新 (2026-11-01 follow-up pass)
+
+- Floating buttons enforced always-visible (storefront only), z-index 30000,
+  safe-area offsets; scroll-to-top disabled (not hidden) at top.
+- `pageUrl('track')` preserves `track` and `tk` query params.
+- `updateCartQty` returns `{ success, error }`; callers toast stock limits.
+- Product image cursor set to `default`.
+- Admin a11y gaps fixed (labels, dialogs, drop zones, toggles).
+- `api/_lib.js` mask comment corrected.
+- Latest test run: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **888 passed, 0 failed**
+  (SQL suite actually ran). `npm run build` → success. `npm audit --omit=dev` →
+  0 vulnerabilities. Built bundle contains only the anon JWT.

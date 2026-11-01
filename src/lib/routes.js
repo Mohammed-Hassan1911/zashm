@@ -44,8 +44,16 @@ export function pageUrl(page, selectedProduct, currentLocation = typeof window !
 
   const path = STATIC_ROUTES[page] || '/';
   if (page === 'track') {
-    const trackId = new URLSearchParams(currentLocation?.search || '').get('track');
-    return trackId ? `${path}?track=${encodeURIComponent(trackId)}` : path;
+    // Preserve the full secure tracking link (?track=…&tk=…) so navigating
+    // back to /track never silently drops the token that unlocks the order.
+    const params = new URLSearchParams(currentLocation?.search || '');
+    const preserved = new URLSearchParams();
+    const trackId = params.get('track');
+    const token = params.get('tk');
+    if (trackId) preserved.set('track', trackId);
+    if (token) preserved.set('tk', token);
+    const query = preserved.toString();
+    return query ? `${path}?${query}` : path;
   }
 
   return path;

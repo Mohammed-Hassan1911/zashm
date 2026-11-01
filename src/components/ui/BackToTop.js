@@ -1,27 +1,55 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ArrowUp, CheckCircle, AlertCircle, AlertTriangle, Info, X, ShoppingBag, Heart } from 'lucide-react';
 
-// Back to Top
 export function BackToTop() {
   const [visible, setVisible] = useState(false);
+  const visibleRef = useRef(false);
+  const reduceMotion = useReducedMotion();
+
   useEffect(() => {
-    const handler = () => setVisible(window.scrollY > 400);
-    window.addEventListener('scroll', handler);
+    const handler = () => {
+      const nextVisible = window.scrollY > 300;
+      if (visibleRef.current !== nextVisible) {
+        visibleRef.current = nextVisible;
+        setVisible(nextVisible);
+      }
+    };
+
+    handler();
+    window.addEventListener('scroll', handler, { passive: true });
     return () => window.removeEventListener('scroll', handler);
   }, []);
+
+  const handleClick = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [reduceMotion]);
+
   return createPortal(
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {visible && (
         <motion.button
-          initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0 }}
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          style={{ borderRadius: '50%', background: 'var(--gold)', color: 'var(--bg)', border: 'none', cursor: 'pointer', alignItems: 'center', justifyContent: 'center', zIndex: 800, boxShadow: '0 4px 20px rgba(201,168,76,0.4)' }}
-          whileHover={{ scale: 1.1, boxShadow: '0 6px 30px rgba(201,168,76,0.6)' }}
-          whileTap={{ scale: 0.9 }}
+          type="button"
+          onClick={handleClick}
+          aria-label="Scroll back to top"
+          title="Scroll back to top"
+          initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
+          transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
+          whileHover={!reduceMotion ? { scale: 1.1, boxShadow: '0 6px 30px rgba(201,168,76,0.6)' } : undefined}
+          whileTap={!reduceMotion ? { scale: 0.9 } : undefined}
           className="back-to-top"
-        ><ArrowUp size={18} /></motion.button>
+          style={{
+            borderRadius: '50%',
+            background: 'var(--gold)',
+            color: 'var(--bg)',
+            border: 'none',
+            padding: 0,
+            boxShadow: '0 4px 20px rgba(201,168,76,0.4)',
+          }}
+        ><ArrowUp size={18} aria-hidden="true" /></motion.button>
       )}
     </AnimatePresence>,
     document.body

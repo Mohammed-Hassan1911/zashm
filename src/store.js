@@ -346,8 +346,10 @@ export const useStore = create((set, get) => ({
       await api.patch('/admin/products', { id, updates: { images: list, image: list[0] || '' } });
     } catch (err) {
       console.error('updateProductImages failed:', err.message);
+      throw err;
+    } finally {
+      await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
     }
-    await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
   },
 
   addProduct: async (p) => {
@@ -394,11 +396,11 @@ export const useStore = create((set, get) => ({
       stockAmount = Number(freshProduct.stock);
     }
 
-    // reservedStock is no longer exposed (view), so this is always 0 here.
-    // The server re-checks real availability inside atomic_place_order, which
-    // is the authoritative gate; this is only a friendlier early warning.
-    const reservedAmount = Number(freshProduct.reservedStock || 0);
-    const available = Math.max(0, stockAmount - reservedAmount);
+    // reservedStock is not part of availability: nothing writes or expires it,
+    // and products_public does not expose it. The server re-checks real
+    // availability inside atomic_place_order, which is the authoritative gate;
+    // this is only a friendlier early warning.
+    const available = Math.max(0, stockAmount);
     const currentInCart = (get().cart || []).find(i => i.product?.id == product.id && i.size === size && i.color === color)?.qty || 0;
 
     if (currentInCart + qty > available && stockAmount !== 99) {
@@ -440,7 +442,7 @@ export const useStore = create((set, get) => ({
   updateCartQty: (key, newQty) => {
     const { cart, products } = get();
     const cartItem = cart.find(item => item.key === key);
-    if (!cartItem) return;
+    if (!cartItem) return { success: false, error: 'This item is no longer in your bag. / هذا المنتج لم يعد في سلتك.' };
 
     // استخدم بيانات المنتج الحيّة من الليستة، وإلا ارجع لنسخة المنتج المحفوظة
     // داخل عنصر السلة (حتى لو الليستة لم تُحمّل بعد) لمنع تجاوز المخزون بلا نهاية.
@@ -453,13 +455,20 @@ export const useStore = create((set, get) => ({
       const availableStock = hasVariantStock ? (Number(pv[variantKey]) || 0) : currentProduct.stock;
 
       if (availableStock !== undefined && availableStock !== null && newQty > Number(availableStock)) {
-        return;
+        const available = Math.max(0, Number(availableStock));
+        return {
+          success: false,
+          error: available > 0
+            ? `Only ${available} piece${available === 1 ? '' : 's'} available for this selection.\nمتوفر ${available} قطعة فقط من هذا الاختيار.`
+            : 'This selection is out of stock.\nهذا الاختيار غير متوفر حالياً.',
+        };
       }
     }
 
     const newCart = cart.map(item => item.key === key ? { ...item, qty: newQty } : item);
     const saved = get()._saveCart(newCart);
     set({ cart: saved });
+    return { success: true };
   },
 
   // ضبط تلقائي للكميات بعد رد السيرفر: يقلل الكميات المتاحة أو يشيل
@@ -500,7 +509,10 @@ export const useStore = create((set, get) => ({
     return { reduced, removed };
   },
 
-  clearCart: () => { localStorage.removeItem('zashm_cart'); set({ cart: [] }); },
+  clearCart: () => {
+    try { localStorage.removeItem('zashm_cart'); } catch (e) { /* storage may be blocked */ }
+    set({ cart: [] });
+  },
   cartTotal: () => {
     const sub = get().cartSubtotal();
     if (!get().appliedDiscount) return sub;
@@ -510,10 +522,18 @@ export const useStore = create((set, get) => ({
   cartDiscountAmount: () => Math.max(0, get().cartSubtotal() - get().cartTotal()),
 
   wishlist: safeParseArray('zashm_wishlist', typeof localStorage !== 'undefined' ? localStorage : null),
-  toggleWishlist: (productId) => set(s => { const wishlist = s.wishlist.includes(productId) ? s.wishlist.filter(id => id !== productId) : [...s.wishlist, productId]; localStorage.setItem('zashm_wishlist', JSON.stringify(wishlist)); return { wishlist }; }),
+  toggleWishlist: (productId) => set(s => {
+    const wishlist = s.wishlist.includes(productId) ? s.wishlist.filter(id => id !== productId) : [...s.wishlist, productId];
+    try { localStorage.setItem('zashm_wishlist', JSON.stringify(wishlist)); } catch (e) { /* storage may be blocked */ }
+    return { wishlist };
+  }),
 
   recentlyViewed: safeParseArray('zashm_recently', typeof sessionStorage !== 'undefined' ? sessionStorage : null),
-  addRecentlyViewed: (id) => set(s => { const recentlyViewed = [id, ...s.recentlyViewed.filter(i => i !== id)].slice(0, 8); sessionStorage.setItem('zashm_recently', JSON.stringify(recentlyViewed)); return { recentlyViewed }; }),
+  addRecentlyViewed: (id) => set(s => {
+    const recentlyViewed = [id, ...s.recentlyViewed.filter(i => i !== id)].slice(0, 8);
+    try { sessionStorage.setItem('zashm_recently', JSON.stringify(recentlyViewed)); } catch (e) { /* storage may be blocked */ }
+    return { recentlyViewed };
+  }),
 
   // ─── ORDERS & NOTIFICATIONS ────────────────────────────────────────────────
   refreshOrders: async (silent = false) => {

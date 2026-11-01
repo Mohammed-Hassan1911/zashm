@@ -1116,8 +1116,10 @@ function parseOrderRow(row) {
   };
 }
 
-/** Masks customer PII for ID-only tracking lookups; `phone` is intentionally
- * kept so the customer sees the number they submitted on the first check. */
+/** Masks customer PII for ID-only tracking lookups (no secure token). All
+ * customer-identifying fields — including `phone` — are cleared so an order id
+ * alone never exposes personal data. The secure `tk` link is required to view
+ * the full record. */
 function maskOrderForLimitedAccess(order) {
   return {
     ...order,

@@ -110,20 +110,52 @@ function makeDb() {
     return p ? p.stock : null;
   }
 
+  // Mirrors atomic_adjust_stock(): restore (+1) is partial and reports missing
+  // products/variants; deduct (-1) stays strict and writes nothing.
   function adjustStock(lines, delta) {
-    for (const line of lines) {
-      const p = state.products.get(Number(line.productId));
-      if (!p) return { ok: false, reason: 'missing_product', productId: line.productId };
+    const warnings = [];
+    let restored = 0;
+
+    if (delta === -1) {
+      for (const line of lines) {
+        const p = state.products.get(Number(line.productId));
+        if (!p) return { ok: false, reason: 'missing_product', productId: line.productId };
+        const vkey = `${line.size || ''}-${line.color || ''}`;
+        if (p.variantStock && Object.keys(p.variantStock).length
+            && !Object.prototype.hasOwnProperty.call(p.variantStock, vkey)) {
+          return { ok: false, reason: 'missing_variant', productId: line.productId, variant: vkey };
+        }
+      }
     }
+
     for (const line of lines) {
       const p = state.products.get(Number(line.productId));
+      if (!p) {
+        if (delta === 1) {
+          if (!warnings.some((w) => w.productId === Number(line.productId))) {
+            warnings.push({ code: 'missing_product', reason: 'missing_product', productId: Number(line.productId) });
+          }
+          continue;
+        }
+        return { ok: false, reason: 'missing_product', productId: line.productId };
+      }
       const vkey = `${line.size || ''}-${line.color || ''}`;
-      if (p.variantStock && Object.prototype.hasOwnProperty.call(p.variantStock, vkey)) {
+      if (p.variantStock && Object.keys(p.variantStock).length) {
+        if (!Object.prototype.hasOwnProperty.call(p.variantStock, vkey)) {
+          if (delta === 1) {
+            warnings.push({ code: 'missing_variant', reason: 'missing_variant', productId: Number(line.productId), variant: vkey });
+            continue;
+          }
+          return { ok: false, reason: 'missing_variant', productId: line.productId, variant: vkey };
+        }
         p.variantStock[vkey] = Math.max(0, p.variantStock[vkey] + delta * line.qty);
+        restored += 1;
+      } else {
+        restored += 1;
       }
       p.stock = Math.max(0, p.stock + delta * line.qty);
     }
-    return { ok: true };
+    return { ok: true, restored, warnings };
   }
 
   const sb = {
@@ -177,10 +209,14 @@ function makeDb() {
               }
               if (parsed.items.length) {
                 const r = adjustStock(parsed.items, going ? 1 : -1);
-                if (!r.ok) return { ...r, warnings };
+                if (!r.ok) return { ...r, warnings: warnings.concat(r.warnings || []) };
+                warnings.push(...(r.warnings || []));
               }
               const coupon = state.coupons.get(order.discountCode);
               if (coupon) coupon.usageCount = Math.max(0, coupon.usageCount + (going ? -1 : 1));
+              else if (order.discountCode) {
+                warnings.push({ ok: true, updated: 0, warning: 'coupon_not_found' });
+              }
             }
             const from = order.status;
             order.status = args.p_new_status;
@@ -205,12 +241,20 @@ function makeDb() {
               }
               if (parsed.items.length) {
                 const r = adjustStock(parsed.items, 1);
-                if (r.ok) restored = true;
-                else if (r.reason === 'missing_product') warnings.push(r);
-                else return { ok: false, reason: 'stock_failed' };
+                if (r.ok) {
+                  restored = (r.restored || 0) > 0;
+                  warnings.push(...(r.warnings || []));
+                } else if (r.reason === 'missing_product') {
+                  warnings.push(r);
+                } else {
+                  return { ok: false, reason: 'stock_failed' };
+                }
               }
               const coupon = state.coupons.get(order.discountCode);
               if (coupon) coupon.usageCount = Math.max(0, coupon.usageCount - 1);
+              else if (order.discountCode) {
+                warnings.push({ ok: true, updated: 0, warning: 'coupon_not_found' });
+              }
             }
             state.orders.delete(String(args.p_id));
             return { ok: true, deleted: true, stockRestored: restored, wasCancelled, warnings };
@@ -336,7 +380,10 @@ console.log('\n[1] static checks: JS is not a transaction coordinator');
     'SQL parses legacy/double-encoded order items safely');
   ok(/zshm_order_skipped_lines/.test(sql), 'SQL reports skipped legacy item lines');
   ok(/legacy_items_skipped/.test(sql), 'skipped lines are surfaced in warnings');
-  ok(/PRODUCT-DELETION WARNING/.test(sql), 'product-loss warning is documented');
+  ok(/PRODUCT-DELETION BEHAVIOUR/.test(sql) && /PARTIAL RESTORE/.test(sql),
+    'partial-restore behaviour is documented');
+  ok(/zshm_guard_coupon_delete/.test(sql),
+    'coupon-delete guard is defined in the lifecycle migration');
 }
 
 // ─── [2] concurrent cancel: stock + coupon move exactly once ────────────────
@@ -496,8 +543,8 @@ console.log('\n[10] legacy order data');
   const skipped = (r.body.warnings || []).find((w) => w.code === 'legacy_items_skipped');
   eq(skipped && skipped.count, 3, 'three invalid lines are reported as skipped');
 
-  // A permanently deleted product: deletion proceeds, but no line is restored
-  // and the warning is returned (documented permanent inventory loss).
+  // A permanently deleted product: deletion proceeds and every EXISTING line is
+  // still restored; the missing product is reported for manual reconciliation.
   seed({ stock: 10, couponUsage: 3 });
   resetOrder({ items: [
     { productId: 1, qty: 2, size: 'M', color: 'Black' },
@@ -506,9 +553,11 @@ console.log('\n[10] legacy order data');
   r = await call('DELETE', { id: 'ZSH-TEST-1' });
   eq(r.status, 200, 'message deletion is not blocked by a deleted product');
   eq(state.orders.has('ZSH-TEST-1'), false, 'the order row is removed');
-  eq(state.products.get(1).stock, 10, 'no partial restore happens when any product is missing');
-  eq(r.body.stockRestored, false, 'response reports stockRestored=false');
-  ok((r.body.warnings || []).some((w) => w.reason === 'missing_product'),
+  eq(state.products.get(1).stock, 12, 'the existing line is still restored (partial restore)');
+  eq(r.body.stockRestored, true, 'response reports stockRestored=true');
+  eq(r.body.partial, true, 'response marks the restore as partial');
+  ok((r.body.warnings || []).some((w) =>
+    w.reason === 'missing_product' && Number(w.productId) === 999),
     'response explains the missing product');
 }
 

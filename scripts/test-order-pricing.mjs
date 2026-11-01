@@ -470,7 +470,7 @@ console.log('\n[7] RPC reasons are mapped to safe HTTP responses');
   eq(r.body.stockIssues[0].missing, true, 'missing product is reported');
 }
 
-// ─── [8] stock availability, including reservedStock ────────────────────────
+// ─── [8] stock availability (reservedStock is intentionally ignored) ────────
 console.log('\n[8] stock availability');
 {
   seed({ stock: 1 });
@@ -478,9 +478,15 @@ console.log('\n[8] stock availability');
   eq(r.status, 422, 'requesting 2 with stock 1 → 422');
   eq(state.rpcCalls.length, 0, 'no order written for an unavailable line');
 
+  // DECISION: reservedStock has no writer/expiry, so it must not reduce the
+  // sellable pool. It is retained in the schema but excluded from availability.
   seed({ stock: 5, reservedStock: 4 });
   r = await place();
-  eq(r.status, 422, 'reservedStock is subtracted from availability');
+  eq(r.status, 200, 'reservedStock does not reduce availability');
+
+  seed({ stock: 2, reservedStock: 99 });
+  r = await place();
+  eq(r.status, 200, 'a large reservedStock value is ignored');
 
   seed({ stock: 2, reservedStock: 0 });
   r = await place();

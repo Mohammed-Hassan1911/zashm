@@ -504,6 +504,12 @@ select option { background: var(--bg3); }
   .zashm-header-nav {
     display: none !important;
   }
+
+  /* Mobile-only: drop duplicate Wishlist/Bag from the top header; they live
+     in the bottom navigation. Keep Search at the extreme right. */
+  .zashm-header-utilities {
+    display: none !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -544,22 +550,50 @@ select option { background: var(--bg3); }
 
 .mobile-nav { display: none; }
 
-.back-to-top {
+/* ─── FLOATING ACTIONS ────────────────────────────────────────────────────────
+   WhatsApp stays visible; scroll-to-top appears after scrolling down. The
+   z-index sits above the header (1000), mobile nav (900), drawers/modals
+   (2000–9999) and toasts (20000). Buttons respect device safe areas and keep
+   comfortable mobile touch targets. */
+:root { --floating-action-z: 30000; }
+
+/* Accessible label that stays available to screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.back-to-top,
+.whatsapp-fab {
   position: fixed;
-  right: 24px;
-  bottom: 90px;
-  width: 44px;
-  height: 44px;
+  z-index: var(--floating-action-z);
   display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.back-to-top {
+  right: calc(24px + env(safe-area-inset-right, 0px));
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  width: 46px;
+  height: 46px;
 }
 
 .whatsapp-fab {
-  position: fixed;
-  bottom: 88px;
-  left: 20px;
+  left: calc(24px + env(safe-area-inset-left, 0px));
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   width: 52px;
   height: 52px;
-  display: flex;
 }
 
 .size-guide-overlay {
@@ -605,29 +639,31 @@ select option { background: var(--bg3); }
 
   .mobile-nav { display: block; }
   .mobile-nav.mobile-nav--keyboard-open { display: none; }
+  /* Keep the floating actions clear of the bottom navigation bar. */
   .back-to-top {
     right: calc(16px + env(safe-area-inset-right, 0px));
-    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-    width: 42px;
-    height: 42px;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    width: 44px;
+    height: 44px;
   }
   .whatsapp-fab {
     left: calc(16px + env(safe-area-inset-left, 0px));
-    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     right: auto;
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
   }
-  .mobile-whatsapp-obstructed .whatsapp-fab,
-  .mobile-back-to-top-obstructed .back-to-top {
-    visibility: hidden;
-    pointer-events: none;
+  .back-to-top svg {
+    width: 16px;
+    height: 16px;
   }
-  .mobile-keyboard-open .whatsapp-fab { display: none; }
-  .mobile-keyboard-open .back-to-top { display: none; }
+  .whatsapp-fab svg {
+    width: 24px;
+    height: 24px;
+  }
 
   footer.site-footer {
-    padding-bottom: calc(12px + 64px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(12px + 72px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 
@@ -1185,6 +1221,10 @@ main, [role="main"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   .zashm-toast,
   .zashm-toast-dismiss {
     scroll-behavior: auto;
