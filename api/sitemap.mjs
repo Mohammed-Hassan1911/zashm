@@ -26,16 +26,31 @@ function getOrigins() {
     throw new Error('Public Supabase URL must use HTTPS');
   }
 
-  const siteUrl = new URL(env('PUBLIC_BASE_URL') || DEFAULT_SITE_ORIGIN);
-  if (siteUrl.protocol !== 'https:' &&
-      !(siteUrl.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(siteUrl.hostname))) {
-    throw new Error('Public site URL must use HTTPS');
+  const configuredSiteUrl = env('PUBLIC_BASE_URL');
+  let siteOrigin = DEFAULT_SITE_ORIGIN;
+  if (configuredSiteUrl) {
+    let siteUrl;
+    try {
+      siteUrl = new URL(configuredSiteUrl);
+    } catch {
+      throw new Error('PUBLIC_BASE_URL is invalid');
+    }
+    if (siteUrl.protocol !== 'https:' ||
+        siteUrl.username ||
+        siteUrl.password ||
+        siteUrl.pathname !== '/' ||
+        siteUrl.search ||
+        siteUrl.hash ||
+        siteUrl.origin !== DEFAULT_SITE_ORIGIN) {
+      throw new Error('PUBLIC_BASE_URL must match the canonical production origin');
+    }
+    siteOrigin = siteUrl.origin;
   }
 
   return {
     supabaseOrigin: parsedSupabaseUrl.origin,
     anonKey,
-    siteOrigin: siteUrl.origin,
+    siteOrigin,
   };
 }
 
@@ -46,22 +61,16 @@ async function fetchPublicProducts({ supabaseOrigin, anonKey }) {
     url.searchParams.set('select', 'id,stock,variantStock');
     url.searchParams.set('order', 'id.asc');
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    let response;
-    try {
-      response = await fetch(url, {
+    const signal = AbortSignal.timeout(8000);
+    const response = await fetch(url, {
         headers: {
           apikey: anonKey,
           Authorization: `Bearer ${anonKey}`,
           Range: `${offset}-${offset + PAGE_SIZE - 1}`,
           'Range-Unit': 'items',
         },
-        signal: controller.signal,
+        signal,
       });
-    } finally {
-      clearTimeout(timeout);
-    }
 
     if (!response.ok) throw new Error(`products_public returned HTTP ${response.status}`);
     const rows = await response.json();

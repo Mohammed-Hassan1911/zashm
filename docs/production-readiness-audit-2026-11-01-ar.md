@@ -132,7 +132,7 @@
 | F-06 | منخفض | `src/pages/HomePage.js:15`, `:18`; `src/pages/ShopPage.js:61`; `src/store.js:233` | بعد إزالة `active` من العرض، كل المنتجات تأتي `active: undefined` ثم `?? true`. فلاتر `p.active !== false` أصبحت dead code. | احذف الفلاتر أو أعد `active` فقط إن كان له معنى في الواجهة. | كود مضلل، لا أثر وظيفي. | **No issue / Low** |
 | F-07 | منخفض / محتمل | `src/lib/security.js:114-121`; `src/lib/auth.js:129-138`; `api/_lib.js:446-455` | توجد **ثلاث** خرائط صلاحيات. خريطة `security.js` المصدَّرة غير مستخدمة حاليًا وتفتقد `dashboard.read`، بينما `auth.js` والسيرفر متطابقان. أي استخدام مستقبلي لها سيسبب اختلافًا. | اجعل مصدرًا واحدًا (shared) أو احذف المصدَّر غير المستخدم. | خطأ صلاحيات مستقبلي محتمل. | **Potential / Low** |
 | F-08 | منخفض | `index.html:2` | `lang="en"` على موقع محتواه عربي/إنجليزي مختلط. | اضبط `lang="ar"` أو `lang="en"` مع `dir` مناسب حسب اللغة السائدة. | SEO/accessibility. | **Confirmed / Low** |
-| F-09 | منخفض | `api/sitemap.mjs`; `vercel.json` | كان الـ sitemap ثابتًا. أصبح `/sitemap.xml` يولّد الصفحة الرئيسية و`/shop` والمنتجات المتاحة من `products_public` باستخدام مفتاح anon، مع canonical routing وfallback آمن. | تحقق من المسار بعد النشر، واضبط `PUBLIC_BASE_URL` إذا كان النطاق الإنتاجي مختلفًا عن الافتراضي. | يعتمد تحديثه على توافر Supabase العام؛ عند الفشل يعيد المسارات الثابتة فقط. | **Fixed locally; deployment verification pending** |
+| F-09 | منخفض | `api/sitemap.mjs`; `vercel.json` | كان الـ sitemap ثابتًا. أصبح `/sitemap.xml` يولّد الصفحة الرئيسية و`/shop` والمنتجات المتاحة من `products_public` باستخدام مفتاح anon، مع canonical routing وfallback آمن. | تحقق من المسار بعد النشر؛ يجب أن يطابق `PUBLIC_BASE_URL` الأصل canonical المعتمد. | يعتمد تحديثه على توافر Supabase العام؛ عند الفشل يعيد المسارات الثابتة فقط. | **Fixed locally; deployment verification pending** |
 | F-10 | منخفض | `src/pages/AdminApp.js:392-404` | `classifyInventory(products)` يستخدم نفس منتجات العرض العام، فلا يرى المنتجات غير النشطة ويصنّف المخزون على مجموعة ناقصة. | يُحل مع F-01 عبر مصدر إداري كامل. | تقارير مخزون مضللة. | **Confirmed / Medium** |
 | F-11 | لا مشكلة | `src/components/shop/ProductCard.js:124-137`, `:145-148` | بطاقة المنتج `role="button"` مع `tabIndex` و`onKeyDown`، وصور lazy/eager مع fallback. | لا شيء. | وصول أفضل. | **No issue** |
 | F-12 | لا مشكلة | `src/App.js:25`, `:48-53`; `src/components/ui/ErrorBoundary.js` | ErrorBoundary يمنع شاشة بيضاء عند خطأ render. | لا شيء. | متانة أفضل. | **No issue** |
@@ -254,7 +254,7 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 
 | الاختبار | الأمر | النتيجة | ملاحظات |
 |---|---|---|---|
-| حزمة الاختبارات الكاملة (آخر تحقق محلي) | `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **918 passed, 0 failed** | 10 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 126 + 25 + 248؛ تضمنت 248 اختبار SQL محليًا. |
+| حزمة الاختبارات الكاملة (آخر تحقق محلي) | `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **922 passed, 0 failed** | 10 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 126 + 29 + 248؛ تضمنت 248 اختبار SQL محليًا. |
 | SQL concurrency / RLS / grants | `node scripts/test-sql-concurrency.mjs` | **248 passed, 0 failed** | PostgreSQL 17 محلي مؤقت، يُدمَّر تلقائيًا. لا اتصال بالإنتاج. |
 | اختبار مسار المنتجات الإداري (جديد) | `node scripts/test-admin-products.mjs` | **18 passed, 0 failed** | يثبت `GET /api/admin/products` والصلاحيات والصفوف الكاملة وعدم تسريب أخطاء DB. |
 | بناء الإنتاج | `npm run build` | **PASS** | Vite 7.3.7، 2555 module، 2.62s، 22 ملفًا. |
@@ -378,7 +378,7 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 13. اجمع `pg_stat_user_indexes` قبل أي حذف index.
 14. أصلح «Best Seller» وUX التتبع و`alt` وحالات الخطأ في المتجر (F-02/F-03/F-04/F-05).
 15. وحّد خرائط الصلاحيات (L-04) واحذف الكود الميت.
-16. تحقق من sitemap الديناميكي في Preview/Production واضبط `PUBLIC_BASE_URL` عند استخدام نطاق مخصص؛ وراجع اللغة السائدة (L-06/L-07).
+16. تحقق من sitemap الديناميكي في Preview/Production؛ يجب أن يطابق `PUBLIC_BASE_URL` الأصل canonical المعتمد. راجع اللغة السائدة (L-06/L-07).
 17. احسم SEC-24 (`reservedStock`) نهائيًا (O-12).
 18. نفّذ اختبار متصفح/Lighthouse/حمل على staging أو Preview.
 
@@ -465,7 +465,7 @@ Phase 3 **لا يعمل** إلا إذا وُجد الصف `products_public_front
 | F-06 / L-03 | **ACCEPTED RISK / NO CHANGE** | التطبيع يعيد `active` افتراضيًا `true`، فالفلاتر الدفاعية تبقى صحيحة ولا تضر. | تنظيف اختياري لاحقًا. |
 | F-07 / L-04 | **FIXED LOCALLY AND TESTED** | `PERMISSIONS` و`hasPermission` أصبحا مصدرًا واحدًا مُصدَّرًا من `src/lib/security.js` ويستخدمهما `auth.js`، مع `dashboard.read`. | لا شيء. |
 | F-08 / L-06 | **ACCEPTED RISK** | `lang="en"` لم يُغيَّر لأن المحتوى مختلط عربي/إنجليزي والقرار محتوى/SEO. | قرار لغة/اتجاه لاحقًا. |
-| F-09 / L-07 | **FIXED LOCALLY; DEPLOYMENT CHECK PENDING** | `/sitemap.xml` يُعاد توجيهه إلى API ديناميكي يقرأ `products_public` بمفتاح anon فقط، ويستبعد غير المتاح ويزيل التكرار، مع `/` و`/shop` وfallback عند الفشل. اختبارات التوليد محلية. | تحقق بعد النشر واضبط `PUBLIC_BASE_URL` إذا اختلف النطاق. |
+| F-09 / L-07 | **FIXED LOCALLY; DEPLOYMENT CHECK PENDING** | `/sitemap.xml` يُعاد توجيهه إلى API ديناميكي يقرأ `products_public` بمفتاح anon فقط، ويستبعد غير المتاح ويزيل التكرار، مع `/` و`/shop` وfallback عند الفشل. الأصل المسموح canonical فقط. | تحقق على Vercel Preview/Production من المسار والـ headers والـ origin. |
 | F-10 / M-06 | **FIXED LOCALLY AND TESTED** | `Dashboard` يستخدم `adminProducts` (يشمل غير النشط) عند امتلاك `products.read`، مع fallback للمتجر لدور بلا صلاحية. | تحقق يدوي من تقرير المخزون. |
 | F-11 / F-12 | **ACCEPTED RISK / NO CHANGE** | ProductCard/ErrorBoundary سليمان (فُحصا). | لا شيء. |
 | F-13 | **PARTIALLY VERIFIED LOCALLY** | جرى اختبار مسارات المتجر و404 والاستجابة للمقاسات في متصفح محلي؛ لم يُختبر Preview/Production أو CSP/Network هناك. | اختبار Preview/Production يدويًا (§11.8 و§11.10). |

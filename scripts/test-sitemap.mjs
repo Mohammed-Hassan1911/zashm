@@ -36,14 +36,21 @@ console.log('\n[1] active and available product selection');
     { id: 46, stock: 5, variantStock: { 'M-black': 0 } },
     { id: 47, stock: 2, deleted: true },
     { id: 48, stock: 2, private: true },
+    { id: 49, stock: null, variantStock: null },
+    { id: 50, stock: '2' },
+    { id: 51, stock: 2, variantStock: [] },
+    { id: 52, stock: null, variantStock: {} },
   ], origin);
-  eq((xml.match(/<loc>/g) || []).length, 4, 'includes the two static routes and two unique available products');
+  eq((xml.match(/<loc>/g) || []).length, 6, 'includes static routes and four unique available products');
   ok(xml.includes(`${origin}/product/42`), 'includes the active in-stock product');
   ok(xml.includes(`${origin}/product/45`), 'uses variant stock to recognize an available product');
+  ok(xml.includes(`${origin}/product/50`) && xml.includes(`${origin}/product/51`),
+    'accepts numeric stock strings and falls back when variant stock is absent or malformed');
   ok(!xml.includes('/product/43') && !xml.includes('/product/44') &&
      !xml.includes('/product/46') && !xml.includes('/product/47') &&
-     !xml.includes('/product/48'),
-  'excludes inactive, sold-out, deleted, and private products');
+     !xml.includes('/product/48') && !xml.includes('/product/49') &&
+     !xml.includes('/product/52'),
+  'excludes inactive, sold-out, deleted, private, null-stock, and zero-variant products');
 }
 
 console.log('\n[2] empty results and canonical routing');
@@ -83,7 +90,7 @@ console.log('\n[3] public data source and pagination');
   for (const name of envNames) oldEnv[name] = process.env[name];
   process.env.SUPABASE_URL = 'https://example.supabase.co';
   process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
-  process.env.PUBLIC_BASE_URL = origin;
+  process.env.PUBLIC_BASE_URL = `${origin}/`;
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'must-not-be-used';
 
   const originalFetch = globalThis.fetch;
@@ -152,7 +159,62 @@ console.log('\n[4] safe handling of source failures');
   eq(errors, 1, 'source failure is reported to server logs');
 }
 
-console.log('\n[5] method guard');
+console.log('\n[5] canonical origin validation');
+{
+  const oldUrl = process.env.SUPABASE_URL;
+  const oldKey = process.env.SUPABASE_ANON_KEY;
+  const oldSite = process.env.PUBLIC_BASE_URL;
+  const oldFetch = globalThis.fetch;
+  const oldConsoleError = console.error;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  process.env.PUBLIC_BASE_URL = 'https://preview--zashm.vercel.app/';
+  globalThis.fetch = async () => { throw new Error('Sitemap must reject an unapproved origin before fetching'); };
+  console.error = () => {};
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = oldFetch;
+    console.error = oldConsoleError;
+    for (const [name, value] of [['SUPABASE_URL', oldUrl], ['SUPABASE_ANON_KEY', oldKey], ['PUBLIC_BASE_URL', oldSite]]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+
+  ok(response.body.includes(`<loc>${origin}/</loc>`) && response.body.includes(`<loc>${origin}/shop</loc>`),
+    'invalid or preview origin falls back to the known production canonical origin');
+  ok(!response.body.includes('preview--zashm') && !response.body.includes('/product/'),
+    'invalid origin is not emitted and product fetch is skipped');
+}
+
+console.log('\n[6] missing canonical origin');
+{
+  const oldUrl = process.env.SUPABASE_URL;
+  const oldKey = process.env.SUPABASE_ANON_KEY;
+  const oldSite = process.env.PUBLIC_BASE_URL;
+  const oldFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  delete process.env.PUBLIC_BASE_URL;
+  globalThis.fetch = async () => new Response('[]', { status: 200 });
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = oldFetch;
+    for (const [name, value] of [['SUPABASE_URL', oldUrl], ['SUPABASE_ANON_KEY', oldKey], ['PUBLIC_BASE_URL', oldSite]]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+
+  ok(response.body.includes(`<loc>${origin}/</loc>`) && response.body.includes(`<loc>${origin}/shop</loc>`),
+    'missing PUBLIC_BASE_URL uses the documented production canonical origin');
+}
+
+console.log('\n[7] method guard');
 {
   const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
   await sitemapHandler({ method: 'POST' }, response);

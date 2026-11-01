@@ -75,12 +75,12 @@
 
 | الأمر | النتيجة |
 |---|---|
-| `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **918 passed, 0 failed** — 10 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 126 + 25 + 248 |
+| `ZSHM_REQUIRE_SQL_TESTS=1 npm test` | **922 passed, 0 failed** — 10 مجموعات: 81 + 90 + 80 + 79 + 74 + 18 + 97 + 126 + 29 + 248 |
 | `node scripts/test-admin-products.mjs` | **18 passed, 0 failed** |
 | `node scripts/test-sessions-admin.mjs` | **74 passed, 0 failed** |
 | `node scripts/test-edge-transport.mjs` | **97 passed, 0 failed** |
 | `node scripts/test-final-hardening.mjs` | **126 passed, 0 failed** |
-| `node scripts/test-sitemap.mjs` | **25 passed, 0 failed** |
+| `node scripts/test-sitemap.mjs` | **29 passed, 0 failed** |
 | `node scripts/test-sql-concurrency.mjs` | **248 passed, 0 failed** — PostgreSQL 17 محلي مؤقت، لا اتصال بالإنتاج |
 | اختبار متصفح محلي | **PASS** — المسارات العامة و404 عند 320 و390 و1440px، بلا أخطاء صفحات أو overflow |
 | `npm run build` | **PASS** — Vite 7.3.7، 2555 module |
@@ -269,13 +269,13 @@ ON CONFLICT (name) DO NOTHING;
   scrolling beyond 300px and hides near the top.
 - `/sitemap.xml` is dynamically generated from the public `products_public`
   view using anon credentials; `/` and `/shop` remain included. Verify the
-  route after deployment and set `PUBLIC_BASE_URL` if the canonical domain differs
-  from the configured default. Empty checkout exposes its empty-state message as an H1.
+  route after deployment and ensure `PUBLIC_BASE_URL` matches the approved
+  canonical origin. Empty checkout exposes its empty-state message as an H1.
 - `pageUrl('track')` preserves `track` and `tk` query params.
 - `updateCartQty` returns `{ success, error }`; callers toast stock limits.
 - Product image cursor set to `default`.
 - Admin a11y gaps fixed (labels, dialogs, drop zones, toggles).
 - `api/_lib.js` mask comment corrected.
-- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **918 passed, 0 failed**
+- Latest verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → **922 passed, 0 failed**
   (SQL suite actually ran). `npm run build` → success. `npm audit` → 0
   vulnerabilities. No configured server-only secret values were found in `build/`.
