@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 
 export default function HomePage() {
-  const { products, setPage } = useStore();
+  const { products, productsLoadStatus, refreshProducts, setPage } = useStore();
   const heroRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
   const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
@@ -102,6 +102,44 @@ export default function HomePage() {
           onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
         ><ChevronDown size={24} /></motion.div>
       </section>
+
+      {productsLoadStatus === 'error' && (
+        <div
+          role="alert"
+          style={{
+            maxWidth: 1400,
+            margin: '24px auto 0',
+            padding: '12px 16px',
+            border: '1px solid rgba(217,119,119,0.35)',
+            background: 'rgba(217,119,119,0.07)',
+            borderRadius: 4,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap'
+          }}
+        >
+          <p style={{ fontSize: 12, color: '#d97777' }}>
+            تعذّر تحميل المنتجات — Could not load products.
+          </p>
+          <button
+            type="button"
+            onClick={refreshProducts}
+            style={{
+              padding: '7px 14px',
+              background: 'var(--bg3)',
+              border: '1px solid var(--border)',
+              borderRadius: 3,
+              color: 'var(--text2)',
+              cursor: 'pointer',
+              fontSize: 11
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* ───── FEATURED ───── */}
       {featured.length > 0 && (

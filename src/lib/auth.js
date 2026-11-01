@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { createSession, getSession, destroySession, checkRateLimit, resetRateLimit, db } from './security';
+import { createSession, getSession, destroySession, checkRateLimit, resetRateLimit, hasPermission as sessionHasPermission, db } from './security';
 import { api, setUnauthorizedHandler } from './api';
 
 const AuthContext = createContext(null);
@@ -127,14 +127,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const hasPermission = useCallback((permission) => {
-    if (!session) return false;
-    const PERMISSIONS = {
-      admin: ['*'],
-      manager: ['products.read', 'products.write', 'orders.read', 'orders.write', 'discounts.read', 'discounts.write', 'analytics.read', 'dashboard.read'],
-      support: ['orders.read', 'dashboard.read'],
-    };
-    const perms = PERMISSIONS[session.role] || [];
-    return perms.includes('*') || perms.includes(permission);
+    return sessionHasPermission(session, permission);
   }, [session]);
 
   const canAccess = useCallback((page) => {

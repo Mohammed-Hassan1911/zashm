@@ -109,13 +109,22 @@ export function destroySession() {
   try { sessionStorage.removeItem('zashm_csrf'); } catch (e) { /* ignore */ }
 }
 
+// Single source of truth for client-side permission UX. The server
+// (api/_lib.js) is still authoritative; these maps only decide what to render.
+// Keep them in sync with the server when a role changes.
+export const PERMISSIONS = Object.freeze({
+  admin: ['*'],
+  manager: [
+    'products.read', 'products.write',
+    'orders.read', 'orders.write',
+    'discounts.read', 'discounts.write',
+    'analytics.read', 'dashboard.read',
+  ],
+  support: ['orders.read', 'dashboard.read'],
+});
+
 export function hasPermission(session, permission) {
   if (!session) return false;
-  const PERMISSIONS = {
-    admin: ['*'],
-    manager: ['products.read', 'products.write', 'orders.read', 'orders.write', 'discounts.read', 'discounts.write', 'analytics.read'],
-    support: ['orders.read'],
-  };
   const perms = PERMISSIONS[session.role] || [];
   return perms.includes('*') || perms.includes(permission);
 }

@@ -20,6 +20,7 @@ const {
   clearCsrfCookie,
   newCsrfToken,
   requestOriginAllowed,
+  readSession,
   SESSION_TTL_MS,
 } = require('./_lib');
 
@@ -57,6 +58,36 @@ module.exports = async function handler(req, res) {
   }
 
   if (body.action === 'logout') {
+    // Best-effort server-side revocation: when supabase/session_revocation.sql
+    // has been applied, bumping users.session_version invalidates every session
+    // token for this user immediately (all devices), instead of leaving a
+    // stolen 4-hour cookie usable. Without the migration this is a no-op and
+    // logout still clears both cookies below.
+    const auth = readSession(req);
+    const userId = auth && auth.session ? auth.session.sub : null;
+    if (userId !== null && userId !== undefined) {
+      try {
+        const sb = supabaseAdmin();
+        const { data: row, error } = await sb
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        if (!error && row && Object.prototype.hasOwnProperty.call(row, 'session_version')) {
+          const current = Number(row.session_version) || 0;
+          const { error: updateError } = await sb
+            .from('users')
+            .update({ session_version: current + 1 })
+            .eq('id', userId);
+          if (updateError) {
+            console.warn('Logout revocation skipped: could not bump session_version');
+          }
+        }
+      } catch (e) {
+        // The local cookies are still cleared; never fail logout on DB errors.
+        console.warn('Logout revocation skipped:', e && e.message);
+      }
+    }
     clearSessionCookie(res);
     clearCsrfCookie(res);
     return json(res, 200, { success: true });

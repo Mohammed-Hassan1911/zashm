@@ -204,12 +204,37 @@ function initDB() {
 initDB();
 const initialRoute = typeof window !== 'undefined' ? resolveRoute() : { page: 'home', productId: null };
 
+// Shared row normalization for storefront (`products_public`) and admin
+// (`products`) rows. Admin rows also carry `tags` and inactive rows.
+function normalizeProductRow(p) {
+  const row = p || {};
+  return {
+    ...row,
+    images: Array.isArray(row.images) && row.images.length
+      ? row.images
+      : (row.image ? [row.image] : []),
+    colors: Array.isArray(row.colors) ? row.colors : [],
+    sizes: Array.isArray(row.sizes) ? row.sizes : [],
+    tags: row.tags || '',
+    active: row.active === undefined || row.active === null ? true : Boolean(row.active),
+    rating: row.rating || 0,
+    reviews: row.reviews || 0
+  };
+}
+
 // ─── ZUSTAND STORE ──────────────────────────────────────────────────────────
 export const useStore = create((set, get) => ({
   products: db.getAll('products') || [],
   productsLoading: false,
   productsLoadStatus: 'idle',
   productsError: null,
+  // Admin-only copy read from /api/admin/products. It is intentionally kept
+  // separate from `products`: the storefront must stay on the sanitized public
+  // view, while the admin panel needs inactive rows and `tags`.
+  adminProducts: [],
+  adminProductsLoading: false,
+  adminProductsLoadStatus: 'idle',
+  adminProductsError: null,
   discounts: [],
   orders: getSanitizedOrders(),
   ordersLoading: false,
@@ -225,15 +250,7 @@ export const useStore = create((set, get) => ({
         set({ productsLoadStatus: 'error', productsError: error.message || 'Could not load products' });
         console.error('Failed to fetch online products:', error);
       } else if (Array.isArray(data)) {
-        const secureData = data.map(p => ({
-          ...p,
-          images: p.images || (p.image ? [p.image] : []),
-          colors: p.colors || [],
-          sizes: p.sizes || [],
-          active: p.active ?? true,
-          rating: p.rating || 0,
-          reviews: p.reviews || 0
-        }));
+        const secureData = data.map(normalizeProductRow);
         db.setAll('products', secureData);
         set({ products: secureData, productsLoadStatus: 'success', productsError: null });
       } else {
@@ -244,6 +261,34 @@ export const useStore = create((set, get) => ({
       console.error("Failed to fetch online products:", err);
     } finally {
       set({ productsLoading: false });
+    }
+  },
+
+  // Admin-only: full rows (inactive + tags) through the authenticated API.
+  // Never writes to the local `products` cache used by the storefront.
+  refreshAdminProducts: async () => {
+    set({ adminProductsLoading: true, adminProductsLoadStatus: 'loading', adminProductsError: null });
+    try {
+      const payload = await api.get('/admin/products');
+      const rows = Array.isArray(payload && payload.products) ? payload.products : [];
+      const normalized = rows.map(normalizeProductRow);
+      set({ adminProducts: normalized, adminProductsLoadStatus: 'success', adminProductsError: null });
+    } catch (err) {
+      if (err && (err.status === 401 || err.status === 403)) {
+        set({
+          adminProducts: [],
+          adminProductsLoadStatus: 'error',
+          adminProductsError: 'Not authorized to load admin products'
+        });
+        return;
+      }
+      set({
+        adminProductsLoadStatus: 'error',
+        adminProductsError: (err && err.message) || 'Could not load products'
+      });
+      console.error('Failed to fetch admin products:', err && err.message);
+    } finally {
+      set({ adminProductsLoading: false });
     }
   },
 
@@ -270,7 +315,7 @@ export const useStore = create((set, get) => ({
       console.error('updateProduct failed:', err.message);
       throw err;
     } finally {
-      await get().refreshProducts();
+      await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
     }
   },
 
@@ -280,7 +325,7 @@ export const useStore = create((set, get) => ({
     try {
       return await api.del('/admin/products', { id });
     } finally {
-      await get().refreshProducts();
+      await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
     }
   },
 
@@ -291,7 +336,7 @@ export const useStore = create((set, get) => ({
     try {
       return await api.del('/admin/products', { ids });
     } finally {
-      await get().refreshProducts();
+      await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
     }
   },
 
@@ -302,7 +347,7 @@ export const useStore = create((set, get) => ({
     } catch (err) {
       console.error('updateProductImages failed:', err.message);
     }
-    await get().refreshProducts();
+    await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
   },
 
   addProduct: async (p) => {
@@ -314,7 +359,7 @@ export const useStore = create((set, get) => ({
       console.error('addProduct failed:', err.message);
       throw err;
     } finally {
-      await get().refreshProducts();
+      await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
     }
   },
 

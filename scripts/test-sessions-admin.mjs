@@ -418,6 +418,12 @@ console.log('\n[7] logout');
   const csrf = r.cookies.find((c) => c.startsWith(`${CSRF_COOKIE}=`)) || '';
   ok(sess.includes('Max-Age=0') && sess.includes('HttpOnly'), 'session cookie is expired');
   ok(csrf.includes('Max-Age=0'), 'CSRF cookie is expired');
+
+  // Session revocation (supabase/session_revocation.sql). The fake users table
+  // has the column, so logout must bump it and make the old cookie useless.
+  eq(state.users.find((u) => u.id === 1).session_version, 1, 'logout bumps users.session_version');
+  const reuse = await admin('GET', { token: sessionToken, csrf: csrfToken });
+  eq(reuse.status, 401, 'reusing the logged-out cookie is rejected immediately');
 }
 
 // ─── Unknown user / dummy hash ──────────────────────────────────────────────

@@ -384,6 +384,7 @@ export default function ImageUploader({ images = [], onChange, maxImages = 6 }) 
 
                 <img
                   src={getOptimizedImageUrl(img, { width: 200, quality: 70 })}
+                  alt={`Product image ${idx + 1}`}
                   style={{
                     width: '100%',
                     aspectRatio: '3/4',

@@ -207,6 +207,13 @@ NOTIFY pgrst, 'reload schema';
 
 COMMIT;
 
+-- Record that Phase 1 was applied. This is bookkeeping only; it does NOT
+-- enable Phase 3. Phase 3 still requires the separate human-verified flag
+-- `products_public_frontend_live` below.
+INSERT INTO public.zshm_deploy_flags (name, note)
+VALUES ('products_public_phase1_applied', 'products_public view created/granted')
+ON CONFLICT (name) DO UPDATE SET set_at = now(), note = EXCLUDED.note;
+
 -- ══════════════════════════════════════════════════════════════════════════════
 -- PHASE 3 — CLOSE THE BASE TABLE (only after the new frontend is live)
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -216,6 +223,7 @@ DECLARE
   v_anon   boolean;
   v_auth   boolean;
   v_col    record;
+  v_rows_match boolean;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.zshm_deploy_flags
@@ -223,6 +231,40 @@ BEGIN
   ) THEN
     RAISE NOTICE 'PHASE 3 SKIPPED: set zshm_deploy_flags(products_public_frontend_live) after deploying the new frontend, then re-run.';
     RETURN;
+  END IF;
+
+  -- Never close the base table unless the replacement is actually present,
+  -- readable, filtered to active rows and still free of reservedStock. This is
+  -- the guard that prevents a typo or a partially-applied Phase 1 from turning
+  -- into a storefront outage.
+  IF to_regclass('public.products_public') IS NULL THEN
+    RAISE EXCEPTION 'Phase 3 aborted: public.products_public does not exist';
+  END IF;
+  IF NOT has_table_privilege('anon', 'public.products_public', 'SELECT') THEN
+    RAISE EXCEPTION 'Phase 3 aborted: anon cannot SELECT public.products_public';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'products_public'
+       AND lower(column_name) = 'reservedstock'
+  ) THEN
+    RAISE EXCEPTION 'Phase 3 aborted: products_public exposes reservedStock';
+  END IF;
+
+  SELECT (SELECT count(*) FROM public.products_public)
+       = (SELECT count(*) FROM public.products WHERE active IS TRUE)
+    INTO v_rows_match;
+  IF NOT v_rows_match THEN
+    RAISE EXCEPTION 'Phase 3 aborted: products_public row set does not match active products';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+     WHERE schemaname = 'public' AND tablename = 'products'
+       AND cmd IN ('SELECT', 'ALL')
+  ) THEN
+    RAISE NOTICE 'products still has RLS SELECT policies; an owner-rights view does not inherit them. Review pg_policies before relying on them.';
   END IF;
 
   EXECUTE 'REVOKE ALL ON public.products FROM PUBLIC, anon, authenticated';

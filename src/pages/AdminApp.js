@@ -390,8 +390,13 @@ function DashSkeleton() {
 function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
   const {
     orders, products, productsLoading, productsLoadStatus, productsError, refreshProducts,
+    adminProducts, refreshAdminProducts,
     refreshOrders, ordersLoading, ordersError,
   } = useStore();
+
+  // Inventory must include inactive products, so admins read the full rows.
+  // Roles without products.read keep the storefront list as a fallback.
+  const canReadProducts = typeof canAccess === 'function' ? canAccess('products') : false;
 
   const [range, setRange] = useState('7d');
 
@@ -400,8 +405,13 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
     // run once on mount to hydrate the dashboard
   }, []);
 
+  useEffect(() => {
+    if (canReadProducts) refreshAdminProducts();
+  }, [canReadProducts, refreshAdminProducts]);
+
   const overview = useMemo(() => computeSalesOverview(orders, range), [orders, range]);
-  const inventory = useMemo(() => classifyInventory(products), [products]);
+  const inventoryProducts = canReadProducts ? adminProducts : products;
+  const inventory = useMemo(() => classifyInventory(inventoryProducts), [inventoryProducts]);
 
   const recentOrders = useMemo(() => {
     const list = Array.isArray(orders) ? [...orders] : [];
@@ -1101,11 +1111,15 @@ const PRODUCT_CATEGORIES = [
 ];
 const EMPTY_PRODUCT_FORM = {
   name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
-  label:'', description:'', sku:'', images:[], active:true, variantStock:{}
+  label:'', tags:'', description:'', sku:'', images:[], active:true, variantStock:{}
 };
 
 function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
-  const { products, addProduct, updateProduct, deleteProduct, bulkDeleteProducts } = useStore();
+  const {
+    adminProducts, adminProductsLoading, adminProductsLoadStatus, adminProductsError,
+    refreshAdminProducts, addProduct, updateProduct, deleteProduct, bulkDeleteProducts,
+  } = useStore();
+  const products = adminProducts;
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -1119,6 +1133,12 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
   // حتى يمكن حذف ملفاتها الفعلية من Storage عند الحذف/الإلغاء دون لمس صور محفوظة.
   const tempUploadsRef = useRef(new Set());
   const cancelInFlightRef = useRef(false);
+
+  // H-01: the admin panel must read the full rows from /api/admin/products,
+  // never the public view (which hides inactive rows and `tags`).
+  useEffect(() => {
+    refreshAdminProducts();
+  }, [refreshAdminProducts]);
 
   useEffect(() => {
     if (!preOpenNew) return;
@@ -1270,7 +1290,8 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
       colors: Array.isArray(p.colors) ? p.colors.join(',') : (p.colors || ''),
       variantStock: p.variantStock || {},
 
-      label: p.label || ''
+      label: p.label || '',
+      tags: p.tags || ''
     });
     setFormErrors({});
     tempUploadsRef.current = new Set();
@@ -1418,6 +1439,21 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
         </div>
       </div>
 
+      {adminProductsLoadStatus === 'error' && (
+        <div style={{ marginBottom:16, border:'1px solid rgba(231,76,60,0.35)', background:'rgba(231,76,60,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
+            <AlertCircle size={14} /> تعذّر تحميل المنتجات — {adminProductsError}
+          </p>
+          <button onClick={refreshAdminProducts} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {adminProductsLoading && products.length === 0 && (
+        <p style={{ fontSize:12, color:'var(--text3)', marginBottom:12 }}>Loading products…</p>
+      )}
+
       {paginated.items.length > 0 && (
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
           <label style={{ display:'flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:12, color:'var(--text3)' }}>
@@ -1430,7 +1466,7 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
         </div>
       )}
 
-      {paginated.items.length === 0 && (
+      {paginated.items.length === 0 && adminProductsLoadStatus !== 'error' && !adminProductsLoading && (
         <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>
           <DashEmpty
             icon={Package}
@@ -1459,6 +1495,11 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
               {p.stock <= 5 && (
                 <div style={{ position:'absolute', top:8, right:8, background: p.stock === 0 ? 'var(--red)' : '#f39c12', color:'white', fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:2 }}>
                   {p.stock === 0 ? 'OUT' : `${p.stock} left`}
+                </div>
+              )}
+              {p.active === false && (
+                <div style={{ position:'absolute', top: p.stock <= 5 ? 34 : 8, right:8, background:'rgba(80,80,80,0.92)', color:'white', fontSize:9, fontWeight:700, padding:'2px 6px', borderRadius:2 }}>
+                  INACTIVE
                 </div>
               )}
 

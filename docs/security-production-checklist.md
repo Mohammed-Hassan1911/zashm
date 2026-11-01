@@ -2,10 +2,11 @@
 
 This file documents the items that **cannot be fixed from the repository alone**
 (they need a Supabase/Vercel dashboard action or an explicit schema decision).
-Nothing in this file has been applied to production. Migrations under
-`supabase/` are delivered as reviewable files only.
+This file is guidance only; it applies nothing automatically. **Nothing in this file has been applied automatically** by the repository or by this audit — every migration and
+Dashboard change below is a manual action whose production status must be
+recorded in the final production-readiness audit, never assumed here.
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 
 ---
 
@@ -21,7 +22,19 @@ They are idempotent where possible and none of them delete rows.
 | 3 | `supabase/admin_protection.sql` | Trigger that refuses to demote/delete the last admin (transaction advisory lock; covered by a real two-connection test). |
 | 4 | `supabase/security_hardening.sql` | Function `search_path` pinning / privilege revokes; inspects every existing `auth.users` trigger and refuses to add a second provisioning trigger. It never drops/replaces an existing trigger and no longer defines a duplicate last-admin function. |
 | 5 | `supabase/storage_hardening.sql` | `products` bucket: 5 MB limit, image MIME allow-list, RLS. Drops only policies provably scoped to `products`; blanket/other-bucket policies are kept for manual review. If the SQL role does not own `storage.objects` (normal in Supabase), it never runs `ALTER TABLE`/`DROP POLICY`; it reports the exact products-only policies for removal in **Dashboard > Storage > Policies**. Every policy dropped by the script is backed up verbatim and restorable with `zshm_restore_storage_policies()`. |
-| 6 | `supabase/products_public_view.sql` | Creates `products_public` from an explicit public-column allow-list (`reservedStock` is not in it), grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
+| 6 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide`; `reservedStock` is not in it, and `active/tags/rating/reviews` are not selected), grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
+
+Two further files are required but are **not** counted in the six above:
+
+- `supabase/coupons_lockdown.sql` — run only after the server-only coupon code
+  is deployed, following its own SECTION 0 → 1 → 2 procedure.
+- `supabase/session_revocation.sql` — adds `users.session_version`; safe to run
+  before or after deployment because both sides default to `0` until applied.
+  Once applied, logout also bumps the current user's `session_version`, so a
+  copied cookie stops working immediately (all of that user's sessions are
+  revoked). Without the migration, logout only clears cookies and a stolen
+  cookie can live up to the 4-hour token TTL.
+
 
 After #6, verify with an **anon** key (not the service role):
 
@@ -29,6 +42,13 @@ After #6, verify with an **anon** key (not the service role):
 - `GET /rest/v1/products?select=reservedStock` → 401/403.
 - Storefront product list, cart, checkout and order tracking still work.
 - Admin product create/edit still work (service role).
+- **Admin product listing was fixed in the repository (H-01/F-01):** the console
+  now calls the authenticated `GET /api/admin/products` (service role,
+  `products.read`) and keeps full rows, including inactive products and `tags`.
+  It no longer reads the public view, so editing a product cannot clear `tags`.
+  This must be deployed **before** Phase 3. Verify by opening Products in the
+  admin console: deactivated products are visible with an `INACTIVE` badge, and
+  saving an edit preserves its tags.
 
 **Rollout order for #6 (enforced by the file, not just documented):** the first
 run creates the view, grants SELECT on it and **skips Phase 3** (the base-table
@@ -47,7 +67,12 @@ The re-run revokes the base table from `PUBLIC`, `anon` and `authenticated`
 (table-level and column-level) and verifies all three with
 `has_table_privilege()` plus a column-ACL check. This prevents applying the file
 "all at once" from breaking the old bundle before the new one is live, and stops
-a lingering column grant from re-exposing `reservedStock`.
+a lingering column grant from re-exposing `reservedStock`. Phase 3 also aborts
+if the view is missing, unreadable by `anon`, still exposes `reservedStock`, or
+returns a different row set than `products WHERE active IS TRUE`.
+
+Run `supabase/verify_production_security.sql` (read-only) after each phase and
+compare its output with `docs/production-remediation-handoff.md §5`.
 
 Rollback for #6 is at the bottom of the file. If you roll it back, also revert
 `src/store.js` and `src/lib/security.js` to `from('products')`.
@@ -133,9 +158,22 @@ Preview as appropriate. Values are not stored in the repo.
 | `PUBLIC_BASE_URL` | recommended | Origin used in tracking links. Example: `https://<your-domain>`. |
 | `UPSTASH_REDIS_REST_URL` | optional | Enables the shared/durable rate limiter. |
 | `UPSTASH_REDIS_REST_TOKEN` | optional | Token for the above. |
+| `TRACKING_TOKEN_TTL_HOURS` | optional | Empty = legacy non-expiring 32-hex tracking tokens. Positive number = newly generated links expire after that many hours; old links keep working. Rotating `SESSION_SECRET` still invalidates all links. |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional | Order notifications. |
 
 Without Upstash the limiter still works, but only per warm serverless instance.
+
+**Exact Upstash setup (manual, not performed):**
+
+1. Create a free Upstash Redis database in the same region as the Vercel
+   functions.
+2. Copy its **REST URL** and **REST token** (not the `redis://` URL).
+3. In Vercel: Project → Settings → Environment Variables → add both variables
+   for **Production** and **Preview**, then redeploy.
+4. Verify no `VITE_`/`REACT_APP_` copy exists (it would ship to the browser).
+5. Check the Vercel function logs for `Durable rate limit unavailable` — it
+   should disappear after the redeploy. The limiter always falls back to the
+   per-instance guard instead of failing open completely.
 
 Verification: log in as admin, open an order, copy its tracking link, and check
 that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
@@ -176,6 +214,23 @@ that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
   policies with `SELECT public.zshm_restore_storage_policies();` (or pass a name
   array) from a role that can manage `storage.objects`.
 
+**Dashboard steps when the SQL role cannot manage `storage.objects` (manual):**
+
+1. Storage → Buckets → `products`: set **File size limit** to `5 MB` and
+   **Allowed MIME types** to `image/jpeg, image/png, image/webp, image/gif,
+   image/avif`.
+2. Storage → Policies → `objects`: remove policies that are scoped **only** to
+   the `products` bucket and are not ownership-guarded (typically a public
+   `SELECT` or a permissive `INSERT`/`UPDATE`/`DELETE`). The upload API uses the
+   service role, so browser write policies are not needed.
+3. Keep at least one ownership-guarded SELECT policy if the bucket must remain
+   public for product images; keep RLS **enabled** and never change the table
+   owner. If unsure, stop and restore the exact policy names from
+   `public.zshm_storage_policy_backup`.
+4. Re-run `supabase/storage_hardening.sql`; the `MANUAL ACTION REQUIRED` notices
+   should disappear, and `supabase/verify_production_security.sql` sections 11–12
+   should show the limits and only the intended policies.
+
 ---
 
 ## 7. Database linter findings reviewed (2026-10-31)
@@ -203,25 +258,37 @@ acceptable alternative under the rollout requirements.
 The accepted mitigations are:
 
 1. The view is built from an explicit column allow-list; `reservedStock` is not
-   in it, and the migration aborts if it is ever added to the allow-list.
-2. The view is owned by `postgres`, so its owner-rights read continues to work
+   in it, and the migration aborts if it is ever added to the allow-list. The
+   final list is `id, name, category, price, salePrice, description, stock,
+   variantStock, sku, label, colors, sizes, images, image, sizeGuide`.
+   `active` is only a filter (not selected), and `tags`, `rating` and `reviews`
+   are not read by the storefront, so they are no longer exposed.
+2. The view applies the public visibility predicate itself
+   (`WHERE active IS TRUE`), because an owner-rights view does not inherit RLS
+   row filters. Inactive and `NULL`-active products never reach the public API,
+   even if a browser asks for them directly.
+3. `stock` and `variantStock` are exposed because the storefront needs
+   availability and per-variant cart limits. They are public availability
+   counters (the same class as `stock`), never `reservedStock`, cost or internal
+   reservation data. Checkout availability is still decided server-side.
+4. The view is owned by `postgres`, so its owner-rights read continues to work
    after Phase 3.
-3. Phase 3 revokes both table-level **and column-level** privileges on
+5. Phase 3 revokes both table-level **and column-level** privileges on
    `public.products` from `PUBLIC`, `anon` and `authenticated`, then proves it
    with `has_table_privilege()` and `aclexplode(attacl)`.
-4. The view itself is granted only `SELECT`, never write privileges.
+6. The view itself is granted only `SELECT`, never write privileges.
 
 **Do not silence this linter warning by granting base-table access.** The
 safest supported alternative is to keep this view SECURITY DEFINER with the
 allow-list and the Phase 3 checks. A dedicated low-privilege view owner is
 possible as future defence-in-depth, but it does not remove the warning.
 
-One pre-rollout check: an owner-rights view does not inherit RLS **row** filters
-from `products`. The view returns every row with the allow-listed columns. If
-the production table relies on a policy predicate (for example `active = true`)
-to hide rows, mirror that predicate in the view before Phase 3. The repository
-contains no `products` policy definition, so this cannot be copied automatically;
-inspect `pg_policies` with the pre-flight query in the migration.
+One pre-rollout check: the view mirrors the known public predicate
+(`active IS TRUE`) but cannot infer an **additional** RLS row predicate on
+`products`. The repository contains no `products` policy definition, so inspect
+`pg_policies` with the pre-flight query in the migration before Phase 3. If a
+policy hides rows for another reason, copy that predicate into the view before
+revoking base-table access.
 
 ### 7.2 RLS enabled with no policies — INTENTIONAL
 
@@ -293,7 +360,9 @@ drop`.
 
 ## 8. Deployment rules used for this work
 
-- No `git commit`, `push`, `merge` or deploy was performed.
+- This audit performed **no** `git commit`, `push`, `merge` or deploy. The
+  security-remediation changes described here are local and uncommitted on
+  top of `a0e78f4`; the branch's last commit predates this remediation.
 - No SQL/migration was executed against production or staging.
 - No production data was modified or deleted.
 - No Vercel/Supabase settings or environment variables were changed.
@@ -304,10 +373,10 @@ drop`.
   PostgreSQL's `initdb`/`pg_ctl`/`psql` are not installed it prints `SKIPPED` and
   exits 0; it never connects to a remote database.
 
-  **CI must require it:** a skip is only safe on a developer machine. In CI,
-  install PostgreSQL 15+ (or point `PGBIN` at its binaries) and export
-  `ZSHM_REQUIRE_SQL_TESTS=1`; the harness then exits non-zero instead of
-  skipping. Example:
+  **CI requires it:** a skip is only safe on a developer machine. The
+  repository now ships `.github/workflows/ci.yml`, which installs PostgreSQL
+  tools, exports `ZSHM_REQUIRE_SQL_TESTS=1` and runs `npm test` + `npm run
+  build`; the harness exits non-zero instead of skipping. Local equivalent:
 
   ```bash
   sudo apt-get install -y postgresql-16

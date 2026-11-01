@@ -214,6 +214,43 @@ async function updateProduct(req, res) {
   }
 }
 
+// ─── GET /api/admin/products — full admin rows (service role) ────────────────
+//
+// The storefront reads the public `products_public` view, which deliberately
+// hides inactive rows and internal columns such as `tags`. The admin panel must
+// never use that view: doing so hid deactivated products and wiped `tags` on
+// every save (H-01 / F-01). This endpoint is the admin source of truth and is
+// protected by `products.read`; it returns complete rows with the service role
+// and never echoes raw database errors.
+async function listProducts(req, res) {
+  const session = await requirePerm(req, res, 'products.read');
+  if (!session) return;
+
+  const ip = clientIp(req);
+  const check = await rateLimitShared(`adminread:${ip}`, 120, 60 * 1000);
+  if (!check.allowed) return tooMany(res, check.resetIn);
+
+  try {
+    const sb = supabaseAdmin();
+    const { data, error } = await sb
+      .from('products')
+      .select('*')
+      .order('id', { ascending: false });
+    if (error) throw error;
+
+    const products = (Array.isArray(data) ? data : []).map((p) => ({
+      ...p,
+      tags: p.tags || '',
+      active: p.active === undefined || p.active === null ? true : Boolean(p.active),
+    }));
+
+    return json(res, 200, { success: true, count: products.length, products });
+  } catch (err) {
+    console.error('Product list failed:', err && err.message);
+    return json(res, 500, { error: 'Could not load products' });
+  }
+}
+
 // ─── DELETE /api/admin/products — single (with storage cleanup) or bulk ──────
 
 // Deletes product rows and cleans up their storage files with these rules:
@@ -315,6 +352,7 @@ module.exports = async function handler(req, res) {
   applyCors(req, res);
   if (req.method === 'OPTIONS') return handleOptions(req, res);
   if (req.method === 'POST') return createProducts(req, res);
+  if (req.method === 'GET') return listProducts(req, res);
   if (req.method === 'PATCH') return updateProduct(req, res);
   if (req.method === 'DELETE') return deleteProducts(req, res);
   return json(res, 405, { error: 'Method not allowed' });
@@ -323,3 +361,4 @@ module.exports = async function handler(req, res) {
 // Export the deletion engine so the storage-cleanup behaviour can be verified
 // directly against real Supabase without going through the HTTP layer.
 module.exports.deleteProductRows = deleteProductRows;
+module.exports.listProducts = listProducts;

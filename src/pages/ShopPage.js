@@ -44,6 +44,8 @@ const getPrice = (product) => {
 export default function ShopPage() {
   const {
     products = [],
+    productsLoadStatus,
+    refreshProducts,
     searchQuery,
     filterCategory,
     setFilterCategory
@@ -150,8 +152,12 @@ export default function ShopPage() {
     } else if (sort === 'Price: High to Low') {
       list.sort((a, b) => getPrice(b) - getPrice(a));
     } else if (sort === 'Best Seller') {
+      // `sales` is not a product column (the storefront view never exposed it),
+      // so the old sort always compared 0 to 0. Sort by the editorial
+      // "Best Seller" label instead; ties keep the incoming order.
       list.sort(
-        (a, b) => (Number(b.sales) || 0) - (Number(a.sales) || 0)
+        (a, b) => (normalize(b.label) === 'best seller' ? 1 : 0)
+          - (normalize(a.label) === 'best seller' ? 1 : 0)
       );
     }
 
@@ -596,8 +602,45 @@ export default function ShopPage() {
         )}
 
         {/* PRODUCT GRID */}
+        {productsLoadStatus === 'error' && (
+          <div
+            role="alert"
+            style={{
+              marginTop: 24,
+              border: '1px solid rgba(217,119,119,0.35)',
+              background: 'rgba(217,119,119,0.07)',
+              borderRadius: 4,
+              padding: '12px 16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap'
+            }}
+          >
+            <p style={{ fontSize: 12, color: '#d97777' }}>
+              تعذّر تحميل المنتجات — Could not load products.
+            </p>
+            <button
+              type="button"
+              onClick={refreshProducts}
+              style={{
+                padding: '7px 14px',
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
+                borderRadius: 3,
+                color: 'var(--text2)',
+                cursor: 'pointer',
+                fontSize: 11
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         <div style={{ paddingBottom: 80 }}>
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && productsLoadStatus === 'error' && products.length === 0 ? null : filtered.length === 0 ? (
             <div
               style={{
                 textAlign: 'center',

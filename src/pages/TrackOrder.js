@@ -116,7 +116,7 @@ export default function TrackOrder() {
             <input
               value={inputOrderId}
               onChange={e => setInputOrderId(e.target.value)}
-              placeholder="e.g. ZSH-MQZUYMH6-HAD6"
+              placeholder="Order ID from your secure link"
               style={{
                 width: '100%',
                 padding: '12px 14px 12px 40px',
@@ -145,6 +145,10 @@ export default function TrackOrder() {
             Track <ArrowRight size={14} />
           </button>
         </form>
+        <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 10, lineHeight: 1.6 }}>
+          An order number alone cannot be looked up for privacy reasons. Use the secure link
+          (with its <code>tk</code> code) from your order confirmation.
+        </p>
       </div>
 
       {/* ─── حالة عدم إدخال طلب أو طلب غير موجود ─── */}

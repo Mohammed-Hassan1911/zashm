@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CI: 'true'
+      # The SQL harness normally prints SKIPPED and exits 0 when PostgreSQL is
+      # missing. In CI a skip must fail instead, so migrations are exercised
+      # against real PostgreSQL on every change.
+      ZSHM_REQUIRE_SQL_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # GitHub's Ubuntu image ships PostgreSQL but its bin directory is not on
+      # PATH; the harness needs initdb/pg_ctl/psql.
+      - name: Expose PostgreSQL tools
+        run: |
+          PG_BIN="$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)"
+          echo "PostgreSQL bin: ${PG_BIN}"
+          echo "${PG_BIN}" >> "$GITHUB_PATH"
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

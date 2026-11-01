@@ -241,6 +241,21 @@ const realFetch = globalThis.fetch;
   const fellBack = await lib.rateLimitShared(`redis-down:${Date.now()}`, 1, 60000);
   eq(fellBack.allowed, true, 'Redis outage falls back to the in-memory limiter instead of failing');
 
+  // A pipeline can return 200 with an error attached to one command (bad auth,
+  // wrong type, ...). That must be treated as an outage, not as "no counter".
+  globalThis.fetch = async () => ({ ok: true, json: async () => ([{ error: 'WRONGTYPE' }, { result: 'OK' }, { result: 42 }]) });
+  const commandError = await lib.rateLimitShared(`redis-cmd-error:${Date.now()}`, 1, 60000);
+  eq(commandError.allowed, true, 'per-command Redis error falls back instead of failing open silently');
+  ok(commandError.resetIn > 0, 'fallback after a command error still has a window');
+
+  // An HTTP timeout/abort is also a fallback, not a crash.
+  globalThis.fetch = async (url, opts) => {
+    ok(Boolean(opts && opts.signal), 'Upstash fetch receives an AbortSignal');
+    return { ok: false, status: 503, json: async () => ({}) };
+  };
+  const httpError = await lib.rateLimitShared(`redis-http-error:${Date.now()}`, 2, 60000);
+  eq(httpError.allowed, true, 'Upstash HTTP error falls back to the in-memory limiter');
+
   delete process.env.UPSTASH_REDIS_REST_URL;
   delete process.env.UPSTASH_REDIS_REST_TOKEN;
   globalThis.fetch = realFetch;
@@ -298,7 +313,9 @@ console.log('\n[5] every API handler uses the shared limiter');
   const libSrc = read('api/_lib.js');
   ok(/UPSTASH_REDIS_REST_URL/.test(libSrc) && /UPSTASH_REDIS_REST_TOKEN/.test(libSrc),
     'Upstash is env-gated');
-  ok(/using in-memory fallback/.test(libSrc), 'Redis failure logs a fallback');
+  ok(/using per-instance fallback/.test(libSrc), 'Redis failure logs a fallback');
+  ok(/RATE_BUCKET_MAX/.test(libSrc), 'the in-memory fallback map is bounded');
+  ok(/AbortSignal|AbortController/.test(libSrc), 'Upstash calls are time-bounded');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

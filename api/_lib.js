@@ -224,16 +224,38 @@ function clientIp(req) {
 
 // ─── SERVER-SIDE RATE LIMITING (per warm instance) ──────────────────────────
 
+// Bounded so a burst of unique keys (for example spoofed X-Real-IP values that
+// reach a function directly) cannot grow the map without limit in a warm
+// instance. Entries are swept on a timer and, under pressure, evicted oldest
+// first. This limiter is a best-effort guard only; durable limits use Upstash.
 const rateBuckets = new Map();
+const RATE_BUCKET_MAX = 10000;
 let rateSweepAt = 0;
+let lastRateWarnAt = 0;
+
+function warnRateLimitOnce(message) {
+  const now = Date.now();
+  if (now - lastRateWarnAt < 60 * 1000) return;
+  lastRateWarnAt = now;
+  console.warn(message);
+}
+
+function sweepRateBuckets(now) {
+  for (const [k, b] of rateBuckets) {
+    if (b.resetAt < now) rateBuckets.delete(k);
+  }
+  while (rateBuckets.size >= RATE_BUCKET_MAX) {
+    const oldest = rateBuckets.keys().next();
+    if (oldest.done) break;
+    rateBuckets.delete(oldest.value);
+  }
+}
 
 function rateLimit(key, maxAttempts, windowMs) {
   const now = Date.now();
-  if (now > rateSweepAt) {
+  if (now > rateSweepAt || rateBuckets.size >= RATE_BUCKET_MAX) {
     rateSweepAt = now + 5 * 60 * 1000;
-    for (const [k, b] of rateBuckets) {
-      if (b.resetAt < now) rateBuckets.delete(k);
-    }
+    sweepRateBuckets(now);
   }
   let bucket = rateBuckets.get(key);
   if (!bucket || bucket.resetAt < now) {
@@ -268,21 +290,40 @@ function upstashConfig() {
   return { url: url.replace(/\/+$/, ''), token };
 }
 
+const REDIS_TIMEOUT_MS = 1500;
+
 async function redisPipeline(cmds) {
   const cfg = upstashConfig();
   if (!cfg) return null;
-  const resp = await fetch(`${cfg.url}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cfg.token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(cmds),
-  });
-  if (!resp.ok) throw new Error(`Upstash HTTP ${resp.status}`);
-  const out = await resp.json();
-  if (!Array.isArray(out)) throw new Error('Upstash bad response');
-  return out.map((row) => (row && Object.prototype.hasOwnProperty.call(row, 'result') ? row.result : null));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REDIS_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`${cfg.url}/pipeline`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${cfg.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(cmds),
+      signal: controller.signal,
+    });
+    if (!resp.ok) throw new Error(`Upstash HTTP ${resp.status}`);
+    const out = await resp.json();
+    if (!Array.isArray(out)) throw new Error('Upstash bad response');
+    return out;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A failed command is returned per-command by the Upstash pipeline, so a
+// silent `null` would look like "no counter" and fail open. Treat it as an
+// outage and fall back to the in-memory guard instead.
+function redisValue(row) {
+  if (row && Object.prototype.hasOwnProperty.call(row, 'error')) {
+    throw new Error('Upstash command failed');
+  }
+  return row && Object.prototype.hasOwnProperty.call(row, 'result') ? row.result : null;
 }
 
 function redisKey(key) {
@@ -293,6 +334,10 @@ function redisKey(key) {
  * Async, durable counterpart of rateLimit(). Always resolves to the same
  * { allowed, remaining, resetIn } shape. Use this in HTTP handlers; rateLimit()
  * stays synchronous for tests and as the fallback.
+ *
+ * If Upstash is not configured, the values are NOT durable: they only protect
+ * one warm serverless instance. See docs/security-production-checklist.md for
+ * the exact Vercel environment variables that make this shared.
  */
 async function rateLimitShared(key, maxAttempts, windowMs) {
   if (!upstashConfig()) return rateLimit(key, maxAttempts, windowMs);
@@ -304,10 +349,19 @@ async function rateLimitShared(key, maxAttempts, windowMs) {
       ['EXPIRE', rk, String(windowSec), 'NX'],
       ['TTL', rk],
     ]);
-    const count = Number(out && out[0]);
+    const count = Number(redisValue(out && out[0]));
     if (!Number.isFinite(count)) throw new Error('Upstash INCR failed');
-    const ttl = Number(out && out[2]);
-    const resetIn = Number.isFinite(ttl) && ttl > 0 ? ttl : windowSec;
+    const rawTtl = Number(redisValue(out && out[2]));
+    const resetIn = Number.isFinite(rawTtl) && rawTtl > 0 ? rawTtl : windowSec;
+    if (rawTtl === -1) {
+      // A counter without an expiry would never reset. Repair it; if the
+      // repair fails the fallback below still applies.
+      try {
+        await redisPipeline([['EXPIRE', rk, String(windowSec)]]);
+      } catch (e) {
+        /* best effort */
+      }
+    }
     return {
       allowed: count <= maxAttempts,
       remaining: Math.max(0, maxAttempts - count),
@@ -315,7 +369,7 @@ async function rateLimitShared(key, maxAttempts, windowMs) {
     };
   } catch (e) {
     // Redis outage must not take the store down. Keep the per-instance guard.
-    console.warn('Durable rate limit unavailable, using in-memory fallback');
+    warnRateLimitOnce('Durable rate limit unavailable, using per-instance fallback');
     return rateLimit(key, maxAttempts, windowMs);
   }
 }
@@ -330,10 +384,11 @@ async function rateLimitPeekShared(key) {
   try {
     const rk = redisKey(key);
     const out = await redisPipeline([['GET', rk], ['TTL', rk]]);
-    const count = Number(out && out[0]) || 0;
-    const ttl = Number(out && out[1]);
+    const count = Number(redisValue(out && out[0])) || 0;
+    const ttl = Number(redisValue(out && out[1]));
     return { count, resetIn: Number.isFinite(ttl) && ttl > 0 ? ttl : 0 };
   } catch (e) {
+    warnRateLimitOnce('Durable rate limit unavailable, using per-instance fallback');
     const b = rateBuckets.get(key);
     if (!b || b.resetAt < Date.now()) return { count: 0, resetIn: 0 };
     return { count: b.count, resetIn: Math.ceil((b.resetAt - Date.now()) / 1000) };
@@ -345,7 +400,8 @@ async function resetRateLimitShared(key) {
   rateBuckets.delete(key);
   if (!upstashConfig()) return;
   try {
-    await redisPipeline([['DEL', redisKey(key)]]);
+    const out = await redisPipeline([['DEL', redisKey(key)]]);
+    redisValue(out && out[0]);
   } catch (e) {
     /* best effort */
   }
@@ -607,15 +663,52 @@ async function verifyPassword(password, stored) {
 }
 
 // ─── TRACKING TOKENS (stateless, no schema change) ──────────────────────────
-
-function trackToken(orderId) {
+//
+// Legacy links are 32 hex chars: HMAC(`track:<id>`) truncated. They never
+// expire, which is why rotating SESSION_SECRET is the only way to invalidate
+// them. New links can opt into expiry with TRACKING_TOKEN_TTL_HOURS: the token
+// becomes `v1.<expiry-ms>.<hmac>` while every legacy token keeps verifying, so
+// already-sent WhatsApp links do not break. With the variable unset, behaviour
+// is byte-for-byte the previous format.
+function legacyTrackToken(orderId) {
   const secret = requireSecret('SESSION_SECRET');
   return hmac(`track:${orderId}`, secret).toString('hex').slice(0, 32);
 }
 
+function expiringTrackToken(orderId, expiresAt) {
+  const secret = requireSecret('SESSION_SECRET');
+  return hmac(`track:${orderId}:${expiresAt}`, secret).toString('hex').slice(0, 32);
+}
+
+function trackingTtlMs() {
+  const raw = env('TRACKING_TOKEN_TTL_HOURS');
+  if (!raw) return 0;
+  const hours = Number(raw);
+  if (!Number.isFinite(hours) || hours <= 0) return 0;
+  // Cap at ten years so a typo cannot create effectively-permanent tokens.
+  return Math.min(Math.floor(hours * 60 * 60 * 1000), 10 * 365 * 24 * 60 * 60 * 1000);
+}
+
+function trackToken(orderId, expiresAt) {
+  const explicit = Number(expiresAt);
+  const ttl = trackingTtlMs();
+  const exp = Number.isFinite(explicit) && explicit > 0
+    ? Math.floor(explicit)
+    : (ttl ? Date.now() + ttl : 0);
+  if (!exp) return legacyTrackToken(orderId);
+  return `v1.${exp}.${expiringTrackToken(orderId, exp)}`;
+}
+
 function verifyTrackToken(orderId, token) {
   if (!orderId || !token || typeof token !== 'string') return false;
-  return safeEqualHex(trackToken(orderId), token);
+  const versioned = token.match(/^v1\.(\d{1,16})\.([a-f0-9]{32})$/i);
+  if (versioned) {
+    const exp = Number(versioned[1]);
+    if (!Number.isSafeInteger(exp) || exp <= Date.now()) return false;
+    return safeEqualHex(expiringTrackToken(orderId, exp), versioned[2].toLowerCase());
+  }
+  // Legacy 32-hex links stay valid indefinitely (no expiry information exists).
+  return safeEqualHex(legacyTrackToken(orderId), token);
 }
 
 function trackingUrlFor(orderId) {

@@ -228,6 +228,28 @@ console.log('\n[4] secure order tracking');
   ok(url.includes(`track=${encodeURIComponent(orderId)}`), 'tracking URL carries the id');
   ok(url.includes(`tk=${token}`), 'tracking URL carries the token');
 
+  // Optional expiring tokens (TRACKING_TOKEN_TTL_HOURS). Legacy links must keep
+  // working, and an explicit expiry must be honoured.
+  {
+    const before = process.env.TRACKING_TOKEN_TTL_HOURS;
+    process.env.TRACKING_TOKEN_TTL_HOURS = '24';
+    const expiring = lib.trackToken(orderId);
+    ok(/^v1\.\d{1,16}\.[0-9a-f]{32}$/.test(expiring), 'TTL env issues a versioned token');
+    const exp = Number(expiring.split('.')[1]);
+    ok(exp > Date.now() && exp <= Date.now() + 24 * 60 * 60 * 1000 + 5000, 'versioned token expires in ~24h');
+    ok(lib.verifyTrackToken(orderId, expiring), 'versioned token verifies');
+    ok(!lib.verifyTrackToken(orderId, expiring.replace(/\.([a-f0-9])/, (m, c) => `.${c === 'a' ? 'b' : 'a'}`)),
+      'tampered versioned token rejected');
+    ok(lib.verifyTrackToken(orderId, token), 'legacy token still verifies while TTL env is set');
+
+    const expired = lib.trackToken(orderId, Date.now() - 1000);
+    ok(/^v1\./.test(expired), 'explicit expiry creates a versioned token');
+    ok(!lib.verifyTrackToken(orderId, expired), 'expired versioned token rejected');
+
+    if (before === undefined) delete process.env.TRACKING_TOKEN_TTL_HOURS;
+    else process.env.TRACKING_TOKEN_TTL_HOURS = before;
+  }
+
   db.queries = [];
   let r = await track({ track: orderId });
   eq(r.status, 200, 'id-only request is a normal 200');
