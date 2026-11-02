@@ -149,8 +149,30 @@ async function handler(req, res) {
 
   const ip = clientIp(req);
   const lockKey = `couponfail:${ip}:${input.code}`;
-  const lock = await rateLimitPeekShared(lockKey);
+
+  // The lockout peek and the coupon lookup are independent read-only calls, so
+  // they run together: a normal apply now costs one shared round-trip instead
+  // of two. The lock is still checked before any result is returned, so an
+  // exhausted lockout always wins. The lookup wrapper never rejects, which
+  // keeps the early 429 path free of unhandled rejections.
+  const lockPromise = rateLimitPeekShared(lockKey);
+  const couponPromise = (async () => {
+    try {
+      const sb = supabaseAdmin();
+      return await sb
+        .from('coupons')
+        .select('code, type, value, discountValue, minOrderAmount, maxDiscount, active, startDate, endDate, usageLimit, usageCount')
+        .eq('code', input.code)
+        .maybeSingle();
+    } catch (err) {
+      return { data: null, error: { code: (err && err.name) || 'unknown' } };
+    }
+  })();
+
+  const lock = await lockPromise;
   if (lock.count >= CODE_LOCK_ATTEMPTS) {
+    // The read has no side effects; it is discarded with the request.
+    void couponPromise.catch(() => {});
     return tooMany(res, lock.resetIn || CODE_LOCK_WINDOW_MS / 1000, {
       valid: false,
       error: INVALID_MESSAGE,
@@ -158,12 +180,7 @@ async function handler(req, res) {
   }
 
   try {
-    const sb = supabaseAdmin();
-    const { data, error } = await sb
-      .from('coupons')
-      .select('code, type, value, discountValue, minOrderAmount, maxDiscount, active, startDate, endDate, usageLimit, usageCount')
-      .eq('code', input.code)
-      .maybeSingle();
+    const { data, error } = await couponPromise;
 
     if (error) {
       // Never log the attempted code or any row contents.
@@ -175,9 +192,13 @@ async function handler(req, res) {
     }
 
     const result = evaluateCoupon(data, cairoDateString(), input.code, subtotalInput.subtotal);
-    // Successful validation clears the failure counter for this IP+code.
-    if (result.valid) await resetRateLimitShared(lockKey);
-    else await rateLimitShared(lockKey, CODE_LOCK_ATTEMPTS, CODE_LOCK_WINDOW_MS);
+    if (!result.valid) {
+      await rateLimitShared(lockKey, CODE_LOCK_ATTEMPTS, CODE_LOCK_WINDOW_MS);
+    } else if (lock.count > 0) {
+      // Nothing was recorded for this IP+code, so clearing it would only add a
+      // write to the happy path. Clear it when failures are still on record.
+      await resetRateLimitShared(lockKey);
+    }
     return json(res, 200, result);
   } catch (err) {
     console.error('Coupon validation failed:', (err && err.name) || 'unknown');

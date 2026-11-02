@@ -237,6 +237,23 @@ console.log('\n[7] source scan: no storefront coupon reads');
   const endpointSrc = readFileSync(`${root}/api/coupons/validate.js`, 'utf8');
   ok(!/\.select\(\s*['"]\*['"]\s*\)/.test(endpointSrc), 'public endpoint selects explicit columns only');
   ok(/Cache-Control', 'no-store'/.test(endpointSrc), 'public endpoint responses are not cacheable');
+  ok(/const lockPromise = rateLimitPeekShared\(lockKey\)/.test(endpointSrc) &&
+     /const couponPromise = \(async \(\) =>/.test(endpointSrc),
+    'coupon lock peek and coupon lookup run in parallel');
+  ok(/const lock = await lockPromise;[\s\S]*?lock\.count >= CODE_LOCK_ATTEMPTS/.test(endpointSrc),
+    'an exhausted IP+code lockout still wins before any result is returned');
+  ok(/else if \(lock\.count > 0\)[\s\S]*?resetRateLimitShared\(lockKey\)/.test(endpointSrc),
+    'successful validation clears the failure counter only when one was recorded');
+
+  const cartPage = readFileSync(`${root}/src/pages/CartPage.js`, 'utf8');
+  ok(/function warmCouponEndpoint/.test(cartPage) &&
+     /method: 'OPTIONS'/.test(cartPage) &&
+     /onFocus=\{warmCouponEndpoint\}/.test(cartPage) &&
+     /React\.useEffect\(\(\) => \{ warmCouponEndpoint\(\); \}, \[\]\)/.test(cartPage),
+    'the bag/checkout page and the coupon field warm the endpoint before apply');
+  ok((cartPage.match(/\{couponApplying \? 'Checking…' : 'Apply'\}/g) || []).length === 2 &&
+     /minWidth: 96/.test(cartPage),
+    'both apply buttons show a stable-width Checking state while validating');
 
   const adminCoupons = adminCouponsSrc;
   ok(/requirePerm\(req, res, 'discounts\.read'\)/.test(adminCoupons), 'admin coupon list requires discounts.read');

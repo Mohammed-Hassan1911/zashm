@@ -15,6 +15,26 @@ function normalizeGovernorate(value) {
 }
 import { toast } from '../components/ui/BackToTop';
 
+// Warm the coupon endpoint as soon as the shopper touches the discount field.
+// A cold serverless start is the slowest part of the first apply; this OPTIONS
+// probe short-circuits before the handler's rate limit and has no side effects.
+// At most one probe per minute so repeated focus/blur cannot spam the API.
+let couponWarmupAt = 0;
+function warmCouponEndpoint() {
+  const now = Date.now();
+  if (now - couponWarmupAt < 60000) return;
+  couponWarmupAt = now;
+  try {
+    fetch('/api/coupons/validate', {
+      method: 'OPTIONS',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    }).catch(() => {});
+  } catch (e) {
+    /* warm-up is best effort */
+  }
+}
+
 function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate', describedBy }) {
   const [open, setOpen] = React.useState(false);
   const suggestions = React.useMemo(() => filterGovernorates(value), [value]);
@@ -81,6 +101,10 @@ export function CartPage() {
   };
 
   React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
+  // Warm the coupon function while the shopper is still reading the bag, so the
+  // first Apply is not paying for a cold serverless start. Throttled to once a
+  // minute by warmCouponEndpoint().
+  React.useEffect(() => { if (safeCart.length) warmCouponEndpoint(); }, []);
 
   const handleApplyCoupon = async () => {
     if (couponApplying) return;
@@ -193,12 +217,13 @@ export function CartPage() {
                         <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                         <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                           onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                          onFocus={warmCouponEndpoint}
                           disabled={couponApplying}
                           placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                       </div>
                       <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
-                        Apply
+                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'progress' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
+                        {couponApplying ? 'Checking…' : 'Apply'}
                       </button>
                     </div>
                     {couponError && (
@@ -258,6 +283,8 @@ export function CheckoutPage() {
 
   React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order' }); }, []);
   React.useEffect(() => { refreshAppliedDiscount(); }, []);
+  // Same warm-up as the bag: checkout is the likeliest place to paste a code.
+  React.useEffect(() => { warmCouponEndpoint(); }, []);
   
   // 🔝 السكرول المبدئي عند فتح الصفحة لأول مرة
   React.useEffect(() => {
@@ -1279,12 +1306,13 @@ export function CheckoutPage() {
                       <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                       <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                         onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                        onFocus={warmCouponEndpoint}
                         disabled={couponApplying}
                         placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                     </div>
                     <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      Apply
+                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'progress' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
+                      {couponApplying ? 'Checking…' : 'Apply'}
                     </button>
                   </div>
                   {couponError && (
@@ -1342,6 +1370,9 @@ export function CheckoutPage() {
                 <span style={{ display: 'block', color: 'var(--text2)' }}>
                   <strong style={{ color: 'var(--gold)' }}>Cash on delivery</strong>
                   <span> · الدفع عند الاستلام</span>
+                </span>
+                <span style={{ display: 'block', color: 'var(--text3)', fontSize: 11 }}>
+                  No online payment is taken. · لا يتم تحصيل أي دفعة أونلاين.
                 </span>
               </div>
               
