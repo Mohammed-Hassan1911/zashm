@@ -6,6 +6,7 @@ import ProductCard from '../components/shop/ProductCard';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
 import { filterGovernorates, getShippingCost, GOVERNORATE_AR, toCanonicalGovernorate } from '../lib/egyptCities';
 import { clearCheckoutIdempotencyKey, getCheckoutIdempotencyKey } from '../lib/orderIdempotency.mjs';
+import { clearOrderConfirmation, readOrderConfirmation, saveOrderConfirmation } from '../lib/orderConfirmation.mjs';
 
 // يطابق المحافظة المكتوبة (عربي/إنجليزي، بأي حالة أحرف) مع القائمة الرسمية،
 // ويعيد '' لو مفيش تطابق — يمنع إرسال مدينة حرة يرفضها السيرفر.
@@ -238,7 +239,7 @@ export function CheckoutPage() {
   const [errors, setErrors] = useState({});
   const [stockErrors, setStockErrors] = useState([]);
   const [stockNotice, setStockNotice] = useState([]);
-  const [success, setSuccess] = useState(null);
+  const [success, setSuccess] = useState(() => readOrderConfirmation());
   const [submitting, setSubmitting] = useState(false);
   const [coupon, setCoupon] = useState('');
   const [couponError, setCouponError] = useState('');
@@ -412,6 +413,12 @@ export function CheckoutPage() {
       // العملية الآن تتم بأمان من داخل الـ Store لضمان إرسال رسالة واحدة فقط!
 
       clearCheckoutIdempotencyKey(idempotencyKey);
+      if (!saveOrderConfirmation(result.order)) {
+        toast(
+          'Order confirmed, but this browser could not save the confirmation for refresh. Please keep your order ID. / تم تأكيد الطلب، لكن تعذر حفظ شاشة التأكيد لهذا التبويب. يُرجى الاحتفاظ برقم الطلب.',
+          'warning'
+        );
+      }
       setSuccess(result.order);
       setSubmitting(false);
 
@@ -784,6 +791,7 @@ export function CheckoutPage() {
               onClick={() => {
                 const url = success.tracking_url || '/track';
 
+                clearOrderConfirmation();
                 window.location.assign(url);
               }}
               style={{
@@ -904,7 +912,10 @@ export function CheckoutPage() {
         <button
           type="button"
           className="order-confirmation-continue"
-          onClick={() => setPage('home')}
+          onClick={() => {
+            clearOrderConfirmation();
+            setPage('home');
+          }}
           style={{
             boxSizing: 'border-box',
             width: '100%',

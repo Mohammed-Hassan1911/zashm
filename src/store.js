@@ -3,6 +3,7 @@ import { db, trackEvent } from './lib/security';
 import { supabase } from './lib/supabase'; // ربط سوبابيز الأونلاين
 import { api } from './lib/api';
 import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
+import { clearOrderConfirmation } from './lib/orderConfirmation.mjs';
 
 // دالة مساعدة موحدة لحساب تاريخ اليوم بالكامل بناءً على التوقيت المحلي (Local Time) لتجنب مشاكل الـ UTC
 function getLocalTodayDate() {
@@ -813,13 +814,23 @@ export const useStore = create((set, get) => ({
   // Global UI States
   currentPage: initialRoute.page,
   setPage: (page) => {
+    if (get().currentPage === 'checkout' && page !== 'checkout') {
+      clearOrderConfirmation();
+    }
     const url = pageUrl(page, get().selectedProduct);
     if (typeof window !== 'undefined' && `${window.location.pathname}${window.location.search}` !== url) {
       window.history.pushState({ page }, '', url);
     }
     set({ currentPage: page });
   },
-  syncPageFromLocation: () => syncLocationToStore(set),
+  syncPageFromLocation: () => {
+    const previousPage = get().currentPage;
+    const route = syncLocationToStore(set);
+    if (previousPage === 'checkout' && route.page !== 'checkout') {
+      clearOrderConfirmation();
+    }
+    return route;
+  },
   language: 'en',
   setLanguage: () => {
     if (typeof document !== 'undefined') {
