@@ -391,6 +391,22 @@ select option { background: var(--bg3); }
   -webkit-backdrop-filter: blur(14px);
 }
 
+/* Shipping details stay side by side (across the width) on phones instead of
+   stacking into a tall single column. The date column stays narrow so the
+   customer name/address keeps the room it needs. */
+.track-shipping-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+@media (max-width: 480px) {
+  .track-shipping-grid {
+    gap: 10px;
+  }
+}
+
 .order-confirmation-primary,
 .order-confirmation-secondary,
 .order-confirmation-continue {

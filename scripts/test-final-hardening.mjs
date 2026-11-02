@@ -470,6 +470,12 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok((cartPage.match(/style=\{orderActionStyle\}/g) || []).length === 3 &&
      /className="order-confirmation-continue"[\s\S]{0,400}?CONTINUE SHOPPING/.test(cartPage),
     'track, support and continue actions share one identical style');
+  const trackPage = read('src/pages/TrackOrder.js');
+  ok(/className="track-shipping-grid"/.test(trackPage) &&
+     /\.track-shipping-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.7fr\) minmax\(0, 1fr\)/.test(read('src/index.css')) &&
+     !/gridTemplateColumns: 'repeat\(auto-fit/.test(trackPage),
+    'shipping details stay side by side on phones instead of stacking');
+
   ok(!/🔍|💬|🛍️/.test(cartPage) &&
      /<PackageSearch[\s\S]{0,200}?TRACK YOUR ORDER/.test(cartPage) &&
      /<Headset[\s\S]{0,200}?CONTACT SUPPORT/.test(cartPage) &&

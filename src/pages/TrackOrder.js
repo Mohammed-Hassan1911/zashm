@@ -284,18 +284,18 @@ export default function TrackOrder() {
 
           <>
               {/* معلومات الشحن والتوصيل */}
-              <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 14 }}>
+              <div className="track-shipping-grid" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                 <div style={{ gridColumn: '1 / -1', borderBottom: '1px solid var(--border)', paddingBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <MapPin size={14} style={{ color: 'var(--gold)' }} />
                   <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>Shipping Details</span>
                 </div>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 500 }}>{currentOrder.customer || 'Valued Gentlemen'}</p>
-                  <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, lineHeight: '1.4' }}>{currentOrder.address || 'Address provided upon confirmation'}{currentOrder.city ? `, ${currentOrder.city}` : ''}</p>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, overflowWrap: 'anywhere' }}>{currentOrder.customer || 'Valued Gentlemen'}</p>
+                  <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 4, lineHeight: '1.4', overflowWrap: 'anywhere' }}>{currentOrder.address || 'Address provided upon confirmation'}{currentOrder.city ? `, ${currentOrder.city}` : ''}</p>
                 </div>
-                <div>
-                  <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={10} /> Order Date</p>
-                  <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2 }}>{currentOrder.date || '—'}</p>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}><Calendar size={10} /> Order Date</p>
+                  <p style={{ fontSize: 12, fontWeight: 500, marginTop: 2, overflowWrap: 'anywhere' }}>{currentOrder.date || '—'}</p>
                 </div>
               </div>
 
