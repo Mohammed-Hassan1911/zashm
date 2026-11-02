@@ -918,25 +918,31 @@ export function CheckoutPage() {
             background:
               'linear-gradient(100deg, #b89a43 0%, #d1b363 55%, #e0c779 100%)',
             color: '#101010',
-            border: '1px solid rgba(224,199,121,0.35)',
+            border: '2px solid #f0d78b',
             fontSize: 12,
             cursor: 'pointer',
-            boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            boxShadow: '0 0 0 1px rgba(15,15,15,0.8), 0 7px 22px rgba(201,170,80,0.3)',
             transition:
-              'background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+              'background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background =
               'linear-gradient(100deg, #c9aa50 0%, #e0c779 55%, #f0d78b 100%)';
+            e.currentTarget.style.borderColor = '#fff0ba';
             e.currentTarget.style.boxShadow =
-              '0 5px 20px rgba(201,170,80,0.23)';
+              '0 0 0 1px rgba(15,15,15,0.8), 0 8px 26px rgba(201,170,80,0.42)';
             e.currentTarget.style.transform = 'translateY(-2px)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background =
               'linear-gradient(100deg, #b89a43 0%, #d1b363 55%, #e0c779 100%)';
+            e.currentTarget.style.borderColor = '#f0d78b';
             e.currentTarget.style.boxShadow =
-              '0 3px 12px rgba(0,0,0,0.12)';
+              '0 0 0 1px rgba(15,15,15,0.8), 0 7px 22px rgba(201,170,80,0.3)';
             e.currentTarget.style.transform = 'translateY(0)';
           }}
           onFocus={(e) => {
@@ -947,7 +953,8 @@ export function CheckoutPage() {
             e.currentTarget.style.outline = 'none';
           }}
         >
-          CONTINUE SHOPPING
+          <span aria-hidden="true">🛍️</span>
+          <span>CONTINUE SHOPPING</span>
         </button>
       </motion.div>
     </div>
