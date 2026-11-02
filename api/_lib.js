@@ -194,25 +194,58 @@ function newCsrfToken() {
 function readBody(req, maxBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let rejected = false;
     const chunks = [];
-    req.on('data', (c) => {
-      size += c.length;
+
+    req.on('data', (chunk) => {
+      if (rejected) return;
+
+      size += chunk.length;
+
       if (size > maxBytes) {
-        reject(Object.assign(new Error('Payload too large'), { status: 413 }));
-        req.destroy();
+        rejected = true;
+        chunks.length = 0;
+
+        reject(
+          Object.assign(
+            new Error('Payload too large'),
+            { status: 413 }
+          )
+        );
+
+        // نوقف استقبال البيانات دون تدمير الاتصال بالكامل.
+        req.resume();
         return;
       }
-      chunks.push(c);
+
+      chunks.push(chunk);
     });
+
     req.on('end', () => {
-      if (!chunks.length) return resolve({});
+      if (rejected) return;
+
+      if (!chunks.length) {
+        resolve({});
+        return;
+      }
+
       try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-      } catch (e) {
-        reject(Object.assign(new Error('Invalid JSON body'), { status: 400 }));
+        resolve(
+          JSON.parse(Buffer.concat(chunks).toString('utf8'))
+        );
+      } catch {
+        reject(
+          Object.assign(
+            new Error('Invalid JSON body'),
+            { status: 400 }
+          )
+        );
       }
     });
-    req.on('error', reject);
+
+    req.on('error', (err) => {
+      if (!rejected) reject(err);
+    });
   });
 }
 
