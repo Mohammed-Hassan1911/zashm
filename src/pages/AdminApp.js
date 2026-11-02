@@ -10,6 +10,7 @@ import {
 import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
 import { paginate, sanitizeInput, validateProductForm, setPageMeta } from '../lib/security';
+import { getColorSwatch } from '../lib/productColors.mjs';
 import {
   computeSalesOverview,
   RANGE_OPTIONS,
@@ -1642,6 +1643,15 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                   <div>
                     <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:1, textTransform:'uppercase' }}>Colors (comma-separated)</label>
                     <input value={form.colors||''} onChange={e => update('colors', e.target.value)} placeholder="Black,White" style={{ width:'100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
+                    <div aria-label="Color previews" style={{ display:'flex', flexWrap:'wrap', gap:10, marginTop:9 }}>
+                      {(typeof form.colors === 'string' ? form.colors.split(',') : Array.isArray(form.colors) ? form.colors : [])
+                        .map(color => color.trim()).filter(Boolean).map((color, index) => (
+                          <span key={`${color}-${index}`} style={{ display:'inline-flex', alignItems:'center', gap:6, color:'var(--text2)', fontSize:11 }}>
+                            <span aria-hidden="true" style={{ width:16, height:16, borderRadius:'50%', background:getColorSwatch(color), border:'1px solid rgba(255,255,255,0.35)', display:'inline-block' }} />
+                            {color}
+                          </span>
+                        ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1681,7 +1691,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                                 <span style={{ fontSize:11, fontWeight:600, color:'var(--text)', background:'var(--bg)', padding:'2px 6px', borderRadius:4 }}>{size}</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: color.toLowerCase() === 'white' ? '#ffffff' : color.toLowerCase(), border: '1px solid #888' }} />
+                                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: getColorSwatch(color), border: '1px solid #888' }} />
                                   <span style={{ fontSize: 11, color: 'var(--text2)', textTransform: 'capitalize' }}>{color}</span>
                                 </div>
                               </div>

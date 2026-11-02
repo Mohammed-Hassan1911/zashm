@@ -6,6 +6,7 @@ import ProductCard from '../components/shop/ProductCard';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
 import { resolveRoute } from '../lib/routes';
+import { getColorSwatch } from '../lib/productColors.mjs';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
@@ -367,14 +368,16 @@ export default function ProductPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
                   const isColorOOS = hasVariantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
+                  const isSelected = selColor === c;
                   
                   return (
                     <button key={c} onClick={() => { setSelColor(c); setQty(1); }}
                       type="button"
-                      aria-pressed={selColor === c}
+                      aria-pressed={isSelected}
                       aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
-                      style={{ padding: '6px 14px', borderRadius: 2, fontSize: 11, fontWeight: 500, border: `2px solid ${selColor === c ? 'var(--gold)' : 'var(--border)'}`, background: selColor === c ? 'rgba(201,168,76,0.1)' : 'transparent', color: selColor === c ? 'var(--gold)' : 'var(--text2)', cursor: 'pointer', transition: 'all 0.2s', opacity: isColorOOS ? 0.4 : 1 }}>
-                      {c} {isColorOOS && '(OOS)'}
+                      title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}
+                      style={{ width:40, height:40, borderRadius:'50%', display:'inline-flex', alignItems:'center', justifyContent:'center', border:`2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`, background:'transparent', cursor:'pointer', transition:'border-color 0.2s, opacity 0.2s', opacity:isColorOOS ? 0.45 : 1, boxShadow:isSelected ? '0 0 0 2px rgba(201,168,76,0.2)' : 'none' }}>
+                      <span aria-hidden="true" style={{ width:26, height:26, borderRadius:'50%', background:getColorSwatch(c), border:'1px solid rgba(255,255,255,0.35)', display:'block' }} />
                     </button>
                   );
                 })}

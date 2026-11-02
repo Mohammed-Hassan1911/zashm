@@ -230,7 +230,7 @@ console.log('\n[4] the router wires GET');
 console.log('\n[5] admin page navigation and add-product wiring');
 {
   const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
-  const pageContentStart = src.indexOf('<div style={{ flex:1, overflowY:\'auto\', padding:\'16px\'');
+  const pageContentStart = src.indexOf('<div style={{ flex:1, minHeight:0, overflowY:\'auto\', padding:\'16px\'');
   const dashboardStart = src.indexOf('// ─── DASHBOARD', pageContentStart);
   const pageContent = src.slice(pageContentStart, dashboardStart);
 
