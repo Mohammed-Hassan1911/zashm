@@ -783,12 +783,8 @@ export function CheckoutPage() {
             <span><Truck size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Delivery · التوصيل</span>
             <span>{success.city || 'Egypt'}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8, color: '#aaa398', fontSize: 10 }}>
-            <span><Banknote size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Payment · الدفع</span>
-            <span>Cash on delivery · عند الاستلام</span>
-          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, borderTop: '1px solid #292720', paddingTop: 10 }}>
-            <span style={{ color: '#e5e0d7', fontSize: 11, fontWeight: 600 }}>Order total · الإجمالي</span>
+            <span style={{ color: '#e5e0d7', fontSize: 11, fontWeight: 600 }}>Order total</span>
             <strong style={{ color: '#e4c66d', fontFamily: 'var(--font-display)', fontSize: 18 }}>EGP {Number(success.total || 0).toLocaleString()}</strong>
           </div>
         </div>
