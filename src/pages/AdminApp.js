@@ -112,6 +112,11 @@ export default function AdminApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [orderToOpen, setOrderToOpen] = useState(null);
   const [productToAdd, setProductToAdd] = useState(false);
+  const handleProductAddOpened = useCallback(() => setProductToAdd(false), []);
+  const openNewProduct = useCallback(() => {
+    setProductToAdd(true);
+    setAdminPage('products');
+  }, [setAdminPage]);
 
   useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
 
@@ -341,17 +346,15 @@ export default function AdminApp() {
         </div>
 
         <div style={{ flex:1, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
-          <AnimatePresence mode="wait">
-            <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-12 }} transition={{ duration:0.25 }}>
-              {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} onAddProduct={() => { setProductToAdd(true); setAdminPage('products'); }} />}
-              {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
-              {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} preOpenNew={productToAdd} onNewOpened={() => setProductToAdd(false)} />}
-              {adminPage === 'discounts' && canAccess('discounts') && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
-              {adminPage === 'analytics' && canAccess('analytics') && <AnalyticsPanel />}
+          <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.25 }}>
+            {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} onAddProduct={openNewProduct} />}
+            {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
+            {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} preOpenNew={productToAdd} onNewOpened={handleProductAddOpened} />}
+            {adminPage === 'discounts' && canAccess('discounts') && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
+            {adminPage === 'analytics' && canAccess('analytics') && <AnalyticsPanel />}
 
-              {adminPage === 'users' && canAccess('users') && <UsersPanel />}
-            </motion.div>
-          </AnimatePresence>
+            {adminPage === 'users' && canAccess('users') && <UsersPanel />}
+          </motion.div>
         </div>
       </main>
     </div>

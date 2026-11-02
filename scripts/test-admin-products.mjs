@@ -227,5 +227,22 @@ console.log('\n[4] the router wires GET');
   ok(/requirePerm\(req,\s*res,\s*'products\.read'\)/.test(src), 'GET requires products.read');
 }
 
+console.log('\n[5] admin page navigation and add-product wiring');
+{
+  const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
+  const pageContentStart = src.indexOf('<div style={{ flex:1, overflowY:\'auto\', padding:\'16px\'');
+  const dashboardStart = src.indexOf('// ─── DASHBOARD', pageContentStart);
+  const pageContent = src.slice(pageContentStart, dashboardStart);
+
+  ok(pageContentStart >= 0 && dashboardStart > pageContentStart, 'admin page content block is found');
+  ok(!/<AnimatePresence mode="wait">/.test(pageContent), 'admin page changes do not wait for the previous page to exit');
+  ok(/<motion\.div key=\{adminPage\}/.test(pageContent), 'selected admin page mounts with its own entrance animation');
+  ok(/onAddProduct=\{openNewProduct\}/.test(pageContent), 'dashboard add-product action uses the direct navigation handler');
+  ok(/const openNewProduct = useCallback\(\(\) => \{\s*setProductToAdd\(true\);\s*setAdminPage\('products'\);/s.test(src),
+    'add-product action selects Products and queues the form together');
+  ok(/preOpenNew=\{productToAdd\} onNewOpened=\{handleProductAddOpened\}/.test(pageContent),
+    'ProductsPanel receives a stable queued-open callback');
+}
+
 console.log(`\nadmin-products: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
