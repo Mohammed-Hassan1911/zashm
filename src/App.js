@@ -79,6 +79,7 @@ function AppInner() {
 
   const [activeModal, setActiveModal] = useState(null);
   const trackedFirstView = useRef(false);
+  const previousPage = useRef(currentPage);
 
   // WhatsApp remains visible; scroll-to-top appears after scrolling down.
   // Both are fixed above every page layer (see src/index.css).
@@ -105,7 +106,15 @@ function AppInner() {
   }, [setSelectedProduct, syncPageFromLocation]);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    const from = previousPage.current;
+    const isHomeShopNavigation = [from, currentPage].every(page => page === 'home' || page === 'shop') && from !== currentPage;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (isHomeShopNavigation && !reduceMotion) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      window.scrollTo(0, 0);
+    }
+    previousPage.current = currentPage;
   }, [currentPage]); 
 
   // Keep the document title / meta description in sync with the active page.
@@ -197,10 +206,10 @@ function AppInner() {
           <AnimatePresence>
             <motion.div
               key={currentPage}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
             >
               <Suspense fallback={<PageLoading />}>
                 {currentPage === 'home' && <HomePage />}

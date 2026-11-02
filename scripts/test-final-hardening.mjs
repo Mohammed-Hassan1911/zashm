@@ -470,11 +470,14 @@ console.log('\n[10] public SEO and checkout accessibility');
     'order success is not delayed while refreshing the product catalog');
 
   const app = read('src/App.js');
-  ok(/initial=\{\{ opacity: 0, y: 10 \}\}[\s\S]*?exit=\{\{ opacity: 0, y: -6 \}\}[\s\S]*?duration: 0\.4, ease: \[0\.22, 1, 0\.36, 1\]/.test(app),
-    'storefront page transitions use a restrained ease-out motion');
+  ok(/window\.scrollTo\(\{ top: 0, behavior: 'smooth' \}\)/.test(app) &&
+     /prefers-reduced-motion: reduce/.test(app),
+    'home/shop navigation returns to top smoothly and respects reduced motion');
+  ok(/initial=\{\{ opacity: 0 \}\}[\s\S]*?exit=\{\{ opacity: 0 \}\}[\s\S]*?duration: 0\.38, ease: \[0\.4, 0, 0\.2, 1\]/.test(app),
+    'storefront page transitions use a restrained crossfade without vertical jumps');
   const productCard = read('src/components/shop/ProductCard.js');
-  ok(/initial=\{\{ opacity: 0, y: 8 \}\}[\s\S]*?duration: 0\.45,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 6\) \* 0\.02/.test(productCard),
-    'product cards use a subtle, shorter stagger on collection entry');
+  ok(/initial=\{\{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
+    'product cards use a brief fade with minimal stagger on collection entry');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

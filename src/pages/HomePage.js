@@ -52,7 +52,7 @@ export default function HomePage() {
           <motion.h1
             className="hero-brand"
             aria-label="ZASHM"
-            initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 1 }}
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, calc(7vw + 22px), 140px)', fontWeight: 400, letterSpacing: 'clamp(4px, 1.6vw, 24px)', lineHeight: 0.95, marginBottom: 'clamp(12px, 2.8vw, 22px)' }}
           >
             <span className="hero-brand-lockup">
@@ -78,18 +78,18 @@ export default function HomePage() {
 
           <motion.p
             className="hero-tagline"
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.85, duration: 0.8 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
             style={{ fontSize: 'clamp(9px, 1.4vw, 11px)', letterSpacing: 'clamp(2px, 0.7vw, 8px)', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 'clamp(14px, 3vw, 24px)', fontWeight: 500 }}
           >EST. 2026 · EGYPT</motion.p>
 
           <motion.p
             className="hero-brand-subtitle"
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0, duration: 0.8 }}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(17px, 2.4vw, 28px)', color: 'var(--gold)', fontStyle: 'italic', fontWeight: 400, letterSpacing: 'clamp(1.5px, 0.3vw, 4px)', marginBottom: 'clamp(22px, 3.5vw, 34px)', textShadow: '0 2px 20px rgba(201,168,76,0.18)' }}
           >Luxury Menswear</motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.7 }}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26, duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
             style={{ display: 'flex', justifyContent: 'center' }}
           >
             <button 
