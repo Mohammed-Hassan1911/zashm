@@ -15,26 +15,6 @@ function normalizeGovernorate(value) {
 }
 import { toast } from '../components/ui/BackToTop';
 
-// Warm the coupon endpoint as soon as the shopper touches the discount field.
-// A cold serverless start is the slowest part of the first apply; this OPTIONS
-// probe short-circuits before the handler's rate limit and has no side effects.
-// At most one probe per minute so repeated focus/blur cannot spam the API.
-let couponWarmupAt = 0;
-function warmCouponEndpoint() {
-  const now = Date.now();
-  if (now - couponWarmupAt < 60000) return;
-  couponWarmupAt = now;
-  try {
-    fetch('/api/coupons/validate', {
-      method: 'OPTIONS',
-      credentials: 'same-origin',
-      cache: 'no-store',
-    }).catch(() => {});
-  } catch (e) {
-    /* warm-up is best effort */
-  }
-}
-
 function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate', describedBy }) {
   const [open, setOpen] = React.useState(false);
   const suggestions = React.useMemo(() => filterGovernorates(value), [value]);
@@ -101,10 +81,6 @@ export function CartPage() {
   };
 
   React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
-  // Warm the coupon function while the shopper is still reading the bag, so the
-  // first Apply is not paying for a cold serverless start. Throttled to once a
-  // minute by warmCouponEndpoint().
-  React.useEffect(() => { if (safeCart.length) warmCouponEndpoint(); }, []);
 
   const handleApplyCoupon = async () => {
     if (couponApplying) return;
@@ -217,13 +193,12 @@ export function CartPage() {
                         <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                         <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                           onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
-                          onFocus={warmCouponEndpoint}
                           disabled={couponApplying}
                           placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                       </div>
                       <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
-                        {couponApplying ? 'Checking…' : 'Apply'}
+                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
+                        Apply
                       </button>
                     </div>
                     {couponError && (
@@ -283,8 +258,6 @@ export function CheckoutPage() {
 
   React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order' }); }, []);
   React.useEffect(() => { refreshAppliedDiscount(); }, []);
-  // Same warm-up as the bag: checkout is the likeliest place to paste a code.
-  React.useEffect(() => { warmCouponEndpoint(); }, []);
   
   // 🔝 السكرول المبدئي عند فتح الصفحة لأول مرة
   React.useEffect(() => {
@@ -460,60 +433,13 @@ export function CheckoutPage() {
   };
   
   if (success) {
-    // All three confirmation actions share one style so they read as a set:
-    // same pill shape, border, gradient, typography and height.
-    const orderActionStyle = {
-      boxSizing: 'border-box',
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 7,
-      flex: '1 1 150px',
-      minWidth: 0,
-      padding: '12px 10px',
-      borderRadius: 50,
-      border: '1px solid #c9aa50',
-      background: 'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)',
-      color: '#101010',
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: 1.1,
-      lineHeight: 1.5,
-      whiteSpace: 'nowrap',
-      textDecoration: 'none',
-      textTransform: 'uppercase',
-      cursor: 'pointer',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
-      transition: 'background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
-    };
-    const orderActionHover = {
-      onMouseEnter: (e) => {
-        e.currentTarget.style.background =
-          'linear-gradient(135deg, #c9aa50 0%, #e0c779 55%, #d1b363 100%)';
-        e.currentTarget.style.boxShadow = '0 5px 18px rgba(201,170,80,0.22)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-      },
-      onMouseLeave: (e) => {
-        e.currentTarget.style.background =
-          'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)';
-        e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.14)';
-        e.currentTarget.style.transform = 'translateY(0)';
-      },
-      onFocus: (e) => {
-        e.currentTarget.style.outline = '2px solid #e0c779';
-        e.currentTarget.style.outlineOffset = '3px';
-      },
-      onBlur: (e) => {
-        e.currentTarget.style.outline = 'none';
-      },
-    };
   return (
     <div
       className="order-confirmation-page"
       style={{
         background: 'radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.12), transparent 42%), #080808',
         minHeight: 'calc(100vh - 90px)',
-        padding: '104px 16px 56px',
+        padding: '112px 20px 80px',
         position: 'relative',
         boxSizing: 'border-box',
       }}
@@ -558,14 +484,14 @@ export function CheckoutPage() {
         style={{
           boxSizing: 'border-box',
           textAlign: 'center',
-          padding: '30px 28px 26px',
+          padding: '42px 44px 38px',
           background: 'linear-gradient(145deg, #151515 0%, #0e0e0e 72%)',
           border: '1px solid rgba(201,168,76,0.28)',
-          borderRadius: 16,
-          maxWidth: 620,
+          borderRadius: 18,
+          maxWidth: 760,
           width: '100%',
           margin: '0 auto',
-          boxShadow: '0 22px 70px rgba(0,0,0,0.5), 0 0 45px rgba(201,168,76,0.06)',
+          boxShadow: '0 28px 90px rgba(0,0,0,0.5), 0 0 55px rgba(201,168,76,0.06)',
           color: '#f5f0e8',
         }}
       >
@@ -576,56 +502,62 @@ export function CheckoutPage() {
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5 }}
           style={{
-            width: 60,
-            height: 60,
+            width: 82,
+            height: 82,
             display: 'grid',
             placeItems: 'center',
-            margin: '0 auto 14px',
+            margin: '0 auto 20px',
             borderRadius: '50%',
             background: 'rgba(201,168,76,0.09)',
             border: '1px solid rgba(201,168,76,0.35)',
-            boxShadow: '0 0 28px rgba(201,168,76,0.11)',
+            boxShadow: '0 0 36px rgba(201,168,76,0.11)',
           }}
         >
           <CheckCircle
-            size={30}
+            size={43}
             color="#d5b65d"
-            strokeWidth={1.6}
+            strokeWidth={1.5}
           />
         </motion.div>
 
-        <div style={{ marginBottom: 18 }}>
-          <p style={{ color: '#c9a84c', fontSize: 9, fontWeight: 700, letterSpacing: 3, marginBottom: 6 }}>
+        <div style={{ marginBottom: 28 }}>
+          <p style={{ color: '#c9a84c', fontSize: 10, fontWeight: 700, letterSpacing: 4, marginBottom: 10 }}>
             ORDER CONFIRMED
           </p>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 4.2vw, 30px)', fontWeight: 500, lineHeight: 1.2, margin: '0 0 6px', color: '#f5f0e8' }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 5vw, 42px)', fontWeight: 500, lineHeight: 1.2, margin: '0 0 10px', color: '#f5f0e8' }}>
             Thank you for your order
           </h1>
-          <h2
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 'clamp(16px, 3vw, 20px)',
-              lineHeight: 1.4,
-              margin: 0,
-              color: '#d1b363',
-              fontWeight: 500,
-              direction: 'rtl',
-            }}
-          >
-            تم تسجيل طلبك بنجاح
-          </h2>
+          <div style={{ marginBottom: 8 }}>
+            <h2
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 'clamp(22px, 4vw, 30px)',
+                lineHeight: 1.5,
+                margin: 0,
+                color: '#d1b363',
+                fontWeight: 600,
+                direction: 'rtl',
+              }}
+            >
+              تم تسجيل طلبك بنجاح
+            </h2>
+          </div>
+          <p style={{ color: '#9b978e', fontSize: 13, margin: '12px 0 0', lineHeight: 1.8 }}>
+                      </p>
+          <p style={{ color: '#9b978e', fontSize: 12, margin: '2px 0 0', direction: 'rtl' }}>
+            شكرًا لاختيارك ZASHM، سنبدأ تجهيز طلبك.
+          </p>
         </div>
 
         {/* Order reference */}
         <div
-          className="order-confirmation-reference"
           style={{
             boxSizing: 'border-box',
             background: 'linear-gradient(110deg, #211d12, #17150f)',
             border: '1px solid rgba(201,168,76,0.26)',
-            borderRadius: 10,
-            padding: '14px 16px',
-            marginBottom: 12,
+            borderRadius: 12,
+            padding: '18px 20px',
+            marginBottom: 18,
             width: '100%',
             textAlign: 'left',
           }}
@@ -633,10 +565,10 @@ export function CheckoutPage() {
           <div
             style={{
               color: '#c9aa50',
-              fontSize: 9,
-              marginBottom: 5,
+              fontSize: 10,
+              marginBottom: 7,
               textAlign: 'left',
-              letterSpacing: 1.5,
+              letterSpacing: 2,
               lineHeight: 1.6,
             }}
           >
@@ -663,9 +595,9 @@ export function CheckoutPage() {
             <span
               style={{
                 color: '#e4c66d',
-                fontSize: 'clamp(14px, 3vw, 17px)',
+                fontSize: 'clamp(15px, 3.5vw, 20px)',
                 fontWeight: 700,
-                letterSpacing: 1.5,
+                letterSpacing: 2,
                 fontFamily: 'monospace',
                 overflowWrap: 'anywhere',
                 lineHeight: 1.6,
@@ -708,7 +640,7 @@ export function CheckoutPage() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: 4,
+                padding: 6,
                 borderRadius: 5,
                 transition: 'color 0.25s ease, transform 0.25s ease',
                 flexShrink: 0,
@@ -730,8 +662,8 @@ export function CheckoutPage() {
               }}
             >
               <svg
-                width="18"
-                height="18"
+                width="22"
+                height="22"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -747,108 +679,293 @@ export function CheckoutPage() {
           </div>
         </div>
 
-        <div className="order-confirmation-summary" style={{ textAlign: 'left', background: '#101010', border: '1px solid #292720', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
-          <h3 style={{ color: '#f0ece4', fontSize: 12, fontWeight: 600, margin: '0 0 10px' }}>
+        <div className="order-confirmation-summary" style={{ textAlign: 'left', background: '#101010', border: '1px solid #292720', borderRadius: 12, padding: '18px 20px', marginBottom: 18 }}>
+          <h3 style={{ color: '#f0ece4', fontSize: 13, fontWeight: 600, margin: '0 0 14px' }}>
             Order summary <span style={{ color: '#8f897e', fontWeight: 400 }}>· ملخص الطلب</span>
           </h3>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 11 }}>
             {(Array.isArray(success.items) ? success.items : []).map((item, index) => (
               <div key={`${item.productId || item.name}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <div style={{ minWidth: 0 }}>
-                  <p style={{ color: '#e5e0d7', fontSize: 11, margin: 0, overflowWrap: 'anywhere' }}>{item.name}</p>
-                  <p style={{ color: '#8f897e', fontSize: 9, margin: '2px 0 0' }}>{[item.size, item.color, `Qty ${item.qty}`].filter(Boolean).join(' · ')}</p>
+                  <p style={{ color: '#e5e0d7', fontSize: 12, margin: 0, overflowWrap: 'anywhere' }}>{item.name}</p>
+                  <p style={{ color: '#8f897e', fontSize: 10, margin: '3px 0 0' }}>{[item.size, item.color, `Qty ${item.qty}`].filter(Boolean).join(' · ')}</p>
                 </div>
-                <span style={{ color: '#d1b363', fontSize: 11, whiteSpace: 'nowrap' }}>EGP {Number(item.price || 0).toLocaleString()}</span>
+                <span style={{ color: '#d1b363', fontSize: 12, whiteSpace: 'nowrap' }}>EGP {Number(item.price || 0).toLocaleString()}</span>
               </div>
             ))}
           </div>
-          <div style={{ height: 1, background: '#292720', margin: '10px 0 9px' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
+          <div style={{ height: 1, background: '#292720', margin: '15px 0 12px' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8, color: '#aaa398', fontSize: 11 }}>
             <span>Subtotal · المجموع</span>
             <span>EGP {Number(success.subtotal || 0).toLocaleString()}</span>
           </div>
           {Number(success.discount || 0) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#9fbd91', fontSize: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8, color: '#9fbd91', fontSize: 11 }}>
               <span>Discount · الخصم</span>
               <span>− EGP {Number(success.discount).toLocaleString()}</span>
             </div>
           )}
           {Number(success.shippingCost || 0) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10, color: '#aaa398', fontSize: 11 }}>
               <span>Shipping · الشحن</span>
               <span>EGP {Number(success.shippingCost).toLocaleString()}</span>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
-            <span><Truck size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Delivery · التوصيل</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10, color: '#aaa398', fontSize: 11 }}>
+            <span><Truck size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 6, color: '#c9a84c' }} />Delivery · التوصيل</span>
             <span>{success.city || 'Egypt'}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, borderTop: '1px solid #292720', paddingTop: 10 }}>
-            <span style={{ color: '#e5e0d7', fontSize: 11, fontWeight: 600 }}>Order total</span>
-            <strong style={{ color: '#e4c66d', fontFamily: 'var(--font-display)', fontSize: 18 }}>EGP {Number(success.total || 0).toLocaleString()}</strong>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, color: '#aaa398', fontSize: 11 }}>
+            <span><Banknote size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 6, color: '#c9a84c' }} />Payment · الدفع</span>
+            <span>Cash on delivery · عند الاستلام</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, borderTop: '1px solid #292720', paddingTop: 12 }}>
+            <span style={{ color: '#e5e0d7', fontSize: 12, fontWeight: 600 }}>Order total · الإجمالي</span>
+            <strong style={{ color: '#e4c66d', fontFamily: 'var(--font-display)', fontSize: 22 }}>EGP {Number(success.total || 0).toLocaleString()}</strong>
           </div>
         </div>
 
-        {/* Uniform actions */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#b8a96f', fontSize: 11, marginBottom: 24 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#d1b363', boxShadow: '0 0 10px rgba(209,179,99,0.7)' }} />
+          Order received <span style={{ color: '#777166' }}>·</span> تم استلام الطلب
+        </div>
+
+        {/* Divider */}
         <div
-          data-order-actions="true"
-          className="order-confirmation-actions"
           style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            alignItems: 'stretch',
-            gap: 8,
+            height: 1,
+            background:
+              'linear-gradient(90deg, transparent, rgba(190,157,70,0.55), transparent)',
+            margin: '0 0 28px',
             width: '100%',
-            direction: 'ltr',
+          }}
+        />
+
+        {/* Tracking section */}
+        <div style={{ marginBottom: 30, textAlign: 'center' }}>
+          <h4
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: '#c9aa50',
+              fontSize: 14,
+              letterSpacing: 5,
+              textTransform: 'uppercase',
+              margin: '0 0 14px',
+              fontWeight: 500,
+              lineHeight: 1.8,
+            }}
+          >
+            WHAT HAPPENS NEXT
+          </h4>
+
+          <div
+            style={{
+              color: '#a5a5a5',
+              fontSize: 13,
+              lineHeight: 2,
+              margin: '0 auto 25px',
+              maxWidth: 420,
+            }}
+          >
+            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك متابعة حالة طلبك من صفحة التتبع، أو التواصل مع فريق الدعم عند الحاجة.</div>
+          </div>
+
+          {/* Two equal buttons on the same row */}
+          <div
+            data-order-actions="true"
+            className="order-confirmation-actions"
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'stretch',
+              gap: 12,
+              marginBottom: 20,
+              width: '100%',
+              direction: 'ltr',
+            }}
+          >
+            <button
+              type="button"
+              className="order-confirmation-primary"
+              onClick={() => {
+                const url = success.tracking_url || '/track';
+
+                clearOrderConfirmation();
+                window.location.assign(url);
+              }}
+              style={{
+                boxSizing: 'border-box',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+                padding: '20px 10px',
+                minWidth: 0,
+                flex: '1 1 0',
+                borderRadius: 50,
+                border: '1px solid #c9aa50',
+                background:
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)',
+                color: '#101010',
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 1.1,
+                lineHeight: 1.5,
+                whiteSpace: 'nowrap',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
+                transition:
+                  'background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #c9aa50 0%, #e0c779 55%, #d1b363 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 5px 18px rgba(201,170,80,0.22)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 3px 12px rgba(0,0,0,0.12)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.outline = '2px solid #e0c779';
+                e.currentTarget.style.outlineOffset = '3px';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.outline = 'none';
+              }}
+            >
+              <span aria-hidden="true">🔍</span> TRACK YOUR ORDER
+            </button>
+
+            <a
+              className="order-confirmation-secondary"
+              href={
+                'https://wa.me/201013380313?text=' +
+                encodeURIComponent(
+                  'مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' +
+                    success.id
+                )
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                boxSizing: 'border-box',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+                padding: '20px 10px',
+                minWidth: 0,
+                flex: '1 1 0',
+                borderRadius: 50,
+                border: '1px solid #c9aa50',
+                background:
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)',
+                color: '#101010',
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 1.1,
+                lineHeight: 1.5,
+                whiteSpace: 'nowrap',
+                textDecoration: 'none',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                boxShadow: '0 3px 12px rgba(0,0,0,0.12)',
+                transition:
+                  'background 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #c9aa50 0%, #e0c779 55%, #d1b363 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 5px 18px rgba(201,170,80,0.22)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background =
+                  'linear-gradient(135deg, #b89a43 0%, #d1b363 52%, #c4a44c 100%)';
+                e.currentTarget.style.boxShadow =
+                  '0 3px 12px rgba(0,0,0,0.12)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.outline = '2px solid #e0c779';
+                e.currentTarget.style.outlineOffset = '3px';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.outline = 'none';
+              }}
+            >
+              <span aria-hidden="true">💬</span> CONTACT SUPPORT
+            </a>
+          </div>
+        </div>
+
+        {/* Continue shopping */}
+        <button
+          type="button"
+          className="order-confirmation-continue"
+          onClick={() => {
+            clearOrderConfirmation();
+            setPage('home');
+          }}
+          style={{
+            boxSizing: 'border-box',
+            width: '100%',
+            padding: '21px 12px',
+            borderRadius: 50,
+            fontWeight: 700,
+            letterSpacing: 3,
+            lineHeight: 1.6,
+            textTransform: 'uppercase',
+            background:
+              'linear-gradient(100deg, #b89a43 0%, #d1b363 55%, #e0c779 100%)',
+            color: '#101010',
+            border: '2px solid #f0d78b',
+            fontSize: 12,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            boxShadow: '0 0 0 1px rgba(15,15,15,0.8), 0 7px 22px rgba(201,170,80,0.3)',
+            transition:
+              'background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background =
+              'linear-gradient(100deg, #c9aa50 0%, #e0c779 55%, #f0d78b 100%)';
+            e.currentTarget.style.borderColor = '#fff0ba';
+            e.currentTarget.style.boxShadow =
+              '0 0 0 1px rgba(15,15,15,0.8), 0 8px 26px rgba(201,170,80,0.42)';
+            e.currentTarget.style.transform = 'translateY(-2px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background =
+              'linear-gradient(100deg, #b89a43 0%, #d1b363 55%, #e0c779 100%)';
+            e.currentTarget.style.borderColor = '#f0d78b';
+            e.currentTarget.style.boxShadow =
+              '0 0 0 1px rgba(15,15,15,0.8), 0 7px 22px rgba(201,170,80,0.3)';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.outline = '2px solid #e0c779';
+            e.currentTarget.style.outlineOffset = '3px';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.outline = 'none';
           }}
         >
-          <button
-            type="button"
-            className="order-confirmation-primary"
-            onClick={() => {
-              const url = success.tracking_url || '/track';
-
-              clearOrderConfirmation();
-              window.location.assign(url);
-            }}
-            style={orderActionStyle}
-            {...orderActionHover}
-          >
-            <span aria-hidden="true">🔍</span> TRACK YOUR ORDER
-          </button>
-
-          <a
-            className="order-confirmation-secondary"
-            href={
-              'https://wa.me/201013380313?text=' +
-              encodeURIComponent(
-                'مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' +
-                  success.id
-              )
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            style={orderActionStyle}
-            {...orderActionHover}
-          >
-            <span aria-hidden="true">💬</span> CONTACT SUPPORT
-          </a>
-
-          <button
-            type="button"
-            className="order-confirmation-continue"
-            onClick={() => {
-              clearOrderConfirmation();
-              setPage('home');
-            }}
-            style={orderActionStyle}
-            {...orderActionHover}
-          >
-            <span aria-hidden="true">🛍️</span>
-            <span>CONTINUE SHOPPING</span>
-          </button>
-        </div>
+          <span aria-hidden="true">🛍️</span>
+          <span>CONTINUE SHOPPING</span>
+        </button>
       </motion.div>
     </div>
   );
@@ -1162,13 +1279,12 @@ export function CheckoutPage() {
                       <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
                       <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                         onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
-                        onFocus={warmCouponEndpoint}
                         disabled={couponApplying}
                         placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                     </div>
                     <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
-                      {couponApplying ? 'Checking…' : 'Apply'}
+                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      Apply
                     </button>
                   </div>
                   {couponError && (
@@ -1225,6 +1341,10 @@ export function CheckoutPage() {
               >
                 <span style={{ display: 'block', color: 'var(--text2)' }}>
                   <strong style={{ color: 'var(--gold)' }}>Cash on delivery</strong>
+                  <span> · الدفع عند الاستلام</span>
+                </span>
+                <span style={{ display: 'block', color: 'var(--text3)', fontSize: 11 }}>
+                  No online payment is taken. · لا يتم تحصيل أي دفعة أونلاين.
                 </span>
               </div>
               
