@@ -480,5 +480,40 @@ console.log('\n[10] public SEO and checkout accessibility');
     'product cards use a brief fade with minimal stagger on collection entry');
 }
 
+// ─── [11] reload resilience and footer polish ──────────────────────────────
+console.log('\n[11] reload resilience and footer polish');
+{
+  const app = read('src/App.js');
+  const entry = read('src/index.js');
+  const recovery = read('src/lib/chunkRecovery.js');
+  const auth = read('src/lib/auth.js');
+  const css = read('src/index.css');
+
+  ok(/vite:preloadError/.test(entry) && /preventDefault\(\)/.test(entry) && /reloadForChunkError/.test(entry),
+    'stale Vite preloads are intercepted before the error reaches the UI');
+  ok(/RELOAD_KEY[\s\S]*?RELOAD_WINDOW_MS = 10000/.test(recovery) &&
+     /Date\.now\(\) - readLastReload\(\) < RELOAD_WINDOW_MS/.test(recovery),
+    'chunk reloads are rate-limited so a broken deployment cannot loop');
+  ok(/export function lazyWithRetry/.test(recovery) &&
+     /await importer\(\)[\s\S]*?await delay\(RETRY_DELAY_MS\)[\s\S]*?await importer\(\)/.test(recovery),
+    'lazy routes retry once before falling back to a guarded reload');
+  ok(/lazyWithRetry\(/.test(app) && !/React\.lazy\(/.test(app),
+    'every storefront lazy route uses the retry wrapper');
+
+  const authInit = auth.slice(auth.indexOf('async function init()'), auth.indexOf('}, [loadUsers])'));
+  ok(/void loadUsers\(\)/.test(authInit) && !/await loadUsers\(\)/.test(authInit),
+    'auth startup never blocks the storefront on the admin users request');
+  ok(/app-startup-stall/.test(app) && /window\.location\.reload\(\)/.test(app.slice(app.indexOf('function AppStartupScreen'), app.indexOf('/* ================= MODAL COMPONENT'))),
+    'a stalled startup screen offers a manual reload instead of staying black');
+
+  ok(/\.site-footer a:hover[\s\S]*?transform: scale\(1\.045\)/.test(css) &&
+     /\.site-footer \.footer-contact p:hover[\s\S]*?transform: scale\(1\.03\)/.test(css),
+    'footer links and contact rows zoom subtly on hover');
+  ok(/\.site-footer a\[target='_blank'\]:hover[\s\S]*?transform: scale\(1\.12\)/.test(css),
+    'footer social icons zoom from their centre');
+  ok(/\.site-footer \.footer-contact p:hover[\s\S]{0,200}?transform: none/.test(css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'))),
+    'footer hover zoom is disabled for reduced motion');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

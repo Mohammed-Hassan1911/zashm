@@ -28,6 +28,7 @@ import WhatsAppButton from './components/ui/WhatsAppButton';
 import { setPageMeta } from './lib/seo';
 import { trackPageView } from './lib/ga';
 import { resolveRoute } from './lib/routes';
+import { lazyWithRetry } from './lib/chunkRecovery';
 
 const loadHomePage = () => import('./pages/HomePage');
 const loadShopPage = () => import('./pages/ShopPage');
@@ -37,15 +38,15 @@ const loadCartPage = () => import('./pages/CartPage');
 const loadAdminPage = () => import('./pages/AdminApp');
 const loadNotFoundPage = () => import('./pages/NotFoundPage');
 
-const HomePage = React.lazy(loadHomePage);
-const ShopPage = React.lazy(loadShopPage);
-const ProductPage = React.lazy(loadProductPage);
-const TrackOrder = React.lazy(loadTrackOrderPage);
-const CartPage = React.lazy(() => loadCartPage().then(module => ({ default: module.CartPage })));
-const CheckoutPage = React.lazy(() => loadCartPage().then(module => ({ default: module.CheckoutPage })));
-const WishlistPage = React.lazy(() => loadCartPage().then(module => ({ default: module.WishlistPage })));
-const AdminApp = React.lazy(loadAdminPage);
-const NotFoundPage = React.lazy(loadNotFoundPage);
+const HomePage = lazyWithRetry(loadHomePage);
+const ShopPage = lazyWithRetry(loadShopPage);
+const ProductPage = lazyWithRetry(loadProductPage);
+const TrackOrder = lazyWithRetry(loadTrackOrderPage);
+const CartPage = lazyWithRetry(() => loadCartPage().then(module => ({ default: module.CartPage })));
+const CheckoutPage = lazyWithRetry(() => loadCartPage().then(module => ({ default: module.CheckoutPage })));
+const WishlistPage = lazyWithRetry(() => loadCartPage().then(module => ({ default: module.WishlistPage })));
+const AdminApp = lazyWithRetry(loadAdminPage);
+const NotFoundPage = lazyWithRetry(loadNotFoundPage);
 
 const PUBLIC_PAGE_LOADERS = [
   loadHomePage,
@@ -241,11 +242,31 @@ function PageLoading() {
 }
 
 function AppStartupScreen({ compact = false }) {
+  const [stalled, setStalled] = useState(false);
+
+  // If a chunk request hangs (slow network / stuck cold start) the startup
+  // screen would otherwise stay black forever. Offer a manual reload after a
+  // reasonable wait; normal loads finish long before this fires.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setStalled(true), 10000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <div className={`app-startup-screen${compact ? ' app-page-loading' : ''}`} role="status" aria-label="Preparing ZASHM">
       <span className="app-startup-indicator" aria-hidden="true">
         <img src="/zashm-z-monogram.png?v=3" alt="" />
       </span>
+      {stalled && (
+        <div className="app-startup-stall">
+          <p className="app-startup-stall-text">
+            Taking longer than usual. · التحميل بياخد وقت أطول من المعتاد.
+          </p>
+          <button type="button" className="app-startup-stall-btn" onClick={() => window.location.reload()}>
+            Reload · إعادة التحميل
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -449,10 +470,10 @@ function Footer({ setModal }) {
 
           <div>
             <h4 style={titleStyle}>{'Contact'}</h4>
-            <div style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
+            <div className="footer-contact" style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-                <span dir="ltr" className="footer-glow-number">01013380313</span>
+                <span dir="ltr" className="footer-phone-number">01013380313</span>
               </p>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8, wordBreak: 'break-all' }}>
                 <Mail size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
@@ -461,10 +482,6 @@ function Footer({ setModal }) {
             </div>
           </div>
 
-        </div>
-
-        <div style={{ borderTop: '1px solid var(--border)', marginTop: 48, paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <p style={{ color: '#C9A84C', fontSize: 12 }}> © ZASHM Luxury Fashion <span className="footer-glow-number">2026</span>. {'All rights reserved.'}</p>
         </div>
 
       </div>

@@ -38,10 +38,10 @@ export function AuthProvider({ children }) {
         const existing = getSession();
         if (existing) {
           setSession(existing);
-        }
-
-        if (existing) {
-          await loadUsers();
+          // Do not block the UI on the admin-only users request. It can be
+          // slow or unreachable and used to keep returning admins on the black
+          // startup screen for up to the API timeout.
+          void loadUsers();
         }
       } catch (error) {
         console.error('Error during auth initialization:', error);

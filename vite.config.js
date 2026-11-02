@@ -11,6 +11,15 @@ export default defineConfig(({ mode }) => {
       include: /src\/.*\.js$/,
       exclude: [],
     },
+    // The project uses JSX inside .js files. The dependency scanner runs its
+    // own esbuild pass, and without this it fails to parse the entry graph,
+    // then re-optimizes dependencies mid-session (which can reload the page
+    // with two React copies and blank the UI during repeated reloads).
+    optimizeDeps: {
+      esbuildOptions: {
+        loader: { '.js': 'jsx' },
+      },
+    },
     define: {
       'import.meta.env.REACT_APP_SUPABASE_URL': JSON.stringify(env.REACT_APP_SUPABASE_URL || ''),
       'import.meta.env.REACT_APP_SUPABASE_ANON_KEY': JSON.stringify(env.REACT_APP_SUPABASE_ANON_KEY || ''),

@@ -224,10 +224,12 @@ select option { background: var(--bg3); }
   100% { background-position: 200% center; }
 }
 
-/* Footer brand: a slow, glassy gold sweep with a soft halo. */
+/* Footer brand: a seamless gold sweep. The gradient tile repeats every
+   160px and the animation shifts exactly one tile, so the glint never pauses
+   or jumps back to a dark gap at the loop boundary. */
 @keyframes footer-brand-shine {
-  0% { background-position: 200% center; }
-  100% { background-position: -200% center; }
+  from { background-position: 0 0; }
+  to { background-position: 160px 0; }
 }
 
 @keyframes footer-number-glow {
@@ -260,18 +262,20 @@ select option { background: var(--bg3); }
   background-clip: text;
 }
 
-/* Footer ZASHM wordmark: brighter glass-like gradient that slowly sweeps. */
+/* Footer ZASHM wordmark: brighter glass-like gradient that keeps sweeping
+   without a visible stop. */
 .site-footer .shimmer-text {
   background-image: linear-gradient(
     110deg,
-    #8a6d2f 0%,
-    #d4af37 32%,
-    #fff4cf 50%,
-    #d4af37 68%,
-    #8a6d2f 100%
+    #8a6d2f 0px,
+    #d4af37 55px,
+    #fff4cf 80px,
+    #d4af37 105px,
+    #8a6d2f 160px
   );
-  background-size: 240% auto;
-  animation: footer-brand-shine 5s linear infinite;
+  background-size: 160px 100%;
+  background-repeat: repeat;
+  animation: footer-brand-shine 3.2s linear infinite;
   filter: drop-shadow(0 0 7px rgba(201, 168, 76, 0.32));
 }
 
@@ -282,16 +286,113 @@ select option { background: var(--bg3); }
   animation: footer-number-glow 3.2s ease-in-out infinite;
 }
 
+/* Footer phone: static gold, no pulse. */
+.footer-phone-number {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Footer hover polish: a restrained zoom on every interactive footer item.
+   Left origin keeps text links from shifting under the cursor; icon-only
+   social links scale from their centre. */
+.site-footer a,
+.site-footer button,
+.site-footer .shimmer-text,
+.site-footer .footer-contact p {
+  transform-origin: left center;
+  transition:
+    transform 0.26s ease,
+    color 0.26s ease,
+    text-shadow 0.26s ease,
+    opacity 0.26s ease;
+}
+
+.site-footer a:focus-visible,
+.site-footer button:focus-visible:not(:disabled),
+.site-footer .shimmer-text:focus-visible {
+  transform: scale(1.045);
+}
+
+/* Touch screens have no real hover, so a tapped item would keep the zoom
+   applied. Limit hover zoom to devices that actually hover. */
+@media (hover: hover) {
+  .site-footer a:hover,
+  .site-footer button:hover:not(:disabled),
+  .site-footer .shimmer-text:hover {
+    transform: scale(1.045);
+  }
+
+  .site-footer a[target='_blank']:hover {
+    transform: scale(1.12);
+  }
+
+  .site-footer .footer-contact p:hover {
+    transform: scale(1.03);
+  }
+}
+
+.site-footer a[target='_blank'] {
+  transform-origin: center;
+}
+
+.site-footer a[target='_blank']:focus-visible {
+  transform: scale(1.12);
+}
+
+.site-footer .footer-contact p {
+  width: fit-content;
+}
+
 .app-startup-screen {
   min-height: 100vh;
   min-height: 100svh;
   display: flex;
+  flex-direction: column;
+  gap: 18px;
   align-items: center;
   justify-content: center;
+  padding: 24px;
+  text-align: center;
   background: var(--bg);
 }
 
 .app-page-loading { min-height: 50vh; }
+
+.app-startup-stall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-startup-stall-text {
+  margin: 0;
+  color: var(--text2);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  line-height: 1.6;
+}
+
+.app-startup-stall-btn {
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: var(--gold);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  cursor: pointer;
+  border-radius: 2px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.app-startup-stall-btn:hover,
+.app-startup-stall-btn:focus-visible {
+  background-color: rgba(201, 168, 76, 0.14);
+}
 
 .order-confirmation-card {
   backdrop-filter: blur(14px);
@@ -1456,5 +1557,25 @@ main, [role="main"] {
 
   .footer-glow-number {
     text-shadow: none;
+  }
+
+  .site-footer a,
+  .site-footer button,
+  .site-footer .shimmer-text,
+  .site-footer .footer-contact p,
+  .app-startup-stall-btn {
+    transition-duration: 0.01ms !important;
+  }
+
+  .site-footer a:hover,
+  .site-footer a:focus-visible,
+  .site-footer button:hover:not(:disabled),
+  .site-footer button:focus-visible:not(:disabled),
+  .site-footer .shimmer-text:hover,
+  .site-footer .shimmer-text:focus-visible,
+  .site-footer a[target='_blank']:hover,
+  .site-footer a[target='_blank']:focus-visible,
+  .site-footer .footer-contact p:hover {
+    transform: none;
   }
 }
