@@ -153,8 +153,8 @@ export default function HomePage() {
       {activeProducts.length === 0 && productsLoadStatus !== 'error' && (
         <div role="status" aria-live="polite" style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 24px', textAlign: 'center', color: 'var(--text3)', fontSize: 12, letterSpacing: 1 }}>
           {productsLoadStatus === 'loading' || productsLoadStatus === 'idle'
-            ? 'Loading the collection… / جارٍ تحميل المجموعة…'
-            : 'New pieces are on their way. / قطع جديدة في الطريق.'}
+            ? 'Loading the collection… '
+            : 'New pieces are on their way'}
         </div>
       )}
 

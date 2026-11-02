@@ -195,9 +195,9 @@ export function CartPage() {
                           disabled={couponApplying}
                           placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                       </div>
-                      <button onClick={handleApplyCoupon} disabled={couponApplying}
-                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'wait' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', opacity: couponApplying ? 0.65 : 1 }}>
-                        {couponApplying ? 'Checking…' : 'Apply'}
+                      <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
+                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
+                        Apply
                       </button>
                     </div>
                     {couponError && (
@@ -1214,9 +1214,9 @@ export function CheckoutPage() {
                         disabled={couponApplying}
                         placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                     </div>
-                    <button onClick={handleApplyCoupon} disabled={couponApplying}
-                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'wait' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', opacity: couponApplying ? 0.65 : 1 }}>
-                      {couponApplying ? 'Checking…' : 'Apply'}
+                    <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
+                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      Apply
                     </button>
                   </div>
                   {couponError && (
