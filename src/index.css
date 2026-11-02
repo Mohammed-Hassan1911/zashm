@@ -401,7 +401,13 @@ select option { background: var(--bg3); }
 .order-confirmation-secondary:hover,
 .order-confirmation-continue:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(201,168,76,0.13);
+}
+
+.order-confirmation-primary:focus-visible,
+.order-confirmation-secondary:focus-visible,
+.order-confirmation-continue:focus-visible {
+  outline: 2px solid #d8bd7a;
+  outline-offset: 3px;
 }
 
 @media (max-width: 560px) {

@@ -470,6 +470,11 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok((cartPage.match(/style=\{orderActionStyle\}/g) || []).length === 3 &&
      /className="order-confirmation-continue"[\s\S]{0,400}?CONTINUE SHOPPING/.test(cartPage),
     'track, support and continue actions share one identical style');
+  ok(!/🔍|💬|🛍️/.test(cartPage) &&
+     /<PackageSearch[\s\S]{0,200}?TRACK YOUR ORDER/.test(cartPage) &&
+     /<Headset[\s\S]{0,200}?CONTACT SUPPORT/.test(cartPage) &&
+     /<ShoppingBag[\s\S]{0,200}?CONTINUE SHOPPING/.test(cartPage),
+    'order confirmation actions use icon components instead of emoji');
 
   const store = read('src/store.js');
   ok(/void get\(\)\.refreshProducts\(\)/.test(store) &&
