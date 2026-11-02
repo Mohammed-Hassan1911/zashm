@@ -73,7 +73,12 @@ function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate'
               onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
             >
               {city}
-              {GOVERNORATE_AR[city] && <span style={{ color: 'var(--text3)', marginInlineStart: 8 }}>{GOVERNORATE_AR[city]}</span>}
+              {GOVERNORATE_AR[city] && (
+                <span style={{ color: 'var(--text3)' }}>
+                  <span aria-hidden="true">{' · '}</span>
+                  <span lang="ar" dir="rtl">{GOVERNORATE_AR[city]}</span>
+                </span>
+              )}
             </button>
           ))}
         </div>

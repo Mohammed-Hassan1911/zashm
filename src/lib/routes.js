@@ -33,8 +33,9 @@ export function resolveRoute(location = window.location) {
 
   const normalizedPath = pathname.replace(/\/+$/, '') || '/';
   const page = Object.keys(STATIC_ROUTES).find((key) => STATIC_ROUTES[key] === normalizedPath);
-  // Unknown paths are a real 404 (both on the server via vercel.json rewrites
-  // and in the SPA). Never silently render the home page under a wrong URL.
+  // Unknown paths are a real 404 on the server (Vercel serves public/404.html
+  // with status 404 — see `framework: null` in vercel.json) and in the SPA.
+  // Never silently render the home page under a wrong URL.
   return { page: page || 'notfound', productId: null, trackId: null };
 }
 

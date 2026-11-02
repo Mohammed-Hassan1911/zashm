@@ -4,7 +4,7 @@ import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { toast } from '../components/ui/BackToTop';
-import { setPageMeta, setProductJsonLd, clearProductJsonLd } from '../lib/seo';
+import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
 import { resolveRoute } from '../lib/routes';
 import { getColorSwatch } from '../lib/productColors.mjs';
 
@@ -171,6 +171,16 @@ export default function ProductPage() {
     setProductJsonLd(p);
     return () => clearProductJsonLd();
   }, [p]);
+
+  // A URL for a product that does not exist must never enter the search index.
+  // Crawlers get a real 404 from middleware.ts; this keeps the client-rendered
+  // state honest too (noindex + no canonical pointing at a dead URL).
+  useEffect(() => {
+    if (p || productsLoading) return undefined;
+    setPageMeta({ title: 'Product Not Found', robots: 'noindex, nofollow' });
+    clearCanonical();
+    return undefined;
+  }, [p, productsLoading]);
 
   if (!p) return (
     <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>

@@ -23,7 +23,7 @@ second state manager, router, CSS framework, or data layer.
 | Icons | `lucide-react` |
 | Backend data | `fetch` wrapper `src/lib/api.js` → `/api/*`; only public product reads use Supabase directly |
 | Styling | One global stylesheet `src/index.css` + inline styles; brand tokens are CSS variables |
-| Dev server | `npm start` (Vite :3000) for UI-only; `npm run dev` (Vercel dev) when `/api` is needed |
+| Dev server | `npm start` (Vite, `PORT` or :3000); `vercel dev` for the `/api` stack (it runs `npm run start` and assigns `PORT`) |
 | Tests | `npm test` (Node scripts, no Jest/Vitest); `npm run build` must pass |
 
 ## Architecture map

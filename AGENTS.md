@@ -105,8 +105,9 @@ Key routes: `/`, `/shop`, `/product/:id`, `/cart`, `/checkout`, `/wishlist`,
 ## 4. Commands
 
 ```bash
-npm start                 # Vite UI only, http://localhost:3000
-npm run dev               # Vercel dev (full /api stack)
+npm start                 # Vite UI only, http://localhost:3000 (PORT=… to change)
+npm run dev               # same Vite server (dev command for `vercel dev`)
+vercel dev                # full /api stack proxy (runs `npm run start`; --listen PORT)
 npm test                  # all Node + SQL tests
 npm run build             # production build → build/
 node scripts/test-<x>.mjs # focused suite

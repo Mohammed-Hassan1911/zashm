@@ -66,7 +66,7 @@ VERBOSE=1 node scripts/test-order-lifecycle.mjs
 npm run build            # required for frontend changes
 ```
 
-For UI journeys, run the Vite server (`npm start`, port 3000) or `npm run dev`
+For UI journeys, run the Vite server (`npm start`, port 3000) or `vercel dev`
 when `/api` is required, then verify in a browser at 320/375/768/1440px. Cover:
 home → shop → product → size/colour → add to bag → cart → coupon → checkout →
 success → track; login → admin → product edit → order status → cancel; deep-link

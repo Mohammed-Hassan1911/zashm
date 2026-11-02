@@ -126,3 +126,11 @@ export function clearProductJsonLd() {
   const el = document.getElementById('zashm-product-jsonld');
   if (el) el.remove();
 }
+
+// Remove the canonical link entirely (used by not-found states, where pointing
+// search engines at the dead URL would be wrong).
+export function clearCanonical() {
+  if (typeof document === 'undefined') return;
+  const el = document.head.querySelector('link[rel="canonical"]');
+  if (el) el.remove();
+}

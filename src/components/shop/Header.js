@@ -58,11 +58,21 @@ export default function Header() {
     transition: 'transform 0.3s ease',
   };
 
+  // الأيقونة نفسها هي مرجع العداد، مش مساحة اللمس (42px). لو العداد اتحط
+  // بالنسبة للزرار كان بيبعد عن الأيقونة ~19px ويبان معلّق في الهوا.
+  const iconWrapStyle = {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 0,
+  };
+
   // استايل مشترك للعداد (الباج) باللون الجولد
   const badgeStyle = {
     position: 'absolute',
-    top: isMobile ? -4 : -6,
-    right: isMobile ? -4 : -8,
+    top: -5,
+    right: -6,
     minWidth: 15,
     height: 15,
     padding: '0 3px',
@@ -168,14 +178,18 @@ export default function Header() {
                 onClick={() => setPage('wishlist')}
                 style={iconButtonStyle}
                 whileHover={{ scale: 1.1 }}
-                aria-label="Wishlist"
+                aria-label={wishlist?.length > 0
+                  ? `Wishlist, ${wishlist.length} item${wishlist.length === 1 ? '' : 's'}`
+                  : 'Wishlist'}
               >
-                <Heart size={isMobile ? 18 : 20} />
-                {(wishlist?.length > 0) && (
-                  <span style={badgeStyle}>
-                    {wishlist.length}
-                  </span>
-                )}
+                <span style={iconWrapStyle}>
+                  <Heart size={isMobile ? 18 : 20} />
+                  {(wishlist?.length > 0) && (
+                    <span style={badgeStyle} aria-hidden="true">
+                      {wishlist.length}
+                    </span>
+                  )}
+                </span>
               </motion.button>
 
               {/* BAG */}
@@ -183,20 +197,18 @@ export default function Header() {
                 onClick={() => setCartOpen(true)}
                 style={iconButtonStyle}
                 whileHover={{ scale: 1.1 }}
-                aria-label={`Shopping bag${cartCount > 0 ? `, ${cartCount} items` : ''}`}
+                aria-label={cartCount > 0
+                  ? `Shopping bag, ${cartCount} item${cartCount === 1 ? '' : 's'}`
+                  : 'Shopping bag'}
               >
-                <ShoppingBag size={isMobile ? 18 : 20} />
-                {cartCount > 0 && (
-                  <span
-                    style={{
-                      ...badgeStyle,
-                      top: isMobile ? -3 : -2,
-                      right: isMobile ? -2 : 0,
-                    }}
-                  >
-                    {cartCount}
-                  </span>
-                )}
+                <span style={iconWrapStyle}>
+                  <ShoppingBag size={isMobile ? 18 : 20} />
+                  {cartCount > 0 && (
+                    <span style={badgeStyle} aria-hidden="true">
+                      {cartCount}
+                    </span>
+                  )}
+                </span>
               </motion.button>
             </div>
 

@@ -26,8 +26,10 @@ Public URL: `https://za-shm.vercel.app`.
 
 ## Environments
 
-- **Local UI:** `npm start` → Vite on `:3000`.
-- **Local full stack:** `npm run dev` → `vercel dev` (needs server env vars).
+- **Local UI:** `npm start` → Vite on `:3000` (or the `PORT` it is given).
+- **Local full stack:** `vercel dev` → starts `npm run start` and proxies `/api`
+  on `--listen <port>` (needs server env vars; never point `dev` back at
+  `vercel dev`, it recurses).
 - **Preview:** Vercel preview deployment; same envs as Production/Preview scopes.
 - **Production:** `main` branch deployment.
 

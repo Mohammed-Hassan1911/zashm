@@ -197,6 +197,21 @@ console.log('\n[1] transport headers + rewrites');
   }
   ok(!sources.some((s) => s === '/(.*)' || s === '/:path*'), 'no catch-all rewrite (unknown paths 404)');
   eq(cfg.trailingSlash, false, 'trailing slashes are normalised');
+
+  // The Vercel project was created with the "Create React App" preset, which
+  // appends its own `/(.*) -> /index.html` route at build time. That route is
+  // invisible in vercel.json and made every unknown path return HTTP 200.
+  // Pinning the preset to "Other" keeps Vercel's real 404 route
+  // (`status: 404` -> /404.html) in the build output.
+  eq(cfg.framework, null, 'framework preset is overridden so Vercel keeps the real 404 route');
+
+  const notFoundPage = read('public/404.html');
+  ok(/<meta name="robots" content="noindex, nofollow"/.test(notFoundPage),
+    'the static 404 page is noindex');
+  ok(/Return Home/.test(notFoundPage) && /الصفحة غير موجودة/.test(notFoundPage),
+    'the static 404 page is bilingual');
+  ok(/href="\/"/.test(notFoundPage) && /href="\/shop"/.test(notFoundPage),
+    'the static 404 page links back to the store');
 }
 
 // ─── [2] storage migration ──────────────────────────────────────────────────

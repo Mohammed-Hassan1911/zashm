@@ -314,3 +314,157 @@ ON CONFLICT (name) DO NOTHING;
   history were changed. Auth, Storage, migration and deployment state remains
   NOT VERIFIED; production launch is blocked until the documented rollout and
   live verification are completed.
+
+## 12. Real 404 status for unknown paths (2026-11-02, local only)
+
+- **Root cause:** the Vercel project was created with the **Create React App**
+  framework preset (`vercel project inspect zashm`). That preset appends
+  `{ "src": "/(.*)", "dest": "/index.html" }` to the build output *after*
+  `vercel.json` is applied, so every unknown path returned `HTTP 200` with the
+  SPA shell even though `vercel.json` has no catch-all rewrite. The route is not
+  visible in `vercel.json`, only in `.vercel/output/config.json`.
+- **Fix:** `vercel.json` now pins `"framework": null` ("Other" preset). The
+  build output no longer contains the catch-all and keeps Vercel's own
+  `{ "status": 404, "dest": "/404.html" }` route. `public/404.html` (already
+  shipped) was rewritten as a small bilingual page with Home/Shop links; it is
+  copied to `build/404.html` and served with status `404` and `noindex`.
+- **Unchanged:** explicit SPA rewrites (`/shop`, `/cart`, `/checkout`,
+  `/wishlist`, `/track`, `/admin`, `/product/:path*`), the trailing-slash 308
+  redirect, all CSP/security headers, and `/api/*` routing — verified by
+  diffing the pre/post `.vercel/output/config.json`.
+- **Local verification:** `vercel build --yes` → no `/(.*) → /index.html`
+  route, `{ "status": 404, "src": "^(?!/api).*$", "dest": "/404.html" }`
+  present, `404.html` present in the static output; `npm test` → 1,023 passed,
+  0 failed (temporary PostgreSQL 17 suite ran); `npm run build` → success.
+- **Post-deploy verification (performed 2026-11-02, deployment
+  `zashm-i7mzkf7f0-zashm.vercel.app` → production `https://za-shm.vercel.app`):**
+  `/definitely-not-a-page`, `/random/deep/path`, `/assets/missing-abc123.js` and
+  `/product-not-real` → **404** with the bilingual page (meta `noindex`,
+  CSP/HSTS/X-Frame-Options still applied); `/`, `/shop`, `/cart`, `/checkout`,
+  `/track`, `/wishlist`, `/admin`, `/product/1793586156664926`, `/404.html`,
+  `/sitemap.xml` and `/robots.txt` → **200**; `/shop/` → **308** `/shop`;
+  `/api/admin/orders` → 401, `POST /api/coupons/validate` → 400,
+  `OPTIONS /api/coupons/validate` → 204 with the allow-listed origin only,
+  `POST /api/orders {}` → 422. Deployed asset filenames are byte-identical to
+  the local `build/`. The static 404 page renders without loading React and its
+  Home/Shop links work.
+- Do not remove `"framework": null` and do not switch the dashboard preset back
+  to Create React App/Vite without re-checking that the soft 404 does not
+  return.
+- The deployment was made from the uncommitted working tree with explicit owner
+  approval; the changes are **not committed** yet.
+
+## 13. Product 404 middleware, dev-server fix, badge/copy polish (2026-11-02, local only)
+
+### 13.1 Product soft-404 (crawler-facing real 404)
+
+- **Problem:** `/product/<unknown-id>` still answered `200` with the SPA shell.
+  The generic `404.html` route cannot know which product ids exist, so section 12
+  only fixed unknown *paths*, not unknown *products*.
+- **Fix:** root `middleware.ts` (Vercel Routing Middleware, `config.matcher =
+  ['/product/:path*']`, `runtime: 'nodejs'` — the default edge runtime is
+  deprecated). For product-detail URLs it validates the id shape, then
+  checks `products_public` with the anon key, and returns a real `404` that
+  reuses the shipped `public/404.html`, plus `x-robots-tag: noindex, nofollow`.
+- **Crawler-gated by design:** the DB check only runs for crawler user agents
+  (`Googlebot`, `Google-InspectionTool`, `bingbot`, link-preview bots, etc.).
+  Shoppers keep the instant static shell, no extra round trip, and no storefront
+  regression if the check is slow.
+- **Fail-open contract** (`src/lib/product-exists.mjs`): `true` = exists,
+  `false` = missing/malformed id, `null` = unknown (no config, timeout, non-2xx,
+  bad payload). Only `false` produces a 404, so a Supabase outage can never hide
+  a real product or break sharing links. The lookup timeout is 8s: local round
+  trips measured 0.2–4.7s with spikes past 5s, and a shorter cap produced
+  intermittent fail-open `200`s.
+- **Continuation:** the Node.js runtime drops the body when the middleware
+  returns `undefined`, so every pass-through returns `new Response(null, {
+  headers: { 'x-middleware-next': '1' } })`. That is byte-for-byte what `next()`
+  from `@vercel/functions` does; the helper is inlined to avoid adding a runtime
+  dependency (installing the package pulled 4 high `npm audit` findings through
+  `@vercel/oidc`/`zod`).
+- **Client-side honesty:** `ProductPage` now sets `robots: noindex, nofollow` and
+  removes the canonical (`clearCanonical()`) for the not-found state.
+- **Do not move the matcher into `vercel.json`:** `proxy.matcher` conflicts with
+  `config.matcher` (`vercel dev` reports "configure the matcher in only one
+  location"). Keep `middleware.ts` as the single source.
+- **Local verification (`vercel dev --listen 3005`, Node.js runtime):**
+  - existing product + Googlebot → `200` (no false 404), 3/3;
+  - `999999999` + Googlebot → `404` with the bilingual page and
+    `x-robots-tag: noindex, nofollow`, 10/10 after the timeout bump
+    (before it, slow Supabase round trips occasionally failed open to `200`);
+  - `999999999` + Bingbot → `404`; `abc` / `0` + Googlebot → `404`;
+  - link-preview bot (`facebookexternalhit`) on the real product → `200`;
+  - normal Chrome UA → `200` (SPA not-found view, `noindex` in the head);
+  - `/`, `/shop`, `/product`, `/cart`, `/checkout`, `/wishlist`, `/track`,
+    `/admin`, `/404.html`, `/robots.txt` → `200`; `/api/auth` → `405`;
+    `OPTIONS /api/coupons/validate` → `204`; `/api/admin/orders` → `401`;
+  - `vercel build --yes` → `middleware.func` emitted, output route
+    `{ middlewares: [{ middlewarePath: "middleware", continue: true,
+    override: true }] }` for `/product/:path*`, `/product` → `/index.html`,
+    `{ status: 404, dest: /404.html }` retained, `404.html` in static output.
+- **Not verified locally:** Routing Middleware responses do not carry the
+  `vercel.json` CSP/HSTS headers in the local proxy. Confirm on the deployment.
+
+### 13.2 `vercel dev` recursion / port detection
+
+- **Root cause:** `package.json` had `"dev": "vercel dev"`, so `vercel dev` tried
+  to invoke itself (`DEV_RECURSIVE_INVOCATION`). Separately, a fixed
+  `--port 3000` made it wait for a port the proxy never received
+  (`DEV_PORT_DETECTION_TIMED_OUT`).
+- **Fix:** `start`/`dev` are plain `vite`; `vite.config.js` reads
+  `process.env.PORT` with a `3000` fallback and `strictPort: true`;
+  `vercel.json` sets `"devCommand": "npm run start"`.
+- **Verified:** `vercel dev --listen 3005` becomes ready; `/`, `/shop` → 200,
+  `/api/auth` → 405, `OPTIONS /api/coupons/validate` → 204,
+  `/api/admin/orders` → 401.
+
+### 13.3 Cart/wishlist badge proximity
+
+- **Problem:** badges were positioned against the 42px hit area, so they floated
+  ~13–19px away from the 20px glyph and the wishlist/bag offsets differed.
+- **Fix:** each header icon is wrapped in a 20px `position: relative` box
+  (`iconWrapStyle`); both badges share `top: -5, right: -6`. The bottom-nav badge
+  uses the same icon-anchored box with `top: -5, right: -5`. Counts are announced
+  through `aria-label` ("Wishlist, 1 item" / "Shopping bag, 2 items"); the visual
+  number is `aria-hidden` so it is not read twice.
+- **Browser measurement (816×755, local):** both badges now overhang the icon by
+  exactly 6px right / 5px top (previously wishlist 0/13 and bag 8/9).
+- **Not verified:** real 320/375/768px emulation is unavailable in this
+  environment; the bottom-nav badge was verified from computed inline styles and
+  geometry only.
+
+### 13.4 Governorate suggestions
+
+`CartPage` renders `Cairo · القاهرة`: an explicit `{" · "}` separator (hidden
+from screen readers) and `<span lang="ar" dir="rtl">` around the Arabic name.
+Browser check at 816px: `innerText` is `Cairo · القاهرة`, `lang="ar"`,
+`dir="rtl"`, no horizontal overflow.
+
+### 13.5 Tests and build (local)
+
+- `npm test` → **1,100 passed, 0 failed across 14 suites**; the SQL suite ran
+  against a temporary PostgreSQL 17 cluster (no production connection).
+  New `scripts/test-routing.mjs` → **63 passed** (crawler/id parsing, the
+  true/false/null lookup contract, the 404 response, continuation, middleware +
+  dev wiring).
+  `scripts/test-final-hardening.mjs` → **165 passed** (section [12] badge,
+  governorate and noindex assertions); `scripts/test-edge-transport.mjs` →
+  **109 passed**.
+- `npm run build` → success; `vercel build --yes` → success with middleware;
+  `npm audit --omit=dev` → **0 vulnerabilities** (no dependency added).
+
+### 13.6 Post-deploy verification (NOT performed for these changes)
+
+1. Deploy only after owner approval; these changes are uncommitted.
+2. `curl -A Googlebot https://za-shm.vercel.app/product/1793586156664926` → 200;
+   `.../product/999999999` and `.../product/abc` → 404 with the bilingual page.
+3. Confirm the middleware 404 carries CSP/HSTS/X-Frame-Options and
+   `x-robots-tag: noindex, nofollow`.
+4. Normal browser UA on a missing product still renders the SPA not-found view
+   with `<meta name="robots" content="noindex, nofollow">` and no canonical.
+5. Re-check header badges at 320/375/768/1440px and the bottom-nav badge at
+   320/375px; WhatsApp and scroll-to-top stay visible above every layer.
+6. If Routing Middleware is disabled or fails to build on the Vercel plan,
+   `vercel build`/deploy output must be checked before assuming the product 404
+   is live.
+

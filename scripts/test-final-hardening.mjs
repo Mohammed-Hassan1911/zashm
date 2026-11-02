@@ -533,5 +533,50 @@ console.log('\n[11] reload resilience and footer polish');
     'footer hover zoom is disabled for reduced motion');
 }
 
+// ─── [12] header/nav badges + governorate suggestions ──────────────────────
+console.log('\n[12] badge proximity and governorate copy');
+{
+  const header = read('src/components/shop/Header.js');
+  const mobileNav = read('src/components/shop/MobileNav.js');
+  const cartPage = read('src/pages/CartPage.js');
+  const productPage = read('src/pages/ProductPage.js');
+
+  // The badge must be positioned against the 20px icon, not the 42px hit area:
+  // otherwise it floats ~19px away from the glyph.
+  ok(/const iconWrapStyle = \{[\s\S]*?position: 'relative'[\s\S]*?\};/.test(header),
+    'header icons have their own positioning box');
+  eq((header.match(/style=\{iconWrapStyle\}/g) || []).length, 2,
+    'both the wishlist and the bag icon use the icon box');
+  ok(/<span style=\{iconWrapStyle\}>\s*<Heart/.test(header),
+    'the wishlist badge is anchored to the heart icon');
+  ok(/<span style=\{iconWrapStyle\}>\s*<ShoppingBag/.test(header),
+    'the bag badge is anchored to the bag icon');
+  const badgeStart = header.indexOf('const badgeStyle');
+  const badge = header.slice(badgeStart, badgeStart + 400);
+  ok(/top: -5,[\s\S]*?right: -6,/.test(badge),
+    'header badges sit on the top-right corner of the glyph');
+  ok(!/top: isMobile \? -3 : -2/.test(header) && !/right: isMobile \? -2 : 0/.test(header),
+    'the bag badge no longer overrides the shared position');
+  eq((header.match(/aria-hidden="true"/g) || []).length, 2,
+    'both header badges are decorative for screen readers');
+  ok(/aria-label=\{wishlist\?\.length > 0/.test(header),
+    'the wishlist button announces its count');
+  ok(/cartCount === 1 \? '' : 's'/.test(header),
+    'the bag button pluralises its announced count');
+
+  ok(/top: -5, right: -5, minWidth: 15, height: 15/.test(mobileNav),
+    'the bottom-nav badge sits on the glyph corner too');
+  ok(/aria-label=\{badge > 0 \?/.test(mobileNav),
+    'bottom-nav buttons announce their badge count');
+  ok(/<span\s+aria-hidden="true"/.test(mobileNav),
+    'the decorative sole badge number is hidden from screen readers');
+
+  ok(/<span aria-hidden="true">\{' · '\}<\/span>/.test(cartPage) &&
+     /<span lang="ar" dir="rtl">\{GOVERNORATE_AR\[city\]\}<\/span>/.test(cartPage),
+    'governorate suggestions separate the English and Arabic names');
+  ok(/clearCanonical/.test(productPage) && /robots: 'noindex, nofollow'/.test(productPage),
+    'the unknown-product view is noindex and drops its canonical');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

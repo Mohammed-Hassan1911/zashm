@@ -1,6 +1,8 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "build",
+  "devCommand": "npm run start",
+  "framework": null,
   "trailingSlash": false,
   "headers": [
     {

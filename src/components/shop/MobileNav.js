@@ -124,15 +124,24 @@ export default function MobileNav() {
             <motion.button
               key={label}
               onClick={action || (() => setPage(page))}
-              aria-label={label}
+              aria-label={badge > 0 ? `${label}, ${badge} item${badge === 1 ? '' : 's'}` : label}
               aria-current={active ? 'page' : undefined}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 16px', background: 'none', border: 'none', cursor: 'pointer', position: 'relative', color: active ? 'var(--gold)' : 'var(--text3)' }}
               whileTap={{ scale: 0.9 }}
             >
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', display: 'flex', lineHeight: 0 }}>
                 <Icon size={20} />
                 {badge > 0 && (
-                  <span style={{ position: 'absolute', top: -6, right: -6, width: 15, height: 15, borderRadius: '50%', background: 'var(--gold)', color: 'var(--bg)', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{badge}</span>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute', top: -5, right: -5, minWidth: 15, height: 15,
+                      padding: '0 3px', borderRadius: '999px', background: 'var(--gold)',
+                      color: 'var(--bg)', fontSize: 8, fontWeight: 700, lineHeight: 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      border: '1.5px solid #111',
+                    }}
+                  >{badge}</span>
                 )}
               </div>
               <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</span>

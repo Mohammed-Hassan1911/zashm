@@ -25,6 +25,14 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.REACT_APP_SUPABASE_ANON_KEY': JSON.stringify(env.REACT_APP_SUPABASE_ANON_KEY || ''),
       'import.meta.env.REACT_APP_GA_ID': JSON.stringify(env.REACT_APP_GA_ID || ''),
     },
+    // `vercel dev` starts its own proxy on --listen and expects the dev
+    // command to read the port it assigns through PORT. Without this, the
+    // fixed `--port 3000` makes `vercel dev` wait for a port that never
+    // opens (DEV_PORT_DETECTION_TIMED_OUT).
+    server: {
+      port: Number(process.env.PORT) || 3000,
+      strictPort: true,
+    },
     build: {
       outDir: 'build',
       rollupOptions: {
