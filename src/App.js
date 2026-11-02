@@ -452,7 +452,7 @@ function Footer({ setModal }) {
             <div style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-                <span dir="ltr">01013380313</span>
+                <span dir="ltr" className="footer-glow-number">01013380313</span>
               </p>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8, wordBreak: 'break-all' }}>
                 <Mail size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
@@ -464,7 +464,7 @@ function Footer({ setModal }) {
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', marginTop: 48, paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <p style={{ color: '#C9A84C', fontSize: 12 }}> © ZASHM Luxury Fashion 2026. {'All rights reserved.'}</p>
+          <p style={{ color: '#C9A84C', fontSize: 12 }}> © ZASHM Luxury Fashion <span className="footer-glow-number">2026</span>. {'All rights reserved.'}</p>
         </div>
 
       </div>
