@@ -118,25 +118,52 @@ select option { background: var(--bg3); }
   letter-spacing: 2px;
   text-transform: uppercase;
   padding: 13px 32px;
-  background: transparent;
+  background-color: transparent;
   cursor: pointer;
-  transition: all 0.3s;
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
   position: relative;
   overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* Soft light sweep, kept inside the button. The old hover used a gold fill
+   painted with `z-index: -1`; it could render behind the page, leaving dark
+   text on a dark background (the "button turns black" bug). This animation is
+   contrast-safe and does not rely on negative stacking. */
 .outline-btn::before {
   content: '';
   position: absolute;
-  top: 0; left: 0;
-  width: 0; height: 100%;
-  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
-  transition: width 0.3s;
-  z-index: -1;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: skewX(-18deg);
+  transition: left 0.55s ease;
+  pointer-events: none;
 }
 
-.outline-btn:hover::before { width: 100%; }
-.outline-btn:hover { color: var(--bg); }
+.outline-btn:hover::before,
+.outline-btn:focus-visible::before { left: 120%; }
+
+.outline-btn:hover,
+.outline-btn:focus-visible {
+  color: var(--gold);
+  background-color: rgba(201, 168, 76, 0.12);
+  border-color: var(--gold);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(201, 168, 76, 0.22);
+}
+
+.outline-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
 
 .label-badge {
   font-size: 9px;
@@ -1365,5 +1392,15 @@ main, [role="main"] {
   .hero-brand-letter-sparkle,
   .hero-brand-sparkle {
     animation: none;
+  }
+
+  .outline-btn,
+  .outline-btn::before {
+    transition-duration: 0.01ms !important;
+  }
+
+  .outline-btn:hover,
+  .outline-btn:focus-visible {
+    transform: none;
   }
 }
