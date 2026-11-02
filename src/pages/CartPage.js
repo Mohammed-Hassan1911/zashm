@@ -222,7 +222,7 @@ export function CartPage() {
                           placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                       </div>
                       <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'progress' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
+                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
                         {couponApplying ? 'Checking…' : 'Apply'}
                       </button>
                     </div>
@@ -1311,7 +1311,7 @@ export function CheckoutPage() {
                         placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
                     </div>
                     <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'progress' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
+                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
                       {couponApplying ? 'Checking…' : 'Apply'}
                     </button>
                   </div>

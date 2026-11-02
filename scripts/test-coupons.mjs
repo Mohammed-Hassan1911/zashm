@@ -252,8 +252,9 @@ console.log('\n[7] source scan: no storefront coupon reads');
      /React\.useEffect\(\(\) => \{ warmCouponEndpoint\(\); \}, \[\]\)/.test(cartPage),
     'the bag/checkout page and the coupon field warm the endpoint before apply');
   ok((cartPage.match(/\{couponApplying \? 'Checking…' : 'Apply'\}/g) || []).length === 2 &&
-     /minWidth: 96/.test(cartPage),
-    'both apply buttons show a stable-width Checking state while validating');
+     /minWidth: 96/.test(cartPage) &&
+     !/cursor:\s*couponApplying \? 'progress'/.test(cartPage),
+    'both apply buttons show a stable-width Checking state without a spinner cursor');
 
   const adminCoupons = adminCouponsSrc;
   ok(/requirePerm\(req, res, 'discounts\.read'\)/.test(adminCoupons), 'admin coupon list requires discounts.read');
