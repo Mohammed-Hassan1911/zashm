@@ -1343,9 +1343,6 @@ export function CheckoutPage() {
                   <strong style={{ color: 'var(--gold)' }}>Cash on delivery</strong>
                   <span> · الدفع عند الاستلام</span>
                 </span>
-                <span style={{ display: 'block', color: 'var(--text3)', fontSize: 11 }}>
-                  No online payment is taken. · لا يتم تحصيل أي دفعة أونلاين.
-                </span>
               </div>
               
               <motion.button 

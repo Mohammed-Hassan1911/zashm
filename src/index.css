@@ -286,18 +286,12 @@ select option { background: var(--bg3); }
   animation: footer-number-glow 3.2s ease-in-out infinite;
 }
 
-/* Footer phone: static gold, no pulse. */
-.footer-phone-number {
-  color: var(--gold);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Footer hover polish: a restrained zoom on every interactive footer item.
-   Left origin keeps text links from shifting under the cursor; icon-only
-   social links scale from their centre. */
+/* Footer hover polish: a restrained zoom on footer links, buttons and
+   contact rows. The ZASHM wordmark is intentionally excluded. Left origin
+   keeps text links from shifting under the cursor; icon-only social links
+   scale from their centre. */
 .site-footer a,
 .site-footer button,
-.site-footer .shimmer-text,
 .site-footer .footer-contact p {
   transform-origin: left center;
   transition:
@@ -308,8 +302,7 @@ select option { background: var(--bg3); }
 }
 
 .site-footer a:focus-visible,
-.site-footer button:focus-visible:not(:disabled),
-.site-footer .shimmer-text:focus-visible {
+.site-footer button:focus-visible:not(:disabled) {
   transform: scale(1.045);
 }
 
@@ -317,8 +310,7 @@ select option { background: var(--bg3); }
    applied. Limit hover zoom to devices that actually hover. */
 @media (hover: hover) {
   .site-footer a:hover,
-  .site-footer button:hover:not(:disabled),
-  .site-footer .shimmer-text:hover {
+  .site-footer button:hover:not(:disabled) {
     transform: scale(1.045);
   }
 
@@ -1561,7 +1553,6 @@ main, [role="main"] {
 
   .site-footer a,
   .site-footer button,
-  .site-footer .shimmer-text,
   .site-footer .footer-contact p,
   .app-startup-stall-btn {
     transition-duration: 0.01ms !important;
@@ -1571,8 +1562,6 @@ main, [role="main"] {
   .site-footer a:focus-visible,
   .site-footer button:hover:not(:disabled),
   .site-footer button:focus-visible:not(:disabled),
-  .site-footer .shimmer-text:hover,
-  .site-footer .shimmer-text:focus-visible,
   .site-footer a[target='_blank']:hover,
   .site-footer a[target='_blank']:focus-visible,
   .site-footer .footer-contact p:hover {

@@ -473,7 +473,7 @@ function Footer({ setModal }) {
             <div className="footer-contact" style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-                <span dir="ltr" className="footer-phone-number">01013380313</span>
+                <span dir="ltr">01013380313</span>
               </p>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8, wordBreak: 'break-all' }}>
                 <Mail size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
