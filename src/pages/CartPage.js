@@ -717,7 +717,7 @@ export function CheckoutPage() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, color: '#aaa398', fontSize: 11 }}>
             <span><Banknote size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 6, color: '#c9a84c' }} />Payment · الدفع</span>
-            <span>Cash on delivery · عند الاستلام</span>
+            <span>Cash on delivery</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, borderTop: '1px solid #292720', paddingTop: 12 }}>
             <span style={{ color: '#e5e0d7', fontSize: 12, fontWeight: 600 }}>Order total · الإجمالي</span>
@@ -1324,28 +1324,6 @@ export function CheckoutPage() {
                   <span style={{ fontSize:13 }}>Total</span>
                   <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 20 }}>EGP {(finalTotal ?? 0).toLocaleString()}</span>
                 </div>
-              </div>
-
-              <div
-                role="group"
-                aria-label="Payment method"
-                style={{
-                  marginTop: 14,
-                  padding: '12px',
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  background: 'var(--bg2)',
-                  fontSize: 12,
-                  lineHeight: 1.7,
-                }}
-              >
-                <span style={{ display: 'block', color: 'var(--text2)' }}>
-                  <strong style={{ color: 'var(--gold)' }}>Cash on delivery</strong>
-                  <span> · الدفع عند الاستلام</span>
-                </span>
-                <span style={{ display: 'block', color: 'var(--text3)', fontSize: 11 }}>
-                  No online payment is taken. · لا يتم تحصيل أي دفعة أونلاين.
-                </span>
               </div>
               
               <motion.button 
