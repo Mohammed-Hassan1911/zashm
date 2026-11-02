@@ -111,18 +111,21 @@ export default function AdminApp() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [orderToOpen, setOrderToOpen] = useState(null);
-  const [productToAdd, setProductToAdd] = useState(false);
-  const handleProductAddOpened = useCallback(() => setProductToAdd(false), []);
-  const openNewProduct = useCallback(() => {
-    setProductToAdd(true);
-    setAdminPage('products');
+  const [productFormOpen, setProductFormOpen] = useState(false);
+  const navigateAdminPage = useCallback((page) => {
+    if (page !== 'products') setProductFormOpen(false);
+    setAdminPage(page);
   }, [setAdminPage]);
+  const openNewProduct = useCallback(() => {
+    setProductFormOpen(true);
+    navigateAdminPage('products');
+  }, [navigateAdminPage]);
 
   useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
 
   // Reset to the dashboard whenever the signed-in identity changes, so a page
   // left open by a previous (more privileged) session is never shown.
-  useEffect(() => { setAdminPage('dashboard'); }, [session?.userId, setAdminPage]);
+  useEffect(() => { navigateAdminPage('dashboard'); }, [session?.userId, navigateAdminPage]);
 
   // Guard: never render a page the current role cannot access. Falls back to the
   // first page the role CAN see (so roles without dashboard.read still land
@@ -131,9 +134,9 @@ export default function AdminApp() {
     if (!session) return;
     if (!canAccess(adminPage)) {
       const fallback = SIDEBAR.find((s) => canAccess(s.id));
-      setAdminPage(fallback ? fallback.id : 'dashboard');
+      navigateAdminPage(fallback ? fallback.id : 'dashboard');
     }
-  }, [session, adminPage, canAccess, setAdminPage]);
+  }, [session, adminPage, canAccess, navigateAdminPage]);
 
   useEffect(() => {
     if (!newOrderNotification) return;
@@ -221,7 +224,7 @@ export default function AdminApp() {
           const badgeCount = badge === 'pending' ? pendingCount : 0;
           const showText = !collapsed || isMobile;
           return (
-            <motion.button key={id} onClick={() => { setAdminPage(id); if(isMobile) setMobileMenuOpen(false); }}
+            <motion.button key={id} onClick={() => { navigateAdminPage(id); if(isMobile) setMobileMenuOpen(false); }}
               style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!showText) ? '10px 14px' : '10px 12px', borderRadius:6, marginBottom:2, background: active ? 'rgba(201,168,76,0.12)' : 'transparent', color: active ? 'var(--gold)' : 'var(--text2)', border: `1px solid ${active ? 'rgba(201,168,76,0.2)' : 'transparent'}`, cursor:'pointer', transition:'all 0.15s', justifyContent: (!showText) ? 'center' : 'flex-start', position:'relative' }}
               whileHover={{ color:'var(--gold)', background:'rgba(201,168,76,0.07)' }}>
               <Icon size={17} style={{ flexShrink:0 }} />
@@ -291,7 +294,7 @@ export default function AdminApp() {
               {newOrderNotification && (
                 <motion.div initial={{ opacity:0, scale:0.8, x:20 }} animate={{ opacity:1, scale:1, x:0 }} exit={{ opacity:0, scale:0.8, x:20 }}
                   style={{ background:'rgba(201,168,76,0.1)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'6px 12px', display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}
-                  onClick={() => { setAdminPage('orders'); }}>
+                  onClick={() => { navigateAdminPage('orders'); }}>
                   <motion.div animate={{ scale:[1,1.3,1] }} transition={{ repeat:2, duration:0.3 }} style={{ width:8, height:8, borderRadius:'50%', background:'var(--gold)' }} />
                   <span style={{ color:'var(--gold)', fontSize:12, fontWeight:600 }} className="hidden-mobile">New order: {newOrderNotification.order?.id}</span>
                 </motion.div>
@@ -325,7 +328,7 @@ export default function AdminApp() {
                           <p style={{ padding:20, textAlign:'center', color:'var(--text3)', fontSize:13 }}>No notifications</p>
                         ) : notifications.map(n => (
                           <div key={n.id} style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
-                            onClick={() => { setAdminPage('orders'); setNotifOpen(false); }}
+                            onClick={() => { navigateAdminPage('orders'); setNotifOpen(false); }}
                             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                             <div style={{ display:'flex', justifyContent:'space-between', marginBottom:2 }}>
@@ -347,9 +350,9 @@ export default function AdminApp() {
 
         <div style={{ flex:1, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
           <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.25 }}>
-            {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={setAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); setAdminPage('orders'); }} onAddProduct={openNewProduct} />}
+            {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={navigateAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); navigateAdminPage('orders'); }} onAddProduct={openNewProduct} />}
             {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
-            {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} preOpenNew={productToAdd} onNewOpened={handleProductAddOpened} />}
+            {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} showForm={productFormOpen} setShowForm={setProductFormOpen} />}
             {adminPage === 'discounts' && canAccess('discounts') && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
             {adminPage === 'analytics' && canAccess('analytics') && <AnalyticsPanel />}
 
@@ -1117,14 +1120,13 @@ const EMPTY_PRODUCT_FORM = {
   label:'', tags:'', description:'', sku:'', images:[], active:true, variantStock:{}
 };
 
-function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
+function ProductsPanel({ canEdit, showForm, setShowForm }) {
   const {
     adminProducts, adminProductsLoading, adminProductsLoadStatus, adminProductsError,
     refreshAdminProducts, addProduct, updateProduct, deleteProduct, bulkDeleteProducts,
   } = useStore();
   const products = adminProducts;
   const [editing, setEditing] = useState(null);
-  const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [confirmBulk, setConfirmBulk] = useState(null);
@@ -1142,17 +1144,6 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
   useEffect(() => {
     refreshAdminProducts();
   }, [refreshAdminProducts]);
-
-  useEffect(() => {
-    if (!preOpenNew) return;
-    setEditing(null);
-    setForm({ ...EMPTY_PRODUCT_FORM });
-    setFormErrors({});
-    tempUploadsRef.current = new Set();
-    cancelInFlightRef.current = false;
-    setShowForm(true);
-    if (onNewOpened) onNewOpened();
-  }, [preOpenNew, onNewOpened]);
 
   const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
   const [formErrors, setFormErrors] = useState({});
@@ -1549,6 +1540,9 @@ function ProductsPanel({ canEdit, preOpenNew, onNewOpened }) {
             <div onClick={handleCancel}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
             <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={editing ? 'Edit Product' : 'New Product'}
               style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:520, background:'var(--bg2)', borderLeft:'1px solid var(--border)', zIndex:2001, display:'flex', flexDirection:'column', overflow:'hidden' }}>
               <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
                 <h2 style={{ fontFamily:'var(--font-display)', fontSize:20 }}>{editing ? 'Edit Product' : 'New Product'}</h2>

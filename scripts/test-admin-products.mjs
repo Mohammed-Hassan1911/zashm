@@ -238,10 +238,12 @@ console.log('\n[5] admin page navigation and add-product wiring');
   ok(!/<AnimatePresence mode="wait">/.test(pageContent), 'admin page changes do not wait for the previous page to exit');
   ok(/<motion\.div key=\{adminPage\}/.test(pageContent), 'selected admin page mounts with its own entrance animation');
   ok(/onAddProduct=\{openNewProduct\}/.test(pageContent), 'dashboard add-product action uses the direct navigation handler');
-  ok(/const openNewProduct = useCallback\(\(\) => \{\s*setProductToAdd\(true\);\s*setAdminPage\('products'\);/s.test(src),
-    'add-product action selects Products and queues the form together');
-  ok(/preOpenNew=\{productToAdd\} onNewOpened=\{handleProductAddOpened\}/.test(pageContent),
-    'ProductsPanel receives a stable queued-open callback');
+  ok(/const openNewProduct = useCallback\(\(\) => \{\s*setProductFormOpen\(true\);\s*navigateAdminPage\('products'\);/s.test(src),
+    'add-product action selects Products and opens its controlled form');
+  ok(/<ProductsPanel[^>]*showForm=\{productFormOpen\} setShowForm=\{setProductFormOpen\}/.test(pageContent),
+    'ProductsPanel receives the controlled form state');
+  ok(!/preOpenNew|onNewOpened|productToAdd/.test(src),
+    'opening the form does not depend on a mount-timing effect');
 }
 
 console.log(`\nadmin-products: ${pass} passed, ${fail} failed`);
