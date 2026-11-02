@@ -1209,25 +1209,6 @@ export function CheckoutPage() {
                   <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 20 }}>EGP {(finalTotal ?? 0).toLocaleString()}</span>
                 </div>
               </div>
-
-              <div
-                role="group"
-                aria-label="Payment method"
-                style={{
-                  marginTop: 14,
-                  padding: '12px',
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  background: 'var(--bg2)',
-                  fontSize: 12,
-                  lineHeight: 1.7,
-                }}
-              >
-                <span style={{ display: 'block', color: 'var(--text2)' }}>
-                  <strong style={{ color: 'var(--gold)' }}>Cash on delivery</strong>
-                  <span> · الدفع عند الاستلام</span>
-                </span>
-              </div>
               
               <motion.button 
                 className="gold-btn" 
