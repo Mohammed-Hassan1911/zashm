@@ -139,11 +139,7 @@ function AppInner() {
   }, [currentPage, products, setSelectedProduct]);
 
   if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
-        <p style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: 2 }}>ZASHM SECURE LOADING...</p>
-      </div>
-    );
+    return <AppStartupScreen />;
   }
 
   return (
@@ -153,11 +149,7 @@ function AppInner() {
 
       {currentPage === 'admin' ? (
         <React.Suspense
-          fallback={
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
-              <p style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: 2 }}>LOADING ADMIN...</p>
-            </div>
-          }
+          fallback={<AppStartupScreen />}
         >
           <AdminApp />
         </React.Suspense>
@@ -200,9 +192,15 @@ function AppInner() {
 }
 
 function PageLoading() {
+  return <AppStartupScreen compact />;
+}
+
+function AppStartupScreen({ compact = false }) {
   return (
-    <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)', fontFamily: 'var(--font-display)', letterSpacing: 2 }}>
-      Loading...
+    <div className={`app-startup-screen${compact ? ' app-page-loading' : ''}`} role="status" aria-label="Preparing ZASHM">
+      <span className="app-startup-indicator" aria-hidden="true">
+        <img src="/zashm-z-monogram.png?v=3" alt="" />
+      </span>
     </div>
   );
 }

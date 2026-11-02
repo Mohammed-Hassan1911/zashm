@@ -208,6 +208,43 @@ select option { background: var(--bg3); }
   background-clip: text;
 }
 
+.app-startup-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.app-page-loading { min-height: 50vh; }
+
+.app-startup-indicator {
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: app-startup-spin 1.1s linear infinite;
+}
+
+.app-startup-indicator img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+@keyframes app-startup-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-startup-indicator { animation: none; }
+}
+
 .card-surface {
   background: var(--surface);
   border: 1px solid var(--border);
