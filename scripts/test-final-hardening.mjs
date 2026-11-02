@@ -468,6 +468,13 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok(/void get\(\)\.refreshProducts\(\)/.test(store) &&
      !/await get\(\)\.refreshProducts\(\)/.test(store.slice(store.indexOf('placeOrder: async'), store.indexOf('updateOrderStatus: async'))),
     'order success is not delayed while refreshing the product catalog');
+
+  const app = read('src/App.js');
+  ok(/initial=\{\{ opacity: 0, y: 10 \}\}[\s\S]*?exit=\{\{ opacity: 0, y: -6 \}\}[\s\S]*?duration: 0\.4, ease: \[0\.22, 1, 0\.36, 1\]/.test(app),
+    'storefront page transitions use a restrained ease-out motion');
+  const productCard = read('src/components/shop/ProductCard.js');
+  ok(/initial=\{\{ opacity: 0, y: 8 \}\}[\s\S]*?duration: 0\.45,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 6\) \* 0\.02/.test(productCard),
+    'product cards use a subtle, shorter stagger on collection entry');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

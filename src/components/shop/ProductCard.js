@@ -104,11 +104,12 @@ export default function ProductCard({ product, index = 0 }) {
   return (
     <motion.div
       className="product-card"
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
-        duration: 0.35,
-        delay: Math.min(Math.max(index, 0), 8) * 0.04,
+        duration: 0.45,
+        delay: Math.min(Math.max(index, 0), 6) * 0.02,
+        ease: [0.22, 1, 0.36, 1],
       }}
       whileHover={{ y: -4 }}
       style={{
