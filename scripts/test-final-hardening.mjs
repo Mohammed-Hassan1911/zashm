@@ -454,8 +454,10 @@ console.log('\n[10] public SEO and checkout accessibility');
   const cartPage = read('src/pages/CartPage.js');
   ok(/<h1[^>]*>Your bag is empty<\/h1>/.test(cartPage),
     'empty checkout state has a semantic page heading');
-  ok(/Cash on delivery/.test(cartPage) && /No online payment is taken/.test(cartPage),
-    'checkout states the real COD method and that online payment is not collected');
+  ok(/Cash on delivery/.test(cartPage),
+    'checkout states the real COD method');
+  ok(!/No online payment is taken/.test(cartPage),
+    'checkout no longer shows the removed online-payment line');
   ok(/الدفع عند الاستلام/.test(cartPage), 'checkout payment terms are bilingual');
   ok(/className="order-confirmation-card"/.test(cartPage) &&
      /className="order-confirmation-summary"/.test(cartPage),
@@ -463,6 +465,11 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok(/className="order-confirmation-page"/.test(cartPage) &&
      /@media \(max-width: 560px\)[\s\S]*?\.order-confirmation-card/.test(read('src/index.css')),
     'order confirmation layout adapts to mobile screens');
+  ok(!/تم استلام الطلب/.test(cartPage) && !/WHAT HAPPENS NEXT/.test(cartPage),
+    'order confirmation drops the repeated received-order copy');
+  ok((cartPage.match(/style=\{orderActionStyle\}/g) || []).length === 3 &&
+     /className="order-confirmation-continue"[\s\S]{0,400}?CONTINUE SHOPPING/.test(cartPage),
+    'track, support and continue actions share one identical style');
 
   const store = read('src/store.js');
   ok(/void get\(\)\.refreshProducts\(\)/.test(store) &&
