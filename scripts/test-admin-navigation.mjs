@@ -232,6 +232,14 @@ try {
   console.log('\n[1] dashboard to products navigation');
   await act(async () => reactRoot.render(React.createElement(AdminApp)));
   assert.equal(pageHeading(), 'dashboard');
+  const adminContainer = document.querySelector('.admin-container');
+  const adminMain = document.querySelector('main');
+  const adminContent = adminMain?.firstElementChild?.nextElementSibling;
+  assert.ok(adminContainer, 'the admin layout is a viewport-bounded container');
+  assert.equal(adminContainer.style.minHeight, '0');
+  assert.equal(adminMain?.style.minHeight, '0');
+  assert.equal(adminContent?.style.minHeight, '0');
+  assert.equal(adminContent?.style.overflowY, 'auto');
   assert.ok(document.body.textContent.includes('Overview ·'));
   await click(buttonByText('Products'));
   assert.equal(pageHeading(), 'products');

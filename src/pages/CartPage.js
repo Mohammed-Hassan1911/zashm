@@ -1271,15 +1271,7 @@ export function CheckoutPage() {
                   lineHeight: 1.7,
                 }}
               >
-                <strong style={{ display: 'block', marginBottom: 4, color: 'var(--gold)' }}>
-                  Payment method / طريقة الدفع
-                </strong>
-                <span>
-                  Cash on delivery. Pay the courier when your order arrives, after inspection. No online payment is taken when placing this order.
-                </span>
-                <span dir="rtl" style={{ display: 'block', marginTop: 4 }}>
-                  الدفع عند الاستلام. ادفع للمندوب عند وصول الطلب بعد معاينته. لن يتم تحصيل أي مبلغ إلكتروني عند تأكيد الطلب.
-                </span>
+                
               </div>
               
               <motion.button 

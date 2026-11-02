@@ -250,7 +250,7 @@ export default function AdminApp() {
   );
 
   return (
-    <div className="admin-container" style={{ display:'flex', minHeight:'100vh', background:'var(--bg)', flexDirection: 'row' }}>
+    <div className="admin-container" style={{ display:'flex', minHeight:0, background:'var(--bg)', flexDirection: 'row' }}>
       <motion.aside
         animate={{ width: collapsed ? 64 : 230 }}
         className="hidden-mobile"
@@ -277,7 +277,7 @@ export default function AdminApp() {
         )}
       </AnimatePresence>
 
-      <main style={{ flex:1, overflow:'hidden', minWidth:0, display:'flex', flexDirection:'column' }}>
+      <main style={{ flex:1, overflow:'hidden', minWidth:0, minHeight:0, display:'flex', flexDirection:'column' }}>
         <div style={{ position:'sticky', top:0, zIndex:100, background:'rgba(10,10,10,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid var(--border)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <button
@@ -348,7 +348,7 @@ export default function AdminApp() {
           </div>
         </div>
 
-        <div style={{ flex:1, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
+        <div style={{ flex:1, minHeight:0, overflowY:'auto', padding:'16px', WebkitOverflowScrolling:'touch' }}>
           <motion.div key={adminPage} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.25 }}>
             {adminPage === 'dashboard' && canAccess('dashboard') && <Dashboard setAdminPage={navigateAdminPage} canAccess={canAccess} onOpenOrder={(id) => { setOrderToOpen(id); navigateAdminPage('orders'); }} onAddProduct={openNewProduct} />}
             {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
