@@ -626,7 +626,9 @@ export const useStore = create((set, get) => ({
       saveAppliedDiscount(null);
       set({ appliedDiscount: null });
     }
-    await get().refreshProducts();
+    // The order is already committed by the server; refresh inventory without
+    // making the customer wait before seeing the confirmation screen.
+    void get().refreshProducts();
 
     set({
       newOrderNotification: { order: sanitizeOrder(order, products), timestamp: Date.now() },

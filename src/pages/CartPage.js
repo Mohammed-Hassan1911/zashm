@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle } from 'lucide-react';
+import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
@@ -428,10 +428,11 @@ export function CheckoutPage() {
   if (success) {
   return (
     <div
+      className="order-confirmation-page"
       style={{
-        background: '#080808',
+        background: 'radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.12), transparent 42%), #080808',
         minHeight: 'calc(100vh - 90px)',
-        padding: '85px 16px 70px',
+        padding: '112px 20px 80px',
         position: 'relative',
         boxSizing: 'border-box',
       }}
@@ -469,82 +470,76 @@ export function CheckoutPage() {
       </AnimatePresence>
       
       <motion.div
+        className="order-confirmation-card"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
         style={{
           boxSizing: 'border-box',
           textAlign: 'center',
-          padding: '48px 30px 40px',
-          background: '#151515',
-          border: '1px solid rgba(190, 157, 70, 0.30)',
-          borderRadius: 12,
-          maxWidth: 555,
+          padding: '42px 44px 38px',
+          background: 'linear-gradient(145deg, #151515 0%, #0e0e0e 72%)',
+          border: '1px solid rgba(201,168,76,0.28)',
+          borderRadius: 18,
+          maxWidth: 760,
           width: '100%',
           margin: '0 auto',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.28)',
-          color: '#d0b56f',
+          boxShadow: '0 28px 90px rgba(0,0,0,0.5), 0 0 55px rgba(201,168,76,0.06)',
+          color: '#f5f0e8',
         }}
       >
         {/* Success icon */}
         <motion.div
+          className="order-confirmation-icon"
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5 }}
+          style={{
+            width: 82,
+            height: 82,
+            display: 'grid',
+            placeItems: 'center',
+            margin: '0 auto 20px',
+            borderRadius: '50%',
+            background: 'rgba(201,168,76,0.09)',
+            border: '1px solid rgba(201,168,76,0.35)',
+            boxShadow: '0 0 36px rgba(201,168,76,0.11)',
+          }}
         >
           <CheckCircle
-            size={76}
-            color="#c9aa50"
-            style={{
-              display: 'block',
-              margin: '0 auto 34px',
-              strokeWidth: 1.7,
-            }}
+            size={43}
+            color="#d5b65d"
+            strokeWidth={1.5}
           />
         </motion.div>
 
-        {/* Arabic confirmation */}
-        <div style={{ marginBottom: 26 }}>
+        <div style={{ marginBottom: 28 }}>
+          <p style={{ color: '#c9a84c', fontSize: 10, fontWeight: 700, letterSpacing: 4, marginBottom: 10 }}>
+            ORDER CONFIRMED
+          </p>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 5vw, 42px)', fontWeight: 500, lineHeight: 1.2, margin: '0 0 10px', color: '#f5f0e8' }}>
+            Thank you for your order
+          </h1>
           <div style={{ marginBottom: 8 }}>
             <h2
               style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: 27,
-                lineHeight: 1.6,
-                margin: '0 0 4px',
-                color: '#d1b363',
-                fontWeight: 700,
-                letterSpacing: 0,
-              }}
-            >
-            </h2>
-            <h2
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 27,
-                lineHeight: 1.6,
+                fontSize: 'clamp(22px, 4vw, 30px)',
+                lineHeight: 1.5,
                 margin: 0,
                 color: '#d1b363',
-                fontWeight: 700,
+                fontWeight: 600,
                 direction: 'rtl',
-                letterSpacing: 0,
               }}
             >
-              تم تسجيل طلبك بنجاح !
+              تم تسجيل طلبك بنجاح
             </h2>
           </div>
-
-          <p
-            style={{
-              color: '#999999',
-              fontSize: 14,
-              margin: 0,
-              textAlign: 'center',
-              lineHeight: 1.9,
-            }}
-          >
-            <br />
-            <span style={{ direction: 'rtl' }}> ZASHM يسعدنا دائمًا اختيارك  </span>
+          <p style={{ color: '#9b978e', fontSize: 13, margin: '12px 0 0', lineHeight: 1.8 }}>
+            We’re preparing your ZASHM experience.
+          </p>
+          <p style={{ color: '#9b978e', fontSize: 12, margin: '2px 0 0', direction: 'rtl' }}>
+            شكرًا لاختيارك ZASHM، سنبدأ تجهيز طلبك.
           </p>
         </div>
 
@@ -552,27 +547,28 @@ export function CheckoutPage() {
         <div
           style={{
             boxSizing: 'border-box',
-            background: '#201e18',
-            border: '1px dashed rgba(190, 157, 70, 0.48)',
-            borderRadius: 10,
-            padding: '21px 16px',
-            marginBottom: 30,
+            background: 'linear-gradient(110deg, #211d12, #17150f)',
+            border: '1px solid rgba(201,168,76,0.26)',
+            borderRadius: 12,
+            padding: '18px 20px',
+            marginBottom: 18,
             width: '100%',
+            textAlign: 'left',
           }}
         >
           <div
             style={{
               color: '#c9aa50',
-              fontSize: 12,
-              marginBottom: 12,
-              textAlign: 'center',
+              fontSize: 10,
+              marginBottom: 7,
+              textAlign: 'left',
               letterSpacing: 2,
-              lineHeight: 1.9,
+              lineHeight: 1.6,
             }}
           >
             <div
               style={{
-                direction: 'rtl',
+                direction: 'ltr',
                 letterSpacing: 0,
               }}
             >
@@ -584,7 +580,7 @@ export function CheckoutPage() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: 'space-between',
               gap: 10,
               flexWrap: 'wrap',
               direction: 'ltr',
@@ -592,8 +588,8 @@ export function CheckoutPage() {
           >
             <span
               style={{
-                color: '#d1b363',
-                fontSize: 'clamp(15px, 3.5vw, 21px)',
+                color: '#e4c66d',
+                fontSize: 'clamp(15px, 3.5vw, 20px)',
                 fontWeight: 700,
                 letterSpacing: 2,
                 fontFamily: 'monospace',
@@ -633,7 +629,7 @@ export function CheckoutPage() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#d1b363',
+                color: '#e4c66d',
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -648,7 +644,7 @@ export function CheckoutPage() {
                 e.currentTarget.style.transform = 'scale(1.1)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#d1b363';
+              e.currentTarget.style.color = '#e4c66d';
                 e.currentTarget.style.transform = 'scale(1)';
               }}
               onFocus={(e) => {
@@ -677,6 +673,57 @@ export function CheckoutPage() {
           </div>
         </div>
 
+        <div className="order-confirmation-summary" style={{ textAlign: 'left', background: '#101010', border: '1px solid #292720', borderRadius: 12, padding: '18px 20px', marginBottom: 18 }}>
+          <h3 style={{ color: '#f0ece4', fontSize: 13, fontWeight: 600, margin: '0 0 14px' }}>
+            Order summary <span style={{ color: '#8f897e', fontWeight: 400 }}>· ملخص الطلب</span>
+          </h3>
+          <div style={{ display: 'grid', gap: 11 }}>
+            {(Array.isArray(success.items) ? success.items : []).map((item, index) => (
+              <div key={`${item.productId || item.name}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ color: '#e5e0d7', fontSize: 12, margin: 0, overflowWrap: 'anywhere' }}>{item.name}</p>
+                  <p style={{ color: '#8f897e', fontSize: 10, margin: '3px 0 0' }}>{[item.size, item.color, `Qty ${item.qty}`].filter(Boolean).join(' · ')}</p>
+                </div>
+                <span style={{ color: '#d1b363', fontSize: 12, whiteSpace: 'nowrap' }}>EGP {Number(item.price || 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ height: 1, background: '#292720', margin: '15px 0 12px' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8, color: '#aaa398', fontSize: 11 }}>
+            <span>Subtotal · المجموع</span>
+            <span>EGP {Number(success.subtotal || 0).toLocaleString()}</span>
+          </div>
+          {Number(success.discount || 0) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8, color: '#9fbd91', fontSize: 11 }}>
+              <span>Discount · الخصم</span>
+              <span>− EGP {Number(success.discount).toLocaleString()}</span>
+            </div>
+          )}
+          {Number(success.shippingCost || 0) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10, color: '#aaa398', fontSize: 11 }}>
+              <span>Shipping · الشحن</span>
+              <span>EGP {Number(success.shippingCost).toLocaleString()}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10, color: '#aaa398', fontSize: 11 }}>
+            <span><Truck size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 6, color: '#c9a84c' }} />Delivery · التوصيل</span>
+            <span>{success.city || 'Egypt'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12, color: '#aaa398', fontSize: 11 }}>
+            <span><Banknote size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 6, color: '#c9a84c' }} />Payment · الدفع</span>
+            <span>Cash on delivery · عند الاستلام</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, borderTop: '1px solid #292720', paddingTop: 12 }}>
+            <span style={{ color: '#e5e0d7', fontSize: 12, fontWeight: 600 }}>Order total · الإجمالي</span>
+            <strong style={{ color: '#e4c66d', fontFamily: 'var(--font-display)', fontSize: 22 }}>EGP {Number(success.total || 0).toLocaleString()}</strong>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#b8a96f', fontSize: 11, marginBottom: 24 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#d1b363', boxShadow: '0 0 10px rgba(209,179,99,0.7)' }} />
+          Order received <span style={{ color: '#777166' }}>·</span> تم استلام الطلب
+        </div>
+
         {/* Divider */}
         <div
           style={{
@@ -702,7 +749,7 @@ export function CheckoutPage() {
               lineHeight: 1.8,
             }}
           >
-            TRACK YOUR ORDER
+            WHAT HAPPENS NEXT
           </h4>
 
           <div
@@ -714,12 +761,13 @@ export function CheckoutPage() {
               maxWidth: 420,
             }}
           >
-            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك الآن تتبع حالة شحنتك وخط سيرها بسهولة عبر زر <span style={{ color: '#d1b363', fontWeight: 600 }}>Track Your Order</span> الذي ينقلك إلى رابط التتبع الآمن الخاص بطلبك، أو عبر التواصل المباشر مع فريق الدعم الفني.</div>
+            <div style={{ direction: 'rtl', marginTop: 6 }}>يمكنك متابعة حالة طلبك من صفحة التتبع، أو التواصل مع فريق الدعم عند الحاجة.</div>
           </div>
 
           {/* Two equal buttons on the same row */}
           <div
             data-order-actions="true"
+            className="order-confirmation-actions"
             style={{
               display: 'flex',
               flexDirection: 'row',
@@ -733,6 +781,7 @@ export function CheckoutPage() {
           >
             <button
               type="button"
+              className="order-confirmation-primary"
               onClick={() => {
                 const url = success.tracking_url || '/track';
 
@@ -789,6 +838,7 @@ export function CheckoutPage() {
             </button>
 
             <a
+              className="order-confirmation-secondary"
               href={
                 'https://wa.me/201013380313?text=' +
                 encodeURIComponent(
@@ -854,6 +904,7 @@ export function CheckoutPage() {
         {/* Continue shopping */}
         <button
           type="button"
+          className="order-confirmation-continue"
           onClick={() => setPage('home')}
           style={{
             boxSizing: 'border-box',

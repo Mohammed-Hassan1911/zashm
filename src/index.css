@@ -225,6 +225,72 @@ select option { background: var(--bg3); }
 
 .app-page-loading { min-height: 50vh; }
 
+.order-confirmation-card {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.order-confirmation-primary,
+.order-confirmation-secondary,
+.order-confirmation-continue {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease !important;
+}
+
+.order-confirmation-primary:hover,
+.order-confirmation-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(201,168,76,0.13);
+}
+
+.order-confirmation-secondary {
+  background: #171612 !important;
+  color: #e2d6ae !important;
+  border-color: #39352a !important;
+}
+
+.order-confirmation-continue {
+  width: auto !important;
+  padding: 12px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #8e887d !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.order-confirmation-continue:hover {
+  color: #e4c66d !important;
+}
+
+@media (max-width: 560px) {
+  .order-confirmation-page {
+    padding: calc(92px + env(safe-area-inset-top, 0px)) 14px calc(48px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .order-confirmation-card {
+    padding: 28px 18px 24px !important;
+    border-radius: 14px !important;
+  }
+
+  .order-confirmation-reference,
+  .order-confirmation-summary {
+    padding: 14px !important;
+  }
+
+  .order-confirmation-actions {
+    flex-direction: column;
+  }
+
+  .order-confirmation-actions > * {
+    flex: 1 1 auto !important;
+    width: 100%;
+    white-space: normal !important;
+  }
+}
+
 .app-startup-indicator {
   width: 76px;
   height: 76px;
