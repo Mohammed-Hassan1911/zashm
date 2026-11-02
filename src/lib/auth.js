@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { createSession, getSession, destroySession, checkRateLimit, resetRateLimit, hasPermission as sessionHasPermission, db } from './security';
+import { createSession, getSession, destroySession, checkRateLimit, resetRateLimit, hasPermission as sessionHasPermission } from './security';
 import { api, setUnauthorizedHandler } from './api';
 
 const AuthContext = createContext(null);
@@ -39,8 +39,6 @@ export function AuthProvider({ children }) {
         if (existing) {
           setSession(existing);
         }
-
-        await db.syncFromServer();
 
         if (existing) {
           await loadUsers();

@@ -29,15 +29,32 @@ import { setPageMeta } from './lib/seo';
 import { trackPageView } from './lib/ga';
 import { resolveRoute } from './lib/routes';
 
-const HomePage = React.lazy(() => import('./pages/HomePage'));
-const ShopPage = React.lazy(() => import('./pages/ShopPage'));
-const ProductPage = React.lazy(() => import('./pages/ProductPage'));
-const TrackOrder = React.lazy(() => import('./pages/TrackOrder'));
-const CartPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.CartPage })));
-const CheckoutPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.CheckoutPage })));
-const WishlistPage = React.lazy(() => import('./pages/CartPage').then(module => ({ default: module.WishlistPage })));
-const AdminApp = React.lazy(() => import('./pages/AdminApp'));
-const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
+const loadHomePage = () => import('./pages/HomePage');
+const loadShopPage = () => import('./pages/ShopPage');
+const loadProductPage = () => import('./pages/ProductPage');
+const loadTrackOrderPage = () => import('./pages/TrackOrder');
+const loadCartPage = () => import('./pages/CartPage');
+const loadAdminPage = () => import('./pages/AdminApp');
+const loadNotFoundPage = () => import('./pages/NotFoundPage');
+
+const HomePage = React.lazy(loadHomePage);
+const ShopPage = React.lazy(loadShopPage);
+const ProductPage = React.lazy(loadProductPage);
+const TrackOrder = React.lazy(loadTrackOrderPage);
+const CartPage = React.lazy(() => loadCartPage().then(module => ({ default: module.CartPage })));
+const CheckoutPage = React.lazy(() => loadCartPage().then(module => ({ default: module.CheckoutPage })));
+const WishlistPage = React.lazy(() => loadCartPage().then(module => ({ default: module.WishlistPage })));
+const AdminApp = React.lazy(loadAdminPage);
+const NotFoundPage = React.lazy(loadNotFoundPage);
+
+const PUBLIC_PAGE_LOADERS = [
+  loadHomePage,
+  loadShopPage,
+  loadProductPage,
+  loadTrackOrderPage,
+  loadCartPage,
+  loadNotFoundPage,
+];
 
 if (typeof window !== 'undefined') {
   window.toast = toast;
@@ -132,13 +149,32 @@ function AppInner() {
   }, [session, refreshProducts, refreshOrders]);
 
   useEffect(() => {
+    const connection = typeof navigator !== 'undefined' ? navigator.connection : undefined;
+    if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) return undefined;
+
+    const preload = () => {
+      PUBLIC_PAGE_LOADERS.forEach((loadPage) => {
+        loadPage().catch((error) => console.error('Storefront page preload failed:', error));
+      });
+    };
+
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleHandle = window.requestIdleCallback(preload, { timeout: 2000 });
+      return () => window.cancelIdleCallback?.(idleHandle);
+    }
+
+    const timeoutHandle = window.setTimeout(preload, 1000);
+    return () => window.clearTimeout(timeoutHandle);
+  }, []);
+
+  useEffect(() => {
     const route = resolveRoute();
     if (route.page !== 'product' || !route.productId) return;
     const product = useStore.getState().products.find(item => String(item.id) === String(route.productId));
     setSelectedProduct(product || null);
   }, [currentPage, products, setSelectedProduct]);
 
-  if (loading) {
+  if (loading && currentPage === 'admin') {
     return <AppStartupScreen />;
   }
 
@@ -158,7 +194,7 @@ function AppInner() {
           <Header />
           <CartDrawer />
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence>
             <motion.div
               key={currentPage}
               initial={{ opacity: 0, y: 20 }}
