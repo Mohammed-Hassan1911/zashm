@@ -536,8 +536,7 @@ export function CheckoutPage() {
             </h2>
           </div>
           <p style={{ color: '#9b978e', fontSize: 13, margin: '12px 0 0', lineHeight: 1.8 }}>
-            We’re preparing your ZASHM experience.
-          </p>
+                      </p>
           <p style={{ color: '#9b978e', fontSize: 12, margin: '2px 0 0', direction: 'rtl' }}>
             شكرًا لاختيارك ZASHM، سنبدأ تجهيز طلبك.
           </p>
