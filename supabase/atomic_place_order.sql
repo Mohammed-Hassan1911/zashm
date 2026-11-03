@@ -243,7 +243,7 @@ BEGIN
     -- SEC-11: a product deactivated in the console must not be sellable, even
     -- if it is still sitting in a shopper's saved cart. api/orders.js rejects
     -- it first; this is the authoritative check.
-    IF v_prod.active IS FALSE THEN
+    IF v_prod.active IS NOT TRUE THEN
       RETURN jsonb_build_object('ok', false, 'reason', 'inactive_product',
                                 'productId', v_id);
     END IF;
@@ -255,6 +255,15 @@ BEGIN
     v_has_variants := v_prod."variantStock" IS NOT NULL
       AND jsonb_typeof(v_prod."variantStock") = 'object'
       AND v_prod."variantStock" <> '{}'::jsonb;
+
+    -- Products that declare sizes/colors but have no variant pool are not
+    -- sellable: reject instead of falling back to a global counter.
+    IF ((v_prod.sizes IS NOT NULL AND jsonb_typeof(v_prod.sizes) = 'array' AND jsonb_array_length(v_prod.sizes) > 0)
+        OR (v_prod.colors IS NOT NULL AND jsonb_typeof(v_prod.colors) = 'array' AND jsonb_array_length(v_prod.colors) > 0))
+       AND NOT v_has_variants THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'invalid_product_config',
+                                'productId', v_id);
+    END IF;
 
     IF v_has_variants THEN
       FOR v_line IN
@@ -271,7 +280,11 @@ BEGIN
         -- DECISION (2026-11-01): reservedStock is NOT subtracted. It has no
         -- writer and no expiry, so it would hide sellable stock forever. The
         -- column is kept for compatibility; availability is the variant pool.
-        v_available := COALESCE((v_prod."variantStock" ->> v_line.vkey)::int, 0);
+        v_available := COALESCE(
+          CASE WHEN (v_prod."variantStock" ->> v_line.vkey) ~ '^-?[0-9]+$'
+               THEN (v_prod."variantStock" ->> v_line.vkey)::int
+               ELSE 0 END,
+          0);
 
         IF v_line.qty > v_available THEN
           RETURN jsonb_build_object(
@@ -296,7 +309,7 @@ BEGIN
        WHERE (it ->> 'productId')::bigint = v_id;
 
       -- Same DECISION as the variant branch above: reservedStock is excluded.
-      v_available := COALESCE(v_prod.stock, 99);
+      v_available := COALESCE(v_prod.stock, 0);
 
       IF v_total_qty > v_available THEN
         RETURN jsonb_build_object(
@@ -465,7 +478,11 @@ END;
           v_var := jsonb_set(
             v_var,
             ARRAY[v_line.vkey],
-            to_jsonb(GREATEST(COALESCE((v_var ->> v_line.vkey)::int, 0) - v_line.qty, 0))
+            to_jsonb(GREATEST(COALESCE(
+              CASE WHEN (v_var ->> v_line.vkey) ~ '^-?[0-9]+$'
+                   THEN (v_var ->> v_line.vkey)::int
+                   ELSE 0 END,
+              0) - v_line.qty, 0))
           );
         END IF;
       END LOOP;
@@ -486,7 +503,7 @@ END;
         FROM _zshm_stock_delta WHERE id = v_id;
 
       UPDATE public.products
-         SET stock = GREATEST(COALESCE(v_prod.stock, 99) - v_total_qty, 0)
+         SET stock = GREATEST(COALESCE(v_prod.stock, 0) - v_total_qty, 0)
        WHERE id = v_id;
     END IF;
   END LOOP;

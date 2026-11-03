@@ -105,7 +105,7 @@ async function placeOrder(req, res) {
       // SEC-11: a product the admin deactivated must never be sellable, even if
       // it is still in a shopper's saved cart. Treat it exactly like a product
       // that disappeared so the client removes it.
-      if (!p || p.active === false) {
+      if (!p || p.active !== true) {
         stockErrors.push('A product in your cart is no longer available.');
         stockIssues.push({
           productId: item.productId,
@@ -117,24 +117,68 @@ async function placeOrder(req, res) {
         });
         continue;
       }
-      const unitPrice = Number(p.salePrice) || Number(p.price) || 0;
+      const rawSale = p.salePrice;
+      const rawPrice = p.price;
+      const unitPrice = (rawSale !== null && rawSale !== undefined)
+        ? Number(rawSale)
+        : Number(rawPrice);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        stockErrors.push('A product in your cart has an invalid price.');
+        stockIssues.push({
+          productId: item.productId,
+          size: item.size || '',
+          color: item.color || '',
+          requested: Number(item.qty || 0),
+          available: 0,
+          missing: true,
+        });
+        continue;
+      }
       const variantKey = `${item.size}-${item.color}`;
-      let stockAmount = 99;
+      let stockAmount = 0;
       const pv = p.variantStock;
       const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
-      if (hasVariantStock) {
-        // Variant products: an undefined key means zero available. Falling back to
-        // the global stock (the sum of all variants) would wrongly allow orders.
-        stockAmount = Number(pv[variantKey]) || 0;
-      } else if (p.stock !== undefined && p.stock !== null) {
-        stockAmount = Number(p.stock);
+      // Products that declare sizes/colors but have no variantStock are not
+      // sellable: there is no per-variant pool and we must not fall back to a
+      // global counter that would let any size/color be ordered.
+      const hasSizesOrColors = (Array.isArray(p.sizes) && p.sizes.length > 0)
+        || (Array.isArray(p.colors) && p.colors.length > 0);
+      if (hasSizesOrColors && !hasVariantStock) {
+        stockErrors.push('A product in your cart is not available in the selected variation.');
+        stockIssues.push({
+          productId: item.productId,
+          size: item.size || '',
+          color: item.color || '',
+          requested: Number(item.qty || 0),
+          available: 0,
+          missing: false,
+        });
+        continue;
       }
-      // DECISION (2026-11-01): reservedStock is intentionally NOT part of
-      // availability. Nothing writes it and nothing expires it, so subtracting
-      // it would permanently hide sellable stock. The column is kept for schema
-      // compatibility; PostgreSQL only sees it in admin service-role rows.
-      // The authoritative check still runs inside atomic_place_order.
-      const available = Math.max(0, stockAmount);
+      if (hasVariantStock) {
+        // Variant products: an undefined key means zero available.
+        const rawVariant = pv[variantKey];
+        stockAmount = Number.isFinite(Number(rawVariant)) ? Number(rawVariant) : 0;
+        if (stockAmount < 0) stockAmount = 0;
+        // Reject unknown variant keys explicitly (defense in depth).
+        if (!Object.prototype.hasOwnProperty.call(pv, variantKey)) {
+          stockErrors.push('A product in your cart is not available in the selected variation.');
+          stockIssues.push({
+            productId: item.productId,
+            size: item.size || '',
+            color: item.color || '',
+            requested: Number(item.qty || 0),
+            available: 0,
+            missing: false,
+          });
+          continue;
+        }
+      } else if (p.stock !== undefined && p.stock !== null) {
+        const parsed = Number(p.stock);
+        stockAmount = Number.isFinite(parsed) ? parsed : 0;
+        if (stockAmount < 0) stockAmount = 0;
+      }
+      const available = stockAmount; // already >= 0 and finite
       // Variant products compare the aggregate for this exact variant; products
       // without variants compare the aggregate for the whole product, because
       // size/color do not select a separate stock pool there.

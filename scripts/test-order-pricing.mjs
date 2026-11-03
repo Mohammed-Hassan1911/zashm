@@ -317,7 +317,7 @@ console.log('\n[1] static checks: the pricing rule has one source of truth');
   const ordersSrc = readFileSync(new URL('../api/orders.js', import.meta.url), 'utf8');
   ok(/couponIsRedeemable\(c, today\)/.test(ordersSrc), 'orders.js uses the shared redeemability rule');
   ok(/computeCouponDiscount\(c, subtotal\)/.test(ordersSrc), 'orders.js uses the shared pricing rule');
-  ok(/p\.active === false/.test(ordersSrc), 'orders.js rejects inactive products (SEC-11)');
+  ok(/p\.active !== true/.test(ordersSrc), 'orders.js rejects inactive products (SEC-11)');
   ok(/reason === 'inactive_product'/.test(ordersSrc), 'orders.js maps inactive_product to 422');
   ok(/reason === 'coupon_changed'/.test(ordersSrc), 'orders.js maps coupon_changed to 409');
   ok(/idempotencyKey === null \|\|/.test(ordersSrc), 'orders.js requires an idempotency key before creating orders');

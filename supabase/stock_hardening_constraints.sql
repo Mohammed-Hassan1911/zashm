@@ -1,0 +1,53 @@
+-- ══════════════════════════════════════════════════════════════════════════════
+-- ZASHM · STOCK HARDENING CONSTRAINTS (PROPOSED MIGRATION — NOT EXECUTED)
+--
+-- Status: DRAFT. Do NOT run in production without owner approval.
+-- Purpose: enforce non-null, non-negative stock/active/reservedStock and valid
+--          variantStock shape at the database level.
+--
+-- PREREQUISITES (run READ-ONLY first):
+--   1. supabase/verify_production_security.sql
+--   2. The §C product-count queries (active IS NULL, stock IS NULL, etc.)
+--   3. Confirm products table identity (Project Ref ptegprcbtfylqhbnbkih).
+--
+-- EXECUTION ORDER (when approved):
+--   Phase A: data cleanup (UPDATE) — only if counts > 0
+--   Phase B: SET NOT NULL
+--   Phase C: ADD CHECK constraints
+--   Phase D: post-verify (re-run verify_production_security.sql)
+--
+-- ROLLBACK: keep a backup of public.products before Phase A.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ── Phase A: DATA CLEANUP (DML) — RUN ONLY AFTER REVIEWING COUNTS ────────────
+-- (Commented out by default. Uncomment after approval.)
+--
+-- UPDATE public.products SET active = COALESCE(active, false) WHERE active IS NULL;
+-- UPDATE public.products SET stock = COALESCE(stock, 0) WHERE stock IS NULL;
+-- (reservedStock is intentionally never written; see reservedStock policy)
+-- -- variantStock backfill must be done per-product (business decision); no auto-backfill here.
+
+-- ── Phase B: NOT NULL ────────────────────────────────────────────────────────
+-- (Commented out by default.)
+--
+-- ALTER TABLE public.products
+--   ALTER COLUMN active SET NOT NULL,
+--   ALTER COLUMN stock SET NOT NULL,
+--   ALTER COLUMN reservedStock SET NOT NULL;
+
+-- ── Phase C: CHECK constraints ───────────────────────────────────────────────
+-- (Commented out by default.)
+--
+-- ALTER TABLE public.products
+--   ADD CONSTRAINT products_active_boolean CHECK (active IN (true, false)),
+--   ADD CONSTRAINT products_stock_nonnegative CHECK (stock >= 0),
+--   ADD CONSTRAINT products_reserved_nonnegative CHECK (reservedStock >= 0),
+--   ADD CONSTRAINT products_variant_stock_shape
+--     CHECK (variantStock IS NULL OR jsonb_typeof(variantStock) = 'object');
+
+-- ── Phase D: post-verify (read-only) ────────────────────────────────────────
+-- SELECT count(*) FILTER (WHERE active IS NULL) AS active_null,
+--        count(*) FILTER (WHERE stock IS NULL) AS stock_null,
+--        count(*) FILTER (WHERE stock < 0) AS stock_neg
+--   FROM public.products;
+EOF
