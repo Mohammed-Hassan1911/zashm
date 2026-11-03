@@ -24,8 +24,6 @@ export default function NotFoundPage() {
       </h1>
       <p style={{ color: 'var(--text3)', maxWidth: 460 }}>
         The page you are looking for does not exist or has moved.
-        <br />
-        الصفحة التي تبحث عنها غير موجودة أو تم نقلها.
       </p>
       <a
         href="/"
@@ -40,7 +38,7 @@ export default function NotFoundPage() {
           fontSize: 12,
         }}
       >
-        Back to the store / العودة للمتجر
+        Back to the store
       </a>
     </main>
   );

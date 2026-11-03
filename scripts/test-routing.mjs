@@ -147,7 +147,7 @@ console.log('\n[4] 404 response');
   const fallback = await buildNotFoundResponse(request, { fetchImpl: failingFetch });
   eq(fallback.status, 404, 'the fallback also answers 404');
   const fallbackBody = await fallback.text();
-  ok(/الصفحة غير موجودة/.test(fallbackBody) && /ZASHM/.test(fallbackBody), 'the fallback is a minimal bilingual page');
+  ok(/This page could not be found/.test(fallbackBody) && /ZASHM/.test(fallbackBody), 'the fallback is a minimal 404 page');
 }
 
 // ─── [5] wiring ──────────────────────────────────────────────────────────────

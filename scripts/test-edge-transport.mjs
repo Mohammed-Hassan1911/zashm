@@ -208,8 +208,8 @@ console.log('\n[1] transport headers + rewrites');
   const notFoundPage = read('public/404.html');
   ok(/<meta name="robots" content="noindex, nofollow"/.test(notFoundPage),
     'the static 404 page is noindex');
-  ok(/Return Home/.test(notFoundPage) && /الصفحة غير موجودة/.test(notFoundPage),
-    'the static 404 page is bilingual');
+  ok(/Return Home/.test(notFoundPage) && /This page could not be found/.test(notFoundPage),
+    'the static 404 page has English text');
   ok(/href="\/"/.test(notFoundPage) && /href="\/shop"/.test(notFoundPage),
     'the static 404 page links back to the store');
 }

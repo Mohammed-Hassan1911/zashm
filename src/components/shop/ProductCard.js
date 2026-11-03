@@ -197,8 +197,8 @@ export default function ProductCard({ product, index = 0 }) {
                 toggleWishlist(product.id);
                 toast(
                   isWished
-                    ? 'Removed from wishlist / تمت الإزالة من المفضلة'
-                    : 'Added to wishlist / تمت الإضافة إلى المفضلة',
+                    ? 'Removed from wishlist'
+                    : 'Added to wishlist',
                   isWished ? 'info' : 'success'
                 );
               }

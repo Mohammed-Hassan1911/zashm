@@ -458,14 +458,14 @@ console.log('\n[10] public SEO and checkout accessibility');
     'checkout states the real COD method');
   ok(!/No online payment is taken/.test(cartPage),
     'checkout no longer shows the removed online-payment line');
-  ok(/الدفع عند الاستلام/.test(cartPage), 'checkout payment terms are bilingual');
+  ok(/Cash on delivery/.test(cartPage), 'checkout states the COD method in English');
   ok(/className="order-confirmation-card"/.test(cartPage) &&
      /className="order-confirmation-summary"/.test(cartPage),
     'order confirmation uses the redesigned summary layout');
   ok(/className="order-confirmation-page"/.test(cartPage) &&
      /@media \(max-width: 560px\)[\s\S]*?\.order-confirmation-card/.test(read('src/index.css')),
     'order confirmation layout adapts to mobile screens');
-  ok(!/تم استلام الطلب/.test(cartPage) && !/WHAT HAPPENS NEXT/.test(cartPage),
+  ok(!/تم تسجيل طلبك بنجاح/.test(cartPage) && !/WHAT HAPPENS NEXT/.test(cartPage),
     'order confirmation drops the repeated received-order copy');
   ok((cartPage.match(/style=\{orderActionStyle\}/g) || []).length === 3 &&
      /className="order-confirmation-continue"[\s\S]{0,400}?CONTINUE SHOPPING/.test(cartPage),
@@ -553,8 +553,8 @@ console.log('\n[12] badge proximity and governorate copy');
     'the bag badge is anchored to the bag icon');
   const badgeStart = header.indexOf('const badgeStyle');
   const badge = header.slice(badgeStart, badgeStart + 400);
-  ok(/top: -5,[\s\S]*?right: -6,/.test(badge),
-    'header badges sit on the top-right corner of the glyph');
+  ok(/top: -7,[\s\S]*?right: -7,/.test(badge),
+    'header badges sit at the upper-right corner of the glyph');
   ok(!/top: isMobile \? -3 : -2/.test(header) && !/right: isMobile \? -2 : 0/.test(header),
     'the bag badge no longer overrides the shared position');
   eq((header.match(/aria-hidden="true"/g) || []).length, 2,
@@ -564,16 +564,15 @@ console.log('\n[12] badge proximity and governorate copy');
   ok(/cartCount === 1 \? '' : 's'/.test(header),
     'the bag button pluralises its announced count');
 
-  ok(/top: -5, right: -5, minWidth: 15, height: 15/.test(mobileNav),
-    'the bottom-nav badge sits on the glyph corner too');
+  ok(/top: -7, right: -7, minWidth: 15, height: 15/.test(mobileNav),
+    'the bottom-nav badge sits at the upper-right corner of the glyph too');
   ok(/aria-label=\{badge > 0 \?/.test(mobileNav),
     'bottom-nav buttons announce their badge count');
   ok(/<span\s+aria-hidden="true"/.test(mobileNav),
     'the decorative sole badge number is hidden from screen readers');
 
-  ok(/<span aria-hidden="true">\{' · '\}<\/span>/.test(cartPage) &&
-     /<span lang="ar" dir="rtl">\{GOVERNORATE_AR\[city\]\}<\/span>/.test(cartPage),
-    'governorate suggestions separate the English and Arabic names');
+  ok(!/<span lang="ar" dir="rtl">\{GOVERNORATE_AR\[city\]\}<\/span>/.test(cartPage),
+    'governorate suggestions show the English name only');
   ok(/clearCanonical/.test(productPage) && /robots: 'noindex, nofollow'/.test(productPage),
     'the unknown-product view is noindex and drops its canonical');
 }

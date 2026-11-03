@@ -771,6 +771,15 @@ select option { background: var(--bg3); }
   justify-content: center;
 }
 
+/* Stand-in for the hero while the home chunk loads. It reuses the exact
+   .home-hero box so the footer keeps its final position and nothing shifts. */
+.home-hero-skeleton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
 @media (max-width: 768px) {
   .product-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
 

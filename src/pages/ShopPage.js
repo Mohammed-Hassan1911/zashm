@@ -619,7 +619,7 @@ export default function ShopPage() {
             }}
           >
             <p style={{ fontSize: 12, color: '#d97777' }}>
-              تعذّر تحميل المنتجات — Could not load products.
+              Could not load products.
             </p>
             <button
               type="button"

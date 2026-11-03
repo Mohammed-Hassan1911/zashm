@@ -103,7 +103,7 @@ async function buildNotFoundResponse(request, { fetchImpl = fetch } = {}) {
     '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>' +
       '<meta name="viewport" content="width=device-width, initial-scale=1"/>' +
       '<meta name="robots" content="noindex, nofollow"/><title>Page Not Found — ZASHM</title>' +
-      '</head><body><h1>404</h1><p>This page could not be found. / الصفحة غير موجودة</p>' +
+      '</head><body><h1>404</h1><p>This page could not be found.</p>' +
       '<p><a href="/">Return Home</a> · <a href="/shop">Browse Collection</a></p></body></html>',
     { status: 404, headers },
   );

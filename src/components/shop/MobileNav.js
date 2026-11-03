@@ -135,7 +135,7 @@ export default function MobileNav() {
                   <span
                     aria-hidden="true"
                     style={{
-                      position: 'absolute', top: -5, right: -5, minWidth: 15, height: 15,
+                      position: 'absolute', top: -7, right: -7, minWidth: 15, height: 15,
                       padding: '0 3px', borderRadius: '999px', background: 'var(--gold)',
                       color: 'var(--bg)', fontSize: 8, fontWeight: 700, lineHeight: 1,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',

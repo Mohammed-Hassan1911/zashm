@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, PackageSearch, Headset } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+import StockFeedback from '../components/shop/StockFeedback';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
-import { filterGovernorates, getShippingCost, GOVERNORATE_AR, toCanonicalGovernorate } from '../lib/egyptCities';
+import { filterGovernorates, getShippingCost, toCanonicalGovernorate } from '../lib/egyptCities';
 import { clearCheckoutIdempotencyKey, getCheckoutIdempotencyKey } from '../lib/orderIdempotency.mjs';
 import { clearOrderConfirmation, readOrderConfirmation, saveOrderConfirmation } from '../lib/orderConfirmation.mjs';
 
@@ -73,12 +74,6 @@ function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate'
               onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
             >
               {city}
-              {GOVERNORATE_AR[city] && (
-                <span style={{ color: 'var(--text3)' }}>
-                  <span aria-hidden="true">{' · '}</span>
-                  <span lang="ar" dir="rtl">{GOVERNORATE_AR[city]}</span>
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -101,7 +96,7 @@ export function CartPage() {
   const changeQty = (item, nextQty) => {
     const result = updateCartQty(item?.key, nextQty);
     if (result && result.success === false) {
-      toast(result.error || 'Maximum available quantity reached. / تم الوصول للحد الأقصى المتاح.', 'warning');
+      toast(result.error || 'Maximum available quantity reached.', 'warning');
     }
   };
 
@@ -116,7 +111,7 @@ export function CartPage() {
     setCouponError('');
     const cleanCoupon = (coupon ?? '').trim().toUpperCase();
     if (!cleanCoupon) {
-      setCouponError('Please enter a discount code / يرجى إدخال كود الخصم');
+      setCouponError('Please enter a discount code.');
       return;
     }
 
@@ -124,8 +119,7 @@ export function CartPage() {
     try {
       const result = await applyDiscount(cleanCoupon);
       if (result.success) {
-        toast(`Code ${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!
-تم تطبيق الكود بنجاح!`, 'success');
+        toast(`Code ${result.discount?.code ?? 'Code'} applied — ${(result.discount?.type ?? 'percentage') === 'percentage' ? (result.discount?.value ?? 0) + '% off' : 'EGP ' + (result.discount?.value ?? 0) + ' off'}!`, 'success');
       } else {
         setCouponError(result.error ?? 'Invalid code');
       }
@@ -166,21 +160,27 @@ export function CartPage() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2 }}>
                           <button onClick={() => (item?.qty ?? 0) > 1 ? changeQty(item, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
+                            type="button"
+                            aria-label={`Decrease quantity of ${item?.product?.name || 'item'}`}
                             style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
-                            <Minus size={12} />
+                            <Minus size={12} aria-hidden="true" />
                           </button>
                           <span style={{ padding: '0 10px', fontSize: 13, minWidth: 28, textAlign: 'center' }}>{item?.qty ?? 0}</span>
                           <button onClick={() => changeQty(item, (item?.qty ?? 0) + 1)}
+                            type="button"
+                            aria-label={`Increase quantity of ${item?.product?.name || 'item'}`}
                             style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
-                            <Plus size={12} />
+                            <Plus size={12} aria-hidden="true" />
                           </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                           <span style={{ color: '#b9a06c', fontSize: 15, fontWeight: 600 }}>EGP {(((item?.product?.salePrice || item?.product?.price) ?? 0) * (item?.qty ?? 0)).toLocaleString()}</span>
                           <button onClick={() => removeFromCart(item?.key)}
+                            type="button"
+                            aria-label={`Remove ${item?.product?.name || 'item'} from bag`}
                             style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
                             onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
-                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}><Trash2 size={15} /></button>
+                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}><Trash2 size={15} aria-hidden="true" /></button>
                         </div>
                       </div>
                     </div>
@@ -311,7 +311,7 @@ export function CheckoutPage() {
     setCouponError('');
     const cleanCoupon = (coupon ?? '').trim().toUpperCase();
     if (!cleanCoupon) {
-      setCouponError('Please enter a discount code / يرجى إدخال كود الخصم');
+      setCouponError('Please enter a discount code.');
       return;
     }
 
@@ -335,16 +335,16 @@ export function CheckoutPage() {
 
   const validateOrderFormCustom = (fields) => {
     const errs = {};
-    if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required.\nهذا الحقل مطلوب.';
-    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters).\nيرجى إدخال الاسم الكامل بشكل صحيح.';
+    if (!fields.name || !fields.name.trim()) errs.name = 'Full name is required.';
+    else if (fields.name.trim().length < 2) errs.name = 'Please enter your full name (at least 2 characters).';
     
     const egyptianPhoneRegex = /^01[0125][0-9]{8}$/;
     const normPhone = normalizeEgyptPhone(fields.phone);
     
     if (!fields.phone || !fields.phone.trim()) {
-      errs.phone = 'Phone number is required.\nهذا الحقل مطلوب.';
+      errs.phone = 'Phone number is required.';
     } else if (!egyptianPhoneRegex.test(normPhone)) {
-      errs.phone = 'Invalid phone number. Must be 11 digits starting with 01.\nرقم الهاتف غير صحيح، يجب أن يبدأ بـ 01 ويتكون من 11 رقمًا.';
+      errs.phone = 'Invalid phone number. Must be 11 digits starting with 01.';
     }
 
     if (fields.phoneAlt && fields.phoneAlt.trim()) {
@@ -352,23 +352,23 @@ export function CheckoutPage() {
       const trimmedPhoneAlt = normalizeEgyptPhone(fields.phoneAlt);
 
       if (!egyptianPhoneRegex.test(trimmedPhoneAlt)) {
-        errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits.\nرقم الهاتف البديل غير صحيح، يجب أن يتكون من 11 رقمًا.';
+        errs.phoneAlt = 'Invalid alternative phone number. Must be 11 digits.';
       } else if (trimmedPhone === trimmedPhoneAlt) {
-        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number.\nلا يمكن استخدام نفس رقم الهاتف الأساسي كرقم بديل.';
+        errs.phoneAlt = 'Alternative phone cannot be the same as the primary phone number.';
       }
     }
 
     if (fields.email && fields.email.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(fields.email.trim())) {
-        errs.email = 'Please enter a valid email address.\nيرجى إدخال بريد إلكتروني صحيح.';
+        errs.email = 'Please enter a valid email address.';
       }
     }
 
-    if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required.\nهذا الحقل مطلوب.';
-    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters).\nيرجى إدخال عنوان كامل (5 أحرف على الأقل).';
+    if (!fields.address || !fields.address.trim()) errs.address = 'Street address is required.';
+    else if (fields.address.trim().length < 5) errs.address = 'Please enter a complete street address (at least 5 characters).';
     if (!fields.city || !fields.city.trim() || fields.city === 'Select City' || !normalizeGovernorate(fields.city)) {
-      errs.city = 'Please select your governorate from the list.\nيرجى اختيار المحافظة من القائمة.';
+      errs.city = 'Please select your governorate from the list.';
     }
     
     return errs;
@@ -377,7 +377,7 @@ export function CheckoutPage() {
   const handleOrder = async () => {
     if (isPlacingOrder.current || submitting) return;
     if (safeCart.length === 0) {
-      setStockErrors(['Your bag is empty. Add a piece before placing an order.\nسلتك فارغة. أضف قطعة قبل تأكيد الطلب.']);
+      setStockErrors(['Your bag is empty. Add a piece before placing an order.']);
       return;
     }
 
@@ -420,14 +420,12 @@ export function CheckoutPage() {
           const notices = [];
           reduced.forEach(r => {
             notices.push(
-              `تم تقليل كمية "${r.name}" تلقائياً من ${r.from} إلى ${r.to} قطعة. المتبقي حالياً: ${r.to} قطعة فقط. ` +
-              `/ The quantity of "${r.name}" was automatically reduced from ${r.from} to ${r.to} — only ${r.to} left in stock.`
+              `The quantity of "${r.name}" was automatically reduced from ${r.from} to ${r.to} — only ${r.to} left in stock.`
             );
           });
           removed.forEach(r => {
             notices.push(
-              `تمت إزالة "${r.name}" من سلة التسوق تلقائياً لأن المخزون نفد. ` +
-              `/ "${r.name}" was automatically removed from your bag because it's out of stock.`
+              `"${r.name}" was automatically removed from your bag because it's out of stock.`
             );
           });
           setStockNotice(notices);
@@ -447,7 +445,7 @@ export function CheckoutPage() {
       clearCheckoutIdempotencyKey(idempotencyKey);
       if (!saveOrderConfirmation(result.order)) {
         toast(
-          'Order confirmed, but this browser could not save the confirmation for refresh. Please keep your order ID. / تم تأكيد الطلب، لكن تعذر حفظ شاشة التأكيد لهذا التبويب. يُرجى الاحتفاظ برقم الطلب.',
+          'Order confirmed, but this browser could not save the confirmation for refresh. Please keep your order ID.',
           'warning'
         );
       }
@@ -561,7 +559,7 @@ export function CheckoutPage() {
               textAlign: 'center',
             }}
           >
-            🎉! تم نسخ رقم الطلب بنجاح 
+            Order number copied!
           </motion.div>
         )}
       </AnimatePresence>
@@ -617,19 +615,6 @@ export function CheckoutPage() {
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 4.2vw, 30px)', fontWeight: 500, lineHeight: 1.2, margin: '0 0 6px', color: '#f5f0e8' }}>
             Thank you for your order
           </h1>
-          <h2
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 'clamp(16px, 3vw, 20px)',
-              lineHeight: 1.4,
-              margin: 0,
-              color: '#d1b363',
-              fontWeight: 500,
-              direction: 'rtl',
-            }}
-          >
-            تم تسجيل طلبك بنجاح
-          </h2>
         </div>
 
         {/* Order reference */}
@@ -662,7 +647,7 @@ export function CheckoutPage() {
                 letterSpacing: 0,
               }}
             >
-              الرقم المرجعي للطلب (ORDER ID)
+              ORDER ID
             </div>
           </div>
 
@@ -765,7 +750,7 @@ export function CheckoutPage() {
 
         <div className="order-confirmation-summary" style={{ textAlign: 'left', background: '#101010', border: '1px solid #292720', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
           <h3 style={{ color: '#f0ece4', fontSize: 12, fontWeight: 600, margin: '0 0 10px' }}>
-            Order summary <span style={{ color: '#8f897e', fontWeight: 400 }}>· ملخص الطلب</span>
+            Order summary
           </h3>
           <div style={{ display: 'grid', gap: 8 }}>
             {(Array.isArray(success.items) ? success.items : []).map((item, index) => (
@@ -780,31 +765,31 @@ export function CheckoutPage() {
           </div>
           <div style={{ height: 1, background: '#292720', margin: '10px 0 9px' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
-            <span>Subtotal · المجموع</span>
+            <span>Subtotal</span>
             <span>EGP {Number(success.subtotal || 0).toLocaleString()}</span>
           </div>
           {Number(success.discount || 0) > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#9fbd91', fontSize: 10 }}>
-              <span>Discount · الخصم</span>
+              <span>Discount</span>
               <span>− EGP {Number(success.discount).toLocaleString()}</span>
             </div>
           )}
           {Number(success.shippingCost || 0) > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
-              <span>Shipping · الشحن</span>
+              <span>Shipping</span>
               <span>EGP {Number(success.shippingCost).toLocaleString()}</span>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
-            <span><Truck size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Delivery · التوصيل</span>
+            <span><Truck size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Delivery</span>
             <span>{success.city || 'Egypt'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8, color: '#aaa398', fontSize: 10 }}>
-            <span><Banknote size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Payment · الدفع</span>
-            <span style={{ textAlign: 'right', lineHeight: 1.4 }}>Cash on delivery · الدفع عند الاستلام</span>
+            <span><Banknote size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Payment</span>
+            <span style={{ textAlign: 'right', lineHeight: 1.4 }}>Cash on delivery</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, borderTop: '1px solid #292720', paddingTop: 10 }}>
-            <span style={{ color: '#e5e0d7', fontSize: 11, fontWeight: 600 }}>Order total · الإجمالي</span>
+            <span style={{ color: '#e5e0d7', fontSize: 11, fontWeight: 600 }}>Order total</span>
             <strong style={{ color: '#e4c66d', fontFamily: 'var(--font-display)', fontSize: 18 }}>EGP {Number(success.total || 0).toLocaleString()}</strong>
           </div>
         </div>
@@ -849,7 +834,7 @@ export function CheckoutPage() {
             href={
               'https://wa.me/201013380313?text=' +
               encodeURIComponent(
-                'مرحباً ZASHM، أود الاستفسار عن حالة طلبي ذو الرقم المرجعي: ' +
+                'Hello ZASHM, I would like to ask about my order with reference number: ' +
                   success.id
               )
             }
@@ -895,12 +880,13 @@ export function CheckoutPage() {
     return (
       <div style={{ paddingTop: 90, minHeight: '80vh' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
+          {/* A server-side stock rejection can empty the bag automatically.
+              Keep the reason visible instead of showing a bare empty state. */}
+          <StockFeedback notice={stockNotice} errors={stockErrors} />
           <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px', display: 'block' }} />
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</h1>
           <p style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 24 }}>
             Add a piece to your bag before checking out.
-            <br />
-            أضف قطعة إلى سلتك قبل إتمام الطلب.
           </p>
           <button className="gold-btn" onClick={() => setPage('shop')}>Explore Collection</button>
         </div>
@@ -914,109 +900,7 @@ export function CheckoutPage() {
         <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
           style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>{'Checkout'}</motion.h1>
 
-        <AnimatePresence>
-          {stockNotice.length > 0 && (
-            <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
-              role="status" aria-live="polite"
-              style={{ background:'rgba(201,168,76,0.10)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'14px 18px', marginBottom:16 }}>
-              <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:4, fontSize:13 }}>
-                Your bag has been updated automatically.
-              </p>
-              <p style={{ color:'var(--gold)', fontWeight:600, marginBottom:8, fontSize:13, direction: 'rtl', textAlign: 'right' }}>
-                تم تحديث سلة التسوق تلقائيًا.
-              </p>
-              {stockNotice.map((e, i) => {
-                const s = String(e || '');
-                const hasArabic = /[\u0600-\u06FF]/.test(s);
-                if (hasArabic) {
-                  const parts = s.split(/\n+/);
-                  const en = parts.find(p => /^[A-Za-z]/.test(p.trim())) || parts[0];
-                  const ar = parts.find(p => /[\u0600-\u06FF]/.test(p.trim())) || parts[parts.length-1];
-                  return (
-                    <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
-                      <div>{en}</div>
-                      <div style={{ direction: 'rtl', textAlign: 'right' }}>{ar}</div>
-                    </div>
-                  );
-                } else {
-                  // English only - add Arabic if known
-                  if (s.includes('updated automatically') || s.includes('bag has been updated')) {
-                    return (
-                      <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
-                        <div>{s}</div>
-                        <div style={{ direction: 'rtl', textAlign: 'right' }}>تم تحديث سلة التسوق تلقائيًا.</div>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={i} style={{ color:'var(--text)', fontSize:12, marginBottom:10, lineHeight:1.7 }}>
-                      <div>{s}</div>
-                    </div>
-                  );
-                }
-              })}
-            </motion.div>
-          )}
-
-          {stockErrors.length > 0 && (
-            <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}
-              role="alert" aria-live="assertive"
-              style={{ background:'rgba(192,57,43,0.08)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:6, padding:'14px 18px', marginBottom:24 }}>
-              <p style={{ color:'var(--red)', fontWeight:600, marginBottom:4, fontSize:13 }}>
-                Stock availability issue:
-              </p>
-              <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13, direction: 'rtl', textAlign: 'right' }}>
-                مشكلة في توفر المخزون:
-              </p>
-              {stockErrors.map((e, i) => {
-                const s = String(e || '');
-                const hasArabic = /[\u0600-\u06FF]/.test(s);
-                if (hasArabic) {
-                  const parts = s.split(/\n+/);
-                  const en = parts.find(p => /^[A-Za-z]/.test(p.trim()));
-                  const ar = parts.find(p => /[\u0600-\u06FF]/.test(p.trim())) || parts[parts.length-1];
-                  if (en) {
-                    return (
-                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
-                        <div>• {en}</div>
-                        <div style={{ direction: 'rtl' }}>• {ar}</div>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
-                        <div>• There was a problem with your order.</div>
-                        <div style={{ direction: 'rtl' }}>• {ar}</div>
-                      </div>
-                    );
-                  }
-                } else {
-                  if (s.includes('Order failed')) {
-                    return (
-                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
-                        <div>• {s}</div>
-                        <div style={{ direction: 'rtl' }}>• فشل الطلب. يرجى المحاولة مرة أخرى.</div>
-                      </div>
-                    );
-                  }
-                  if (s.includes('problem')) {
-                    return (
-                      <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
-                        <div>• {s}</div>
-                        <div style={{ direction: 'rtl' }}>• حدث خطأ في عملية الطلب.</div>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={i} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>
-                      <div>• {s}</div>
-                    </div>
-                  );
-                }
-              })}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <StockFeedback notice={stockNotice} errors={stockErrors} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="checkout-grid">
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
@@ -1260,13 +1144,11 @@ export function CheckoutPage() {
                       style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
                     <div style={{ textAlign: 'center', lineHeight: 1.2 }}>
                       <div>Placing Order…</div>
-                      <div style={{ fontSize: '11px', marginTop: 2, letterSpacing: '1px' }}>جاري تنفيذ الطلب…</div>
                     </div>
                   </span>
                 ) : (
                     <div style={{ textAlign: 'center', lineHeight: 1.2 }}>
                       <div>PLACE ORDER</div>
-                      <div style={{ fontSize: '11px', marginTop: 2, letterSpacing: '1px' }}>تأكيد الطلب</div>
                     </div>
                   )}
               </motion.button>

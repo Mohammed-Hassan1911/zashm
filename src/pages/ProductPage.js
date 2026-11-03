@@ -208,20 +208,19 @@ export default function ProductPage() {
   };
 
   const handleAddToCart = () => {
-    if (!selSize) { showToast('Please select a size.\nيرجى اختيار المقاس.', 'warning'); return; }
-    if (!selColor) { showToast('Please select a color.\nيرجى اختيار اللون.', 'warning'); return; }
+    if (!selSize) { showToast('Please select a size.', 'warning'); return; }
+    if (!selColor) { showToast('Please select a color.', 'warning'); return; }
     if (qty > currentVariantStock) {
-      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.
-عذرًا، يتوفر ${currentVariantStock} قطعة فقط بالمقاس ${selSize} واللون ${selColor}.` });
+      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.` });
       return;
     }
     
     const result = addToCart(p, selSize, selColor, qty);
     
     if (result && result.success) {
-      showToast(`${p.name ?? 'Product'} added to your bag! / تمت إضافة المنتج إلى سلة التسوق!`, 'success');
+      showToast(`${p.name ?? 'Product'} added to your bag!`, 'success');
     } else {
-      setStockModal({ open: true, message: result?.error || 'Requested quantity is not available. / الكمية المطلوبة غير متاحة.' });
+      setStockModal({ open: true, message: result?.error || 'Requested quantity is not available.' });
     }
   };
 
@@ -484,7 +483,7 @@ export default function ProductPage() {
                 aria-pressed={isWished}
                 onClick={() => {
                   toggleWishlist(p.id);
-                  toast(isWished ? 'Removed from wishlist / تمت الإزالة من المفضلة' : 'Added to wishlist / تمت الإضافة إلى المفضلة', isWished ? 'info' : 'success');
+                  toast(isWished ? 'Removed from wishlist' : 'Added to wishlist', isWished ? 'info' : 'success');
                 }}
                 style={{ width: 52, height: 52, borderRadius: 2, border: `2px solid ${isWished ? '#e74c3c' : 'var(--border)'}`, background: 'transparent', color: isWished ? '#e74c3c' : 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
@@ -725,9 +724,9 @@ export default function ProductPage() {
                           <thead>
                             <tr style={{ borderBottom: '1px solid var(--gold, #c9a84c)', color: 'var(--gold, #c9a84c)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
                               <th style={{ padding: '12px 8px', fontWeight: 500 }}>Size</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Waist (الخصر)</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Hips (الأرداف)</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Length (الطول)</th>
+                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Waist</th>
+                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Hips</th>
+                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Length</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -751,9 +750,9 @@ export default function ProductPage() {
                           <thead>
                             <tr style={{ borderBottom: '1px solid var(--gold, #c9a84c)', color: 'var(--gold, #c9a84c)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
                               <th style={{ padding: '12px 8px', fontWeight: 500 }}>Size</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Chest (الصدر)</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Shoulder (الكتف)</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Length (الطول)</th>
+                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Chest</th>
+                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Shoulder</th>
+                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Length</th>
                             </tr>
                           </thead>
                           <tbody>

@@ -68,11 +68,13 @@ export default function Header() {
     lineHeight: 0,
   };
 
-  // استايل مشترك للعداد (الباج) باللون الجولد
+  // Shared badge (counter) style in gold. It sits just above the icon box
+  // (not on the artwork) with a 1px gap, keeps the icon fully visible and
+  // stays inside the header without touching a neighbouring control.
   const badgeStyle = {
     position: 'absolute',
-    top: -5,
-    right: -6,
+    top: -7,
+    right: -7,
     minWidth: 15,
     height: 15,
     padding: '0 3px',

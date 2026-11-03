@@ -212,7 +212,7 @@ function AppInner() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
             >
-              <Suspense fallback={<PageLoading />}>
+              <Suspense fallback={<PageLoading page={currentPage} />}>
                 {currentPage === 'home' && <HomePage />}
                 {currentPage === 'shop' && <ShopPage />}
                 {currentPage === 'product' && <ProductPage />}
@@ -237,7 +237,19 @@ function AppInner() {
   );
 }
 
-function PageLoading() {
+function PageLoading({ page }) {
+  // The home page opens with a full-viewport hero. While its lazy chunk loads,
+  // reserve exactly that height with the same .home-hero box so the footer
+  // below does not jump into place when the hero mounts (CLS).
+  if (page === 'home') {
+    return (
+      <div className="home-hero home-hero-skeleton" role="status" aria-label="Preparing ZASHM">
+        <span className="app-startup-indicator" aria-hidden="true">
+          <img src="/zashm-z-monogram.png?v=3" alt="" />
+        </span>
+      </div>
+    );
+  }
   return <AppStartupScreen compact />;
 }
 
@@ -260,10 +272,10 @@ function AppStartupScreen({ compact = false }) {
       {stalled && (
         <div className="app-startup-stall">
           <p className="app-startup-stall-text">
-            Taking longer than usual. · التحميل بياخد وقت أطول من المعتاد.
+            Taking longer than usual.
           </p>
           <button type="button" className="app-startup-stall-btn" onClick={() => window.location.reload()}>
-            Reload · إعادة التحميل
+            Reload
           </button>
         </div>
       )}

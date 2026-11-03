@@ -185,7 +185,6 @@ console.log('\n[11] formatting');
 {
   eq(A.fmtEGP(509), 'EGP 509', 'fmtEGP basic');
   eq(A.fmtEGP(1234567.89), 'EGP 1,234,568', 'fmtEGP rounding + thousands');
-  eq(A.fmtEGPAr(509), `509 ج.م`, 'fmtEGPAr');
   eq(A.compactEGP(0), '0', 'compact zero');
   eq(A.compactEGP(1234), '1.2K', 'compact thousands');
 }

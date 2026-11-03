@@ -49,16 +49,16 @@ const CODE_LOCK_ATTEMPTS = 5;
 const CODE_LOCK_WINDOW_MS = 15 * 60 * 1000;
 
 const INVALID_MESSAGE =
-  'Invalid or expired discount code / كود خصم غير صالح أو منتهي الصلاحية';
+  'Invalid or expired discount code';
 
 function readCouponCode(body) {
   const raw = body && body.code;
   if (typeof raw !== 'string' || !raw.trim()) {
-    return { ok: false, error: 'A discount code is required / يرجى إدخال كود الخصم' };
+    return { ok: false, error: 'A discount code is required.' };
   }
   const code = raw.trim().toUpperCase();
   if (!COUPON_CODE_RE.test(code)) {
-    return { ok: false, error: 'Invalid discount code format / صيغة كود الخصم غير صحيحة' };
+    return { ok: false, error: 'Invalid discount code format.' };
   }
   return { ok: true, code };
 }
@@ -71,7 +71,7 @@ function readSubtotal(body) {
   if (raw === undefined || raw === null || raw === '') return { ok: true, subtotal: null };
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0 || n > 100000000) {
-    return { ok: false, error: 'Invalid cart total / إجمالي السلة غير صحيح' };
+    return { ok: false, error: 'Invalid cart total.' };
   }
   return { ok: true, subtotal: n };
 }
@@ -187,7 +187,7 @@ async function handler(req, res) {
       console.error('Coupon validation query failed:', error.code || 'unknown');
       return json(res, 500, {
         valid: false,
-        error: 'Could not validate the discount code. Please try again. / تعذر التحقق من كود الخصم، يرجى المحاولة مرة أخرى.',
+        error: 'Could not validate the discount code. Please try again.',
       });
     }
 
@@ -204,7 +204,7 @@ async function handler(req, res) {
     console.error('Coupon validation failed:', (err && err.name) || 'unknown');
     return json(res, 500, {
       valid: false,
-      error: 'Could not validate the discount code. Please try again. / تعذر التحقق من كود الخصم، يرجى المحاولة مرة أخرى.',
+      error: 'Could not validate the discount code. Please try again.',
     });
   }
 }

@@ -34,7 +34,7 @@ const STATUS_FLOW = ['Pending','Confirmed','Processing','Shipped','Delivered'];
 function cleanupPathSummary(paths) {
   const unique = [...new Set(paths.filter(Boolean))];
   const shown = unique.slice(0, 3).join(', ');
-  return unique.length > 3 ? `${shown}، و${unique.length - 3} ملفات أخرى` : shown;
+  return unique.length > 3 ? `${shown} and ${unique.length - 3} more files` : shown;
 }
 
 // Build a customer tracking link on whatever host is actually serving the app,
@@ -433,14 +433,14 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === range);
 
   const kpis = [
-    { key: 'totalValue', labelAr: 'قيمة الطلبات الإجمالية', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${overview.orderCount} non-cancelled orders`, color: 'var(--gold)', icon: TrendingUp, delta: overview.totalDeltaPct },
-    { key: 'delivered', labelAr: 'مبيعات الطلبات المسلّمة', labelEn: 'Delivered Sales', value: fmtEGP(overview.deliveredSales), sub: `${overview.deliveredCount} delivered`, color: '#27ae60', icon: CheckCircle },
-    { key: 'pending', labelAr: 'قيمة الطلبات قيد المعالجة', labelEn: 'Orders In Progress Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: '#f39c12', icon: Clock },
-    { key: 'shipped', labelAr: 'قيمة الطلبات المشحونة', labelEn: 'Shipped Order Value', value: fmtEGP(overview.shippedValue), sub: `${overview.shippedCount} shipped`, color: '#3498db', icon: Truck },
-    { key: 'orders', labelAr: 'إجمالي الطلبات', labelEn: 'Total Orders', value: String(overview.orderCount), sub: 'all statuses', color: 'var(--text)', icon: ShoppingCart, delta: overview.orderDeltaPct },
-    { key: 'deliveredCount', labelAr: 'طلبات مسلّمة', labelEn: 'Delivered Orders', value: String(overview.deliveredCount), sub: `of ${overview.orderCount} total`, color: '#27ae60', icon: Package2 },
-    { key: 'aov', labelAr: 'متوسط قيمة الطلب', labelEn: 'Average Order Value', value: fmtEGP(overview.aov), sub: 'per eligible order', color: '#9b59b6', icon: BarChart2 },
-    { key: 'cancelled', labelAr: 'الطلبات الملغاة', labelEn: 'Cancelled Orders', value: fmtEGP(overview.cancelledValue), sub: `${overview.cancelledCount} cancelled (excluded everywhere)`, color: '#e74c3c', icon: XCircle },
+    { key: 'totalValue', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${overview.orderCount} non-cancelled orders`, color: 'var(--gold)', icon: TrendingUp, delta: overview.totalDeltaPct },
+    { key: 'delivered', labelEn: 'Delivered Sales', value: fmtEGP(overview.deliveredSales), sub: `${overview.deliveredCount} delivered`, color: '#27ae60', icon: CheckCircle },
+    { key: 'pending', labelEn: 'Orders In Progress Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: '#f39c12', icon: Clock },
+    { key: 'shipped', labelEn: 'Shipped Order Value', value: fmtEGP(overview.shippedValue), sub: `${overview.shippedCount} shipped`, color: '#3498db', icon: Truck },
+    { key: 'orders', labelEn: 'Total Orders', value: String(overview.orderCount), sub: 'all statuses', color: 'var(--text)', icon: ShoppingCart, delta: overview.orderDeltaPct },
+    { key: 'deliveredCount', labelEn: 'Delivered Orders', value: String(overview.deliveredCount), sub: `of ${overview.orderCount} total`, color: '#27ae60', icon: Package2 },
+    { key: 'aov', labelEn: 'Average Order Value', value: fmtEGP(overview.aov), sub: 'per eligible order', color: '#9b59b6', icon: BarChart2 },
+    { key: 'cancelled', labelEn: 'Cancelled Orders', value: fmtEGP(overview.cancelledValue), sub: `${overview.cancelledCount} cancelled (excluded everywhere)`, color: '#e74c3c', icon: XCircle },
   ];
 
   const hasSeriesData = !isEmpty && overview.series.some((p) => p.value > 0 || p.orders > 0);
@@ -449,9 +449,9 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:16, gap:10, flexWrap:'wrap' }}>
         <div>
-          <h2 style={{ fontSize:18, fontWeight:600, marginBottom:2 }}>نظرة عامة</h2>
+          <h2 style={{ fontSize:18, fontWeight:600, marginBottom:2 }}>Overview</h2>
           <p style={{ fontSize:11, color:'var(--text3)' }}>
-            Overview · {rangeLabel ? `${rangeLabel.labelAr} (${rangeLabel.labelEn})` : ''} — up to {overview.orderCount} orders
+            Overview · {rangeLabel ? `${rangeLabel.labelEn}` : ''} — up to {overview.orderCount} orders
           </p>
         </div>
         <motion.button onClick={refreshOrders} whileTap={{ scale:0.95 }} disabled={ordersLoading}
@@ -466,7 +466,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
       {ordersError && !loading && (
         <div style={{ marginBottom:16, border:'1px solid rgba(231,76,60,0.35)', background:'rgba(231,76,60,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
           <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
-            <AlertCircle size={14} /> تعذّر تحميل الطلبات — {ordersError}
+            <AlertCircle size={14} /> Could not load orders — {ordersError}
           </p>
           <button onClick={refreshOrders} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
             Retry
@@ -478,7 +478,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
         <>
           {/* ── KPIs ── */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))', gap:12, marginBottom:18 }}>
-            {kpis.map(({ labelAr, labelEn, value, sub, color, icon:Icon, delta }, i) => (
+            {kpis.map(({ labelEn, value, sub, color, icon:Icon, delta }, i) => (
               <motion.div key={labelEn} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ delay:i*0.04 }}
                 style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'14px 14px 12px', display:'flex', flexDirection:'column' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
@@ -488,23 +488,23 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                   {delta !== undefined && <KpiDelta pct={delta} />}
                 </div>
                 <div dir="ltr" style={{ fontSize:19, fontWeight:600, fontFamily:'var(--font-display)', color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{value}</div>
-                <p style={{ fontSize:12, fontWeight:600, marginTop:3 }}>{labelAr}</p>
-                <p style={{ fontSize:10, color:'var(--text3)', marginTop:1 }}>{labelEn} · {sub}</p>
+                <p style={{ fontSize:12, fontWeight:600, marginTop:3 }}>{labelEn}</p>
+                <p style={{ fontSize:10, color:'var(--text3)', marginTop:1 }}>{sub}</p>
               </motion.div>
             ))}
           </div>
 
           {/* ── Quick actions ── */}
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:18 }}>
-            <button onClick={() => setAdminPage('orders')} style={quickActionStyle}><ShoppingCart size={14} /> عرض كل الطلبات</button>
-            {canAccess('products.write') && <button onClick={() => onAddProduct()} style={quickActionStyle}><Plus size={14} /> إضافة منتج</button>}
-            {canAccess('products.read') && <button onClick={() => setAdminPage('products')} style={quickActionStyle}><Package size={14} /> إدارة المخزون</button>}
-            {canAccess('discounts.read') && <button onClick={() => setAdminPage('discounts')} style={quickActionStyle}><Tag size={14} /> كوبونات الخصم</button>}
+            <button onClick={() => setAdminPage('orders')} style={quickActionStyle}><ShoppingCart size={14} /> View all orders</button>
+            {canAccess('products.write') && <button onClick={() => onAddProduct()} style={quickActionStyle}><Plus size={14} /> Add product</button>}
+            {canAccess('products.read') && <button onClick={() => setAdminPage('products')} style={quickActionStyle}><Package size={14} /> Manage inventory</button>}
+            {canAccess('discounts.read') && <button onClick={() => setAdminPage('discounts')} style={quickActionStyle}><Tag size={14} /> Discount codes</button>}
           </div>
 
           {/* ── Sales performance ── */}
           <Card
-            title={rangeLabel ? rangeLabel.labelAr : 'أداء المبيعات'}
+            title={rangeLabel ? rangeLabel.labelEn : 'Sales performance'}
             titleEn="Sales Performance"
             style={{ marginBottom: 16 }}
             actions={
@@ -539,21 +539,21 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
-                <DashEmpty icon={BarChart2} title="لا توجد طلبات في هذه الفترة"
-                  hint="اختر نطاق زمني آخر من الأعلى أو انتظر وصول أول طلب."
-                  action={canAccess('orders.read') ? <button onClick={() => setAdminPage('orders')} style={{ marginTop:10, padding:'6px 14px', background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--gold)', borderRadius:6, cursor:'pointer', fontSize:11 }}>عرض الطلبات</button> : null} />
+                <DashEmpty icon={BarChart2} title="No orders in this period"
+                  hint="Choose another date range above or wait for the first order."
+                  action={canAccess('orders.read') ? <button onClick={() => setAdminPage('orders')} style={{ marginTop:10, padding:'6px 14px', background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--gold)', borderRadius:6, cursor:'pointer', fontSize:11 }}>View orders</button> : null} />
               )}
             </div>
 
             <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginTop:12, paddingTop:12, borderTop:'1px solid var(--border)', fontSize:11, color:'var(--text3)' }}>
-              <span>Sales = Total Order Value (غير الملغي: بانتظار/مؤكد/معالج/شُحن/سلّم). الدفع عند الاستلام (COD) — لا يُعدّ تحصيلاً نقدياً.</span>
+              <span>Sales = Total Order Value (non-cancelled: pending/confirmed/processing/shipped/delivered). Cash on delivery (COD) — not counted as collected.</span>
               {overview.prevTotalValue === null ? (
-                <span style={{ color:'var(--text2)' }}>— لا توجد فترة سابقة للمقارنة {range === 'all' ? '(all-time)' : ''}</span>
+                <span style={{ color:'var(--text2)' }}>— No previous period to compare {range === 'all' ? '(all-time)' : ''}</span>
               ) : (
                 <span style={{ color:'var(--text2)', display:'inline-flex', alignItems:'center', gap:4 }}>
-                  مقارنة بـ{overview.prevLabel}: <strong dir="ltr">{fmtEGP(overview.prevTotalValue)}</strong>
+                  Compared with {overview.prevLabel}: <strong dir="ltr">{fmtEGP(overview.prevTotalValue)}</strong>
                   {overview.totalDeltaPct !== null && <KpiDelta pct={overview.totalDeltaPct} />}
-                  {overview.totalDeltaPct === null && overview.prevTotalValue === 0 && <span>— فترة سابقة بلا طلبات</span>}
+                  {overview.totalDeltaPct === null && overview.prevTotalValue === 0 && <span>— Previous period had no orders</span>}
                 </span>
               )}
             </div>
@@ -561,12 +561,12 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
 
           {/* ── Recent orders + store health ── */}
           <div className="admin-dash-split" style={{ display:'grid', gridTemplateColumns:'minmax(0, 2fr) minmax(280px, 1fr)', gap:16, alignItems:'start' }}>
-            <Card title="أحدث الطلبات" titleEn="Recent Orders"
-              actions={<button onClick={() => setAdminPage('orders')} style={linkActionStyle}>عرض كل الطلبات ←</button>}
+            <Card title="Recent Orders"
+              actions={<button onClick={() => setAdminPage('orders')} style={linkActionStyle}>View all orders ←</button>}
               style={{ overflow:'hidden' }}>
               {recentOrders.length === 0 ? (
-                <DashEmpty icon={ShoppingCart} title="لا توجد طلبات بعد"
-                  hint={canAccess('orders.read') ? 'اول طلب سيظهر هنا فور وصوله.' : null} />
+                <DashEmpty icon={ShoppingCart} title="No orders yet"
+                  hint={canAccess('orders.read') ? 'The first order will appear here as soon as it arrives.' : null} />
               ) : (
                 <div>
                   <div style={{ display:'none' }}>
@@ -595,22 +595,22 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
             </Card>
 
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-              <Card title="صحة المخزون" titleEn="Store Health">
+              <Card title="Store Health">
                 {productsLoading || productsLoadStatus === 'idle' ? (
-                  <p role="status" style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>جارٍ تحميل بيانات المنتجات والمخزون…</p>
+                  <p role="status" style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>Loading product and stock data…</p>
                 ) : productsLoadStatus === 'error' ? (
                   <div role="alert" style={{ display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-                    <p style={{ color:'#e74c3c', fontSize:12 }}>{`تعذّر تحميل المنتجات${productsError ? ` — ${productsError}` : ''}`}</p>
-                    <button onClick={refreshProducts} style={{ padding:'5px 10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>إعادة المحاولة</button>
+                    <p style={{ color:'#e74c3c', fontSize:12 }}>{`Could not load products${productsError ? ` — ${productsError}` : ''}`}</p>
+                    <button onClick={refreshProducts} style={{ padding:'5px 10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>Retry</button>
                   </div>
                 ) : products.length === 0 ? (
-                  <p style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>لا توجد منتجات لعرض حالة مخزونها.</p>
+                  <p style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>No products to show stock health for.</p>
                 ) : inventory.outOfStock.length === 0 &&
                   inventory.lowStock.length === 0 &&
                   inventory.variantOutOfStock.length === 0 &&
                   inventory.variantLowStock.length === 0 ? (
                   <div style={{ display:'flex', alignItems:'center', gap:8, color:'#27ae60', fontSize:12, padding:'4px 0' }}>
-                    <CheckCircle size={15} /> كل المنتجات والتوليفات متاحة بمخزون جيد
+                    <CheckCircle size={15} /> All products and variations are well stocked
                   </div>
                 ) : (
                   <div style={{ maxHeight:320, overflowY:'auto', paddingRight:2 }}>
@@ -619,14 +619,14 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                         <div style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:11, marginBottom:variants.length ? 6 : 0 }}>
                           <span style={{ color:'var(--text2)', minWidth:0, overflowWrap:'anywhere' }}>{product.name}</span>
                           <strong style={{ flexShrink:0, color:stock <= 0 ? 'var(--red)' : stock <= 5 ? '#f39c12' : '#27ae60' }}>
-                            الإجمالي: {stock}
+                            Total: {stock}
                           </strong>
                         </div>
                         {variants.length > 0 && (
                           <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
                             {variants.map((variant) => {
                               const color = variant.stock <= 0 ? 'var(--red)' : variant.stock <= 5 ? '#f39c12' : '#27ae60';
-                              const status = variant.stock <= 0 ? 'نفد' : variant.stock <= 5 ? 'منخفض' : 'متاح';
+                              const status = variant.stock <= 0 ? 'Out of stock' : variant.stock <= 5 ? 'Low' : 'In stock';
                               return (
                                 <span key={variant.key} style={{ color, border:`1px solid ${color}55`, background:`${color}12`, borderRadius:4, padding:'3px 6px', fontSize:10, whiteSpace:'nowrap' }}>
                                   {variant.size}{variant.color ? ` - ${variant.color}` : ''}: {status} ({variant.stock})
@@ -641,9 +641,9 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                 )}
 
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop:'1px solid var(--border)' }}>
-                  <p style={{ fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>الطلبات قيد المعالجة</p>
+                  <p style={{ fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Orders in progress</p>
                   {attentionOrders.length === 0 ? (
-                    <p style={{ fontSize:12, color:'#27ae60', display:'flex', alignItems:'center', gap:6 }}><CheckCircle size={14} /> لا توجد طلبات معلّقة</p>
+                    <p style={{ fontSize:12, color:'#27ae60', display:'flex', alignItems:'center', gap:6 }}><CheckCircle size={14} /> No pending orders</p>
                   ) : attentionOrders.map((o) => (
                     <div key={o.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', fontSize:11 }}>
                       <span style={{ color:'var(--text2)', fontFamily:'monospace' }}>{o.id}</span>
@@ -680,7 +680,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const handleStatusChange = async (id, status) => {
     const res = await updateOrderStatus(id, status);
     if (res && res.success === false) {
-      toast.error(res.error || 'تعذر تحديث حالة الطلب، حاول مرة أخرى.');
+      toast.error(res.error || 'Could not update the order status. Please try again.');
     }
   };
 
@@ -779,8 +779,8 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                   <td colSpan={7} style={{ padding: '8px' }}>
                     <DashEmpty
                       icon={ShoppingCart}
-                      title={search.trim() || statusFilter !== 'All' ? 'لا توجد طلبات مطابقة' : 'لا توجد طلبات بعد'}
-                      hint={search.trim() || statusFilter !== 'All' ? 'جرّب تغيير كلمة البحث أو الفلتر.' : 'ستظهر الطلبات الجديدة هنا تلقائياً.'}
+                      title={search.trim() || statusFilter !== 'All' ? 'No matching orders' : 'No orders yet'}
+                      hint={search.trim() || statusFilter !== 'All' ? 'Try a different search term or filter.' : 'New orders will appear here automatically.'}
                     />
                   </td>
                 </tr>
@@ -815,14 +815,14 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                               gap: 2,
                               userSelect: 'none'
                             }}
-                            title="اضغط لعرض سجل الأوردرات والتواصل"
+                            title="Click to view order history and contact the customer"
                           >
                             🔥 VIP ({orderCount})
                           </span>
                         )}
                       </div>
                       <p style={{ fontSize:10, color:'var(--text3)', marginTop: 4 }}>📞 {order.phone}</p>
-                      {order.phoneAlt && <p style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>📱 {order.phoneAlt} (بديل)</p>}
+                      {order.phoneAlt && <p style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>📱 {order.phoneAlt} (alt)</p>}
                     </td>
 
                     <td style={{ padding:'11px 14px', verticalAlign: 'top', minWidth: '220px' }}>
@@ -918,8 +918,8 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
               style={{ position:'fixed', top:'10%', left:'50%', transform:'translateX(-50%)', width:'92%', maxWidth:460, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:20, zIndex:2501, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', paddingBottom:12, marginBottom:16 }}>
                 <div>
-                  <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600 }}>📋 سجل الطلبات المتكررة</h3>
-                  <p style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>الرقم: {selectedCustomerPhone}</p>
+                  <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600 }}>📋 Repeat order history</h3>
+                  <p style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>Phone: {selectedCustomerPhone}</p>
                 </div>
                 <button onClick={() => setShowHistoryModal(false)} style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:28, height:28, borderRadius:6, cursor:'pointer', fontSize:12 }}>✕</button>
               </div>
@@ -959,14 +959,14 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
       }
 
       return cleaned;
-    })()}?text=${encodeURIComponent('شكراً لثقتك في ZASHM، وبمناسبة طلبك لأكثر من أوردر من عندنا فحابين نهديك كود خصم خاص بيك تستخدمه في أي طلب قادم صالح لمده شهرين')}`}
+    })()}?text=${encodeURIComponent('Thank you for your trust in ZASHM. As you have ordered from us more than once, we would like to give you a personal discount code to use on any upcoming order. It is valid for two months.')}`}
     target="_blank"
     rel="noreferrer"
     style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
   >
-    <MessageSquare size={15} /> تواصل معه بالخصم
+    <MessageSquare size={15} /> Contact with the discount
   </a>
-  <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize: 13 }}>إغلاق</button>
+  <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize: 13 }}>Close</button>
 </div>
             </motion.div>
           </>
@@ -1211,9 +1211,9 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
         }));
         if (failedPaths.length || sharedPaths.length) {
           const parts = [];
-          if (failedPaths.length) parts.push(`تعذر حذف: ${cleanupPathSummary(failedPaths)}`);
-          if (sharedPaths.length) parts.push(`احتُفظ بالصور المشتركة: ${cleanupPathSummary(sharedPaths)}`);
-          toast.error(`تم إغلاق المحرر. ${parts.join(' — ')}`);
+          if (failedPaths.length) parts.push(`Could not delete: ${cleanupPathSummary(failedPaths)}`);
+          if (sharedPaths.length) parts.push(`Shared images kept: ${cleanupPathSummary(sharedPaths)}`);
+          toast.error(`Editor closed. ${parts.join(' — ')}`);
         }
       }
     } finally {
@@ -1232,15 +1232,15 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
       const shared = (payload && payload.cleanup && payload.cleanup.shared) || [];
       if (failed.length) {
-        toast.error(`تم حذف المنتج، وتعذر تنظيف الصور التالية: ${cleanupPathSummary(failed)}. حاول مرة أخرى لاحقاً.`);
+        toast.error(`Product deleted, but these images could not be cleaned up: ${cleanupPathSummary(failed)}. Try again later.`);
       } else if (shared.length) {
-        toast.error(`تم حذف المنتج، واحتُفظ بالصور المشتركة: ${cleanupPathSummary(shared)}.`);
+        toast.error(`Product deleted; shared images kept: ${cleanupPathSummary(shared)}.`);
       } else {
-        toast.success('تم حذف المنتج بنجاح');
+        toast.success('Product deleted.');
       }
     } catch (err) {
       console.error('confirmSingleDelete failed:', err && err.message);
-      toast.error('Could not delete product. Please try again.\nتعذر حذف المنتج، يرجى المحاولة مرة أخرى.');
+      toast.error('Could not delete product. Please try again.');
     }
   };
 
@@ -1255,15 +1255,15 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
       const shared = (payload && payload.cleanup && payload.cleanup.shared) || [];
       if (failed.length) {
-        toast.error(`تم حذف المنتجات، وتعذر تنظيف الصور التالية: ${cleanupPathSummary(failed)}. حاول مرة أخرى لاحقاً.`);
+        toast.error(`Products deleted, but these images could not be cleaned up: ${cleanupPathSummary(failed)}. Try again later.`);
       } else if (shared.length) {
-        toast.error(`تم حذف المنتجات، واحتُفظ بالصور المشتركة: ${cleanupPathSummary(shared)}.`);
+        toast.error(`Products deleted; shared images kept: ${cleanupPathSummary(shared)}.`);
       } else {
-        toast.success('تم حذف المنتجات بنجاح');
+        toast.success('Products deleted.');
       }
     } catch (err) {
       console.error('confirmBulkDelete failed:', err && err.message);
-      toast.error('Could not delete products. Please try again.\nتعذر حذف المنتجات، يرجى المحاولة مرة أخرى.');
+      toast.error('Could not delete products. Please try again.');
     }
   };
 
@@ -1296,23 +1296,23 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
 
   const handleSave = async () => {
     if (!form.name || form.name.trim() === '') {
-      toast.error('⚠️ عذراً، يرجى إدخال اسم المنتج أولاً قبل الحفظ.');
+      toast.error('⚠️ Please enter the product name before saving.');
       return;
     }
 
     if (!form.category || form.category.trim() === '') {
-      toast.error('⚠️ عذراً، يرجى اختيار أو كتابة القسم (Category) أولاً.');
+      toast.error('⚠️ Please choose or type a category first.');
       return;
     }
 
     const parsedPrice = parseFloat(form.price);
     if (!form.price || isNaN(parsedPrice) || parsedPrice <= 0) {
-      toast.error('⚠️ عذراً، يجب إدخال سعر صحيح للمنتج (يكون أكبر من صفر).');
+      toast.error('⚠️ Please enter a valid product price (greater than zero).');
       return;
     }
 
     if (!form.images || !Array.isArray(form.images) || form.images.length === 0 || form.images[0]?.trim() === '') {
-      toast.error('⚠️ عذراً، يرجى رفع صورة واحدة على الأقل للمنتج قبل إضافته.');
+      toast.error('⚠️ Please upload at least one product image before adding it.');
       return;
     }
 
@@ -1380,13 +1380,13 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       const failedImagePaths = [...(savedImageCleanup.failed || []), ...tempCleanupFailedPaths];
       const sharedImagePaths = [...(savedImageCleanup.shared || []), ...tempCleanupSharedPaths];
       if (failedImagePaths.length) {
-        toast.error(`تم حفظ المنتج، لكن تعذر حذف الصور التالية: ${cleanupPathSummary(failedImagePaths)}. راجع التخزين وحاول لاحقاً.`);
+        toast.error(`Product saved, but these images could not be deleted: ${cleanupPathSummary(failedImagePaths)}. Check storage and try again later.`);
       } else if (sharedImagePaths.length) {
-        toast.error(`تم حفظ المنتج، واحتُفظ بالصور المشتركة التالية: ${cleanupPathSummary(sharedImagePaths)}.`);
+        toast.error(`Product saved; shared images kept: ${cleanupPathSummary(sharedImagePaths)}.`);
       } else if (editing && editing.id) {
-        toast.success('تم تعديل المنتج ومزامنة المخزون بنجاح! 🔄');
+        toast.success('Product updated and stock synced successfully! 🔄');
       } else {
-        toast.success('تم إضافة المنتج الجديد للمتجر بنجاح! 🚀');
+        toast.success('New product added to the store successfully! 🚀');
       }
 
       tempUploadsRef.current = new Set();
@@ -1394,7 +1394,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       setShowForm(false);
     } catch (err) {
       console.error("❌ [HandleSave Error]:", err);
-      toast.error("Database connection error.\nحدث خطأ أثناء الاتصال بقاعدة البيانات.");
+      toast.error('Database connection error. Please try again.');
     }
   };
 
@@ -1437,7 +1437,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       {adminProductsLoadStatus === 'error' && (
         <div style={{ marginBottom:16, border:'1px solid rgba(231,76,60,0.35)', background:'rgba(231,76,60,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
           <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
-            <AlertCircle size={14} /> تعذّر تحميل المنتجات — {adminProductsError}
+            <AlertCircle size={14} /> Could not load products — {adminProductsError}
           </p>
           <button onClick={refreshAdminProducts} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
             Retry
@@ -1465,11 +1465,11 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
         <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>
           <DashEmpty
             icon={Package}
-            title={search ? 'لا توجد منتجات مطابقة' : 'لا توجد منتجات بعد'}
-            hint={search ? 'جرّب كلمة بحث أخرى.' : 'ابدأ بإضافة أول منتج لمتجرك.'}
+            title={search ? 'No matching products' : 'No products yet'}
+            hint={search ? 'Try another search term.' : 'Start by adding your first product.'}
             action={(!search && canEdit) ? (
               <button className="gold-btn" style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={openNew}>
-                <Plus size={14} /> إضافة منتج
+                <Plus size={14} /> Add product
               </button>
             ) : null}
           />
@@ -1632,7 +1632,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                 </div>
 
                 {form.salePrice && form.price && Number(form.salePrice) > Number(form.price) && (
-                  <p style={{ color: '#ef4444', fontSize: 11, marginTop: 0, marginBottom: 12, direction: 'rtl', textAlign: 'right' }}>* سعر الخصم لا يمكن أن يكون أكبر من السعر الأصلي.</p>
+                  <p style={{ color: '#ef4444', fontSize: 11, marginTop: 0, marginBottom: 12 }}>* The sale price cannot be higher than the original price.</p>
                 )}
 
                 <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12, marginTop:12 }}>
@@ -1740,7 +1740,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                   style={{ flex:1, opacity: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 0.4 : 1, cursor: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 'not-allowed' : 'pointer' }}
                   onClick={() => {
                     if (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) {
-                      toast.error('عذراً، لا يمكن أن يكون سعر الخصم أكبر من السعر الأصلي'); return;
+                      toast.error('The sale price cannot be higher than the original price.'); return;
                     }
                     handleSave();
                   }}
@@ -1776,16 +1776,16 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(192, 57, 43, 0.1)', border: '1px solid rgba(192, 57, 43, 0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                 <Trash2 size={28} style={{ color: '#f07171' }} />
               </div>
-              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>تأكيد الحذف النهائي</h3>
-              <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>هل أنت متأكد من حذف منتج <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>؟ هذا الإجراء سيؤدي إلى إزالته نهائياً.</p>
+              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>Confirm permanent deletion</h3>
+              <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6' }}>Are you sure you want to delete <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>? This will remove it permanently.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button
                   onClick={confirmSingleDelete}
                   style={{ flex: 1, padding: '10px 0', background: '#b83232', border: '1px solid #d65353', color: '#ffffff', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
                 >
-                  حذف
+                  Delete
                 </button>
-                <button onClick={() => setProductToDelete(null)} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid #333333', color: '#ffffff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>إلغاء</button>
+                <button onClick={() => setProductToDelete(null)} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid #333333', color: '#ffffff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
               </div>
             </motion.div>
           </>
@@ -1804,11 +1804,11 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(192, 57, 43, 0.1)', border: '1px solid rgba(192, 57, 43, 0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                 <Trash2 size={28} style={{ color: '#f07171' }} />
               </div>
-              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>{confirmBulk === 1 ? 'تأكيد الحذف' : 'تأكيد الحذف الجماعي'}</h3>
-              <p style={{ color: '#dddddd', fontSize: 13, marginBottom: 24, lineHeight: '1.6', direction: 'rtl' }}>
+              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>{confirmBulk === 1 ? 'Confirm deletion' : 'Confirm bulk deletion'}</h3>
+              <p style={{ color: '#dddddd', fontSize: 13, marginBottom: 24, lineHeight: '1.6' }}>
                 {confirmBulk === 1
-                  ? 'هل تريد حذف هذا المنتج؟'
-                  : 'هل تريد حذف المنتجات التي اخترتها؟'}
+                  ? 'Delete this product?'
+                  : 'Delete the selected products?'}
               </p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button
@@ -1841,23 +1841,23 @@ function DiscountsPanel({ canEdit }) {
 
   const handleAdd = async () => {
     const code = (form.code || '').trim().toUpperCase();
-    if (!code) { toast.error('يرجى إدخال كود الخصم.'); return; }
-    if (!/^[A-Za-z0-9_-]{3,30}$/.test(code)) { toast.error('كود الخصم يجب أن يكون 3-30 حرفًا ويحتوي على أحرف وأرقام و_ أو - فقط.'); return; }
+    if (!code) { toast.error('Please enter a discount code.'); return; }
+    if (!/^[A-Za-z0-9_-]{3,30}$/.test(code)) { toast.error('The discount code must be 3-30 characters and contain only letters, numbers, _ or -.'); return; }
     const value = Number(form.value);
-    if (form.value === '' || form.value === null || form.value === undefined || !Number.isFinite(value) || value <= 0) { toast.error('يرجى إدخال قيمة خصم صحيحة أكبر من صفر.'); return; }
-    if (form.type === 'percentage' && value > 100) { toast.error('نسبة الخصم لا يمكن أن تتجاوز 100%.'); return; }
-    if (form.type !== 'percentage' && form.type !== 'fixed') { toast.error('نوع الخصم غير صحيح.'); return; }
-    if (!form.startDate || !form.endDate) { toast.error('يرجى تحديد تاريخ البداية والنهاية.'); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(form.endDate)) { toast.error('صيغة التاريخ غير صحيحة.'); return; }
-    if (form.endDate < form.startDate) { toast.error('تاريخ النهاية يجب أن يكون بعد تاريخ البداية.'); return; }
-    if (form.usageLimit === '' || form.usageLimit === null || form.usageLimit === undefined) { toast.error('يرجى إدخال حد استخدام.'); return; }
+    if (form.value === '' || form.value === null || form.value === undefined || !Number.isFinite(value) || value <= 0) { toast.error('Please enter a valid discount value greater than zero.'); return; }
+    if (form.type === 'percentage' && value > 100) { toast.error('The discount percentage cannot exceed 100%.'); return; }
+    if (form.type !== 'percentage' && form.type !== 'fixed') { toast.error('Invalid discount type.'); return; }
+    if (!form.startDate || !form.endDate) { toast.error('Please select start and end dates.'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(form.endDate)) { toast.error('Invalid date format.'); return; }
+    if (form.endDate < form.startDate) { toast.error('The end date must be after the start date.'); return; }
+    if (form.usageLimit === '' || form.usageLimit === null || form.usageLimit === undefined) { toast.error('Please enter a usage limit.'); return; }
     const usageLimit = Number(form.usageLimit);
-    if (!Number.isFinite(usageLimit) || !Number.isInteger(usageLimit) || usageLimit < 0 || usageLimit > 1000000) { toast.error('يرجى إدخال حد استخدام صحيح.'); return; }
+    if (!Number.isFinite(usageLimit) || !Number.isInteger(usageLimit) || usageLimit < 0 || usageLimit > 1000000) { toast.error('Please enter a valid usage limit.'); return; }
 
     const minOrderAmount = form.minOrderAmount === '' ? 0 : Number(form.minOrderAmount);
-    if (!Number.isFinite(minOrderAmount) || minOrderAmount < 0 || minOrderAmount > 10000000) { toast.error('يرجى إدخال حد أدنى صحيح للطلب.'); return; }
+    if (!Number.isFinite(minOrderAmount) || minOrderAmount < 0 || minOrderAmount > 10000000) { toast.error('Please enter a valid minimum order amount.'); return; }
     const maxDiscount = form.maxDiscount === '' ? null : Number(form.maxDiscount);
-    if (maxDiscount !== null && (!Number.isFinite(maxDiscount) || maxDiscount < 0 || maxDiscount > 10000000)) { toast.error('يرجى إدخال سقف خصم صحيح.'); return; }
+    if (maxDiscount !== null && (!Number.isFinite(maxDiscount) || maxDiscount < 0 || maxDiscount > 10000000)) { toast.error('Please enter a valid maximum discount.'); return; }
 
     try {
       await addDiscount({
@@ -1876,9 +1876,9 @@ function DiscountsPanel({ canEdit }) {
       });
       setShowForm(false);
       setForm({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, minOrderAmount:'', maxDiscount:'', description:'', active:true });
-      toast.success('تم إنشاء كود الخصم بنجاح.');
+      toast.success('Discount code created.');
     } catch (err) {
-      const msg = err && err.message ? err.message : 'تعذر إنشاء كود الخصم. يرجى التحقق من البيانات والمحاولة مرة أخرى.';
+      const msg = err && err.message ? err.message : 'Could not create the discount code. Check the details and try again.';
       toast.error(msg);
     }
   };
@@ -1890,10 +1890,10 @@ function DiscountsPanel({ canEdit }) {
     setUpdatingDiscountId(discount.id);
     try {
       await updateDiscount(discount.id, { active: !discount.active });
-      toast.success(discount.active ? 'تم إيقاف كود الخصم.' : 'تم تفعيل كود الخصم.');
+      toast.success(discount.active ? 'Discount code paused.' : 'Discount code activated.');
     } catch (err) {
       console.error('Failed to update discount status:', err);
-      toast.error('تعذر تحديث حالة كود الخصم. تحقق من الاتصال وحاول مرة أخرى.');
+      toast.error('Could not update the discount code. Check your connection and try again.');
     } finally {
       setUpdatingDiscountId(null);
     }
@@ -1905,9 +1905,9 @@ function DiscountsPanel({ canEdit }) {
     setDiscountToDelete(null);
     try {
       await deleteDiscount(target.id);
-      toast.success('تم حذف كود الخصم.');
+      toast.success('Discount code deleted.');
     } catch (e) {
-      toast.error('Could not delete discount code. Please try again.\nتعذر حذف كود الخصم، يرجى المحاولة مرة أخرى.');
+      toast.error('Could not delete discount code. Please try again.');
     }
   };
 
@@ -1925,11 +1925,11 @@ function DiscountsPanel({ canEdit }) {
           <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>
             <DashEmpty
               icon={Tag}
-              title="لا توجد كوبونات خصم"
-              hint="أنشئ كود خصم لجذب المزيد من الطلبات."
+              title="No discount codes"
+              hint="Create a discount code to attract more orders."
               action={canEdit ? (
                 <button className="gold-btn" style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={() => setShowForm(true)}>
-                  <Plus size={14} /> إنشاء كود خصم
+                  <Plus size={14} /> Create discount code
                 </button>
               ) : null}
             />
@@ -2074,11 +2074,11 @@ function DiscountsPanel({ canEdit }) {
               <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(192, 57, 43, 0.1)', border:'1px solid rgba(192, 57, 43, 0.28)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
                 <Trash2 size={28} style={{ color:'#f07171' }} />
               </div>
-              <h3 style={{ color:'#ffffff', fontSize:18, fontWeight:500, marginBottom:12, fontFamily:'var(--font-display)', letterSpacing:1 }}>تأكيد حذف الكوبون</h3>
-              <p style={{ color:'#aaaaaa', fontSize:13, marginBottom:24, lineHeight:'1.6', direction:'rtl' }}>هل أنت متأكد من حذف كود الخصم <strong style={{ color:'#ffffff' }}>"{discountToDelete.code}"</strong>؟ لا يمكن التراجع عن هذا الإجراء.</p>
+              <h3 style={{ color:'#ffffff', fontSize:18, fontWeight:500, marginBottom:12, fontFamily:'var(--font-display)', letterSpacing:1 }}>Confirm discount deletion</h3>
+              <p style={{ color:'#aaaaaa', fontSize:13, marginBottom:24, lineHeight:'1.6' }}>Are you sure you want to delete the discount code <strong style={{ color:'#ffffff' }}>"{discountToDelete.code}"</strong>? This cannot be undone.</p>
               <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
-                <button onClick={confirmDelete} style={{ flex:1, padding:'10px 0', background:'#b83232', border:'1px solid #d65353', color:'#ffffff', borderRadius:6, fontWeight:600, cursor:'pointer', fontSize:13 }}>حذف</button>
-                <button onClick={() => setDiscountToDelete(null)} style={{ flex:1, padding:'10px 0', background:'transparent', border:'1px solid #333333', color:'#ffffff', borderRadius:6, cursor:'pointer', fontSize:13 }}>إلغاء</button>
+                <button onClick={confirmDelete} style={{ flex:1, padding:'10px 0', background:'#b83232', border:'1px solid #d65353', color:'#ffffff', borderRadius:6, fontWeight:600, cursor:'pointer', fontSize:13 }}>Delete</button>
+                <button onClick={() => setDiscountToDelete(null)} style={{ flex:1, padding:'10px 0', background:'transparent', border:'1px solid #333333', color:'#ffffff', borderRadius:6, cursor:'pointer', fontSize:13 }}>Cancel</button>
               </div>
             </motion.div>
           </>
@@ -2110,23 +2110,23 @@ function AnalyticsPanel() {
   const hasSeriesData = report.series.some((p) => p.value > 0 || p.orders > 0);
 
   const kpis = [
-    { labelAr: 'إجمالي المبيعات', labelEn: 'Total Sales', value: fmtEGP(report.totalValue), sub: 'غير ملغي · COD', color: 'var(--gold)', icon: TrendingUp, delta: report.totalDeltaPct },
-    { labelAr: 'الطلبات', labelEn: 'Orders', value: String(report.orderCount), sub: 'كل الحالات في الفترة', color: 'var(--text)', icon: ShoppingCart, delta: report.orderDeltaPct },
-    { labelAr: 'متوسط قيمة الطلب', labelEn: 'Average Order Value', value: fmtEGP(report.aov), sub: 'Total Sales ÷ Orders', color: '#9b59b6', icon: BarChart2 },
-    { labelAr: 'القطع المباعة', labelEn: 'Items Sold', value: report.itemsSold.toLocaleString('en-US'), sub: 'وحدات في الطلبات', color: '#3498db', icon: Package2 },
-    { labelAr: 'عملاء مميزون', labelEn: 'Unique Customers', value: report.uniqueCustomers.toLocaleString('en-US'), sub: 'بـ رقم هاتف / اسم', color: '#16a085', icon: Users },
-    { labelAr: 'معدل العملاء المتكررين', labelEn: 'Returning Customer Rate', value: `${report.returningRate}%`, sub: `${report.returningCustomers} بأكثر من طلب`, color: '#27ae60', icon: RefreshCw },
-    { labelAr: 'معدل التسليم', labelEn: 'Fulfilment Rate', value: `${report.fulfilmentRate}%`, sub: `${report.fulfilledCount} delivered من ${report.orderCount}`, color: '#c9a84c', icon: CheckCircle },
-    { labelAr: 'معدل الإلغاء', labelEn: 'Cancellation Rate', value: `${report.cancellationRate}%`, sub: `${report.cancelledCount} ملغي`, color: '#e74c3c', icon: XCircle },
+    { labelEn: 'Total Sales', value: fmtEGP(report.totalValue), sub: 'Non-cancelled · COD', color: 'var(--gold)', icon: TrendingUp, delta: report.totalDeltaPct },
+    { labelEn: 'Orders', value: String(report.orderCount), sub: 'All statuses in range', color: 'var(--text)', icon: ShoppingCart, delta: report.orderDeltaPct },
+    { labelEn: 'Average Order Value', value: fmtEGP(report.aov), sub: 'Total Sales ÷ Orders', color: '#9b59b6', icon: BarChart2 },
+    { labelEn: 'Items Sold', value: report.itemsSold.toLocaleString('en-US'), sub: 'Units across orders', color: '#3498db', icon: Package2 },
+    { labelEn: 'Unique Customers', value: report.uniqueCustomers.toLocaleString('en-US'), sub: 'By phone / name', color: '#16a085', icon: Users },
+    { labelEn: 'Returning Customer Rate', value: `${report.returningRate}%`, sub: `${report.returningCustomers} with more than one order`, color: '#27ae60', icon: RefreshCw },
+    { labelEn: 'Fulfilment Rate', value: `${report.fulfilmentRate}%`, sub: `${report.fulfilledCount} delivered of ${report.orderCount}`, color: '#c9a84c', icon: CheckCircle },
+    { labelEn: 'Cancellation Rate', value: `${report.cancellationRate}%`, sub: `${report.cancelledCount} cancelled`, color: '#e74c3c', icon: XCircle },
   ];
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 2 }}>التحليلات</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 2 }}>Analytics</h2>
           <p style={{ fontSize: 11, color: 'var(--text3)' }}>
-            Analytics · {rangeLabel ? `${rangeLabel.labelAr} (${rangeLabel.labelEn})` : ''}
+            Analytics · {rangeLabel ? `${rangeLabel.labelEn}` : ''}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)', overflowX: 'auto' }}>
@@ -2140,7 +2140,7 @@ function AnalyticsPanel() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-        {kpis.map(({ labelAr, labelEn, value, sub, color, icon: Icon, delta }, i) => (
+        {kpis.map(({ labelEn, value, sub, color, icon: Icon, delta }, i) => (
           <motion.div key={labelEn} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
             style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -2150,13 +2150,13 @@ function AnalyticsPanel() {
               {delta !== undefined && <KpiDelta pct={delta} />}
             </div>
             <div dir="ltr" style={{ fontSize: 19, fontWeight: 600, fontFamily: 'var(--font-display)', color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
-            <p style={{ fontSize: 12, fontWeight: 600, marginTop: 3 }}>{labelAr}</p>
-            <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>{labelEn} · {sub}</p>
+            <p style={{ fontSize: 12, fontWeight: 600, marginTop: 3 }}>{labelEn}</p>
+            <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 1 }}>{sub}</p>
           </motion.div>
         ))}
       </div>
 
-      <Card title="المبيعات عبر الوقت" titleEn="Sales over time">
+      <Card title="Sales over time">
         <div style={{ width: '100%', height: 280 }}>
           {hasSeriesData ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -2178,26 +2178,26 @@ function AnalyticsPanel() {
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
-            <DashEmpty icon={BarChart2} title="لا توجد طلبات في هذه الفترة"
-              hint="اختر نطاقًا زمنيًا آخر من الأعلى أو انتظر وصول أول طلب." />
+            <DashEmpty icon={BarChart2} title="No orders in this period"
+              hint="Choose another date range above or wait for the first order." />
           )}
         </div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text3)' }}>
-          <span>Sales = إجمالي قيمة الطلبات غير الملغاة (COD — لا يُعدّ تحصيلًا نقديًا حتى التسليم).</span>
+          <span>Sales = total value of non-cancelled orders (COD — not counted as collected until delivery).</span>
           <span style={{ color: 'var(--text2)', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-            <span>المسلّم: <strong dir="ltr" style={{ color: '#27ae60' }}>{fmtEGP(report.deliveredSales)}</strong></span>
+            <span>Delivered: <strong dir="ltr" style={{ color: '#27ae60' }}>{fmtEGP(report.deliveredSales)}</strong></span>
             <span>·</span>
-            <span>بانتظار/معالجة: <strong dir="ltr" style={{ color: '#f39c12' }}>{fmtEGP(report.pendingValue)}</strong></span>
+            <span>Pending/processing: <strong dir="ltr" style={{ color: '#f39c12' }}>{fmtEGP(report.pendingValue)}</strong></span>
             <span>·</span>
-            <span>ملغي: <strong dir="ltr" style={{ color: '#e74c3c' }}>{fmtEGP(report.cancelledValue)}</strong></span>
+            <span>Cancelled: <strong dir="ltr" style={{ color: '#e74c3c' }}>{fmtEGP(report.cancelledValue)}</strong></span>
           </span>
         </div>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <Card title="الأكثر مبيعًا" titleEn="Top products by revenue">
+        <Card title="Top products by revenue">
           {report.topProducts.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>لا توجد مبيعات في هذه الفترة.</p>
+            <p style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>No sales in this period.</p>
           ) : report.topProducts.map((p, i) => (
             <div key={`${p.name}-${i}`} style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
@@ -2215,9 +2215,9 @@ function AnalyticsPanel() {
           ))}
         </Card>
 
-        <Card title="الإيرادات حسب الفئة" titleEn="Revenue by category">
+        <Card title="Revenue by category">
           {report.categoryRevenue.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>لا توجد بيانات في هذه الفترة.</p>
+            <p style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>No data in this period.</p>
           ) : report.categoryRevenue.map((c, i) => (
             <div key={`${c.name}-${i}`} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -2233,7 +2233,7 @@ function AnalyticsPanel() {
         </Card>
       </div>
 
-      <Card title="حالة الطلبات" titleEn="Orders by status">
+      <Card title="Orders by status">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           {report.statusBreakdown.map((s) => (
             <div key={s.status} style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px' }}>

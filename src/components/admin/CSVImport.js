@@ -83,13 +83,13 @@ export default function CSVImport({ onClose }) {
     const res = await importProducts(preview);
     setImporting(false);
     if (!res || res.success === false) {
-      if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء استيراد المنتجات.', 'error');
+      if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ Could not import products.', 'error');
       return;
     }
     setImportedCount(res.count ?? preview.length);
     setSuccess(true);
     if (res.truncated) {
-      if (typeof window.toast === 'function') window.toast(`تم استيراد ${res.count} من أصل ${res.requested} منتج. يتم استيراد 500 صف كحد أقصى في المرة الواحدة.`, 'error');
+      if (typeof window.toast === 'function') window.toast(`Imported ${res.count} of ${res.requested} products. A maximum of 500 rows is imported per run.`, 'error');
     }
     setTimeout(() => onClose(), 2000);
   };

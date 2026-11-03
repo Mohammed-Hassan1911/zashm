@@ -919,15 +919,15 @@ function validateOrderPayload(body) {
   const errors = [];
   const items = body && Array.isArray(body.items) ? body.items : null;
   if (!items || items.length < 1 || items.length > 30) {
-    return { ok: false, errors: ['Your bag is empty or contains too many items. / سلة التسوق فارغة أو تحتوي على عدد كبير من المنتجات.'] };
+    return { ok: false, errors: ['Your bag is empty or contains too many items.'] };
   }
 
   const cleanItems = [];
   for (const raw of items) {
     const productId = intInRange(raw && raw.productId, 1, Number.MAX_SAFE_INTEGER);
-    if (productId === null) { errors.push('Invalid product id / معرّف منتج غير صالح'); break; }
+    if (productId === null) { errors.push('Invalid product id.'); break; }
     const qty = intInRange(raw && raw.qty, 1, 20);
-    if (qty === null) { errors.push('Invalid quantity for an item / كمية غير صالحة لمنتج'); break; }
+    if (qty === null) { errors.push('Invalid quantity for an item.'); break; }
     const size = str(raw.size).slice(0, 50);
     const color = str(raw.color).slice(0, 50);
     cleanItems.push({ productId, qty, size, color });
@@ -940,16 +940,16 @@ function validateOrderPayload(body) {
   const phone = normalizePhone(c.phone);
   const city = str(c.city).trim();
 
-  if (name === null) errors.push('Please enter your full name (at least 2 characters). / يرجى إدخال اسمك الكامل (حرفان على الأقل).');
-  if (!EGYPT_PHONE_RE.test(phone)) errors.push('Please enter a valid Egyptian mobile number (e.g. 01XXXXXXXXX). / يرجى إدخال رقم موبايل مصري صحيح (مثال: 01XXXXXXXXX).');
+  if (name === null) errors.push('Please enter your full name (at least 2 characters).');
+  if (!EGYPT_PHONE_RE.test(phone)) errors.push('Please enter a valid Egyptian mobile number (e.g. 01XXXXXXXXX).');
   const phoneAlt = c.phoneAlt ? normalizePhone(c.phoneAlt) : '';
   if (phoneAlt && (!EGYPT_PHONE_RE.test(phoneAlt) || phoneAlt === phone)) {
-    errors.push('The alternative phone number is invalid or the same as the primary one. / رقم الهاتف البديل غير صالح أو مطابق لرقم الهاتف الأساسي.');
+    errors.push('The alternative phone number is invalid or the same as the primary one.');
   }
   const email = str(c.email).trim();
-  if (email && (email.length > 200 || !EMAIL_RE.test(email))) errors.push('Please enter a valid email address. / يرجى إدخال بريد إلكتروني صحيح.');
-  if (address === null) errors.push('Please enter a complete street address (at least 5 characters). / يرجى إدخال عنوان شارع كامل (5 أحرف على الأقل).');
-  if (!EGYPT_GOVERNORATES.includes(city)) errors.push('Please select your governorate from the list. / يرجى اختيار المحافظة من القائمة.');
+  if (email && (email.length > 200 || !EMAIL_RE.test(email))) errors.push('Please enter a valid email address.');
+  if (address === null) errors.push('Please enter a complete street address (at least 5 characters).');
+  if (!EGYPT_GOVERNORATES.includes(city)) errors.push('Please select your governorate from the list.');
 
   if (errors.length) return { ok: false, errors };
 
@@ -1242,7 +1242,7 @@ function mdSafe(v) {
   // markup OR new lines (a newline could fake extra order lines / prices).
   return String(v == null ? '' : v)
     .replace(/[\r\n\t]+/g, ' ')
-    .replace(/[_*`[\]()~>#+=|{}.!-]/g, '')
+    .replace(/[_*`[\]()~>#+=|{}!-]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 400);
@@ -1281,36 +1281,40 @@ function buildOrderTelegramMessage(order, trackingUrl) {
       const detailsStr = details.length
         ? ` (${mdSafe(details.join(' / '))})`
         : '';
-      return `▪️ ${mdSafe(item.name)}${detailsStr} × ${Number(item.qty || 0)} — EGP ${Number(item.price || 0).toLocaleString()}`;
+      return `• ${mdSafe(item.name)}${detailsStr} × ${Number(item.qty || 0)} — EGP ${Number(item.price || 0).toLocaleString()}`;
     })
     .join('\n');
   const shippingLine = order.shippingCost
     ? `• الشحن: EGP ${Number(order.shippingCost).toLocaleString()}\n`
     : '';
+  const altPhoneLine = order.phoneAlt ? `• هاتف بديل: ${mdSafe(order.phoneAlt)}\n` : '';
+  const emailLine = order.email ? `• الإيميل: ${mdSafe(order.email)}\n` : '';
+  const notesLine = order.notes ? `• ملاحظات: ${mdSafe(order.notes)}\n` : '';
+  const discountLine = order.discountCode ? `• كود الخصم: ${mdSafe(order.discountCode)}\n` : '';
+  const discountAmountLine = Number(order.discount || 0) > 0
+    ? `• قيمة الخصم: EGP ${Number(order.discount || 0).toLocaleString()}\n`
+    : '';
   return `
-✨ *ZASHM | طلب جديد* ✨
-━━━━━━━━━━━━━━
+*ZASHM | طلب جديد*
+
 👤 *بيانات العميل*
 • الاسم: ${mdSafe(order.customer)}
 • الهاتف: ${mdSafe(order.phone)} — [واتساب](https://wa.me/${waNumber(order.phone)})
-• هاتف بديل: ${mdSafe(order.phoneAlt) || 'لا يوجد'}
-• الإيميل: ${mdSafe(order.email) || 'غير محدد'}
-📍 *عنوان الشحن*
+${altPhoneLine}${emailLine}📍 *عنوان الشحن*
 • المدينة: ${mdSafe(order.city) || 'غير محدد'}
 • العنوان: ${mdSafe(order.address)}
-• ملاحظات: ${mdSafe(order.notes) || 'لا توجد'}
-🛍 *المنتجات*
+${notesLine}
+🛍️ *المنتجات*
 ${itemsText || 'لا توجد منتجات'}
-━━━━━━━━━━━━━━
+
 💰 *ملخص الحساب*
 • المجموع الفرعي: EGP ${Number(order.subtotal || 0).toLocaleString()}
-${shippingLine}• كود الخصم: ${mdSafe(order.discountCode) || 'لا يوجد'}
-• قيمة الخصم: EGP ${Number(order.discount || 0).toLocaleString()}
-💵 *الإجمالي: EGP ${Number(order.total || 0).toLocaleString()}*
-🔗 *تتبع الطلب*
+${shippingLine}${discountLine}${discountAmountLine}• الإجمالي: EGP ${Number(order.total || 0).toLocaleString()}
+
+🚚 *تتبع الطلب*
 ${trackingUrl}
-🧾 رقم الطلب: ${mdSafe(order.id)}
-━━━━━━━━━━━━━━
+• رقم الطلب: ${mdSafe(order.id)}
+
 💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.
 `.trim();
 }

@@ -115,7 +115,7 @@ const mockSources = new Map([
     });
   `],
   ['../lib/analytics', `
-    export const RANGE_OPTIONS = [{ key: '7d', labelAr: '7 أيام', labelEn: '7 days' }];
+    export const RANGE_OPTIONS = [{ key: '7d', labelEn: '7 days' }];
     export const fmtEGP = (value) => String(value ?? 0);
     export const compactEGP = (value) => String(value ?? 0);
     export const computeSalesOverview = () => ({
@@ -262,7 +262,7 @@ try {
   console.log('  PASS dashboard content is restored');
 
   console.log('\n[4] dashboard opens the new-product form without creating a product');
-  await click(buttonByText('إضافة منتج'));
+  await click(buttonByText('Add product'));
   assert.equal(pageHeading(), 'products');
   assert.ok(document.querySelector('[role="dialog"][aria-label="New Product"]'));
   assert.equal(globalThis.__zashmAdminTest.addProductCalls, 0);

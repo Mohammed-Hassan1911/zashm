@@ -70,17 +70,17 @@ export default function UsersPanel() {
         
         const res = await updateUser(editingId, updatedData);
         if (!res || res.success === false) {
-          if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء حفظ بيانات العضو.', 'error');
+          if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ Could not save this team member.', 'error');
           return;
         }
-        if (typeof window.toast?.success === 'function') window.toast.success('تم تحديث بيانات العضو بنجاح.');
+        if (typeof window.toast?.success === 'function') window.toast.success('Team member updated.');
       } else {
         const res = await addUser(form);
         if (!res || res.success === false) {
-          if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء إضافة العضو.', 'error');
+          if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ Could not add this team member.', 'error');
           return;
         }
-        if (typeof window.toast?.success === 'function') window.toast.success('تم إضافة عضو الفريق بنجاح.');
+        if (typeof window.toast?.success === 'function') window.toast.success('Team member added.');
       }
       
       setShowForm(false);
@@ -89,7 +89,7 @@ export default function UsersPanel() {
       setShowPassword(false);
     } catch (err) {
       console.error("Error saving user:", err);
-      if (typeof window.toast?.error === 'function') window.toast.error('حدث خطأ أثناء حفظ بيانات العضو.');
+      if (typeof window.toast?.error === 'function') window.toast.error('Could not save this team member.');
     } finally {
       setLoading(false);
     }
@@ -101,13 +101,13 @@ export default function UsersPanel() {
     try {
       const res = await deleteUser(userToDelete.id);
       if (!res || res.success === false) {
-        if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ حدث خطأ أثناء الحذف', 'error');
+        if (typeof window.toast === 'function') window.toast(res?.error || '⚠️ Could not delete this team member', 'error');
         return;
       }
-      if (typeof window.toast?.success === 'function') window.toast.success('تم حذف العضو بنجاح.');
+      if (typeof window.toast?.success === 'function') window.toast.success('Team member deleted.');
     } catch (err) {
       console.error(err);
-      if (typeof window.toast?.error === 'function') window.toast.error('حدث خطأ أثناء الحذف.');
+      if (typeof window.toast?.error === 'function') window.toast.error('Could not delete this team member.');
     } finally {
       setUserToDelete(null);
     }
@@ -474,11 +474,11 @@ export default function UsersPanel() {
                 </div>
 
                 <h3 id="delete-user-title" style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#ffffff', marginBottom: 12 }}>
-                  تأكيد الحذف النهائي
+                  Confirm permanent deletion
                 </h3>
                 
                 <p style={{ fontSize: 13, color: '#b3b3b3', lineHeight: 1.6, marginBottom: 24 }}>
-                  هل أنت متأكد من حذف عضو الفريق <span style={{ color: '#f07171', fontWeight: 600 }}>"{userToDelete.name}"</span>؟ هذا الإجراء سيؤدي إلى إزالة صلاحياته نهائياً.
+                  Are you sure you want to delete team member <span style={{ color: '#f07171', fontWeight: 600 }}>"{userToDelete.name}"</span>? This permanently removes their access.
                 </p>
 
                 {/* أزرار الحذف والإلغاء المخصصة */}
@@ -500,7 +500,7 @@ export default function UsersPanel() {
                     onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                     onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                   >
-                    حذف
+                    Delete
                   </button>
                   <button
                     onClick={() => setUserToDelete(null)}
@@ -519,7 +519,7 @@ export default function UsersPanel() {
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    إلغاء
+                    Cancel
                   </button>
                 </div>
               </motion.div>

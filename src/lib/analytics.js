@@ -77,11 +77,11 @@ export function orderDateKey(order, now = new Date()) {
 // ─── RANGES ───────────────────────────────────────────────────────────────────
 
 export const RANGE_OPTIONS = [
-  { key: 'today', labelEn: 'Today', labelAr: 'اليوم' },
-  { key: '7d', labelEn: 'Last 7 days', labelAr: 'آخر 7 أيام' },
-  { key: '30d', labelEn: 'Last 30 days', labelAr: 'آخر 30 يوم' },
-  { key: 'month', labelEn: 'This month', labelAr: 'هذا الشهر' },
-  { key: 'all', labelEn: 'All time', labelAr: 'كل الفترة' },
+  { key: 'today', labelEn: 'Today' },
+  { key: '7d', labelEn: 'Last 7 days' },
+  { key: '30d', labelEn: 'Last 30 days' },
+  { key: 'month', labelEn: 'This month' },
+  { key: 'all', labelEn: 'All time' },
 ];
 
 const RANGE_DAYS = { '7d': 7, '30d': 30 };
@@ -257,10 +257,6 @@ function monthShortLabel(key) {
 
 export function fmtEGP(n) {
   return `EGP ${Math.round(num(n)).toLocaleString('en-US')}`;
-}
-
-export function fmtEGPAr(n) {
-  return `${Math.round(num(n)).toLocaleString('en-US')} ج.م`;
 }
 
 export function compactEGP(n) {

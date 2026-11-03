@@ -3,26 +3,61 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, Trash2, Plus, Minus } from 'lucide-react';
 import { useStore } from '../../store';
 import { toast } from '../ui/BackToTop';
+import { focusFirstElement, redirectOutsideFocus, trapTabKey } from '../../lib/focus-trap';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="100"%3E%3Crect fill="%23222" width="80" height="100"/%3E%3C/svg%3E';
 
 export default function CartDrawer() {
   const { cart, cartOpen, setCartOpen, removeFromCart, updateCartQty, cartTotal, setPage, appliedDiscount, removeAppliedDiscount } = useStore();
   const total = cartTotal() ?? 0;
+  const panelRef = React.useRef(null);
+  const openerRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!cartOpen) return undefined;
+
+    // Remember what opened the drawer (usually the bag button) so focus can
+    // return there on close, then move focus inside the dialog.
+    const opener = document.activeElement;
+    openerRef.current = opener && typeof opener.focus === 'function' ? opener : null;
+    focusFirstElement(panelRef.current);
+
+    // Lock background scrolling while the overlay owns the screen.
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setCartOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setCartOpen(false);
+        return;
+      }
+      trapTabKey(event, panelRef.current);
+    };
+    const handleFocusIn = (event) => {
+      redirectOutsideFocus(event, panelRef.current);
     };
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    // Safety net: Tab is trapped on keydown, but focus can still land outside
+    // through a click, a script or a control disappearing while focused.
+    document.addEventListener('focusin', handleFocusIn);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('focusin', handleFocusIn);
+      document.body.style.overflow = previousBodyOverflow;
+      const openerElement = openerRef.current;
+      openerRef.current = null;
+      if (openerElement && document.contains(openerElement)) {
+        openerElement.focus({ preventScroll: true });
+      }
+    };
   }, [cartOpen, setCartOpen]);
 
   const changeQty = (item, nextQty) => {
     const result = updateCartQty(item.key, nextQty);
     if (result && result.success === false) {
-      toast(result.error || 'Maximum available quantity reached. / تم الوصول للحد الأقصى المتاح.', 'warning');
+      toast(result.error || 'Maximum available quantity reached.', 'warning');
     }
   };
 
@@ -36,9 +71,11 @@ export default function CartDrawer() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, backdropFilter: 'blur(4px)' }}
           />
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label="Shopping bag"
+            tabIndex={-1}
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             style={{ 

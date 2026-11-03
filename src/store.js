@@ -381,7 +381,7 @@ export const useStore = create((set, get) => ({
   },
 
   addToCart: (product, size, color, qty = 1) => {
-    if (!product?.id) return { success: false, error: 'Invalid product / منتج غير صالح' };
+    if (!product?.id) return { success: false, error: 'Invalid product.' };
 
     const products = get().products;
     const freshProduct = products.find(p => p.id == product.id) || product;
@@ -408,14 +408,11 @@ export const useStore = create((set, get) => ({
       const remainingToOrder = Math.max(0, available - currentInCart);
       let errorMsg = "";
       if (remainingToOrder === 0) {
-        errorMsg = `This variation (${size} · ${color}) is currently out of stock. You already have ${currentInCart} in your bag.
-هذا الخيار (${size} · ${color}) غير متوفر حاليًا. الكمية الموجودة منه في سلتك: ${currentInCart}.`
+        errorMsg = `This variation (${size} · ${color}) is currently out of stock. You already have ${currentInCart} in your bag.`
       } else if (remainingToOrder === 1) {
-        errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}).
-تبقت قطعة واحدة فقط بالمقاس واللون المحددين (${size} - ${color}).`
+        errorMsg = `Sorry, only 1 more piece is remaining in stock for this variation (${size} - ${color}).`
       } else {
-        errorMsg = `Sorry, only ${remainingToOrder} more pieces are remaining in stock for this variation (${size} - ${color}).
-تبقت ${remainingToOrder} قطع فقط بالمقاس واللون المحددين (${size} - ${color}).`
+        errorMsg = `Sorry, only ${remainingToOrder} more pieces are remaining in stock for this variation (${size} - ${color}).`
       }
       return { success: false, error: errorMsg };
     }
@@ -443,7 +440,7 @@ export const useStore = create((set, get) => ({
   updateCartQty: (key, newQty) => {
     const { cart, products } = get();
     const cartItem = cart.find(item => item.key === key);
-    if (!cartItem) return { success: false, error: 'This item is no longer in your bag. / هذا المنتج لم يعد في سلتك.' };
+    if (!cartItem) return { success: false, error: 'This item is no longer in your bag.' };
 
     // استخدم بيانات المنتج الحيّة من الليستة، وإلا ارجع لنسخة المنتج المحفوظة
     // داخل عنصر السلة (حتى لو الليستة لم تُحمّل بعد) لمنع تجاوز المخزون بلا نهاية.
@@ -460,8 +457,8 @@ export const useStore = create((set, get) => ({
         return {
           success: false,
           error: available > 0
-            ? `Only ${available} piece${available === 1 ? '' : 's'} available for this selection.\nمتوفر ${available} قطعة فقط من هذا الاختيار.`
-            : 'This selection is out of stock.\nهذا الاختيار غير متوفر حالياً.',
+            ? `Only ${available} piece${available === 1 ? '' : 's'} available for this selection.`
+            : 'This selection is out of stock.',
         };
       }
     }
@@ -615,7 +612,7 @@ export const useStore = create((set, get) => ({
     } catch (err) {
       const errors = (err && Array.isArray(err.payload?.errors) && err.payload.errors.length)
         ? err.payload.errors
-        : [err && err.message ? err.message : 'Order failed. Please try again.\nفشل تنفيذ الطلب، يرجى المحاولة مرة أخرى.'];
+        : [err && err.message ? err.message : 'Order failed. Please try again.'];
       const stockIssues = (err && Array.isArray(err.payload?.stockIssues)) ? err.payload.stockIssues : [];
       return { success: false, error: errors[0], errors, stockIssues };
     }
@@ -779,7 +776,7 @@ export const useStore = create((set, get) => ({
 
   applyDiscount: async (code) => {
     const normalized = (code ?? '').trim().toUpperCase();
-    if (!normalized) return { success: false, error: 'Please enter a discount code / يرجى إدخال كود الخصم' };
+    if (!normalized) return { success: false, error: 'Please enter a discount code.' };
 
     try {
       const payload = await api.post('/coupons/validate', {
@@ -790,7 +787,7 @@ export const useStore = create((set, get) => ({
       if (!discount) {
         return {
           success: false,
-          error: (payload && payload.error) || 'Invalid or expired discount code / كود خصم غير صالح أو منتهي الصلاحية',
+          error: (payload && payload.error) || 'Invalid or expired discount code.',
         };
       }
       saveAppliedDiscount(discount);
@@ -798,12 +795,12 @@ export const useStore = create((set, get) => ({
       return { success: true, discount };
     } catch (err) {
       if (err && err.status === 429) {
-        return { success: false, error: 'Too many attempts. Please wait a minute and try again.\nمحاولات كثيرة، يرجى المحاولة بعد دقيقة.' };
+        return { success: false, error: 'Too many attempts. Please wait a minute and try again.' };
       }
       if (err && err.status === 400 && err.message) {
         return { success: false, error: err.message };
       }
-      return { success: false, error: 'Could not validate the discount code. Please try again.\nتعذر التحقق من كود الخصم، يرجى المحاولة مرة أخرى.' };
+      return { success: false, error: 'Could not validate the discount code. Please try again.' };
     }
   },
   removeAppliedDiscount: () => {
