@@ -578,5 +578,51 @@ console.log('\n[12] badge proximity and governorate copy');
     'the unknown-product view is noindex and drops its canonical');
 }
 
+console.log('\n[13] admin image upload payload budget');
+{
+  const uploader = read('src/components/admin/ImageUploader.js');
+  const endpoint = read('api/admin/upload.js');
+
+  // Parse the client constants so the budget is checked numerically, not by
+  // trusting comments: a JSON body of {file: <dataUrl>} must stay well under
+  // both the server limit and the ~4.5MB platform cap.
+  const bytes = (name) => {
+    const m = uploader.match(new RegExp(`const ${name} = ([0-9.]+(?: \\* [0-9]+)+);`));
+    if (!m) return NaN;
+    return m[1].split('*').map((part) => Number(part.trim()))
+      .reduce((a, b) => a * b, 1);
+  };
+
+  eq(bytes('MAX_COMPRESSED_SIZE'), 900 * 1024, 'compressed images target 900KB');
+  eq(bytes('DATAURL_LIMIT'), 1.35 * 1024 * 1024, 'the data URL is capped at 1.35MB');
+  eq(bytes('MAX_FILE_SIZE'), 15 * 1024 * 1024, 'source files up to 15MB are accepted');
+
+  const bodyBytes = bytes('DATAURL_LIMIT') + 64; // JSON envelope
+  ok(bodyBytes < 1.5 * 1024 * 1024,
+    `a prepared upload body stays under 1.5MB (${Math.round(bodyBytes / 1024)}KB)`);
+
+  const serverBody = endpoint.match(/const MAX_BODY = (\d+) \* 1024 \* 1024;/);
+  ok(serverBody && bodyBytes < Number(serverBody[1]) * 1024 * 1024,
+    'the client body fits inside the server MAX_BODY');
+  ok(/const MAX_DECODED = (\d+) \* 1024 \* 1024;/.test(endpoint),
+    'the server still caps decoded bytes');
+
+  // One upload at a time: parallel multi-megabyte bodies saturate mobile
+  // uplinks, and a dropped connection surfaces as a network error.
+  ok(/const MAX_PARALLEL_UPLOADS = 1;/.test(uploader),
+    'images upload sequentially');
+  ok(/const UPLOAD_RETRIES = 1;/.test(uploader),
+    'a failed upload is retried once');
+  ok(/function isRetryableUploadError\(err\) \{[\s\S]*?status === 0[\s\S]*?status === 408[\s\S]*?status === 504[\s\S]*?\n\}/.test(uploader),
+    'the retry covers dropped connections, timeouts and gateway errors');
+  ok(/status === 413/.test(uploader) && /too large for the server/.test(uploader),
+    'a 413 is reported as a size problem, not a network error');
+  ok(/setProgress\(\{ done: 0, total: validFiles\.length \}\)/.test(uploader) &&
+     /setProgress\(\{ done: 0, total: 0 \}\)/.test(uploader),
+    'upload progress starts and resets with the upload');
+  ok(/resized automatically/.test(uploader) && !/Maximum 5MB per image/.test(uploader),
+    'the drop zone advertises the real 15MB limit');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

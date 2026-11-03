@@ -12,14 +12,24 @@ import { api, deleteStorageFile } from '../../lib/api';
 import { getOptimizedImageUrl } from '../../lib/security';
 import { supabase } from '../../lib/supabase';
 
-const RAW_DIRECT_LIMIT = 2.5 * 1024 * 1024;
-const MAX_COMPRESSED_SIZE = 2.4 * 1024 * 1024;
-const DATAURL_LIMIT = 3.5 * 1024 * 1024;
+const RAW_DIRECT_LIMIT = 600 * 1024;
+const MAX_COMPRESSED_SIZE = 900 * 1024;
+const DATAURL_LIMIT = 1.35 * 1024 * 1024;
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const MAX_DIM = 1800;
-const MAX_PARALLEL_UPLOADS = 2;
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_DIM = 1600;
+// One at a time: two parallel 3MB bodies saturate a mobile uplink and make
+// both requests more likely to drop (which surfaces as a network error).
+const MAX_PARALLEL_UPLOADS = 1;
 const UPLOAD_TIMEOUT = 90000;
+const UPLOAD_RETRIES = 1;
+const RETRY_DELAY_MS = 1500;
+
+// A failed fetch has status 0 in ApiError; 408/5xx are worth one more attempt.
+function isRetryableUploadError(err) {
+  const status = Number(err?.status ?? 0);
+  return status === 0 || status === 408 || status === 502 || status === 503 || status === 504;
+}
 
 // Extract a safe path from products bucket URLs only.
 function storagePathFromUrl(url) {
@@ -115,20 +125,27 @@ function loadImageFromBlob(blob) {
   });
 }
 
-// Compress an image using canvas.toBlob().
-async function compressImage(file) {
-  const img = await loadImageFromBlob(file);
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error('Image compression failed'));
+        return;
+      }
 
+      resolve(blob);
+    }, type, quality);
+  });
+}
+
+function drawToCanvas(img, maxDim) {
   let { width, height } = img;
 
-  if (width > MAX_DIM || height > MAX_DIM) {
-    const scale = Math.min(
-      MAX_DIM / width,
-      MAX_DIM / height
-    );
+  if (width > maxDim || height > maxDim) {
+    const scale = Math.min(maxDim / width, maxDim / height);
 
-    width = Math.round(width * scale);
-    height = Math.round(height * scale);
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
   }
 
   const canvas = document.createElement('canvas');
@@ -144,42 +161,49 @@ async function compressImage(file) {
 
   ctx.drawImage(img, 0, 0, width, height);
 
-  const toBlob = (type, quality) => {
-    return new Promise((resolve, reject) => {
-      canvas.toBlob(blob => {
-        if (!blob) {
-          reject(new Error('Image compression failed'));
-          return;
-        }
+  return canvas;
+}
 
-        resolve(blob);
-      }, type, quality);
-    });
-  };
+// Compress an image using canvas.toBlob(). Tries quality first, then smaller
+// dimensions, so a 12MP phone photo still ends up under MAX_COMPRESSED_SIZE.
+async function compressImage(file) {
+  const img = await loadImageFromBlob(file);
 
-  let blob = await toBlob('image/webp', 0.82);
+  const attempts = [
+    { maxDim: MAX_DIM, type: 'image/webp', quality: 0.82 },
+    { maxDim: MAX_DIM, type: 'image/jpeg', quality: 0.78 },
+    { maxDim: 1280, type: 'image/jpeg', quality: 0.68 },
+    { maxDim: 1024, type: 'image/jpeg', quality: 0.6 },
+  ];
 
-  // Fallback if WebP is unsupported.
-  if (!blob.type.includes('webp')) {
-    blob = await toBlob('image/jpeg', 0.78);
+  let smallest = null;
+
+  for (const attempt of attempts) {
+    const canvas = drawToCanvas(img, attempt.maxDim);
+
+    let blob = await canvasToBlob(canvas, attempt.type, attempt.quality);
+
+    // Fallback if WebP is unsupported.
+    if (attempt.type === 'image/webp' && !blob.type.includes('webp')) {
+      blob = await canvasToBlob(canvas, 'image/jpeg', 0.78);
+    }
+
+    if (!smallest || blob.size < smallest.size) {
+      smallest = blob;
+    }
+
+    if (blob.size <= MAX_COMPRESSED_SIZE) {
+      return blob;
+    }
   }
 
-  // Reduce quality if needed.
-  if (blob.size > MAX_COMPRESSED_SIZE) {
-    blob = await toBlob('image/jpeg', 0.68);
+  if (smallest && smallest.size <= MAX_COMPRESSED_SIZE) {
+    return smallest;
   }
 
-  if (blob.size > MAX_COMPRESSED_SIZE) {
-    blob = await toBlob('image/jpeg', 0.55);
-  }
-
-  if (blob.size > MAX_COMPRESSED_SIZE) {
-    throw new Error(
-      'Image is too large after compression. Please choose a smaller image.'
-    );
-  }
-
-  return blob;
+  throw new Error(
+    'Image is too large after compression. Please choose a smaller image.'
+  );
 }
 
 // Prepare image before upload.
@@ -254,6 +278,7 @@ export default function ImageUploader({
   const [urlInput, setUrlInput] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
 
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
@@ -342,21 +367,40 @@ export default function ImageUploader({
     setUrlInput('');
   };
 
-  // Upload a single file.
+  // Upload a single file, retrying once on a dropped connection / cold 5xx.
   const uploadSingleFile = async (file) => {
     const dataUrl = await prepareImage(file);
 
-    const payload = await api.post(
-      '/admin/upload',
-      { file: dataUrl },
-      { timeoutMs: UPLOAD_TIMEOUT }
-    );
+    let lastError = null;
 
-    if (!payload?.url || !payload?.path) {
-      throw new Error('Server did not return a valid image URL and path');
+    for (let attempt = 0; attempt <= UPLOAD_RETRIES; attempt += 1) {
+      try {
+        const payload = await api.post(
+          '/admin/upload',
+          { file: dataUrl },
+          { timeoutMs: UPLOAD_TIMEOUT }
+        );
+
+        if (!payload?.url || !payload?.path) {
+          throw new Error('Server did not return a valid image URL and path');
+        }
+
+        return payload;
+      } catch (err) {
+        lastError = err;
+
+        const canRetry =
+          attempt < UPLOAD_RETRIES &&
+          isRetryableUploadError(err) &&
+          mountedRef.current;
+
+        if (!canRetry) throw err;
+
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      }
     }
 
-    return payload;
+    throw lastError;
   };
 
   // Clean up uploaded image if editor was closed.
@@ -404,7 +448,7 @@ export default function ImageUploader({
 
       if (file.size > MAX_FILE_SIZE) {
         failureCount++;
-        errorMessage = 'File too large (maximum 5MB)';
+        errorMessage = 'File too large (maximum 15MB)';
         continue;
       }
 
@@ -436,6 +480,8 @@ export default function ImageUploader({
     // Store results by original file index.
     // This preserves the user's selected order.
     const uploadedResults = new Array(validFiles.length);
+
+    setProgress({ done: 0, total: validFiles.length });
 
     let currentIndex = 0;
     let successCount = 0;
@@ -475,6 +521,10 @@ export default function ImageUploader({
           });
 
           errorMessage = getUploadError(err);
+        } finally {
+          if (mountedRef.current) {
+            setProgress(prev => ({ ...prev, done: prev.done + 1 }));
+          }
         }
       }
     };
@@ -529,6 +579,7 @@ export default function ImageUploader({
 
       if (mountedRef.current) {
         setUploading(false);
+        setProgress({ done: 0, total: 0 });
 
         if (fileRef.current) {
           fileRef.current.value = '';
@@ -626,7 +677,9 @@ export default function ImageUploader({
               animation: 'spin 1s linear infinite'
             }} />
 
-            Uploading images...
+            {progress.total > 0
+              ? `Uploading ${Math.min(progress.done + 1, progress.total)} of ${progress.total}...`
+              : 'Uploading images...'}
           </div>
         ) : (
           <>
@@ -641,7 +694,7 @@ export default function ImageUploader({
             </p>
 
             <p style={{ fontSize: 11, opacity: 0.65 }}>
-              Maximum 5MB per image
+              Up to 15MB per image — resized automatically
             </p>
           </>
         )}

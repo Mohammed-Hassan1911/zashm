@@ -483,3 +483,42 @@ Browser check at 816px: `innerText` is `Cairo · القاهرة`, `lang="ar"`,
    `vercel build`/deploy output must be checked before assuming the product 404
    is live.
 
+### 13.7 Admin image uploads: payload budget (2026-11-03, local only)
+
+- **Symptom:** product images and size charts took a very long time and mostly
+  ended in `Network error — could not reach the server` / `خطأ في الشبكة`.
+- **Root cause:** the upload is a **base64 JSON** body (`{ file: 'data:…' }`).
+  The client allowed a 3.5MB data URL (≈4.7MB body after JSON), which crosses
+  Vercel's ~4.5MB request cap; the platform answers `413
+  FUNCTION_PAYLOAD_TOO_LARGE` **before** the function runs, so the SPA never
+  sees a JSON error. Measured from this network: a 4.5MB body → `413` after
+  ~109–120s; a 1.4MB body → 24s. Two uploads ran in parallel, doubling the
+  contention on a mobile uplink, so slow links dropped the connection first and
+  surfaced as a generic network error.
+- **Fix (client only, server contract unchanged):**
+  - `src/components/admin/ImageUploader.js`: source files up to **15MB** are
+    accepted and compressed on the canvas to **≤900KB** (WebP 0.82 at 1600px,
+    with 1280/1024px JPEG fallbacks), so the data URL stays ≤**1.35MB** and the
+    JSON body under ~1.4MB — a third of the platform cap.
+  - uploads are **sequential** (`MAX_PARALLEL_UPLOADS = 1`) with one retry on
+    status `0`/`408`/`502`/`503`/`504` and a visible `Uploading X of Y…`
+    counter.
+  - `413` keeps its own message ("Image is too large for the server"), so a size
+    problem is never reported as a network failure.
+- **Server side (unchanged):** `api/admin/upload.js` still caps the body at 4MB,
+  decoded bytes at 3MB, and validates magic bytes; the Supabase bucket stays at
+  5MB with a MIME allow-list. No limit was weakened.
+- **Tests:** `scripts/test-final-hardening.mjs` section [13] parses the client
+  constants and asserts the prepared body stays under 1.5MB and inside the
+  server `MAX_BODY`, plus sequential upload, retry predicate and progress copy.
+- **Measured payloads (from this network, unauthenticated → `401`):** the old
+  3.5MB data URL produced a ~4.7MB body; a 4.5MB body → `413
+  FUNCTION_PAYLOAD_TOO_LARGE` after 109–120s. The new 1.35MB data URL (1.41MB
+  body) is accepted and answered in ~13.5s with no platform rejection.
+- **Measured compression (Chrome, 4000×3000 source):** a gradient/typography
+  image → 14KB WebP at 1600px; worst-case random noise → 1084KB at 1600px, then
+  473KB JPEG at 1280px (631KB data URL). Both stay inside the budget.
+- **Not verified:** the end-to-end upload could not be exercised because no
+  admin session was available in this environment; the conclusion comes from the
+  measured platform responses above and the code path, not a live upload.
+
