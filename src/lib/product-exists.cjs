@@ -9,6 +9,12 @@
 // shell with no extra network round trip, while Googlebot/Bingbot get an
 // honest status. Anything unexpected (missing env, timeout, DB error) fails
 // open so a flaky dependency can never 404 a real product.
+//
+// This file is CommonJS on purpose: Vercel compiles `middleware.ts` to a
+// CommonJS function, and a `require()` of an ES module crashes at runtime with
+// ERR_REQUIRE_ESM. `scripts/test-routing.mjs` loads it through `createRequire`,
+// the same way the other suites load the `/api` handlers.
+'use strict';
 
 const CRAWLER_PATTERN = /googlebot|google-inspectiontool|bingbot|bingpreview|yandex|duckduckbot|baiduspider|applebot|petalbot|slurp|seznam|sogou|qwantify|semrushbot|ahrefsbot|mj12bot|dotbot|facebookexternalhit|twitterbot|linkedinbot|pinterest|slackbot|telegrambot|whatsapp|embedly|discordbot|redditbot/i;
 
@@ -23,15 +29,15 @@ function firstEnv(env, names) {
   return '';
 }
 
-export function isCrawler(userAgent) {
+function isCrawler(userAgent) {
   return typeof userAgent === 'string' && CRAWLER_PATTERN.test(userAgent);
 }
 
-export function isProductId(value) {
+function isProductId(value) {
   return typeof value === 'string' && NUMERIC_ID.test(value);
 }
 
-export function productIdFromPath(pathname) {
+function productIdFromPath(pathname) {
   const match = PRODUCT_PATH.exec(typeof pathname === 'string' ? pathname : '');
   if (!match) return null;
   try {
@@ -44,7 +50,7 @@ export function productIdFromPath(pathname) {
 // Returns true (exists), false (missing / malformed id) or null (unknown:
 // configuration missing, network error, timeout). Callers must treat null as
 // "let the request continue" rather than as a missing product.
-export async function checkProductExists(id, { env = process.env, fetchImpl = fetch } = {}) {
+async function checkProductExists(id, { env = process.env, fetchImpl = fetch } = {}) {
   if (!isProductId(id)) return false;
 
   const supabaseUrl = firstEnv(env, ['SUPABASE_URL', 'VITE_SUPABASE_URL', 'REACT_APP_SUPABASE_URL']);
@@ -78,7 +84,7 @@ export async function checkProductExists(id, { env = process.env, fetchImpl = fe
   }
 }
 
-export async function buildNotFoundResponse(request, { fetchImpl = fetch } = {}) {
+async function buildNotFoundResponse(request, { fetchImpl = fetch } = {}) {
   const headers = {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': 'public, max-age=0, must-revalidate',
@@ -102,3 +108,11 @@ export async function buildNotFoundResponse(request, { fetchImpl = fetch } = {})
     { status: 404, headers },
   );
 }
+
+module.exports = {
+  isCrawler,
+  isProductId,
+  productIdFromPath,
+  checkProductExists,
+  buildNotFoundResponse,
+};

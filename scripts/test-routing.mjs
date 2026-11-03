@@ -10,13 +10,16 @@
  *   - middleware.ts wiring + vercel.json / vite dev-port configuration
  */
 import { readFileSync } from 'node:fs';
-import {
+import { createRequire } from 'node:module';
+
+const requireHelper = createRequire(import.meta.url);
+const {
   buildNotFoundResponse,
   checkProductExists,
   isCrawler,
   isProductId,
   productIdFromPath,
-} from '../src/lib/product-exists.mjs';
+} = requireHelper('../src/lib/product-exists.cjs');
 
 let pass = 0;
 let fail = 0;
@@ -124,7 +127,7 @@ console.log('\n[3] products_public lookup');
 
   eq(await checkProductExists('123', { env: { ...ENV, SUPABASE_URL: 'not a url' }, fetchImpl: missingIdFetch }), null,
     'an unparseable Supabase URL fails open');
-  ok(/AbortSignal\.timeout\(8000\)/.test(read('src/lib/product-exists.mjs')),
+  ok(/AbortSignal\.timeout\(8000\)/.test(read('src/lib/product-exists.cjs')),
     'the lookup timeout leaves headroom for slow Supabase round trips');
 }
 
@@ -153,7 +156,7 @@ console.log('\n[5] middleware wiring and dev server');
   const middleware = read('middleware.ts');
   ok(/export const config = \{\s*matcher: \['\/product\/:path\*'\],[\s\S]*?runtime: 'nodejs',\s*\};/.test(middleware),
     'the middleware only runs on product detail paths (Node.js runtime)');
-  ok(/from '\.\/src\/lib\/product-exists\.mjs'/.test(middleware), 'the middleware reuses the tested helpers');
+  ok(/from '\.\/src\/lib\/product-exists\.cjs'/.test(middleware), 'the middleware reuses the tested helpers');
   ok(middleware.indexOf('isCrawler(') < middleware.indexOf('checkProductExists('),
     'crawlers are detected before any database request');
   ok(/if \(exists === false\) return buildNotFoundResponse\(request\);/.test(middleware),

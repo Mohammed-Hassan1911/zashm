@@ -370,12 +370,27 @@ ON CONFLICT (name) DO NOTHING;
   (`Googlebot`, `Google-InspectionTool`, `bingbot`, link-preview bots, etc.).
   Shoppers keep the instant static shell, no extra round trip, and no storefront
   regression if the check is slow.
-- **Fail-open contract** (`src/lib/product-exists.mjs`): `true` = exists,
+- **Fail-open contract** (`src/lib/product-exists.cjs`): `true` = exists,
   `false` = missing/malformed id, `null` = unknown (no config, timeout, non-2xx,
   bad payload). Only `false` produces a 404, so a Supabase outage can never hide
   a real product or break sharing links. The lookup timeout is 8s: local round
   trips measured 0.2–4.7s with spikes past 5s, and a shorter cap produced
   intermittent fail-open `200`s.
+- **Module format (production incident, 2026-11-03):** the first deployment of
+  this middleware answered `500 MIDDLEWARE_INVOCATION_FAILED` on every
+  `/product/*` URL. Vercel compiles `middleware.ts` to CommonJS, but the helper
+  was shipped as an ES module, so `require()` crashed with `ERR_REQUIRE_ESM`
+  (confirmed in the deployment logs). The helper is now
+  `src/lib/product-exists.cjs` (CommonJS) and the built function only does
+  `require("./src/lib/product-exists.cjs")`. The deployment was reverted by
+  redeploying a corrected build; `vercel rollback` was rejected by the plan
+  ("upgrade to Pro"), so rollback must happen through a redeploy.
+- **Pre-deploy artifact check:** `vercel build --yes`, then
+  `require('.vercel/output/functions/middleware.func/middleware.js')` and call
+  `default(request)`: real id + Googlebot → 200 + `x-middleware-next: 1`;
+  `999999999` / `abc` / `0` + Googlebot → 404 with `x-robots-tag`; Chrome UA →
+  200 + continuation. This tests the exact artifact Vercel runs, which
+  `vercel dev` does not.
 - **Continuation:** the Node.js runtime drops the body when the middleware
   returns `undefined`, so every pass-through returns `new Response(null, {
   headers: { 'x-middleware-next': '1' } })`. That is byte-for-byte what `next()`

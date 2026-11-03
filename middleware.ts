@@ -2,13 +2,13 @@
 //
 // Answers a real HTTP 404 for `/product/<id>` URLs whose product does not exist
 // in `products_public`. The decision only runs for crawlers; see
-// src/lib/product-exists.mjs for the rules and the fail-open behaviour.
+// src/lib/product-exists.cjs for the rules and the fail-open behaviour.
 import {
   buildNotFoundResponse,
   checkProductExists,
   isCrawler,
   productIdFromPath,
-} from './src/lib/product-exists.mjs';
+} from './src/lib/product-exists.cjs';
 
 // `next()` from `@vercel/functions` is exactly this response. Building it here
 // keeps a one-helper dependency (and its transitive audit findings) out of the
