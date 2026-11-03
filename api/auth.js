@@ -7,7 +7,7 @@ const {
   readBody,
   clientIp,
   rateLimitShared,
-  resetRateLimit,
+  resetRateLimitShared,
   tooMany,
   supabaseAdmin,
   signSession,
@@ -132,7 +132,10 @@ module.exports = async function handler(req, res) {
       return json(res, 401, { error: 'Invalid credentials' });
     }
 
-    resetRateLimit(emailKey);
+    // Clear the failed-attempt budget for this IP+email in the SHARED limiter
+    // too, otherwise a user who retried a few times gets 429 after a
+    // successful login. The per-IP key is deliberately not reset.
+    await resetRateLimitShared(emailKey);
 
     const nowIso = new Date().toISOString();
     const updates = { lastlogin: nowIso };
@@ -141,7 +144,12 @@ module.exports = async function handler(req, res) {
       // upgraded to scrypt on successful login. Nothing plaintext is ever stored.
       updates.passwordhash = await hashPassword(password);
     }
-    await sb.from('users').update(updates).eq('id', data.id);
+    const { error: loginWriteError } = await sb.from('users').update(updates).eq('id', data.id);
+    if (loginWriteError) {
+      // Login still succeeds; but a silent failure means legacy hashes are
+      // re-hashed every time and lastlogin lies, so surface it.
+      console.warn('Login bookkeeping update failed:', loginWriteError.message);
+    }
 
     const token = signSession({
       id: data.id,

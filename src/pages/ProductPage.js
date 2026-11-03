@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
+import { discountPercent, effectivePrice, regularPrice } from '../lib/pricing';
 import { resolveRoute } from '../lib/routes';
 import { getColorSwatch } from '../lib/productColors.mjs';
 
@@ -191,7 +192,7 @@ export default function ProductPage() {
 
   const isWished = (wishlist || []).includes(p.id);
   const related = (products || []).filter(pr => pr.active !== false && (pr.category ?? 'General') === (p.category ?? 'General') && pr.id !== p.id).slice(0, 4);
-  const discount = (p.salePrice && p.price > 0) ? Math.round((1 - (p.salePrice ?? 0) / p.price) * 100) : null;
+  const discount = discountPercent(p);
 
   const currentVariantKey = `${selSize}-${selColor}`;
   // المصدر الحقيقي للمخزون هو variantStock عند وجود متغيرات؛ المفتاح غير المعرّف = صفر
@@ -361,11 +362,11 @@ export default function ProductPage() {
               }}
             >
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: 'var(--gold)' }}>
-                EGP {(p.salePrice || p.price).toLocaleString()}
+                EGP {effectivePrice(p).toLocaleString()}
               </span>
-              {p.salePrice && (
+              {discount !== null && (
                 <>
-                  <span style={{ color: 'var(--text3)', fontSize: 18, textDecoration: 'line-through' }}>EGP {p.price.toLocaleString()}</span>
+                  <span style={{ color: 'var(--text3)', fontSize: 18, textDecoration: 'line-through' }}>EGP {regularPrice(p).toLocaleString()}</span>
                   <span style={{ background: 'var(--red)', color: 'white', fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 700 }}>-{discount}%</span>
                 </>
               )}

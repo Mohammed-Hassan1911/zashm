@@ -11,6 +11,7 @@ import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
 import { paginate, sanitizeInput, validateProductForm, setPageMeta } from '../lib/security';
 import { getColorSwatch } from '../lib/productColors.mjs';
+import { effectivePrice, orphanedVariantStock } from '../lib/pricing';
 import {
   computeSalesOverview,
   RANGE_OPTIONS,
@@ -1324,11 +1325,18 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       ? form.colors.split(',').map(c => c.trim()).filter(Boolean)
       : (Array.isArray(form.colors) ? form.colors : []);
 
+    const rawSalePrice = form.salePrice === '' || form.salePrice === null || form.salePrice === undefined ? null : parseFloat(form.salePrice);
+    if (rawSalePrice !== null && Number.isFinite(rawSalePrice) && rawSalePrice >= parsedPrice) {
+      toast.error('The sale price must be lower than the original price.');
+      return;
+    }
+
     const productData = {
       name: form.name,
       category: form.category,
       price: parsedPrice,
-      salePrice: form.salePrice === '' || form.salePrice === null || form.salePrice === undefined ? null : parseFloat(form.salePrice),
+      // Rule: 0 / empty / invalid sale price means "no discount" → store null.
+      salePrice: rawSalePrice !== null && Number.isFinite(rawSalePrice) && rawSalePrice > 0 ? rawSalePrice : null,
       description: form.description,
       stock: parseInt(form.stock || 0),
       variantStock: form.variantStock || {},
@@ -1518,7 +1526,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
               <p style={{ fontSize:10, color:'var(--text3)', marginBottom:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.category}</p>
               <p style={{ fontSize:12, fontWeight:600, marginBottom:4, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.name}</p>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap' }}>
-                <span style={{ color:'var(--gold)', fontSize:11, fontWeight:600 }}>EGP {(p.salePrice||p.price).toLocaleString()}</span>
+                <span style={{ color:'var(--gold)', fontSize:11, fontWeight:600 }}>EGP {effectivePrice(p).toLocaleString()}</span>
                 <span style={{ fontSize:9, color: p.stock > 5 ? '#27ae60' : p.stock > 0 ? '#f39c12' : 'var(--red)', fontWeight:500 }}>Qty: {p.stock}</span>
               </div>
             </div>
@@ -1620,18 +1628,18 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: form.salePrice && form.price && Number(form.salePrice) > Number(form.price) ? 6 : 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: form.salePrice && form.price && Number(form.salePrice) >= Number(form.price) ? 6 : 12 }}>
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Price (EGP) *</label>
                     <input type="number" required min="0" value={form.price || ''} onChange={e => update('price', Number(e.target.value) || 0)} placeholder="700" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Sale Price</label>
-                    <input type="number" min="0" value={form.salePrice || ''} onChange={e => update('salePrice', e.target.value ? Number(e.target.value) : null)} placeholder="500" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
+                    <input type="number" min="0" value={form.salePrice ?? ''} onChange={e => update('salePrice', e.target.value === '' ? null : Number(e.target.value))} placeholder="500" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
                   </div>
                 </div>
 
-                {form.salePrice && form.price && Number(form.salePrice) > Number(form.price) && (
+                {form.salePrice && form.price && Number(form.salePrice) >= Number(form.price) && (
                   <p style={{ color: '#ef4444', fontSize: 11, marginTop: 0, marginBottom: 12 }}>* The sale price cannot be higher than the original price.</p>
                 )}
 
@@ -1663,24 +1671,63 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                       const currentColors = typeof form.colors === 'string' ? form.colors.split(',').map(c => c.trim()).filter(Boolean) : (Array.isArray(form.colors) ? form.colors : []);
 
                       if (currentSizes.length === 0 || currentColors.length === 0) {
-                        return <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'10px 0' }}>Enter sizes and colors above to generate stock fields</p>;
+                        return (
+                          <div>
+                            <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'4px 0' }}>No sizes or colors defined — this product sells without variants.</p>
+                            <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:1, textTransform:'uppercase' }}>Stock (units)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={form.stock ?? 0}
+                              onChange={e => update('stock', Math.max(0, parseInt(e.target.value) || 0))}
+                              style={{ width:120, padding:'8px 12px', borderRadius:4, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)' }}
+                            />
+                          </div>
+                        );
                       }
+
+                      // Sum only the declared size × color keys. Parsing keys with
+                      // split('-') breaks for hyphenated colors ("Off-White"), and
+                      // orphaned keys must not leak into the total.
+                      const totalFor = (matrix) => {
+                        let total = 0;
+                        for (const size of currentSizes) {
+                          for (const color of currentColors) {
+                            const qty = Number(matrix[`${size}-${color}`]);
+                            if (Number.isFinite(qty) && qty > 0) total += qty;
+                          }
+                        }
+                        return total;
+                      };
 
                       const commitVariantStock = (matrixKey, qty) => {
                         const safeQty = Math.max(0, Number.isFinite(Number(qty)) ? Number(qty) : 0);
                         const updatedMatrix = { ...(form.variantStock || {}), [matrixKey]: safeQty };
                         update('variantStock', updatedMatrix);
-                        const totalStock = Object.keys(updatedMatrix).reduce((sum, key) => {
-                          const [sz, col] = key.split('-');
-                          if (currentSizes.includes(sz) && currentColors.includes(col)) {
-                            return sum + (updatedMatrix[key] || 0);
-                          }
-                          return sum;
-                        }, 0);
-                        update('stock', totalStock);
+                        update('stock', totalFor(updatedMatrix));
                       };
 
+                      const orphaned = orphanedVariantStock({
+                        variantStock: form.variantStock || {},
+                        sizes: currentSizes,
+                        colors: currentColors,
+                      });
+
                       const rows = [];
+                      if (orphaned.length > 0) {
+                        rows.push(
+                          <div key="__orphaned__" style={{ padding:'10px 12px', background:'rgba(243,156,18,0.08)', border:'1px solid #f39c12', borderRadius:4, marginBottom:8 }}>
+                            <p style={{ fontSize:11, color:'#f39c12', fontWeight:600, margin:'0 0 6px' }}>⚠ Orphaned stock entries (size/color no longer defined)</p>
+                            <p style={{ fontSize:11, color:'var(--text2)', margin:'0 0 8px' }}>
+                              These keys are kept untouched and are excluded from the total and from customer-facing availability:
+                            </p>
+                            <ul style={{ margin:0, paddingLeft:16, fontSize:11, color:'var(--text2)' }}>
+                              {orphaned.map(o => <li key={o.key}>{o.key}: {o.qty}</li>)}
+                            </ul>
+                          </div>
+                        );
+                      }
+
                       currentSizes.forEach(size => {
                         currentColors.forEach(color => {
                           const matrixKey = `${size}-${color}`;
@@ -1737,9 +1784,9 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
               <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:8, flexShrink:0 }}>
                 <button
                   className="gold-btn"
-                  style={{ flex:1, opacity: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 0.4 : 1, cursor: (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) ? 'not-allowed' : 'pointer' }}
+                  style={{ flex:1, opacity: (form.salePrice && form.price && Number(form.salePrice) >= Number(form.price)) ? 0.4 : 1, cursor: (form.salePrice && form.price && Number(form.salePrice) >= Number(form.price)) ? 'not-allowed' : 'pointer' }}
                   onClick={() => {
-                    if (form.salePrice && form.price && Number(form.salePrice) > Number(form.price)) {
+                    if (form.salePrice && form.price && Number(form.salePrice) >= Number(form.price)) {
                       toast.error('The sale price cannot be higher than the original price.'); return;
                     }
                     handleSave();

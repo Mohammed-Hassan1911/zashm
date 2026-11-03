@@ -32,7 +32,7 @@ console.log('\n[1] active and available product selection');
     { id: '42', stock: 4 },
     { id: 43, active: false, stock: 2 },
     { id: 44, stock: 0 },
-    { id: 45, stock: 0, variantStock: { 'M-black': 2 } },
+    { id: 45, stock: 0, variantStock: { 'M-black': 2 }, sizes: ['M'], colors: ['black'] },
     { id: 46, stock: 5, variantStock: { 'M-black': 0 } },
     { id: 47, stock: 2, deleted: true },
     { id: 48, stock: 2, private: true },
@@ -40,17 +40,20 @@ console.log('\n[1] active and available product selection');
     { id: 50, stock: '2' },
     { id: 51, stock: 2, variantStock: [] },
     { id: 52, stock: null, variantStock: {} },
+    { id: 53, stock: 0, variantStock: { 'M-White': 3 }, sizes: ['M'], colors: ['Black'] },
+    { id: 54, stock: 0, variantStock: { 'M-Black': 2 }, sizes: ['M'] },
   ], origin);
   eq((xml.match(/<loc>/g) || []).length, 6, 'includes static routes and four unique available products');
   ok(xml.includes(`${origin}/product/42`), 'includes the active in-stock product');
-  ok(xml.includes(`${origin}/product/45`), 'uses variant stock to recognize an available product');
+  ok(xml.includes(`${origin}/product/45`), 'uses declared-variant stock to recognize an available product');
   ok(xml.includes(`${origin}/product/50`) && xml.includes(`${origin}/product/51`),
     'accepts numeric stock strings and falls back when variant stock is absent or malformed');
   ok(!xml.includes('/product/43') && !xml.includes('/product/44') &&
      !xml.includes('/product/46') && !xml.includes('/product/47') &&
      !xml.includes('/product/48') && !xml.includes('/product/49') &&
-     !xml.includes('/product/52'),
-  'excludes inactive, sold-out, deleted, private, null-stock, and zero-variant products');
+     !xml.includes('/product/52') &&
+     !xml.includes('/product/53') && !xml.includes('/product/54'),
+  'excludes inactive, sold-out, deleted, private, null-stock, zero-variant, and orphaned-variant products');
 }
 
 console.log('\n[2] empty results and canonical routing');

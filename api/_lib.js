@@ -976,6 +976,8 @@ function validateProductPayload(p) {
   if (p.salePrice !== null && p.salePrice !== undefined && p.salePrice !== '') {
     salePrice = numInRange(p.salePrice, 0, 10000000);
     if (salePrice === null) errors.push('Invalid sale price');
+    // Same rule as the storefront: 0 means "no discount", never a free order.
+    else if (!(salePrice > 0)) salePrice = null;
   }
 
   const strArr = (v, maxLen, maxItems) => {

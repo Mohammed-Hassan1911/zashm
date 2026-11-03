@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Heart, Eye } from 'lucide-react';
 import { useStore } from '../../store';
 import { toast } from '../ui/BackToTop';
+import { availableStock, discountPercent, effectivePrice } from '../../lib/pricing';
 
 const LABEL_CLASS = {
   'New Arrival': 'label-new',
@@ -27,27 +28,9 @@ export default function ProductCard({ product, index = 0 }) {
 
   const isWished = (wishlist || []).includes(product?.id);
 
-  // variantStock هو المصدر الأساسي للتوفر عند وجود المقاسات أو المتغيرات.
-  const variantStock =
-    product?.variantStock &&
-    typeof product.variantStock === 'object' &&
-    !Array.isArray(product.variantStock)
-      ? product.variantStock
-      : null;
-
-  const hasVariants =
-    !!variantStock && Object.keys(variantStock).length > 0;
-
-  const variantTotal = hasVariants
-    ? Object.values(variantStock).reduce(
-        (sum, quantity) => sum + (Number(quantity) || 0),
-        0
-      )
-    : null;
-
-  const isSoldOut = hasVariants
-    ? variantTotal <= 0
-    : (Number(product?.stock) || 0) <= 0;
+  // variantStock هو المصدر الأساسي للتوفر عند وجود المتغيرات، ويُحسب فقط من
+  // المفاتيح المطابقة للمقاسات والألوان المعرفة (مخزون اليتيم لا يظهر للعميل).
+  const isSoldOut = availableStock(product) <= 0;
 
   const images = Array.isArray(product?.images)
     ? product.images.filter(Boolean)
@@ -80,17 +63,8 @@ export default function ProductCard({ product, index = 0 }) {
     }
   };
 
-  const discount =
-    Number(product?.salePrice) > 0 && Number(product?.price) > 0
-      ? Math.round(
-          (1 - Number(product.salePrice) / Number(product.price)) * 100
-        )
-      : null;
-
-  const displayPrice =
-    Number(product?.salePrice) > 0
-      ? Number(product.salePrice)
-      : Number(product?.price) || 0;
+  const discount = discountPercent(product);
+  const displayPrice = effectivePrice(product);
 
   const formatPrice = (price) =>
     price.toLocaleString('en-US');

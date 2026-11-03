@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+import { effectivePrice } from '../lib/pricing';
 
 const SORT_OPTIONS = [
   'Newest',
@@ -22,24 +23,7 @@ const LABELS = [
 const normalize = (value) =>
   String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
-const getPrice = (product) => {
-  const salePrice = Number(product.salePrice);
-  const regularPrice = Number(product.price);
-
-  if (
-    product.salePrice !== null &&
-    product.salePrice !== undefined &&
-    product.salePrice !== '' &&
-    Number.isFinite(salePrice) &&
-    salePrice >= 0
-  ) {
-    return salePrice;
-  }
-
-  return Number.isFinite(regularPrice) && regularPrice >= 0
-    ? regularPrice
-    : 0;
-};
+const getPrice = (product) => effectivePrice(product);
 
 export default function ShopPage() {
   const {

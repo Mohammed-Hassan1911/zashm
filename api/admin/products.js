@@ -173,7 +173,7 @@ async function updateProduct(req, res) {
     if (updates.images !== undefined && updates.image === undefined) {
       write.image = Array.isArray(normalized.images) ? (normalized.images[0] || '') : '';
     } else if (updates.image !== undefined && !write.image && updates.images && updates.images.length) {
-      write.image = updates.images[0];
+      write.image = Array.isArray(normalized.images) ? (normalized.images[0] || '') : '';
     }
     if (Object.keys(write).length === 0) return json(res, 400, { error: 'Nothing to update' });
 

@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'; // ربط سوبابيز الأونل
 import { api } from './lib/api';
 import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
 import { clearOrderConfirmation } from './lib/orderConfirmation.mjs';
+import { effectivePrice } from './lib/pricing';
 
 // دالة مساعدة موحدة لحساب تاريخ اليوم بالكامل بناءً على التوقيت المحلي (Local Time) لتجنب مشاكل الـ UTC
 function getLocalTodayDate() {
@@ -29,7 +30,7 @@ function safeParseArray(key, storage) {
 function sanitizeOrderItem(item, products = []) {
   const product = (products || []).find(p => p.id == item?.productId);
   const qty = item?.qty ?? 0;
-  const unitPrice = item?.unitPrice ?? (qty > 0 && item?.price != null ? item.price / qty : (product?.salePrice ?? product?.price ?? 0));
+  const unitPrice = item?.unitPrice ?? (qty > 0 && item?.price != null ? item.price / qty : effectivePrice(product));
   const name = (item?.name || '').trim();
   const safeName = (name && name !== 'Unknown') ? name : ((product?.name || '').trim() || 'Unknown Product');
   const category = (item?.category || product?.category || '').trim() || 'General';
@@ -387,7 +388,7 @@ export const useStore = create((set, get) => ({
     const freshProduct = products.find(p => p.id == product.id) || product;
     const variantKey = `${size}-${color}`;
 
-    let stockAmount = 99;
+    let stockAmount = null; // null = stock unknown (no variantStock, no stock column)
     const pv = freshProduct.variantStock;
     const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
     if (hasVariantStock) {
@@ -401,10 +402,11 @@ export const useStore = create((set, get) => ({
     // and products_public does not expose it. The server re-checks real
     // availability inside atomic_place_order, which is the authoritative gate;
     // this is only a friendlier early warning.
-    const available = Math.max(0, stockAmount);
+    const stockKnown = stockAmount !== null && Number.isFinite(stockAmount);
+    const available = stockKnown ? Math.max(0, stockAmount) : 0;
     const currentInCart = (get().cart || []).find(i => i.product?.id == product.id && i.size === size && i.color === color)?.qty || 0;
 
-    if (currentInCart + qty > available && stockAmount !== 99) {
+    if (stockKnown && currentInCart + qty > available) {
       const remainingToOrder = Math.max(0, available - currentInCart);
       let errorMsg = "";
       if (remainingToOrder === 0) {
@@ -516,7 +518,7 @@ export const useStore = create((set, get) => ({
     if (!get().appliedDiscount) return sub;
     return Math.max(0, sub - discountAmountFor(sub, get().appliedDiscount));
   },
-  cartSubtotal: () => (get().cart || []).reduce((sum, i) => sum + (((i.product?.salePrice || i.product?.price) ?? 0) * (i.qty ?? 0)), 0),
+  cartSubtotal: () => (get().cart || []).reduce((sum, i) => sum + (effectivePrice(i.product) * (i.qty ?? 0)), 0),
   cartDiscountAmount: () => Math.max(0, get().cartSubtotal() - get().cartTotal()),
 
   wishlist: safeParseArray('zashm_wishlist', typeof localStorage !== 'undefined' ? localStorage : null),

@@ -90,7 +90,18 @@ function isAvailable(product) {
     : null;
   const hasVariants = variantStock && Object.keys(variantStock).length > 0;
   if (hasVariants) {
-    return Object.values(variantStock).some((quantity) => Number.isFinite(Number(quantity)) && Number(quantity) > 0);
+    // Mirror src/lib/pricing.js availableStock(): only keys matching the
+    // declared sizes × colors count. Orphaned keys (removed colors/sizes)
+    // must never make a product look available.
+    const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+    const colors = Array.isArray(product.colors) ? product.colors : [];
+    for (const size of sizes) {
+      for (const color of colors) {
+        const qty = Number(variantStock[`${size}-${color}`]);
+        if (Number.isFinite(qty) && qty > 0) return true;
+      }
+    }
+    return false;
   }
   return Number.isFinite(Number(product.stock)) && Number(product.stock) > 0;
 }

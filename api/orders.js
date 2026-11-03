@@ -119,10 +119,16 @@ async function placeOrder(req, res) {
       }
       const rawSale = p.salePrice;
       const rawPrice = p.price;
-      const unitPrice = (rawSale !== null && rawSale !== undefined)
-        ? Number(rawSale)
-        : Number(rawPrice);
-      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      // Same rule as the storefront (src/lib/pricing.js): a sale price only
+      // counts when 0 < salePrice < price. 0 / null / invalid / >= price all
+      // mean "no discount" — never a free or overpriced order.
+      const priceNum = Number(rawPrice);
+      const saleNum = Number(rawSale);
+      const hasSale = rawSale !== null && rawSale !== undefined && rawSale !== ''
+        && Number.isFinite(saleNum) && saleNum > 0
+        && Number.isFinite(priceNum) && saleNum < priceNum;
+      const unitPrice = hasSale ? saleNum : priceNum;
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
         stockErrors.push('A product in your cart has an invalid price.');
         stockIssues.push({
           productId: item.productId,

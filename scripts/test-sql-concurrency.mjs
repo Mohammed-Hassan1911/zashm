@@ -32,7 +32,7 @@
  *     unrelated triggers are preserved, re-runs do not duplicate.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,19 +125,26 @@ async function startCluster() {
   mkdirSync(sockDir, { recursive: true });
   sockPort = await freePort();
 
+  // Homebrew PostgreSQL 17 on macOS aborts with "postmaster became
+  // multithreaded during startup" when the inherited locale is not one it
+  // recognizes; LC_ALL=C is always valid there.
+  const env = { ...process.env, LC_ALL: 'C' };
+
   const init = spawnSync(tools.initdb, [
     '-D', dataDir, '-U', 'postgres', '-A', 'trust', '--locale=C', '--encoding=UTF8',
-  ], { encoding: 'utf8', timeout: 120000 });
+  ], { encoding: 'utf8', timeout: 120000, env });
   if (init.status !== 0) {
     throw new Error(`initdb failed:\n${init.stdout || ''}${init.stderr || ''}`);
   }
 
-  const options = `-k ${sockDir} -p ${sockPort} -c fsync=off -c full_page_writes=off -c autovacuum=off`;
+  const options = `-c unix_socket_directories='${sockDir}' -p ${sockPort} -c fsync=off -c full_page_writes=off -c autovacuum=off`;
   const start = spawnSync(tools.pgCtl, [
     '-D', dataDir, '-l', join(tmp, 'postgres.log'), '-o', options, '-w', 'start',
-  ], { encoding: 'utf8', timeout: 120000 });
+  ], { encoding: 'utf8', timeout: 120000, env });
   if (start.status !== 0) {
-    throw new Error(`pg_ctl start failed:\n${start.stdout || ''}${start.stderr || ''}`);
+    let log = '';
+    try { log = readFileSync(join(tmp, 'postgres.log'), 'utf8'); } catch { /* no log */ }
+    throw new Error(`pg_ctl start failed:\n${start.stdout || ''}${start.stderr || ''}${log ? `\n--- postgres.log ---\n${log}` : ''}`);
   }
   clusterStarted = true;
 }

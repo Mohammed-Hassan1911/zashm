@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../store';
 import { api } from '../lib/api';
 import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
 
@@ -16,24 +15,23 @@ const STATUS_COLORS = {
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered'];
 
 export default function TrackOrder() {
-  const storeSearchQuery = useStore((state) => state.searchQuery); // 🎯 استدعاء الـ ID المحقون من الـ Store
   const [inputOrderId, setInputOrderId] = useState('');
   const [activeOrderId, setActiveOrderId] = useState('');
   const [currentOrder, setCurrentOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [missingToken, setMissingToken] = useState(false);
   const [loadingTrack, setLoadingTrack] = useState(false);
-  // 🎯 لقط الأوردر أوتوماتيكياً: رابط التتبع الآمن (?track=...&tk=...) له الأولوية
-  // على أي قيمة قديمة في الـ store (مثل نص بحث المنتجات).
+  // 🎯 لقط الأوردر أوتوماتيكياً: رابط التتبع الآمن (?track=...&tk=...) هو المصدر
+  // الوحيد. نص بحث المنتجات في الـ store ليس رقم طلب ويجب ألا يملأ هذا الحقل.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const idFromUrl = params.get('track');
-    const id = (idFromUrl || storeSearchQuery || '').trim();
+    const id = (idFromUrl || '').trim();
     if (id) {
       setActiveOrderId(id);
       setInputOrderId(id);
     }
-  }, [storeSearchQuery]);
+  }, []);
 
   // البحث عن الطلب عبر السيرفر (لا يوجد نسخ محلية من الطلبات لضمان الخصوصية)
   useEffect(() => {

@@ -4,6 +4,7 @@ import { X, ShoppingBag, Trash2, Plus, Minus } from 'lucide-react';
 import { useStore } from '../../store';
 import { toast } from '../ui/BackToTop';
 import { focusFirstElement, redirectOutsideFocus, trapTabKey } from '../../lib/focus-trap';
+import { effectivePrice } from '../../lib/pricing';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="100"%3E%3Crect fill="%23222" width="80" height="100"/%3E%3C/svg%3E';
 
@@ -98,7 +99,7 @@ export default function CartDrawer() {
                 <ShoppingBag size={20} color="var(--gold)" />
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>Shopping Bag</span>
                 <span style={{ background: 'var(--gold)', color: 'var(--bg)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                  {cart.reduce((s, i) => s + i.qty, 0)}
+                  {cart.reduce((s, i) => s + (i.qty ?? 0), 0)}
                 </span>
               </div>
               <button onClick={() => setCartOpen(false)} aria-label="Close shopping bag" style={{ color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
@@ -141,7 +142,7 @@ export default function CartDrawer() {
                           <p style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.product?.name || 'Product'}</p>
                           <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 4 }}>Size: {item.size} · Color: {item.color}</p>
                           <p style={{ color: 'var(--gold)', fontSize: 14, fontWeight: 600, margin: 0 }}>
-                            EGP {(((item.product?.salePrice || item.product?.price) ?? 0) * (item.qty ?? 0)).toLocaleString()}
+                            EGP {(effectivePrice(item.product) * (item.qty ?? 0)).toLocaleString()}
                           </p>
                         </div>
                         

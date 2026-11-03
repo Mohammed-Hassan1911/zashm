@@ -7,6 +7,7 @@ import StockFeedback from '../components/shop/StockFeedback';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
 import { filterGovernorates, getShippingCost, toCanonicalGovernorate } from '../lib/egyptCities';
 import { clearCheckoutIdempotencyKey, getCheckoutIdempotencyKey } from '../lib/orderIdempotency.mjs';
+import { effectivePrice } from '../lib/pricing';
 import { clearOrderConfirmation, readOrderConfirmation, saveOrderConfirmation } from '../lib/orderConfirmation.mjs';
 
 // يطابق المحافظة المكتوبة (عربي/إنجليزي، بأي حالة أحرف) مع القائمة الرسمية،
@@ -174,7 +175,7 @@ export function CartPage() {
                           </button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                          <span style={{ color: '#b9a06c', fontSize: 15, fontWeight: 600 }}>EGP {(((item?.product?.salePrice || item?.product?.price) ?? 0) * (item?.qty ?? 0)).toLocaleString()}</span>
+                          <span style={{ color: '#b9a06c', fontSize: 15, fontWeight: 600 }}>EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}</span>
                           <button onClick={() => removeFromCart(item?.key)}
                             type="button"
                             aria-label={`Remove ${item?.product?.name || 'item'} from bag`}
@@ -1070,7 +1071,7 @@ export function CheckoutPage() {
                       </div>
                     </div>
                     <span style={{ fontSize:12, fontWeight:600, color:'var(--gold)', whiteSpace:'nowrap', marginLeft: 'auto', textAlign: 'right' }}>
-                      EGP {((((i?.product?.salePrice || i?.product?.price) ?? 0) * (i?.qty ?? 0))).toLocaleString()}
+                      EGP {(effectivePrice(i?.product) * (i?.qty ?? 0)).toLocaleString()}
                     </span>
                   </div>
                 ))}

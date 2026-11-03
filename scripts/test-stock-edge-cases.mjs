@@ -36,8 +36,8 @@ ok(/let stockAmount = 0/.test(ordersSrc), 'default stock is 0');
 ok(/Number\.isFinite/.test(ordersSrc), 'finite stock/price checks present');
 ok(/hasSizesOrColors && !hasVariantStock/.test(ordersSrc), 'phantom variants rejected');
 ok(/Object\.prototype\.hasOwnProperty\.call\(pv, variantKey\)/.test(ordersSrc), 'unknown variant key rejected');
-ok(/rawSale !== null && rawSale !== undefined/.test(ordersSrc), 'salePrice = 0 preserved (null check)');
-ok(/unitPrice < 0/.test(ordersSrc), 'negative price rejected');
+ok(/saleNum > 0/.test(ordersSrc) && /saleNum < priceNum/.test(ordersSrc), 'salePrice only counts when 0 < sale < price (0 means no discount)');
+ok(/unitPrice <= 0/.test(ordersSrc), 'negative and zero prices rejected');
 
 console.log('\n[2] atomic_place_order.sql hardened checks');
 ok(/v_prod\.active IS NOT TRUE/.test(rpcSrc), 'SQL active check uses IS NOT TRUE');
