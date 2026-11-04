@@ -4,7 +4,7 @@ import React from 'react';
 // anchor performs a full navigation back to the home page.
 export default function NotFoundPage() {
   return (
-    <main
+    <div
       style={{
         minHeight: '60vh',
         display: 'flex',
@@ -40,6 +40,6 @@ export default function NotFoundPage() {
       >
         Back to the store
       </a>
-    </main>
+    </div>
   );
 }

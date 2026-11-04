@@ -195,7 +195,7 @@ export function CartPage() {
     }
   };
 
-  React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces' }); }, []);
+  React.useEffect(() => { setPageMeta({ title: 'Shopping Bag', description: 'Review your selected luxury pieces', robots: 'noindex, nofollow' }); }, []);
   // Warm the coupon function while the shopper is still reading the bag, so the
   // first Apply is not paying for a cold serverless start. Throttled to once a
   // minute by warmCouponEndpoint().
@@ -388,7 +388,7 @@ export function CheckoutPage() {
   // filling the form, not only after pressing Place Order.
   const liveIssues = cartLineIssues();
 
-  React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order' }); }, []);
+  React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order', robots: 'noindex, nofollow' }); }, []);
   React.useEffect(() => { refreshAppliedDiscount(); }, []);
   // Same warm-up as the bag: checkout is the likeliest place to paste a code.
   React.useEffect(() => { warmCouponEndpoint(); }, []);
@@ -1315,7 +1315,7 @@ export function WishlistPage() {
   // 🎯 إخفاء المنتجات غير النشطة عن العملاء في قائمة المفضلة
   const wished = products.filter(p => p.active !== false && wishlist.includes(p.id));
 
-  React.useEffect(() => { setPageMeta({ title: 'Wishlist', description: 'Your saved luxury pieces' }); }, []);
+  React.useEffect(() => { setPageMeta({ title: 'Wishlist', description: 'Your saved luxury pieces', robots: 'noindex, nofollow' }); }, []);
 
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>

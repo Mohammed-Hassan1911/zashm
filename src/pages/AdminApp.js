@@ -123,7 +123,7 @@ export default function AdminApp() {
     navigateAdminPage('products');
   }, [navigateAdminPage]);
 
-  useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard' }); }, []);
+  useEffect(() => { setPageMeta({ title: 'Admin Panel', description: 'ZASHM Admin Dashboard', robots: 'noindex, nofollow' }); }, []);
 
   // Reset to the dashboard whenever the signed-in identity changes, so a page
   // left open by a previous (more privileged) session is never shown.

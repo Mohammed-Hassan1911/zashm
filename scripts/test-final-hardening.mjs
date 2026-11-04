@@ -629,5 +629,45 @@ console.log('\n[13] admin image upload payload budget');
     'the drop zone advertises the real 15MB limit');
 }
 
+// ─── [14] private-page robots meta and accessibility landmarks ──────────────
+console.log('\n[14] private-page robots meta and accessibility landmarks');
+{
+  const seo = read('src/lib/seo.js');
+  ok(/if \(robots\) \{\s*setNamed\('robots', robots\);\s*\} else \{/.test(seo),
+    'setPageMeta rewrites robots to index, follow only when a page omits robots');
+
+  const cart = read('src/pages/CartPage.js');
+  for (const title of ['Shopping Bag', 'Checkout', 'Wishlist']) {
+    const call = cart.match(new RegExp(`setPageMeta\\(\\{ title: '${title}'[^}]*\\}\\)`));
+    ok(call && /robots: 'noindex, nofollow'/.test(call[0]),
+      `the ${title} page keeps its own noindex robots meta (matching X-Robots-Tag)`);
+  }
+
+  const admin = read('src/pages/AdminApp.js');
+  ok(/setPageMeta\(\{ title: 'Admin Panel'[^}]*robots: 'noindex, nofollow'/.test(admin),
+    'the admin panel keeps its own noindex robots meta');
+
+  const app = read('src/App.js');
+  ok(/<main>\s*<AnimatePresence>/.test(app) && /<\/AnimatePresence>\s*<\/main>/.test(app),
+    'storefront page content renders inside a main landmark');
+  ok((app.match(/<main>/g) || []).length === 1,
+    'the storefront declares exactly one main landmark');
+  ok(!/<h4 style=\{titleStyle\}>/.test(app) &&
+     (app.match(/<h2 style=\{titleStyle\}>/g) || []).length === 3,
+    'footer section titles use h2 so the heading order never skips a level');
+  ok(/aria-label="ZASHM on Instagram"/.test(app) && /aria-label="ZASHM on Facebook"/.test(app),
+    'footer social icon links expose an accessible name');
+
+  const notFound = read('src/pages/NotFoundPage.js');
+  ok(!/<main/.test(notFound),
+    'the not-found page does not nest a second main inside the app landmark');
+
+  const productCard = read('src/components/shop/ProductCard.js');
+  ok(!/aria-label=\{`View\s/.test(productCard),
+    'product cards take their accessible name from their visible content');
+  ok(/role="button"\s*\n\s*tabIndex=\{0\}/.test(productCard),
+    'product cards stay keyboard reachable after dropping the aria-label override');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -211,27 +211,29 @@ function AppInner() {
           <Header />
           <CartDrawer />
 
-          <AnimatePresence>
-            <motion.div
-              key={currentPage}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
-            >
-              <Suspense fallback={<PageLoading page={currentPage} />}>
-                <PageReadySignal onReady={markPageReady} />
-                {currentPage === 'home' && <HomePage />}
-                {currentPage === 'shop' && <ShopPage />}
-                {currentPage === 'product' && <ProductPage />}
-                {currentPage === 'cart' && <CartPage />}
-                {currentPage === 'checkout' && <CheckoutPage />}
-                {currentPage === 'wishlist' && <WishlistPage />}
-                {currentPage === 'track' && <TrackOrder />}
-                {currentPage === 'notfound' && <NotFoundPage />}
-              </Suspense>
-            </motion.div>
-          </AnimatePresence>
+          <main>
+            <AnimatePresence>
+              <motion.div
+                key={currentPage}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
+              >
+                <Suspense fallback={<PageLoading page={currentPage} />}>
+                  <PageReadySignal onReady={markPageReady} />
+                  {currentPage === 'home' && <HomePage />}
+                  {currentPage === 'shop' && <ShopPage />}
+                  {currentPage === 'product' && <ProductPage />}
+                  {currentPage === 'cart' && <CartPage />}
+                  {currentPage === 'checkout' && <CheckoutPage />}
+                  {currentPage === 'wishlist' && <WishlistPage />}
+                  {currentPage === 'track' && <TrackOrder />}
+                  {currentPage === 'notfound' && <NotFoundPage />}
+                </Suspense>
+              </motion.div>
+            </AnimatePresence>
+          </main>
 
           {firstPageReady && <Footer setModal={setActiveModal} />}
           <MobileNav />
@@ -436,13 +438,13 @@ function Footer({ setModal }) {
               <span>{'Luxury fashion crafted with elegance and precision for the modern gentleman.'}</span>
             </p>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <a href="https://www.instagram.com/zashm_brand?obrf=MWh1NHhqMWQ4MTRycg%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
-              <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}><Facebook size={18} /></a>
+              <a href="https://www.instagram.com/zashm_brand?obrf=MWh1NHhqMWQ4MTRycg%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" aria-label="ZASHM on Instagram" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
+              <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" aria-label="ZASHM on Facebook" style={{ color: 'var(--gold)' }}><Facebook size={18} /></a>
             </div>
           </div>
 
           <div>
-            <h4 style={titleStyle}>{'Quick Links'}</h4>
+            <h2 style={titleStyle}>{'Quick Links'}</h2>
             {[
               ['Home', 'home', Home],
               ['Shop', 'shop', ShoppingBag],
@@ -456,7 +458,7 @@ function Footer({ setModal }) {
           </div>
 
           <div>
-  <h4 style={titleStyle}>{'Customer Care'}</h4>
+  <h2 style={titleStyle}>{'Customer Care'}</h2>
   
   {/* 🎯 تحويل الـ button إلى motion.button لإضافة الأنيميشن الذكي */}
   <motion.button 
@@ -504,7 +506,7 @@ function Footer({ setModal }) {
 </div>
 
           <div>
-            <h4 style={titleStyle}>{'Contact'}</h4>
+            <h2 style={titleStyle}>{'Contact'}</h2>
             <div className="footer-contact" style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />

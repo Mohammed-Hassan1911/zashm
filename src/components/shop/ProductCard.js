@@ -98,7 +98,6 @@ export default function ProductCard({ product, index = 0 }) {
       onKeyDown={handleCardKeyDown}
       role="button"
       tabIndex={0}
-      aria-label={`View ${product?.name || 'product'}`}
     >
       {/* PRODUCT IMAGE */}
       <div
