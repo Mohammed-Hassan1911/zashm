@@ -653,7 +653,7 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
   ok((app.match(/<main>/g) || []).length === 1,
     'the storefront declares exactly one main landmark');
   ok(!/<h4 style=\{titleStyle\}>/.test(app) &&
-     (app.match(/<h2 style=\{titleStyle\}>/g) || []).length === 3,
+     (app.match(/<h2 className="footer-col-title">/g) || []).length === 3,
     'footer section titles use h2 so the heading order never skips a level');
   ok(/aria-label="ZASHM on Instagram"/.test(app) && /aria-label="ZASHM on Facebook"/.test(app),
     'footer social icon links expose an accessible name');

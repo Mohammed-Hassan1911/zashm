@@ -102,13 +102,15 @@ export default function HomePage() {
           </motion.div>
         </motion.div>
 
-        <motion.button
-          type="button"
-          aria-label="Scroll to the collection"
-          animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}
-          style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', zIndex: 5, background: 'none', border: 'none', padding: 8 }}
-          onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
-        ><ChevronDown size={24} aria-hidden="true" /></motion.button>
+        <div style={{ position: 'absolute', bottom: 32, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 5, pointerEvents: 'none' }}>
+          <motion.button
+            type="button"
+            aria-label="Scroll to the collection"
+            animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}
+            onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+            style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', background: 'none', border: 'none', padding: 8, pointerEvents: 'auto' }}
+          ><ChevronDown size={24} aria-hidden="true" /></motion.button>
+        </div>
       </section>
 
       {productsLoadStatus === 'error' && (

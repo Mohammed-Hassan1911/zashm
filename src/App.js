@@ -444,7 +444,7 @@ function Footer({ setModal }) {
           </div>
 
           <div>
-            <h2 style={titleStyle}>{'Quick Links'}</h2>
+            <h2 className="footer-col-title">{'Quick Links'}</h2>
             {[
               ['Home', 'home', Home],
               ['Shop', 'shop', ShoppingBag],
@@ -458,7 +458,7 @@ function Footer({ setModal }) {
           </div>
 
           <div>
-  <h2 style={titleStyle}>{'Customer Care'}</h2>
+  <h2 className="footer-col-title">{'Customer Care'}</h2>
   
   {/* 🎯 تحويل الـ button إلى motion.button لإضافة الأنيميشن الذكي */}
   <motion.button 
@@ -506,7 +506,7 @@ function Footer({ setModal }) {
 </div>
 
           <div>
-            <h2 style={titleStyle}>{'Contact'}</h2>
+            <h2 className="footer-col-title">{'Contact'}</h2>
             <div className="footer-contact" style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 2.2 }}>
               <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
@@ -526,5 +526,4 @@ function Footer({ setModal }) {
   );
 }
 
-const titleStyle = { fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 20, fontWeight: 600 };
 const linkStyle = { display: 'block', marginBottom: 12, color: 'var(--text2)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' };

@@ -224,36 +224,36 @@ export function CartPage() {
   };
 
   return (
-    <div style={{ paddingTop: 90, minHeight: '80vh' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
+    <div style={{ paddingTop: 90, minHeight: '80vh' }} className="cart-page">
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(24px, 5vw, 40px) clamp(16px, 4vw, 24px)' }}>
         <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
-          style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>Shopping Bag</motion.h1>
+          style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 7vw, 40px)', fontWeight: 400, letterSpacing: 'clamp(1px, 0.5vw, 2px)', marginBottom: 'clamp(20px, 5vw, 40px)' }}>Shopping Bag</motion.h1>
 
         <LiveStockBanner issues={lineIssues} detailed={false} />
 
         {safeCart.length === 0 ? (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
             <ShoppingBag size={80} color="var(--border)" style={{ margin: '0 auto 24px', display: 'block' }} />
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</p>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(20px, 5.5vw, 28px)', marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</p>
             <p style={{ color: 'var(--text3)', marginBottom: 32 }}>Explore our collection to find your next luxury piece</p>
             <button className="gold-btn" onClick={() => setPage('shop')}>Explore Collection</button>
           </motion.div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="cart-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 'clamp(20px, 5vw, 40px)' }} className="cart-grid">
             <div>
               <AnimatePresence>
                 {safeCart.map(item => (
                   <motion.div key={item?.key} layout initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0, height:0, overflow:'hidden' }}
-                    style={{ display: 'flex', gap: 20, padding: '20px 0', borderBottom: '1px solid var(--border)' }}>
+                    style={{ display: 'flex', gap: 'clamp(12px, 3vw, 20px)', padding: 'clamp(14px, 3.5vw, 20px) 0', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ position:'relative' }}>
                       <img src={item?.product?.images?.[0] ?? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'} alt={item?.product?.name ?? 'Product'}
                         onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'; }}
-                        style={{ width: 110, height: 138, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} loading="lazy" />
+                        style={{ width: 'clamp(74px, 22vw, 110px)', aspectRatio: '3 / 4', height: 'auto', objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} loading="lazy" />
                     </div>
                     <div style={{ flex: 1 }}>
                       <p style={{ color: 'var(--text3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>{item?.product?.category ?? 'General'}</p>
-                      <p style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 500, marginBottom: 5 }}>{item?.product?.name ?? 'Unknown Product'}</p>
-                      <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>
+                      <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(15px, 4.3vw, 19px)', fontWeight: 500, marginBottom: 5 }}>{item?.product?.name ?? 'Unknown Product'}</p>
+                      <p style={{ color: 'var(--text2)', fontSize: 'clamp(10px, 3vw, 11px)', marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2 }}>
                           <button onClick={() => (item?.qty ?? 0) > 1 ? changeQty(item, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
@@ -289,7 +289,7 @@ export function CartPage() {
 
             <div>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: 24, position: 'sticky', top: 100 }}>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 20 }}>Order Summary</h3>
+                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(17px, 4.6vw, 20px)', marginBottom: 20 }}>Order Summary</h3>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ color: 'var(--text2)', fontSize: 13 }}>Subtotal</span>
                   <span style={{ fontSize: 13 }}>EGP {subtotal.toLocaleString()}</span>
@@ -309,7 +309,7 @@ export function CartPage() {
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 18 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontWeight: 600 }}>Total</span>
-                    <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>EGP {total.toLocaleString()}</span>
+                    <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 'clamp(18px, 5vw, 22px)', fontWeight: 600 }}>EGP {total.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -1001,7 +1001,7 @@ export function CheckoutPage() {
 
   if (safeCart.length === 0) {
     return (
-      <div style={{ paddingTop: 90, minHeight: '80vh' }}>
+      <div style={{ paddingTop: 90, minHeight: '80vh' }} className="cart-page">
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
           {/* The bag only empties when the shopper removes a line themselves.
               A server-side rejection still needs its reason visible here. */}

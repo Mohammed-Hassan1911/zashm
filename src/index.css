@@ -1743,3 +1743,40 @@ main, [role="main"] {
     transform: none;
   }
 }
+
+/* ─── Footer column titles (Quick Links / Customer Care / Contact) ─────────── */
+.footer-col-title {
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+@media (max-width: 768px) {
+  .footer-col-title {
+    font-size: 9px;
+    letter-spacing: 1.3px;
+    margin-bottom: 12px;
+  }
+}
+@media (max-width: 420px) {
+  .footer-col-title {
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+}
+
+/* ─── Cart page: no iOS zoom on the coupon field + compact placeholders ──── */
+@media (max-width: 768px) {
+  .cart-page input,
+  .cart-page textarea,
+  .cart-page select {
+    font-size: 16px;
+  }
+  .cart-page input::placeholder,
+  .checkout-grid input::placeholder {
+    font-size: 12px;
+  }
+}
