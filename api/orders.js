@@ -98,23 +98,45 @@ async function placeOrder(req, res) {
     // 2b. Rebuild line items from DB prices + validate stock availability.
     const orderItems = [];
     const stockErrors = [];
-    // Structured issues so the client can auto-correct the cart quantities.
+    // Structured issues so the client can highlight and repair the exact line.
     const stockIssues = [];
+
+    // The single way to refuse one cart line. The message is deduplicated (the
+    // same variation can sit on several lines) and every issue carries its
+    // size/color, so the storefront marks that line and nothing else. A
+    // product-wide refusal (nothing in this product can be ordered) sets
+    // productWide so the client marks every line of that product.
+    const rejectLine = (message, item, options = {}) => {
+      const { available = 0, missing = false, requested = null, productWide = false } = options;
+      if (!stockErrors.includes(message)) stockErrors.push(message);
+      const size = item.size || '';
+      const color = item.color || '';
+      const qty = requested === null ? Number(item.qty || 0) : requested;
+      const existing = stockIssues.find(
+        (si) => si.productId === item.productId && si.size === size && si.color === color
+      );
+      if (existing) {
+        existing.requested = Math.max(existing.requested, qty);
+        existing.available = Math.min(existing.available, available);
+        existing.missing = existing.missing || missing;
+        existing.productWide = existing.productWide || productWide;
+      } else {
+        stockIssues.push({ productId: item.productId, size, color, requested: qty, available, missing, productWide });
+      }
+    };
+    const variation = (item) => {
+      const size = item.size || '';
+      const color = item.color || '';
+      return size || color ? ` (${size} - ${color})` : '';
+    };
+
     for (const item of items) {
       const p = productMap.get(item.productId);
       // SEC-11: a product the admin deactivated must never be sellable, even if
       // it is still in a shopper's saved cart. Treat it exactly like a product
       // that disappeared so the client removes it.
       if (!p || p.active !== true) {
-        stockErrors.push('A product in your cart is no longer available.');
-        stockIssues.push({
-          productId: item.productId,
-          size: item.size || '',
-          color: item.color || '',
-          requested: Number(item.qty || 0),
-          available: 0,
-          missing: true,
-        });
+        rejectLine('A product in your cart is no longer available.', item, { missing: true });
         continue;
       }
       const rawSale = p.salePrice;
@@ -129,15 +151,7 @@ async function placeOrder(req, res) {
         && Number.isFinite(priceNum) && saleNum < priceNum;
       const unitPrice = hasSale ? saleNum : priceNum;
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-        stockErrors.push('A product in your cart has an invalid price.');
-        stockIssues.push({
-          productId: item.productId,
-          size: item.size || '',
-          color: item.color || '',
-          requested: Number(item.qty || 0),
-          available: 0,
-          missing: true,
-        });
+        rejectLine('A product in your cart has an invalid price.', item, { missing: true });
         continue;
       }
       const variantKey = `${item.size}-${item.color}`;
@@ -149,34 +163,44 @@ async function placeOrder(req, res) {
       // global counter that would let any size/color be ordered.
       const hasSizesOrColors = (Array.isArray(p.sizes) && p.sizes.length > 0)
         || (Array.isArray(p.colors) && p.colors.length > 0);
+      const declaredSizes = Array.isArray(p.sizes) ? p.sizes : [];
+      const declaredColors = Array.isArray(p.colors) ? p.colors : [];
       if (hasSizesOrColors && !hasVariantStock) {
-        stockErrors.push('A product in your cart is not available in the selected variation.');
-        stockIssues.push({
-          productId: item.productId,
-          size: item.size || '',
-          color: item.color || '',
-          requested: Number(item.qty || 0),
-          available: 0,
-          missing: false,
-        });
+        // The mirror image of the case below: options are declared but the variant
+        // matrix is empty, so no size/colour can be matched and the global counter
+        // must not sell them. One sentence for both shapes of broken options.
+        rejectLine('This product is not available to order right now — its size and color options are not set up.', item, { productWide: true });
+        continue;
+      }
+      // REVISION 10 (owner decision 3ب): the mirror image. A variant pool with no
+      // declared size list or no declared colour list is an invalid configuration
+      // — nothing can be matched against it, so it is refused instead of sold by
+      // raw key lookup. Same rule in the storefront (src/lib/pricing.js) and in
+      // atomic_place_order(). A production inventory (2026-11-04) found no product
+      // in this shape; migration 0c in supabase/reject_undefined_variants.sql is
+      // the pre-flight check that keeps that promise.
+      if (hasVariantStock && (declaredSizes.length === 0 || declaredColors.length === 0)) {
+        rejectLine('This product is not available to order right now — its size and color options are not set up.', item, { productWide: true });
         continue;
       }
       if (hasVariantStock) {
+        // A leftover variantStock key is not permission to sell: the variation
+        // must also be declared in sizes/colors. When the admin removes a colour,
+        // its stock rows are left untouched (owner decision 2ج) but the variation
+        // itself becomes unorderable — here and inside atomic_place_order.
+        const sizeNotDeclared = !declaredSizes.includes(item.size);
+        const colorNotDeclared = !declaredColors.includes(item.color);
+        if (sizeNotDeclared || colorNotDeclared) {
+          rejectLine(`This piece is no longer available in the selected size or color${variation(item)}.`, item);
+          continue;
+        }
         // Variant products: an undefined key means zero available.
         const rawVariant = pv[variantKey];
         stockAmount = Number.isFinite(Number(rawVariant)) ? Number(rawVariant) : 0;
         if (stockAmount < 0) stockAmount = 0;
         // Reject unknown variant keys explicitly (defense in depth).
         if (!Object.prototype.hasOwnProperty.call(pv, variantKey)) {
-          stockErrors.push('A product in your cart is not available in the selected variation.');
-          stockIssues.push({
-            productId: item.productId,
-            size: item.size || '',
-            color: item.color || '',
-            requested: Number(item.qty || 0),
-            available: 0,
-            missing: false,
-          });
+          rejectLine(`A product in your cart is not available in the selected variation${variation(item)}.`, item);
           continue;
         }
       } else if (p.stock !== undefined && p.stock !== null) {
@@ -195,24 +219,8 @@ async function placeOrder(req, res) {
         const variationSuffix = hasVariantStock ? ` (${item.size} - ${item.color})` : '';
         const msg = available === 0
           ? `Sorry, this piece is out of stock${hasVariantStock ? ' for this variation' : ''}${variationSuffix}.`
-          : `Only ${available} piece(s) remaining in stock${hasVariantStock ? ' for this variation' : ''}${variationSuffix}.`;
-        if (!stockErrors.includes(msg)) stockErrors.push(msg);
-        const existing = stockIssues.find(
-          (si) => si.productId === item.productId && si.size === (item.size || '') && si.color === (item.color || '')
-        );
-        if (existing) {
-          existing.requested = Math.max(existing.requested, requested);
-          existing.available = Math.min(existing.available, available);
-        } else {
-          stockIssues.push({
-            productId: item.productId,
-            size: item.size || '',
-            color: item.color || '',
-            requested,
-            available,
-            missing: false,
-          });
-        }
+          : `Only ${available} piece${available === 1 ? '' : 's'} remaining in stock${hasVariantStock ? ' for this variation' : ''}${variationSuffix}.`;
+        rejectLine(msg, item, { available, requested });
         continue;
       }
       orderItems.push({
@@ -335,6 +343,47 @@ async function placeOrder(req, res) {
             requested: null,
             available,
             missing: false,
+          }],
+        });
+      }
+      if (reason === 'undefined_variant') {
+        // The variation survives only in variantStock (its size/colour was
+        // removed from the product). available: 0 + missing: false marks that one
+        // line only, so the product's other variations stay in the bag.
+        const variationText = `${r.size || ''} - ${r.color || ''}`.trim();
+        const msg = `This piece is no longer available in the selected size or color${variationText ? ` (${variationText})` : ''}.`;
+        return json(res, 422, {
+          success: false,
+          error: msg,
+          errors: [msg],
+          stockIssues: [{
+            productId: Number(r.productId) || 0,
+            size: r.size || '',
+            color: r.color || '',
+            requested: null,
+            available: 0,
+            missing: false,
+            productWide: false,
+          }],
+        });
+      }
+      if (reason === 'invalid_product_config') {
+        // The product itself cannot be sold: declared options without a variant
+        // pool, or a variant pool without declared options. Every line of it is
+        // marked, and the shopper keeps the rest of the bag.
+        const cfgMsg = `This product is not available to order right now — its size and color options are not set up.${r.name ? ` (${r.name})` : ''}`;
+        return json(res, 422, {
+          success: false,
+          error: cfgMsg,
+          errors: [cfgMsg],
+          stockIssues: [{
+            productId: Number(r.productId) || 0,
+            size: r.size || '',
+            color: r.color || '',
+            requested: null,
+            available: 0,
+            missing: false,
+            productWide: true,
           }],
         });
       }

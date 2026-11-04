@@ -4,7 +4,7 @@ import { supabase } from './lib/supabase'; // ربط سوبابيز الأونل
 import { api } from './lib/api';
 import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
 import { clearOrderConfirmation } from './lib/orderConfirmation.mjs';
-import { effectivePrice } from './lib/pricing';
+import { effectivePrice, hasInvalidVariantConfig, hasVariantStock, isSellableVariant, sellableStockFor } from './lib/pricing';
 
 // دالة مساعدة موحدة لحساب تاريخ اليوم بالكامل بناءً على التوقيت المحلي (Local Time) لتجنب مشاكل الـ UTC
 function getLocalTodayDate() {
@@ -386,24 +386,26 @@ export const useStore = create((set, get) => ({
 
     const products = get().products;
     const freshProduct = products.find(p => p.id == product.id) || product;
-    const variantKey = `${size}-${color}`;
 
-    let stockAmount = null; // null = stock unknown (no variantStock, no stock column)
-    const pv = freshProduct.variantStock;
-    const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
-    if (hasVariantStock) {
-      // موجود متغيرات: المفتاح غير المعرّف = صفر (لا نرجع للمخزون العام = مجموع المتغيرات)
-      stockAmount = Number(pv[variantKey]) || 0;
-    } else if (freshProduct.stock !== undefined && freshProduct.stock !== null) {
-      stockAmount = Number(freshProduct.stock);
+    // One rule for the whole storefront (src/lib/pricing.js): a variation is only
+    // sellable while its size AND colour are still declared on the product. A
+    // leftover variantStock key is not permission to add it to the bag.
+    if (!isSellableVariant(freshProduct, size, color)) {
+      return {
+        success: false,
+        error: hasInvalidVariantConfig(freshProduct)
+          ? 'This product is not available to order right now.'
+          : `This variation (${size || '—'} · ${color || '—'}) is no longer available.`,
+      };
     }
-
-    // reservedStock is not part of availability: nothing writes or expires it,
-    // and products_public does not expose it. The server re-checks real
-    // availability inside atomic_place_order, which is the authoritative gate;
-    // this is only a friendlier early warning.
-    const stockKnown = stockAmount !== null && Number.isFinite(stockAmount);
-    const available = stockKnown ? Math.max(0, stockAmount) : 0;
+    // reservedStock is not part of availability (nothing writes or expires it),
+    // and the server re-checks inside atomic_place_order — this is the friendly
+    // early warning, not the gate.
+    const stockKnown = hasVariantStock(freshProduct)
+      ? true
+      : (freshProduct.stock !== undefined && freshProduct.stock !== null
+        && Number.isFinite(Number(freshProduct.stock)));
+    const available = sellableStockFor(freshProduct, size, color);
     const currentInCart = (get().cart || []).find(i => i.product?.id == product.id && i.size === size && i.color === color)?.qty || 0;
 
     if (stockKnown && currentInCart + qty > available) {
@@ -449,13 +451,16 @@ export const useStore = create((set, get) => ({
     const currentProduct = products.find(p => p.id == cartItem.product.id) || cartItem.product;
 
     if (currentProduct) {
-      const variantKey = `${cartItem.size}-${cartItem.color}`;
-      const pv = currentProduct.variantStock;
-      const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
-      const availableStock = hasVariantStock ? (Number(pv[variantKey]) || 0) : currentProduct.stock;
-
-      if (availableStock !== undefined && availableStock !== null && newQty > Number(availableStock)) {
-        const available = Math.max(0, Number(availableStock));
+      if (!isSellableVariant(currentProduct, cartItem.size, cartItem.color)) {
+        return {
+          success: false,
+          error: hasInvalidVariantConfig(currentProduct)
+            ? 'This product is not available to order right now.'
+            : `This variation (${cartItem.size || '—'} · ${cartItem.color || '—'}) is no longer available.`,
+        };
+      }
+      const available = sellableStockFor(currentProduct, cartItem.size, cartItem.color);
+      if (newQty > available) {
         return {
           success: false,
           error: available > 0
@@ -471,42 +476,108 @@ export const useStore = create((set, get) => ({
     return { success: true };
   },
 
-  // ضبط تلقائي للكميات بعد رد السيرفر: يقلل الكميات المتاحة أو يشيل
-  // المنتجات غير المتوفرة، ويرجع ملخص التغييرات لعرض تنبيه ثنائي اللغة.
+  // ─── PROACTIVE BAG CHECK (never mutates the cart) ────────────────────────────
+  // Every bag line is measured against the LIVE product row before the shopper
+  // reaches the server: an undeclared variation, an out-of-stock variation or an
+  // invalid variant configuration. blocking: true means the order cannot succeed,
+  // so the line is marked and offers Remove — the bag is never edited silently.
+  // Lines whose product is missing from the catalogue are skipped: when the list
+  // has not loaded (or failed), the server stays the only authority.
+  cartLineIssues: () => {
+    const cart = get().cart || [];
+    const products = get().products || [];
+    if (cart.length === 0 || products.length === 0) return [];
+
+    const issues = [];
+    for (const item of cart) {
+      const live = products.find(p => p.id == item.product?.id);
+      if (!live) continue;
+
+      const size = item.size || '';
+      const color = item.color || '';
+      const requested = Number(item.qty) || 0;
+      const base = { key: item.key, productId: live.id, name: live.name || 'this item', size, color };
+      const variationText = (size || color) ? ` (${size} - ${color})` : '';
+
+      if (hasInvalidVariantConfig(live)) {
+        issues.push({ ...base, requested, available: 0, blocking: true, productWide: true,
+          reason: 'invalid_config',
+          message: 'This product is not available to order right now — its size and color options are not set up.' });
+        continue;
+      }
+      if (!isSellableVariant(live, size, color)) {
+        issues.push({ ...base, requested, available: 0, blocking: true, productWide: false,
+          reason: 'undefined_variant',
+          message: `This piece is no longer available in the selected size or color${variationText}.` });
+        continue;
+      }
+      const available = sellableStockFor(live, size, color);
+      // Wording is deliberately identical to api/orders.js, so the checkout can
+      // show one sentence per problem instead of a client copy and a server copy.
+      const scope = hasVariantStock(live) ? ' for this variation' : '';
+      if (available <= 0) {
+        issues.push({ ...base, requested, available: 0, blocking: true, productWide: false,
+          reason: 'out_of_stock',
+          message: `Sorry, this piece is out of stock${scope}${variationText}.` });
+      } else if (requested > available) {
+        issues.push({ ...base, requested, available, blocking: false, productWide: false,
+          reason: 'oversold',
+          message: `Only ${available} piece${available === 1 ? '' : 's'} remaining in stock${scope}${variationText}.` });
+      }
+    }
+    return issues;
+  },
+
+  // Reconciliation after the server refused the order. Quantities that the server
+  // says are too high are lowered (announced in the notice). Lines that cannot be
+  // ordered at all are NOT deleted — they are returned as `unavailable` so the
+  // bag marks them and the shopper removes them (owner decision, 2026-11-04: no
+  // silent removals).
   reduceCartForStockIssues: (stockIssues) => {
-    if (!Array.isArray(stockIssues) || stockIssues.length === 0) return { reduced: [], removed: [] };
+    if (!Array.isArray(stockIssues) || stockIssues.length === 0) return { reduced: [], unavailable: [] };
     const cart = get().cart || [];
     const reduced = [];
-    const removed = [];
+    const unavailable = [];
     const kept = [];
+    let changed = false;
+
+    const issueFor = (item) => stockIssues.find(si => {
+      if (Number(si.productId) !== Number(item.product?.id)) return false;
+      // A product-wide refusal (gone, deactivated, invalid configuration) marks
+      // every line of that product; a variation refusal marks only its line.
+      if (si.missing || si.productWide) return true;
+      return (si.size || '') === (item.size || '') && (si.color || '') === (item.color || '');
+    });
 
     for (const item of cart) {
-      const issue = stockIssues.find(si => {
-        if (Number(si.productId) !== Number(item.product?.id)) return false;
-        if (si.missing) return true;
-        return (si.size || '') === (item.size || '') && (si.color || '') === (item.color || '');
-      });
-
+      const issue = issueFor(item);
       if (!issue) { kept.push(item); continue; }
 
       const label = item.product?.name || 'this item';
-      if (issue.missing || Number(issue.available) <= 0) {
-        removed.push({ name: label, size: item.size || '', color: item.color || '' });
+      const entry = { key: item.key, name: label, size: item.size || '', color: item.color || '',
+        available: Number(issue.available) || 0 };
+
+      if (issue.missing || issue.productWide || !(Number(issue.available) > 0)) {
+        unavailable.push(entry);
+        kept.push(item);
         continue;
       }
 
-      const avail = Math.max(1, Math.floor(Number(issue.available)));
+      const avail = Math.floor(Number(issue.available));
       if (Number(item.qty) > avail) {
-        reduced.push({ name: label, size: item.size || '', color: item.color || '', from: Number(item.qty), to: avail });
+        reduced.push({ ...entry, from: Number(item.qty), to: avail });
         kept.push({ ...item, qty: avail });
+        changed = true;
       } else {
         kept.push(item);
       }
     }
 
-    const saved = get()._saveCart(kept);
-    set({ cart: saved });
-    return { reduced, removed };
+    if (changed) {
+      const saved = get()._saveCart(kept);
+      set({ cart: saved });
+    }
+    return { reduced, unavailable };
   },
 
   clearCart: () => {
@@ -581,6 +652,29 @@ export const useStore = create((set, get) => ({
   placeOrder: async (orderData, idempotencyKey = null) => {
     const { cart, appliedDiscount, clearCart } = get();
     const products = get().products;
+
+    // Proactive gate: never submit a bag the live catalogue already says cannot
+    // be ordered. The server stays authoritative (this only saves the shopper a
+    // rejected round-trip), and the same issues shape are returned so the UI has
+    // one rendering path.
+    const blockingIssues = get().cartLineIssues().filter(i => i.blocking);
+    if (blockingIssues.length > 0) {
+      const errors = [];
+      for (const issue of blockingIssues) {
+        if (!errors.includes(issue.message)) errors.push(issue.message);
+      }
+      return {
+        success: false,
+        blockedLocally: true,
+        error: errors[0],
+        errors,
+        stockIssues: blockingIssues.map(i => ({
+          productId: i.productId, size: i.size, color: i.color,
+          requested: i.requested, available: 0,
+          missing: false, productWide: i.productWide === true,
+        })),
+      };
+    }
 
     // المرور عبر السيرفر: الأسعار والمخزون والكوبون والشحن قبل إنشاء الطلب.
     const items = cart.map(i => ({

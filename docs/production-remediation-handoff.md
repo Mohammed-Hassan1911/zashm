@@ -108,7 +108,7 @@
 ### 4.2 ترتيب التنفيذ الإلزامي
 
 1. **Pre-flight** أعلاه (قراءة فقط).
-2. `supabase/atomic_place_order.sql`
+2. `supabase/atomic_place_order.sql` (REVISION 10 — رفض المقاس/اللون غير المعرّف، رفض الإعداد غير الصالح `invalid_product_config`، وإعادة حساب `stock` من التركيبات المعرفة فقط. وإن كان الإصدار السابق مطبَّقًا فيكفي التدرّج: `supabase/reject_undefined_variants.sql` ثم `supabase/declared_only_stock_recompute.sql` بالترتيب).
 3. `supabase/atomic_order_lifecycle.sql`
 4. `supabase/admin_protection.sql`
 5. `supabase/security_hardening.sql`
@@ -128,6 +128,7 @@ ON CONFLICT (name) DO NOTHING;
 
 13. أعد تشغيل `supabase/products_public_view.sql` — **Phase 3**.
 14. أعد فحوصات §5 كاملة، ثم راجع Vercel logs وSupabase logs لمدة 24 ساعة.
+15. `supabase/stock_hardening_constraints.sql` — **الخطوة الأخيرة، اختيارية لكن موصى بها**: قيود `NOT NULL` و`CHECK` على الأعمدة الحقيقية `"reservedStock"` و`"variantStock"` (باقتباس صحيح) داخل transaction واحد مع `lock_timeout` وفشل مغلق إن وُجدت صفوف NULL/غير صالحة. لا يعدّل أي بيانات: يعرض التقرير في §0 ثم يوقف التنفيذ إن لزم. للتراجع نفّذ `supabase/stock_hardening_constraints_rollback.sql` كما هو. أعد الفحص الثاني (تشغيل الملف مرتين) آمن لأن كل قيد محمي بفحص كتالوج.
 
 **ممنوع:** إنشاء العلم قبل خطوة 10، أو تشغيل Phase 3 قبل التحقق من الشبكة.
 
@@ -196,7 +197,9 @@ ON CONFLICT (name) DO NOTHING;
 
 كل الملفات التالية **مُعدّة للمراجعة اليدوية فقط**، ولم تُنفَّذ على أي بيئة:
 
-- `supabase/atomic_place_order.sql`
+- `supabase/atomic_place_order.sql` — REVISION 10.
+- `supabase/reject_undefined_variants.sql` — Migration 1 من 2 (لم يُطبَّق): يضيف `public.zshm_sellable_stock()` ويستبدل `atomic_place_order` برفض المقاس/اللون غير المعرّف (`undefined_variant`) ورفض variantStock بلا sizes/colors معرفة (`invalid_product_config`) وكتابة `stock` من التركيبات المعرفة فقط. نفس نص الدوال حرفيًا في الملف المرجعي، و`scripts/test-undefined-variant.mjs` يقارنهما، و`[9]` في `scripts/test-sql-concurrency.mjs` يطبّق الملف على PostgreSQL حقيقي مؤقت. الفحص 0c هو جرد المنتجات القديمة (كانت صفر وقت المراجعة) — إن رجعت أي صفوف فتوقف وراجع القائمة قبل التطبيق. لا يحذف ولا يصفّر أي مخزون ولا يمسّ الطلبات القائمة.
+- `supabase/declared_only_stock_recompute.sql` — Migration 2 من 2 (لم يُطبَّق، بعده مباشرة): يستبدل `atomic_adjust_stock` بنفس قاعدة إعادة الحساب حتى لا يتناقض الإلغاء/الاسترجاع مع الشراء. يفشل loudly إن لم يكن Migration 1 مطبَّقًا. لا يغيّر أي صف منتج عند التطبيق؛ الأرقام تتحرك فقط مع أول عملية دورة حياة حقيقية.
 - `supabase/atomic_order_lifecycle.sql`
 - `supabase/admin_protection.sql`
 - `supabase/security_hardening.sql`
@@ -205,6 +208,8 @@ ON CONFLICT (name) DO NOTHING;
 - `supabase/storage_hardening.sql`
 - `supabase/products_public_view.sql` (Phase 1 ثم Phase 3)
 - `supabase/rate_limit_storage.sql` (shared rate-limit fallback)
+- `supabase/stock_hardening_constraints.sql` — قيود NOT NULL/CHECK (لم يُطبَّق): يصحّح أسماء الأعمدة الحساسة لحالة الأحرف (`"reservedStock"` و`"variantStock"`) داخل transaction واحد مع `lock_timeout = 5s`، ويفشل مغلقًا قبل إضافة أي قيد إن وُجدت قيم NULL أو سالبة أو مفاتيح variantStock غير صالحة، ولا يحذف/يصفّر أي مخزون. كل قيد يُضاف مرة واحدة فقط (فحص `pg_constraint`) لذا إعادة التشغيل آمنة. التراجع: `supabase/stock_hardening_constraints_rollback.sql` (قابل للتنفيذ كما هو).
+- `supabase/stock_hardening_constraints_rollback.sql` (rollback للقيود فقط؛ لا يمسّ البيانات)
 - `supabase/verify_production_security.sql` (قراءة فقط)
 
 **العلم الوحيد الذي يُدخَل يدويًا بعد النشر:**

@@ -1,5 +1,25 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- ZASHM · H-02 · ATOMIC ORDER PLACEMENT + ATOMIC STOCK ADJUSTMENT
+-- REVISION 10 — two owner-approved changes (2026-11-04):
+--   1أ) products.stock is recomputed from the DECLARED size × colour combinations
+--       only (public.zshm_sellable_stock, §2b), in atomic_place_order() AND
+--       atomic_adjust_stock(). Summing every variantStock key re-added orphaned
+--       quantities on the first sale, so stock drifted above what is sellable.
+--       Legacy rows (no declared lists) keep the old all-keys sum.
+--   3ب) a product with a variant pool but NO declared sizes/colours is an invalid
+--       configuration and is refused with `invalid_product_config` — the mirror of
+--       the existing "declared options but no variant pool" refusal. Production
+--       was inventoried first (see supabase/declared_only_stock_recompute.sql):
+--       zero live products are affected, and no product was deactivated.
+--       The key quantities are still never modified.
+-- REVISION 9 — an order line must reference a size AND a colour that are still
+-- declared on the product. A variantStock key left behind when the admin removes
+-- a colour (e.g. "M-White" while colors = ["Black","Burgundy"]) used to be
+-- purchasable through the API because only the key's existence was checked. This
+-- revision returns `undefined_variant` for such lines. The stock rows themselves
+-- are NEVER modified here: removing/zeroing leftover keys stays an owner
+-- decision. Deploy via supabase/reject_undefined_variants.sql (same body), then
+-- supabase/declared_only_stock_recompute.sql for atomic_adjust_stock().
 -- REVISION 8 — reservedStock is no longer subtracted from availability. No
 -- process writes or expires that column, so subtracting it permanently hid
 -- sellable stock. The column is retained but is not part of availability.
@@ -95,6 +115,68 @@ AS $$
   ) AS t;
 $$;
 
+-- ── 2b) INTERNAL HELPER: sellable (declared-only) stock of a variant pool ─────
+-- REVISION 10 (owner decision 2026-11-04, "1أ"): products.stock is rewritten by
+-- BOTH writers of variantStock — atomic_place_order() and atomic_adjust_stock().
+-- It used to be the sum of EVERY key in the map, which re-added the quantities of
+-- orphaned keys (a colour the admin removed) on the first sale and inflated
+-- products.stock above what can actually be sold. The declared size × colour
+-- combinations are the sellable pool, so they are the stock.
+--   * declared lists present  → sum of the declared keys only (orphans excluded)
+--   * declared lists absent /
+--     empty (legacy rows)     → sum of every key: the previous behaviour, so a
+--                               product that never used the declared lists can
+--                               never be zeroed by this change.
+-- Pure and read-only: it never touches variantStock, so no quantity is deleted.
+CREATE OR REPLACE FUNCTION public.zshm_sellable_stock(
+  p_variant_stock jsonb,
+  p_sizes jsonb,
+  p_colors jsonb
+)
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = public, pg_temp
+AS $$
+  SELECT CASE
+    -- No usable variant pool: nothing to sum.
+    WHEN p_variant_stock IS NULL
+         OR jsonb_typeof(p_variant_stock) <> 'object'
+         OR p_variant_stock = '{}'::jsonb
+      THEN 0
+
+    -- Both option lists declared → the declared combinations are the stock.
+    WHEN p_sizes IS NOT NULL
+         AND jsonb_typeof(p_sizes) = 'array'
+         AND jsonb_array_length(p_sizes) > 0
+         AND p_colors IS NOT NULL
+         AND jsonb_typeof(p_colors) = 'array'
+         AND jsonb_array_length(p_colors) > 0
+      THEN COALESCE((
+        SELECT SUM(GREATEST(
+                 CASE WHEN (p_variant_stock ->> (sz.value || '-' || co.value)) ~ '^-?[0-9]+$'
+                      THEN (p_variant_stock ->> (sz.value || '-' || co.value))::integer
+                      ELSE 0 END,
+                 0))::integer
+          -- DISTINCT: a legacy row with the same size/colour listed twice must
+          -- not count the same combination twice. Exact duplicates only; do NOT
+          -- case-fold or trim here, because that could merge two different
+          -- variantStock keys ("S-Black" vs "s-Black") into one.
+          FROM (SELECT DISTINCT value FROM jsonb_array_elements_text(p_sizes))  AS sz(value)
+         CROSS JOIN (SELECT DISTINCT value FROM jsonb_array_elements_text(p_colors)) AS co(value)
+      ), 0)
+
+    -- Legacy fallback: keep summing every key (never zero a legacy product).
+    ELSE COALESCE((
+      SELECT SUM(GREATEST(
+               CASE WHEN kv.value ~ '^-?[0-9]+$' THEN kv.value::integer ELSE 0 END,
+               0))::integer
+        FROM jsonb_each_text(p_variant_stock) AS kv(key, value)
+    ), 0)
+  END;
+$$;
+
 -- ── 3) ATOMIC ORDER PLACEMENT ─────────────────────────────────────────────────
 -- One PostgreSQL transaction (a single function call) = the ONLY writer that
 -- decrements stock for new orders. Guarantees:
@@ -129,6 +211,8 @@ DECLARE
   v_available integer;
   v_var jsonb;
   v_has_variants boolean;
+  v_size_list text[];
+  v_color_list text[];
   v_total_qty integer;
   v_existing text;
   v_existing_items jsonb;
@@ -265,6 +349,34 @@ BEGIN
                                 'productId', v_id);
     END IF;
 
+    -- REVISION 10 (3ب): the mirror image. A variant pool with no declared size
+    -- list or no declared colour list has nothing to match a line against, so it
+    -- is the same invalid configuration and is refused rather than sold by raw
+    -- key lookup. The owner approved this only after a read-only inventory
+    -- (check 0c of supabase/reject_undefined_variants.sql, 2026-11-04) returned no
+    -- product in this shape. Nothing is written here: keys and quantities stay.
+    IF v_has_variants
+       AND (v_prod.sizes IS NULL OR jsonb_typeof(v_prod.sizes) <> 'array'
+            OR jsonb_array_length(v_prod.sizes) = 0
+            OR v_prod.colors IS NULL OR jsonb_typeof(v_prod.colors) <> 'array'
+            OR jsonb_array_length(v_prod.colors) = 0) THEN
+      RETURN jsonb_build_object('ok', false, 'reason', 'invalid_product_config',
+                                'productId', v_id);
+    END IF;
+
+    -- Declared options, as a text array. `x = ANY(NULL)` is NULL → the guard below
+    -- is skipped, which now only happens for products that were refused above.
+    v_size_list := NULL;
+    v_color_list := NULL;
+    IF v_prod.sizes IS NOT NULL AND jsonb_typeof(v_prod.sizes) = 'array' THEN
+      SELECT array_agg(opt) INTO v_size_list
+        FROM jsonb_array_elements_text(v_prod.sizes) AS opt;
+    END IF;
+    IF v_prod.colors IS NOT NULL AND jsonb_typeof(v_prod.colors) = 'array' THEN
+      SELECT array_agg(opt) INTO v_color_list
+        FROM jsonb_array_elements_text(v_prod.colors) AS opt;
+    END IF;
+
     IF v_has_variants THEN
       FOR v_line IN
         SELECT
@@ -277,6 +389,22 @@ BEGIN
         GROUP BY 1, 2, 3
         ORDER BY 1
       LOOP
+        -- REVISION 9: a leftover variantStock key does not authorise a sale. The
+        -- line's size AND colour must still be declared on the product. The key
+        -- and its quantity are left exactly as they are — cleaning them up is an
+        -- owner decision, never a side effect of placing an order.
+        IF NOT (v_line.size = ANY (v_size_list))
+           OR NOT (v_line.color = ANY (v_color_list)) THEN
+          RETURN jsonb_build_object(
+            'ok', false, 'reason', 'undefined_variant',
+            'productId', v_id,
+            'name', v_prod.name,
+            'size', v_line.size,
+            'color', v_line.color,
+            'variant', v_line.vkey
+          );
+        END IF;
+
         -- DECISION (2026-11-01): reservedStock is NOT subtracted. It has no
         -- writer and no expiry, so it would hide sellable stock forever. The
         -- column is kept for compatibility; availability is the variant pool.
@@ -487,13 +615,12 @@ END;
         END IF;
       END LOOP;
 
-      -- Invariant: global stock always equals the sum of variant stock.
+      -- Invariant: global stock equals the SELLABLE variant stock — the declared
+      -- size × colour keys only (§2b). Orphaned keys keep their quantities but
+      -- can no longer re-enter products.stock through a purchase.
       UPDATE public.products
          SET "variantStock" = v_var,
-             stock = (
-               SELECT COALESCE(SUM(value::integer), 0)::integer
-                 FROM jsonb_each_text(v_var)
-             )
+             stock = public.zshm_sellable_stock(v_var, v_prod.sizes, v_prod.colors)
        WHERE id = v_id;
 
     ELSE
@@ -744,16 +871,15 @@ BEGIN
         v_restored := v_restored + 1;
       END LOOP;
 
-      -- Invariant: global stock always equals the sum of variant stock. Only
-      -- write when at least one existing variant was actually adjusted.
+      -- Invariant: global stock equals the SELLABLE variant stock (§2b) — the
+      -- same rule atomic_place_order() uses, so cancelling an order cannot push
+      -- stock back above the declared pool. Only write when at least one existing
+      -- variant was actually adjusted.
       IF v_touched THEN
         UPDATE public.products
         SET
           "variantStock" = v_var,
-          stock = (
-            SELECT COALESCE(SUM(value::integer), 0)::integer
-            FROM jsonb_each_text(v_var)
-          )
+          stock = public.zshm_sellable_stock(v_var, v_prod.sizes, v_prod.colors)
         WHERE id = v_id;
       END IF;
 
@@ -782,13 +908,15 @@ $$;
 REVOKE ALL ON FUNCTION public.atomic_place_order(jsonb, text)     FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.atomic_adjust_stock(jsonb, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.zshm_order_signature(jsonb)         FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.zshm_sellable_stock(jsonb, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.atomic_place_order(jsonb, text)     TO service_role;
 GRANT EXECUTE ON FUNCTION public.atomic_adjust_stock(jsonb, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.zshm_order_signature(jsonb)         TO service_role;
+GRANT EXECUTE ON FUNCTION public.zshm_sellable_stock(jsonb, jsonb, jsonb) TO service_role;
 
 -- ── 6) POST-APPLY VERIFICATION (run after applying) ───────────────────────────
 -- SELECT proname, provolatile FROM pg_proc
--- WHERE proname IN ('atomic_place_order', 'atomic_adjust_stock', 'zshm_order_signature');
+-- WHERE proname IN ('atomic_place_order', 'atomic_adjust_stock', 'zshm_order_signature', 'zshm_sellable_stock');
 -- SELECT has_function_privilege('anon', 'public.atomic_place_order(jsonb, text)', 'EXECUTE') AS anon_can,
 --        has_function_privilege('service_role', 'public.atomic_place_order(jsonb, text)', 'EXECUTE') AS svc_can;
 -- SELECT indexdef FROM pg_indexes

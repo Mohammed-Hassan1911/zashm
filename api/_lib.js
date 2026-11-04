@@ -980,9 +980,23 @@ function validateProductPayload(p) {
     else if (!(salePrice > 0)) salePrice = null;
   }
 
+  // Option labels are compared the same way the admin UI does (trim, collapse
+  // whitespace, ignore case) and repeats are dropped while keeping the first
+  // spelling — a duplicate size/colour must never be stored twice and must
+  // never double-count stock. Variant keys are built from these spellings.
   const strArr = (v, maxLen, maxItems) => {
     if (!Array.isArray(v)) return [];
-    return v.slice(0, maxItems).map((x) => str(x).replace(/[<>]/g, '').slice(0, maxLen)).filter(Boolean);
+    const seen = new Set();
+    const unique = [];
+    for (const raw of v.slice(0, maxItems)) {
+      const value = str(raw).replace(/[<>]/g, '').trim().slice(0, maxLen);
+      if (!value) continue;
+      const key = value.replace(/\s+/g, ' ').toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(value);
+    }
+    return unique;
   };
 
   const sizes = strArr(p.sizes, 40, 30);
@@ -1002,6 +1016,22 @@ function validateProductPayload(p) {
     }
   }
 
+  // products.stock is server-authoritative for variant products: recompute it
+  // from the DECLARED combinations only instead of trusting the client. Orphan
+  // keys stay untouched inside variantStock but never contribute to the
+  // sellable total. Legacy products (no declared size/colour lists) keep their
+  // submitted global counter.
+  let storedStock = stock;
+  if (sizes.length > 0 && colors.length > 0) {
+    storedStock = 0;
+    for (const size of sizes) {
+      for (const color of colors) {
+        const qty = Number(variantStock[`${size}-${color}`]);
+        if (Number.isFinite(qty) && qty > 0) storedStock += qty;
+      }
+    }
+  }
+
   if (errors.length) return null;
 
   return {
@@ -1009,7 +1039,7 @@ function validateProductPayload(p) {
     category,
     price,
     salePrice,
-    stock,
+    stock: storedStock,
     sizes,
     colors,
     images,

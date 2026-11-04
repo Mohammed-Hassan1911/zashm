@@ -559,6 +559,52 @@ try {
       assert.ok(alert.textContent.includes('no longer available'), 'rejection reason');
     });
   }
+  console.log('\n[6] QA fixes: declared-stock inputs, COD disclosure and CLS skeletons');
+  {
+    const admin = read('src/pages/AdminApp.js');
+    await step('admin recomputes Total Stock on every option change', () => {
+      assert.ok(/normalizeOptionLabel|parseOptionList/.test(admin), 'option parsing helpers exist');
+      assert.ok(/duplicateOptionLabels/.test(admin), 'duplicate option detection exists');
+      assert.ok(/orphanBaselineRef/.test(admin) && /restoreAck/.test(admin) && /Confirm restoring these units/.test(admin),
+        're-adding a removed option requires explicit confirmation before restoring orphan stock');
+      assert.ok(/setForm\([\s\S]{0,400}sizes|sizes:[\s\S]{0,300}colors/.test(admin),
+        'size/colour edits update the form');
+      assert.ok(/totalFor\(|declaredVariantStockTotal/.test(admin), 'total uses the shared declared-combination helper');
+    });
+
+    const cart = read('src/pages/CartPage.js');
+    await step('COD disclosure renders between the total and PLACE ORDER', () => {
+      const totalAt = cart.indexOf('EGP {(finalTotal');
+      const codAt = cart.indexOf('الدفع نقدًا عند الاستلام');
+      const placeAt = cart.indexOf('PLACE ORDER');
+      assert.ok(totalAt >= 0 && codAt > totalAt && placeAt > codAt,
+        'COD copy must sit after the total and before PLACE ORDER');
+      assert.ok(/Cash on Delivery/.test(cart), 'English COD label is present');
+      assert.ok(/when your order arrives|عند الاستلام/.test(cart), 'payment-on-arrival explanation is present');
+    });
+
+    const app = read('src/App.js');
+    const css = read('src/index.css');
+    await step('route skeletons reserve the final layout while chunks load', () => {
+      assert.ok(/from '\.\/components\/ui\/PageSkeletons'/.test(app), 'App imports the route skeletons');
+      assert.ok(/page === 'shop'\) return <ShopPageSkeleton/.test(app), 'shop route uses its skeleton');
+      assert.ok(/page === 'product'\) return <ProductPageSkeleton/.test(app), 'product route uses its skeleton');
+      assert.ok(/PageReadySignal/.test(app) && /firstPageReady && <Footer/.test(app),
+        'the footer waits for the first real page commit');
+      assert.ok(/\.page-skeleton\s*\{[\s\S]{0,160}min-height:\s*100svh/.test(css),
+        'skeletons reserve one viewport');
+      assert.ok(/\.page-skeleton-card-image\s*\{[\s\S]{0,120}aspect-ratio:\s*3\s*\/\s*4/.test(css),
+        'skeleton cards use the real 3:4 image box');
+    });
+
+    const product = read('src/pages/ProductPage.js');
+    await step('product page shows the skeleton while the catalogue is loading', () => {
+      assert.ok(/productPending/.test(product), 'pending state is explicit');
+      assert.ok(/ProductPageSkeleton/.test(product), 'the skeleton is rendered while pending');
+      assert.ok(/productsLoadStatus === 'idle'|productsLoadStatus === 'loading'/.test(product),
+        'only a settled load can produce "Product not found"');
+    });
+  }
 } catch (error) {
   console.error('Fatal test harness error:', error);
   failed += 1;

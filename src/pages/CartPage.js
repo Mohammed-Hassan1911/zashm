@@ -83,9 +83,98 @@ function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate'
   );
 }
 
+// Summary of the proactive check, shown on the bag and on the checkout form
+// before the shopper presses the button. Blocking lines must be removed;
+// warnings only say the quantity is above what is left.
+//
+// `detailed` is false on the bag page, where every problem already names itself
+// on its own line (LineStockIssue) — the banner then counts the pieces instead of
+// repeating the same sentence twice. The checkout form has no per-line strips, so
+// it keeps the full messages.
+function LiveStockBanner({ issues, detailed = true }) {
+  const blocking = issues.filter(i => i.blocking);
+  const warnings = issues.filter(i => !i.blocking);
+  if (blocking.length === 0 && warnings.length === 0) return null;
+  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {blocking.length > 0 && (
+        <div role="alert" aria-live="assertive"
+          style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '12px 16px', background: 'rgba(192,57,43,0.07)' }}>
+          <p style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+            {blocking.length === 1 ? 'One piece in your bag' : `${blocking.length} pieces in your bag`} can’t be ordered right now.
+          </p>
+          {detailed && (
+            <ul style={{ margin: 0, paddingLeft: 16 }}>
+              {blocking.map(i => (
+                <li key={i.key} style={{ color: 'var(--red)', fontSize: 11, lineHeight: 1.6 }}>{i.message}</li>
+              ))}
+            </ul>
+          )}
+          <p style={{ color: 'var(--text2)', fontSize: 12, margin: '8px 0 0' }}>
+            {detailed
+              ? 'Remove the marked piece(s) to continue — nothing was taken out of your bag automatically.'
+              : 'Each one is marked in your bag below with its own Remove button — nothing was taken out of your bag automatically.'}
+          </p>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div role="status" aria-live="polite" style={{ marginTop: blocking.length ? 10 : 0,
+          border: '1px solid #f39c12', borderRadius: 6, padding: '10px 16px', background: 'rgba(243,156,18,0.07)' }}>
+          {detailed ? (
+            <ul style={{ margin: 0, paddingLeft: 16 }}>
+              {warnings.map(i => (
+                <li key={i.key} style={{ color: '#f39c12', fontSize: 11, lineHeight: 1.6 }}>{i.message}</li>
+              ))}
+            </ul>
+          ) : (
+            <p style={{ color: '#f39c12', fontSize: 11, margin: 0, lineHeight: 1.6 }}>
+              {count(warnings.length, 'piece is', 'pieces are')} above the quantity left in stock — see the marks below.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One bag line that the live catalogue says cannot be ordered (blocking) or is
+// over the available quantity (warning). The shopper decides: the only action
+// offered is Remove — nothing is deleted from the bag automatically.
+function LineStockIssue({ issue, onRemove }) {
+  if (!issue) return null;
+  const blocking = issue.blocking;
+  const color = blocking ? 'var(--red)' : '#f39c12';
+  return (
+    <div
+      role={blocking ? 'alert' : 'status'}
+      style={{
+        display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+        justifyContent: 'space-between', marginTop: 10, padding: '8px 12px',
+        border: `1px solid ${color}`, borderRadius: 4,
+        background: blocking ? 'rgba(192,57,43,0.08)' : 'rgba(243,156,18,0.08)',
+      }}
+    >
+      <span style={{ color, fontSize: 11, lineHeight: 1.5, flex: '1 1 220px' }}>{issue.message}</span>
+      {blocking && (
+        <button
+          type="button"
+          onClick={onRemove}
+          style={{
+            background: 'none', border: `1px solid ${color}`, color, borderRadius: 3,
+            padding: '5px 12px', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── CART PAGE ────────────────────────────────────────────────────────────────
 export function CartPage() {
-  const { cart, removeFromCart, updateCartQty, cartTotal, cartSubtotal, cartDiscountAmount, setPage, appliedDiscount, applyDiscount, removeAppliedDiscount } = useStore();
+  const { cart, removeFromCart, updateCartQty, cartTotal, cartSubtotal, cartDiscountAmount, setPage, appliedDiscount, applyDiscount, removeAppliedDiscount, cartLineIssues } = useStore();
   const [coupon, setCoupon] = useState('');
   const [couponError, setCouponError] = useState('');
   const [couponApplying, setCouponApplying] = useState(false);
@@ -93,6 +182,11 @@ export function CartPage() {
   const subtotal = cartSubtotal() ?? 0;
   const discountAmount = cartDiscountAmount() ?? 0;
   const safeCart = cart ?? [];
+
+  // Checked against the live catalogue on every render — nothing here mutates the
+  // bag: an unavailable line is shown with its own Remove control.
+  const lineIssues = cartLineIssues();
+  const issueByKey = new Map(lineIssues.map(i => [i.key, i]));
 
   const changeQty = (item, nextQty) => {
     const result = updateCartQty(item?.key, nextQty);
@@ -134,6 +228,8 @@ export function CartPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
         <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
           style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>Shopping Bag</motion.h1>
+
+        <LiveStockBanner issues={lineIssues} detailed={false} />
 
         {safeCart.length === 0 ? (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
@@ -184,6 +280,7 @@ export function CartPage() {
                             onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}><Trash2 size={15} aria-hidden="true" /></button>
                         </div>
                       </div>
+                      <LineStockIssue issue={issueByKey.get(item?.key)} onRemove={() => removeFromCart(item?.key)} />
                     </div>
                   </motion.div>
                 ))}
@@ -265,6 +362,7 @@ export function CheckoutPage() {
     cart, cartTotal, cartSubtotal, cartDiscountAmount, placeOrder, setPage,
     appliedDiscount, applyDiscount, removeAppliedDiscount, refreshAppliedDiscount,
     reduceCartForStockIssues,
+    cartLineIssues,
   } = useStore();
   const [form, setForm] = useState({ name: '', phone: '', phoneAlt: '', email: '', address: '', city: '', notes: '' });
   const [errors, setErrors] = useState({});
@@ -286,6 +384,9 @@ export function CheckoutPage() {
 
   const shippingCost = getShippingCost(form.city);
   const finalTotal = subtotal + shippingCost - discountAmount;
+  // Same proactive check as the bag: the shopper sees an unorderable line before
+  // filling the form, not only after pressing Place Order.
+  const liveIssues = cartLineIssues();
 
   React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order' }); }, []);
   React.useEffect(() => { refreshAppliedDiscount(); }, []);
@@ -412,27 +513,48 @@ export function CheckoutPage() {
       }, idempotencyKey);
 
       if (!result || !result.success) {
-        setStockErrors(result?.errors || ['Order failed. Please try again.']);
-
-        // خفّض الكميات تلقائيًا حسب ما أخبرنا به السيرفر،
-        // واعرض تنبيهًا بالعربي والإنجليزي يوضح التغيير.
+        // Quantities the server says are too high are lowered (and announced).
+        // Lines that cannot be ordered at all stay in the bag and are marked with
+        // their own Remove button — the bag is never edited silently.
+        let reduced = [];
+        let unavailable = [];
         if (result?.stockIssues && result.stockIssues.length) {
-          const { reduced, removed } = reduceCartForStockIssues(result.stockIssues);
-          const notices = [];
-          reduced.forEach(r => {
-            notices.push(
-              `The quantity of "${r.name}" was automatically reduced from ${r.from} to ${r.to} — only ${r.to} left in stock.`
-            );
-          });
-          removed.forEach(r => {
-            notices.push(
-              `"${r.name}" was automatically removed from your bag because it's out of stock.`
-            );
-          });
-          setStockNotice(notices);
-          if (notices.length) toast(notices[0], 'info');
-        } else {
-          setStockNotice([]);
+          const outcome = reduceCartForStockIssues(result.stockIssues);
+          reduced = outcome.reduced;
+          unavailable = outcome.unavailable;
+        }
+
+        // The banner above and the strip on each line already name every line the
+        // live catalogue rejects, in the same wording the server uses. Repeating the
+        // server list under them is the duplication customers complained about, so a
+        // message is only added here when the catalogue could not show it (a product
+        // the list has not loaded, for instance).
+        const shownIssues = cartLineIssues();
+        const shownMessages = new Set(shownIssues.map(i => i.message));
+        const blockingKeys = new Set(shownIssues.filter(i => i.blocking).map(i => i.key));
+        const extraErrors = (result?.errors || []).filter(e => !shownMessages.has(e));
+        setStockErrors(extraErrors.length > 0
+          ? extraErrors
+          : (shownIssues.length > 0 ? [] : ['Order failed. Please try again.']));
+
+        const notices = [];
+        reduced.forEach(r => {
+          const where = (r.size || r.color) ? ` (${r.size} - ${r.color})` : '';
+          notices.push(
+            `The quantity of "${r.name}"${where} was lowered from ${r.from} to ${r.to} — only ${r.to} left in stock.`
+          );
+        });
+        unavailable.filter(r => !blockingKeys.has(r.key)).forEach(r => {
+          const where = (r.size || r.color) ? ` (${r.size} - ${r.color})` : '';
+          notices.push(
+            `"${r.name}"${where} can't be ordered right now. It stays in your bag until you remove it.`
+          );
+        });
+        setStockNotice(notices);
+        if (notices.length) {
+          toast(notices[0], 'info');
+        } else if (result?.blockedLocally) {
+          toast(result.error || 'Some pieces in your bag can’t be ordered right now.', 'warning');
         }
 
         isPlacingOrder.current = false;
@@ -881,8 +1003,8 @@ export function CheckoutPage() {
     return (
       <div style={{ paddingTop: 90, minHeight: '80vh' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
-          {/* A server-side stock rejection can empty the bag automatically.
-              Keep the reason visible instead of showing a bare empty state. */}
+          {/* The bag only empties when the shopper removes a line themselves.
+              A server-side rejection still needs its reason visible here. */}
           <StockFeedback notice={stockNotice} errors={stockErrors} />
           <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px', display: 'block' }} />
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</h1>
@@ -902,6 +1024,7 @@ export function CheckoutPage() {
           style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>{'Checkout'}</motion.h1>
 
         <StockFeedback notice={stockNotice} errors={stockErrors} />
+        <LiveStockBanner issues={liveIssues} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="checkout-grid">
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
@@ -1131,7 +1254,30 @@ export function CheckoutPage() {
                   <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 20 }}>EGP {(finalTotal ?? 0).toLocaleString()}</span>
                 </div>
               </div>
-              
+
+              {/* Payment method: COD only. Stated next to the total and above
+                  the action so the shopper knows how they will pay before
+                  placing the order. */}
+              <div
+                role="note"
+                style={{
+                  marginTop: 12,
+                  padding: '10px 12px',
+                  borderRadius: 4,
+                  border: '1px solid var(--border-gold)',
+                  background: 'rgba(201,168,76,0.07)',
+                  textAlign: 'center'
+                }}
+              >
+                <p style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, fontSize:12, fontWeight:600, color:'var(--text)', lineHeight:1.5, margin:0 }}>
+                  <Banknote size={14} color="var(--gold)" aria-hidden="true" />
+                  الدفع نقدًا عند الاستلام (Cash on Delivery)
+                </p>
+                <p style={{ fontSize:11, color:'var(--text3)', lineHeight:1.6, margin:'4px 0 0' }}>
+                  You pay in cash when your order arrives. · ستدفع نقدًا عند وصول طلبك.
+                </p>
+              </div>
+
               <motion.button 
                 className="gold-btn" 
                 style={{ width: '100%', marginTop: 16, opacity: (submitting || isPlacingOrder.current) ? 0.7 : 1 }}

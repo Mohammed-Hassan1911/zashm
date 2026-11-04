@@ -202,6 +202,13 @@ function apply(db, relativePath) {
   return out;
 }
 
+function applyExpectOutcome(db, relativePath) {
+  const r = spawnSync(tools.psql, psqlArgs(db).concat(['-f', fileURLToPath(new URL(relativePath, ROOT))]), {
+    encoding: 'utf8', timeout: 120000,
+  });
+  return { status: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
+}
+
 function applyAsRole(db, role, relativePath) {
   const r = spawnSync(tools.psql, psqlArgs(db).concat([
     '-v', 'ON_ERROR_STOP=1',
@@ -389,10 +396,12 @@ function seedShop(db) {
     DELETE FROM public.coupons;
     DELETE FROM public.products;
     INSERT INTO public.products
-      (id, name, category, price, stock, "variantStock", "reservedStock", active)
+      (id, name, category, price, stock, "variantStock", "reservedStock", active, sizes, colors)
     VALUES
-      (1, 'Tee', 'clothing', 50, 10, '{"M-Black": 10}'::jsonb, 0, true),
-      (2, 'Hat', 'clothing', 40, 10, '{"L-White": 10}'::jsonb, 0, true);
+      (1, 'Tee', 'clothing', 50, 10, '{"M-Black": 10}'::jsonb, 0, true,
+       '["M"]'::jsonb, '["Black"]'::jsonb),
+      (2, 'Hat', 'clothing', 40, 10, '{"L-White": 10}'::jsonb, 0, true,
+       '["L"]'::jsonb, '["White"]'::jsonb);
     INSERT INTO public.coupons
       (code, type, value, "discountValue", active, "startDate", "endDate",
        "usageLimit", "usageCount", "minOrderAmount", "maxDiscount")
@@ -412,8 +421,9 @@ function seedLegacyOrder(db, {
     DELETE FROM public.coupons;
     DELETE FROM public.products;
     INSERT INTO public.products
-      (id, name, category, price, stock, "variantStock", "reservedStock", active)
-    VALUES (1, 'Tee', 'clothing', 50, ${stock}, ${dollar(`{"M-Black": ${stock}}`)}::jsonb, 0, true);
+      (id, name, category, price, stock, "variantStock", "reservedStock", active, sizes, colors)
+    VALUES (1, 'Tee', 'clothing', 50, ${stock}, ${dollar(`{"M-Black": ${stock}}`)}::jsonb, 0, true,
+            '["M"]'::jsonb, '["Black"]'::jsonb);
     INSERT INTO public.coupons
       (code, type, value, "discountValue", active, "startDate", "endDate",
        "usageLimit", "usageCount", "minOrderAmount", "maxDiscount")
@@ -974,6 +984,324 @@ async function main() {
     }
     eq(scalarNum(DB, `SELECT count(*) FROM public.orders`), 0,
       'malformed payloads write no orders');
+  }
+
+  // [3l] REVISION 9 guard: a variantStock key left behind by a removed size or
+  // colour must NOT stay purchasable at the database level. Fixtures mirror the
+  // real Production row 1793739505270547 (Jacket Boxy): colors has no "White"
+  // yet variantStock still holds M-White/L-White.
+  console.log('\n[3l] atomic_place_order: undeclared sizes/colours are refused');
+  seedShop(DB);
+  runSql(DB, `
+    INSERT INTO public.products
+      (id, name, category, price, stock, "variantStock", "reservedStock",
+       active, sizes, colors)
+    VALUES
+      -- the production-shaped case: 2 declared colours, 2 orphan White keys
+      (20, 'Jacket', 'Jackets', 100, 18,
+       '{"M-Black": 5, "M-Burgundy": 1, "M-White": 4, "L-White": 4}'::jsonb, 0, true,
+       '["M","L","XL"]'::jsonb, '["Black","Burgundy"]'::jsonb),
+      -- legacy: variantStock with no declared options at all
+      (21, 'Legacy Tee', 'clothing', 100, 5, '{"M-Black": 5}'::jsonb, 0, true, NULL, NULL),
+      -- declared arrays are EMPTY
+      (22, 'Empty Options', 'clothing', 100, 5, '{"M-Black": 5}'::jsonb, 0, true,
+       '[]'::jsonb, '[]'::jsonb),
+      -- only sizes declared: sizes are still enforced, colours are not
+      (23, 'Sizes Only', 'clothing', 100, 5, '{"M-Black": 5}'::jsonb, 0, true,
+       '["M"]'::jsonb, NULL),
+      -- colour contains a hyphen: the key is never re-parsed
+      (24, 'Coat', 'Outerwear', 100, 3, '{"M-Off-White": 3}'::jsonb, 0, true,
+       '["M"]'::jsonb, '["Off-White"]'::jsonb);
+  `);
+  {
+    const order = makeOrder({
+      id: 'ORD-ORPHAN-COLOR',
+      items: [{ productId: 20, qty: 1, size: 'M', color: 'White', price: 100 }],
+    });
+    const r = lastJson(runSql(DB, placeSql(order, null)).out);
+    eq(r.ok, false, 'an undeclared colour with existing stock is refused');
+    eq(r.reason, 'undefined_variant', 'the refusal is specific, not a generic unavailable');
+    eq(r.color, 'White', 'the rejection names the offending colour');
+    eq(scalarNum(DB, `SELECT count(*) FROM public.orders WHERE id='ORD-ORPHAN-COLOR'`), 0,
+      'undeclared colour writes no order');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int FROM public.products WHERE id=20`), 4,
+      'the orphan key keeps its quantity — the guard never deletes stock');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=20`), 18,
+      'a refused undeclared line leaves the global stock untouched');
+  }
+  {
+    const order = makeOrder({
+      id: 'ORD-ORPHAN-SIZE',
+      items: [{ productId: 20, qty: 1, size: 'XXL', color: 'Black', price: 100 }],
+    });
+    const r = lastJson(runSql(DB, placeSql(order, null)).out);
+    eq(r.reason, 'undefined_variant', 'an undeclared SIZE is refused too');
+    eq(r.size, 'XXL', 'the rejection names the offending size');
+  }
+  {
+    // An undeclared colour asked in an undeclared size is still refused, and a
+    // line with empty size+colour (legacy cart) cannot slip through either.
+    const order = makeOrder({
+      id: 'ORD-ORPHAN-EMPTY',
+      items: [{ productId: 20, qty: 1, size: '', color: '', price: 100 }],
+    });
+    const r = lastJson(runSql(DB, placeSql(order, null)).out);
+    eq(r.reason, 'undefined_variant', 'an empty size/colour pair is refused when options are declared');
+  }
+  {
+    // Declared variations keep working — the guard must not over-block.
+    const order = makeOrder({
+      id: 'ORD-DECLARED-OK',
+      items: [
+        { productId: 20, qty: 1, size: 'M', color: 'Burgundy', price: 100 },
+        { productId: 20, qty: 2, size: 'M', color: 'Black', price: 100 },
+      ],
+      subtotal: 300,
+    });
+    const r = lastJson(runSql(DB, placeSql(order, null)).out);
+    eq(r.ok, true, 'declared variations still purchase normally');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-Burgundy')::int FROM public.products WHERE id=20`), 0,
+      'declared variation decremented');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int FROM public.products WHERE id=20`), 4,
+      'the orphan key is still untouched after a successful declared order');
+    // REVISION 10 (owner decision 1أ): the decrement pass recomputes stock over
+    // the DECLARED keys only, so the 8 orphan White units can no longer re-enter
+    // the global counter. Here the declared pool is 3 (M-Black) + 0 (M-Burgundy).
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=20`), 3,
+      'stock is recomputed over the declared keys only — orphans excluded');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int +
+             ("variantStock"->>'L-White')::int FROM public.products WHERE id=20`), 8,
+      'the orphan quantities are still in the map, untouched');
+    eq(scalarNum(DB, `SELECT public.zshm_sellable_stock("variantStock", sizes, colors)
+             FROM public.products WHERE id=20`), 3,
+      'stored stock equals the sellable (declared-only) pool');
+  }
+  {
+    // REVISION 10 (owner decision 3ب): a variant pool that has no declared size
+    // list or no declared colour list is an invalid configuration. Nothing can be
+    // matched against it, so it is refused instead of sold by raw key lookup —
+    // in the UI and in the RPC, on the same rule.
+    const cases = [
+      [21, 'M', 'Black', 'invalid_product_config', 'legacy NULL sizes/colors is refused as invalid config'],
+      [22, 'M', 'Black', 'invalid_product_config', 'empty declared arrays are invalid config'],
+      [23, 'M', 'Black', 'invalid_product_config', 'sizes without any colour list is invalid config'],
+      [23, 'XL', 'Black', 'invalid_product_config', 'an undeclared size on an invalid config hits the config guard first'],
+    ];
+    let n = 0;
+    for (const [pid, size, color, expectReason, label] of cases) {
+      n += 1;
+      const order = makeOrder({
+        id: `ORD-GUARD-${n}`,
+        items: [{ productId: pid, qty: 1, size, color, price: 100 }],
+        subtotal: 100,
+      });
+      const r = lastJson(runSql(DB, placeSql(order, null)).out);
+      eq(r.ok, false, `${label} (got ok=${r.ok})`);
+      eq(r.reason, expectReason, `${label} — reason`);
+      eq(scalarNum(DB, `SELECT count(*) FROM public.orders WHERE id='ORD-GUARD-${n}'`), 0,
+        `${label} — no order row`);
+    }
+    {
+      // A fully declared pool still sells, hyphenated colours included — the key
+      // is matched whole, never re-parsed with split('-').
+      const order = makeOrder({
+        id: 'ORD-GUARD-HYPHEN',
+        items: [{ productId: 24, qty: 2, size: 'M', color: 'Off-White', price: 100 }],
+        subtotal: 200,
+      });
+      const r = lastJson(runSql(DB, placeSql(order, null)).out);
+      eq(r.ok, true, 'a declared hyphenated colour purchases normally');
+      eq(scalarNum(DB, `SELECT ("variantStock"->>'M-Off-White')::int FROM public.products WHERE id=24`), 1,
+        'the hyphenated variant decremented by the ordered quantity');
+      eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=24`), 1,
+        'its stock matches the declared pool exactly');
+    }
+    {
+      // A product with NO variant pool at all keeps using the global counter —
+      // the legacy path this change must not touch.
+      runSql(DB, `
+        INSERT INTO public.products (id, name, category, price, stock, "variantStock", "reservedStock", active, sizes, colors)
+        VALUES (25, 'Plain Cap', 'caps', 100, 4, NULL, 0, true, NULL, NULL);
+      `);
+      const order = makeOrder({
+        id: 'ORD-LEGACY-PLAIN',
+        items: [{ productId: 25, qty: 3, size: '', color: '', price: 100 }],
+        subtotal: 300,
+      });
+      const r = lastJson(runSql(DB, placeSql(order, null)).out);
+      eq(r.ok, true, 'a product without variantStock still sells from the global counter');
+      eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=25`), 1,
+        'the non-variant decrement path is unchanged');
+    }
+  }
+  {
+    // The cancel/delete lifecycle keeps its tolerant contract: historical orders
+    // that DO contain an orphan variation still restore. Only new purchases gate.
+    runSql(DB, `
+      INSERT INTO public.orders (id, subtotal, discount, total, status, date,
+        customer, phone, address, city, items, timestamps)
+      VALUES ('ORD-HISTORIC-WHITE', 100, 0, 100, 'Pending', '2026-01-01',
+        'Old Cart', '01000000000', 'street', 'Cairo',
+        '[{"productId": 20, "qty": 1, "size": "M", "color": "White"}]'::jsonb,
+        '{"created":"2026-01-01T00:00:00.000Z"}'::jsonb);
+    `);
+    const r = lastJson(runSql(DB, `SELECT public.atomic_adjust_stock(
+      '[{"productId": 20, "qty": 1, "size": "M", "color": "White"}]'::jsonb, 1);`).out);
+    eq(r.ok, true, 'restocking an existing order line with an orphan key still works');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int FROM public.products WHERE id=20`), 5,
+      'restore returns the unit to the same orphan key');
+    // REVISION 10: the returned unit lands on a key that is not sellable, so it
+    // must NOT raise the global counter. Before this change the same restore took
+    // stock from 3 to 4 while nothing new could actually be sold.
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=20`), 3,
+      'a restore onto an orphan key leaves the sellable stock unchanged');
+  }
+
+  // [3m] REVISION 10 stock recompute (owner decision 1أ): products.stock is the
+  // DECLARED size × colour pool, written identically by atomic_place_order() and
+  // atomic_adjust_stock(). The fixture is the real Production row
+  // 1793739505270547 (Jacket Boxy): stock 18, declared pool 18, and 8 units
+  // sitting on orphan "M-White"/"L-White" keys that the admin removed.
+  console.log('\n[3m] REVISION 10: stock is recomputed from declared combinations only');
+  seedShop(DB);
+  runSql(DB, `
+    INSERT INTO public.products
+      (id, name, category, price, stock, "variantStock", "reservedStock",
+       active, sizes, colors)
+    VALUES
+      (30, 'Jacket Boxy', 'Jackets', 100, 18,
+       '{"M-Black": 6, "L-Black": 6, "XL-Black": 3, "XXL-Black": 3,
+         "M-White": 4, "L-White": 4}'::jsonb, 0, true,
+       '["M","L","XL","XXL"]'::jsonb, '["Black","Burgundy"]'::jsonb),
+      -- legacy shape: variant pool, no declared option lists at all
+      (31, 'Legacy Tee', 'clothing', 100, 5, '{"M-Black": 5}'::jsonb, 0, true, NULL, NULL);
+  `);
+  {
+    // The helper is pure, so it can be measured directly before any write.
+    const cases = [
+      [`SELECT public.zshm_sellable_stock('{"M-Black": 6, "M-White": 4}'::jsonb, '["M"]'::jsonb, '["Black"]'::jsonb)`, 6,
+        'an orphan colour is excluded from the pool'],
+      [`SELECT public.zshm_sellable_stock('{"M-Black": 6, "M-White": 4}'::jsonb, NULL, NULL)`, 10,
+        'legacy NULL lists fall back to the all-keys sum'],
+      [`SELECT public.zshm_sellable_stock('{"M-Black": 6}'::jsonb, '[]'::jsonb, '["Black"]'::jsonb)`, 6,
+        'an empty sizes array still uses the legacy fallback'],
+      [`SELECT public.zshm_sellable_stock('{"M-Black": 6, "L-Black": 2}'::jsonb, '["M","L","XL"]'::jsonb, '["Black"]'::jsonb)`, 8,
+        'declared keys that are missing from the map count as zero'],
+      [`SELECT public.zshm_sellable_stock('{"M-Black": -3, "L-Black": 5}'::jsonb, '["M","L"]'::jsonb, '["Black"]'::jsonb)`, 5,
+        'a negative declared value never inflates the pool'],
+      [`SELECT public.zshm_sellable_stock('{"M-Black": "abc", "L-Black": 5}'::jsonb, '["M","L"]'::jsonb, '["Black"]'::jsonb)`, 5,
+        'a non-numeric junk value is ignored, not an error'],
+      [`SELECT public.zshm_sellable_stock(NULL, '["M"]'::jsonb, '["Black"]'::jsonb)`, 0,
+        'a product with no variant pool has no sellable variant stock'],
+      [`SELECT public.zshm_sellable_stock('{}'::jsonb, '["M"]'::jsonb, '["Black"]'::jsonb)`, 0,
+        'an empty variant pool is zero'],
+      [`SELECT public.zshm_sellable_stock('"nope"'::jsonb, '["M"]'::jsonb, '["Black"]'::jsonb)`, 0,
+        'a scalar variantStock cannot raise an error'],
+      [`SELECT public.zshm_sellable_stock('{"M-Off-White": 7}'::jsonb, '["M"]'::jsonb, '["Off-White"]'::jsonb)`, 7,
+        'hyphenated colours match on the whole key'],
+    ];
+    for (const [sql, expected, label] of cases) {
+      eq(scalarNum(DB, sql), expected, label);
+    }
+  }
+  {
+    // Production baseline: stored stock already equals the declared pool, and the
+    // orphans are the 8 units of un-declared White.
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`), 18, 'baseline stock');
+    eq(scalarNum(DB, `SELECT public.zshm_sellable_stock("variantStock", sizes, colors) FROM public.products WHERE id=30`), 18,
+      'baseline declared pool');
+    eq(scalarNum(DB, `SELECT (SELECT COALESCE(SUM((kv.value)::int),0) FROM jsonb_each_text("variantStock") kv)
+             FROM public.products WHERE id=30`), 26, 'baseline all-keys sum (18 declared + 8 orphan)');
+  }
+  {
+    // Buying ONE declared unit. Old behaviour: stock jumped 18 → 25 because the
+    // 8 orphans were re-added. New behaviour: 18 → 17.
+    const r = lastJson(runSql(DB, placeSql(makeOrder({
+      id: 'ORD-REC-1', items: [{ productId: 30, qty: 1, size: 'M', color: 'Black', price: 100 }], subtotal: 100,
+    }), null)).out);
+    eq(r.ok, true, 'the first declared purchase succeeds');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`), 17,
+      'one unit bought from a 18-unit declared pool leaves 17 (not 24/25)');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int FROM public.products WHERE id=30`), 4,
+      'the orphan key still holds its 4 units');
+  }
+  {
+    // THREE more declared units (2 L-Black + 1 XL-Black, different lines):
+    // 17 → 14. The old code produced 23 for this exact purchase.
+    const r = lastJson(runSql(DB, placeSql(makeOrder({
+      id: 'ORD-REC-2',
+      items: [
+        { productId: 30, qty: 2, size: 'L', color: 'Black', price: 100 },
+        { productId: 30, qty: 1, size: 'XL', color: 'Black', price: 100 },
+      ],
+      subtotal: 300,
+    }), null)).out);
+    eq(r.ok, true, 'the multi-line declared order places');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`), 14,
+      'stock tracks the declared pool: 14 after 4 declared units sold');
+    eq(scalarNum(DB, `SELECT public.zshm_sellable_stock("variantStock", sizes, colors)
+             FROM public.products WHERE id=30`), 14,
+      'stored stock and sellable pool agree exactly');
+    eq(scalarNum(DB, `SELECT stock - public.zshm_sellable_stock("variantStock", sizes, colors)
+             FROM public.products WHERE id=30`), 0,
+      'no drift is left between the global counter and the sellable pool');
+  }
+  {
+    // Cancellation restores through atomic_adjust_stock(+1) — the second writer.
+    // It must land on the same declared-only rule.
+    const r = lastJson(runSql(DB, `SELECT public.atomic_set_order_status(
+      'ORD-REC-2', 'Pending', 'Cancelled', '{}'::jsonb);`).out);
+    eq(r.ok, true, 'cancelling the declared order succeeds');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`), 17,
+      'the cancel restores the units into the declared pool (14 → 17)');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'L-Black')::int FROM public.products WHERE id=30`), 6,
+      'each unit returns to the variant it was bought from');
+  }
+  {
+    // A restore onto an ORPHAN key (a historical order for the removed colour)
+    // still puts the unit back where it belongs, and still leaves the sellable
+    // counter alone — the orphan is not sellable, so it is not stock.
+    const before = scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`);
+    const r = lastJson(runSql(DB, `SELECT public.atomic_adjust_stock(
+      '[{"productId": 30, "qty": 1, "size": "M", "color": "White"}]'::jsonb, 1);`).out);
+    eq(r.ok, true, 'orphan restore is tolerated (partial-restore contract)');
+    eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int FROM public.products WHERE id=30`), 5,
+      'the orphan key received the returned unit');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`), before,
+      'the sellable stock is unchanged by a restore onto an orphan key');
+  }
+  {
+    // The legacy fallback is preserved where it is still needed: cancelling an
+    // OLD order that carried a legacy (undeclared-list) product restores the key
+    // and recomputes stock over ALL keys, exactly as before REVISION 10.
+    runSql(DB, `
+      INSERT INTO public.orders (id, subtotal, discount, total, status, date,
+        customer, phone, address, city, items, timestamps)
+      VALUES ('ORD-LEGACY-HIST', 100, 0, 100, 'Pending', '2025-01-01',
+        'Old Cart', '01000000000', 'street', 'Cairo',
+        '[{"productId": 31, "qty": 1, "size": "M", "color": "Black"}]'::jsonb,
+        '{"created":"2025-01-01T00:00:00.000Z"}'::jsonb);
+    `);
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=31`), 5, 'legacy stock before restore');
+    const r = lastJson(runSql(DB, `SELECT public.atomic_adjust_stock(
+      '[{"productId": 31, "qty": 1, "size": "M", "color": "Black"}]'::jsonb, 1);`).out);
+    eq(r.ok, true, 'legacy restore works with no declared option lists');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=31`), 6,
+      'the legacy all-keys fallback raised stock by exactly the restored unit');
+    const deduct = lastJson(runSql(DB, `SELECT public.atomic_adjust_stock(
+      '[{"productId": 31, "qty": 2, "size": "M", "color": "Black"}]'::jsonb, -1);`).out);
+    eq(deduct.ok, true, 'legacy deduct passes the preflight against the variant key');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=31`), 4,
+      'legacy deduct recomputes with the same fallback');
+    // New purchases of that legacy shape are refused (3ب) — the pool is not gone,
+    // only the ability to sell it without declared options.
+    const refused = lastJson(runSql(DB, placeSql(makeOrder({
+      id: 'ORD-LEGACY-BUY', items: [{ productId: 31, qty: 1, size: 'M', color: 'Black', price: 100 }], subtotal: 100,
+    }), null)).out);
+    eq(refused.ok, false, 'a new order for a legacy-config product is refused');
+    eq(refused.reason, 'invalid_product_config', 'the refusal names the invalid configuration');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=31`), 4,
+      'the refused purchase changed nothing');
   }
 
   // [3i] atomic_adjust_stock: aggregate non-variant demand, preserve the
@@ -1541,6 +1869,213 @@ async function main() {
   eq(scalar(DB, `SELECT has_function_privilege('service_role',
                     'public.atomic_place_order(jsonb, text)', 'EXECUTE')`), 't',
     'service_role can execute atomic_place_order');
+
+  await stagedMigrationRollout();
+}
+
+// [9] THE STAGED MIGRATIONS THEMSELVES. Up to here the cluster was built from
+// supabase/atomic_place_order.sql (the canonical source). Applying the two
+// migration files must (a) succeed with no SQL error, and (b) leave exactly the
+// same behaviour — the reviewed rollout and the canonical file cannot diverge.
+// This is the last section: it deliberately rewrites the functions it just
+// proved identical. It runs as the last step of main(), once the throwaway
+// cluster is up and the canonical definitions have passed every scenario.
+async function stagedMigrationRollout() {
+  console.log('\n[9] staged migrations apply cleanly and behave identically');
+  apply(DB, 'supabase/reject_undefined_variants.sql');
+  apply(DB, 'supabase/declared_only_stock_recompute.sql');
+
+  eq(scalarNum(DB, `SELECT count(*) FROM pg_proc
+                    WHERE proname IN ('atomic_place_order', 'atomic_adjust_stock',
+                                      'zshm_order_signature', 'zshm_sellable_stock')`), 4,
+    'all four definitions exist after the rollout');
+  eq(scalar(DB, `SELECT has_function_privilege('anon',
+                    'public.zshm_sellable_stock(jsonb, jsonb, jsonb)', 'EXECUTE')`), 'f',
+    'the new helper is not callable by anon');
+  eq(scalar(DB, `SELECT has_function_privilege('service_role',
+                    'public.zshm_sellable_stock(jsonb, jsonb, jsonb)', 'EXECUTE')`), 't',
+    'the service role can execute the helper');
+
+  const body = runSql(DB, `SELECT pg_get_functiondef('public.atomic_place_order(jsonb, text)'::regprocedure);`).out;
+  ok(body.includes('undefined_variant'), 'the applied RPC still refuses undeclared variations');
+  ok(body.includes('invalid_product_config'), 'the applied RPC still refuses invalid variant configs');
+  ok(body.includes('zshm_sellable_stock'), 'the applied RPC still recomputes stock through the helper');
+
+  seedShop(DB);
+  runSql(DB, `
+    INSERT INTO public.products
+      (id, name, category, price, stock, "variantStock", "reservedStock",
+       active, sizes, colors)
+    VALUES (30, 'Jacket Boxy', 'Jackets', 100, 18,
+       '{"M-Black": 6, "L-Black": 6, "XL-Black": 3, "XXL-Black": 3,
+         "M-White": 4, "L-White": 4}'::jsonb, 0, true,
+       '["M","L","XL","XXL"]'::jsonb, '["Black","Burgundy"]'::jsonb);
+  `);
+  const orphan = lastJson(runSql(DB, placeSql(makeOrder({
+    id: 'ORD-MIG-ORPHAN',
+    items: [{ productId: 30, qty: 1, size: 'M', color: 'White', price: 100 }],
+    subtotal: 100,
+  }), null)).out);
+  eq(orphan.reason, 'undefined_variant', 'the applied migration still refuses the orphan colour');
+  const declared = lastJson(runSql(DB, placeSql(makeOrder({
+    id: 'ORD-MIG-DECLARED',
+    items: [{ productId: 30, qty: 1, size: 'M', color: 'Black', price: 100 }],
+    subtotal: 100,
+  }), null)).out);
+  eq(declared.ok, true, 'a declared variation purchases through the applied migration');
+  eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`), 17,
+    'and stock is recomputed declared-only (18 → 17, not 25)');
+  eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int FROM public.products WHERE id=30`), 4,
+    'the orphan key is still there, untouched, with its quantity intact');
+
+  await stockHardeningChecks();
+}
+
+// ─── [10] stock_hardening_constraints.sql ─────────────────────────────────────
+// The hardening file was never executable before: it used unquoted camelCase
+// identifiers, ran outside a transaction and ended with a literal "EOF". These
+// checks apply it for real, prove it fails closed on dirty data, prove a second
+// run is a no-op, and prove the rollback file is executable. They run on the
+// same throwaway cluster as [9], so they are called from the end of main().
+async function stockHardeningChecks() {
+console.log('\n[10] stock_hardening_constraints: fail-closed preflight, idempotency, rollback');
+{
+  const hardening = () => applyExpectOutcome(DB, 'supabase/stock_hardening_constraints.sql');
+  const rollback  = () => applyExpectOutcome(DB, 'supabase/stock_hardening_constraints_rollback.sql');
+  const HARDENING_CONSTRAINTS = `'products_active_boolean','products_stock_nonnegative',
+    'products_reserved_nonnegative','products_variant_stock_shape'`.replace(/\s+/g, ' ');
+  const constraintCount = () => scalarNum(DB,
+    `SELECT count(*) FROM pg_constraint
+      WHERE conrelid = 'public.products'::regclass
+        AND conname IN (${HARDENING_CONSTRAINTS})`);
+  const helperExists = () => scalar(DB,
+    `SELECT to_regprocedure('public.zshm_valid_variant_stock(jsonb)') IS NOT NULL`);
+  const attnotnull = (col) => scalar(DB,
+    `SELECT attnotnull FROM pg_attribute
+      WHERE attrelid = 'public.products'::regclass AND attname = '${col}'`);
+
+  eq(helperExists(), 'f', 'the variant-shape helper does not exist before the migration');
+  eq(constraintCount(), 0, 'no hardening constraint exists before the migration');
+
+  // A dirty catalogue must abort with zero side effects (no NOT NULL, no CHECK,
+  // no helper function left behind by the rolled-back transaction).
+  runSql(DB, `
+    INSERT INTO public.products (id, name, category, price, stock, "variantStock", active)
+    VALUES (901, 'QA null active', 'QA', 10, 0, '{}'::jsonb, NULL),
+           (902, 'QA negative variant', 'QA', 10, 0, '{"S-Black": -2}'::jsonb, true),
+           (903, 'QA padded variant key', 'QA', 10, 0, '{" S-Black": 2}'::jsonb, true);
+  `);
+  const dirty = hardening();
+  ok(dirty.status !== 0, 'dirty data (NULL active, negative/padded variant) aborts the migration');
+  ok(/aborted/i.test(dirty.out), 'the preflight explains why it aborted');
+  ok(/901/.test(dirty.out) && /902/.test(dirty.out) && /903/.test(dirty.out),
+    'the preflight lists every offending product id');
+  ok(!/does not exist/i.test(dirty.out),
+    'no unquoted camelCase identifier is referenced (the PostgreSQL 17 failure)');
+  eq(constraintCount(), 0, 'the aborted transaction added no constraint');
+  eq(helperExists(), 'f', 'the aborted transaction rolled the helper function back');
+  eq(attnotnull('active'), 'f', 'the aborted transaction left active nullable');
+  // The abort must not have modified the offending rows either.
+  eq(scalarNum(DB, `SELECT count(*) FROM public.products WHERE id IN (901, 902, 903)`), 3,
+    'the aborted migration did not delete or rewrite the offending rows');
+  eq(scalarNum(DB, `SELECT count(*) FROM public.products WHERE id = 901 AND active IS NULL`), 1,
+    'NULL active is preserved for an explicit owner decision');
+  runSql(DB, `DELETE FROM public.products WHERE id IN (901, 902, 903)`);
+
+  const first = hardening();
+  eq(first.status, 0, 'the migration applies on a clean catalogue');
+  ok(!/does not exist/i.test(first.out), 'quoting "reservedStock"/"variantStock" is correct');
+  eq(constraintCount(), 4, 'all four constraints exist after the first run');
+  eq(attnotnull('active'), 't', 'active is NOT NULL');
+  eq(attnotnull('stock'), 't', 'stock is NOT NULL');
+  eq(attnotnull('reservedStock'), 't', '"reservedStock" is NOT NULL');
+  eq(helperExists(), 't', 'the variant-shape helper exists after the run');
+
+  const second = hardening();
+  eq(second.status, 0, 'a second run succeeds instead of failing on an existing constraint');
+  ok(!/already exists/i.test(second.out), 'the second run never raises "already exists"');
+  eq(constraintCount(), 4, 'the constraints were not duplicated by the second run');
+
+  // The constraints must defend the real columns.
+  ok(runSql(DB, `UPDATE public.products SET stock = -1 WHERE id = 30`).status !== 0,
+    'negative stock is rejected by the CHECK');
+  ok(runSql(DB, `UPDATE public.products SET "reservedStock" = -1 WHERE id = 30`).status !== 0,
+    'negative reservedStock is rejected by the CHECK');
+  ok(runSql(DB, `UPDATE public.products SET active = NULL WHERE id = 30`).status !== 0,
+    'NULL active is rejected by NOT NULL');
+  ok(runSql(DB, `UPDATE public.products SET "variantStock" = '[]'::jsonb WHERE id = 30`).status !== 0,
+    'a non-object variantStock is rejected');
+  ok(runSql(DB, `UPDATE public.products SET "variantStock" = '{"S-Black": 1.5}'::jsonb WHERE id = 30`).status !== 0,
+    'a non-integer variant quantity is rejected');
+  ok(runSql(DB, `UPDATE public.products SET "variantStock" = '{" S-Black": 1}'::jsonb WHERE id = 30`).status !== 0,
+    'a padded variant key is rejected');
+  eq(scalar(DB, `SELECT public.zshm_valid_variant_stock(NULL::jsonb)`), 't',
+    'the helper still accepts a NULL variant pool');
+  eq(scalar(DB, `SELECT public.zshm_valid_variant_stock('{"M-Black": 3}'::jsonb)`), 't',
+    'the helper accepts a well-formed variant pool');
+  eq(scalar(DB, `SELECT public.zshm_valid_variant_stock('{"M-Black": -3}'::jsonb)`), 'f',
+    'the helper rejects a negative quantity');
+
+  // The constraints must not break the order path that legitimately rewrites stock.
+  const afterHardening = lastJson(runSql(DB, placeSql(makeOrder({
+    id: 'ORD-HARDEN-1',
+    items: [{ productId: 30, qty: 1, size: 'M', color: 'Black', price: 100 }],
+    subtotal: 100,
+  }), null)).out);
+  eq(afterHardening.ok, true, 'a declared purchase still goes through with the constraints on');
+  eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=30`), 16,
+    'and the declared-only stock counter still moves by exactly one');
+
+  const rb = rollback();
+  eq(rb.status, 0, 'the rollback file is executable as-is');
+  eq(constraintCount(), 0, 'the rollback drops all four constraints');
+  eq(helperExists(), 'f', 'the rollback drops the helper function');
+  eq(attnotnull('active'), 'f', 'the rollback restores a nullable active column');
+  eq(attnotnull('reservedStock'), 'f', 'the rollback restores a nullable "reservedStock" column');
+
+  eq(hardening().status, 0, 'the migration can be re-applied after the rollback');
+  eq(constraintCount(), 4, 'and the constraints are back');
+}
+
+// ─── [10b] duplicated declared options never double-count ─────────────────────
+console.log('\n[10b] duplicated declared sizes/colours are counted once');
+{
+  eq(scalarNum(DB, `SELECT public.zshm_sellable_stock(
+        '{"S-Black": 7, "M-Black": 5, "L-Black": 5}'::jsonb,
+        '["S","S","M","M","L"]'::jsonb,
+        '["Black","Black"]'::jsonb)`), 17,
+    'duplicate size/colour lines sum each combination once (not 24/34)');
+  eq(scalarNum(DB, `SELECT public.zshm_sellable_stock(
+        '{"S-Black": 7, "M-Black": 5}'::jsonb,
+        '["s","S","M"]'::jsonb,
+        '["Black"]'::jsonb)`), 12,
+    'a case variant resolves to its own key and never inflates the total');
+  eq(scalarNum(DB, `SELECT public.zshm_sellable_stock(
+        '{"S-Black": 7, "S-Burgundy": 2}'::jsonb,
+        '["S","S"]'::jsonb,
+        '["Black","Burgundy"]'::jsonb)`), 9,
+    'duplicate sizes keep every distinct colour combination');
+
+  seedShop(DB);
+  runSql(DB, `
+    INSERT INTO public.products
+      (id, name, category, price, stock, "variantStock", "reservedStock",
+       active, sizes, colors)
+    VALUES (31, 'Legacy Duplicate Tee', 'Tees', 100, 12,
+       '{"S-Black": 7, "M-Black": 5, "S-White": 4}'::jsonb, 0, true,
+       '["S","S","M","M"]'::jsonb, '["Black","Black"]'::jsonb);
+  `);
+  const dupOrder = lastJson(runSql(DB, placeSql(makeOrder({
+    id: 'ORD-DUP-1',
+    items: [{ productId: 31, qty: 1, size: 'S', color: 'Black', price: 100 }],
+    subtotal: 100,
+  }), null)).out);
+  eq(dupOrder.ok, true, 'a legacy product with duplicated option lines can still be purchased');
+  eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=31`), 11,
+    'its recomputed stock is 12 − 1, not the inflated 24 − 1');
+  eq(scalarNum(DB, `SELECT ("variantStock"->>'S-White')::int FROM public.products WHERE id=31`), 4,
+    'the orphan colour stock is still untouched');
+}
 }
 
 try {

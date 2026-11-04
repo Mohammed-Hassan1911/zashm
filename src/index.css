@@ -780,6 +780,172 @@ select option { background: var(--bg3); }
   background: var(--bg);
 }
 
+/* ── Route skeletons (/shop, /product) ──────────────────────────────────────
+   The lazy page chunks swap in above the footer. A short generic spinner made
+   the footer jump into place (CLS 0.103 / 0.146 at 1440px). These skeletons
+   reuse the real page padding, heading scale, toolbar and 3:4 product image
+   box, and keep at least one viewport of height, so the footer stays below the
+   fold at its final position instead of flashing mid-page. No fixed pixel
+   heights: every box follows the same responsive rules as the real layout. */
+.page-skeleton {
+  min-height: 100vh;
+  min-height: 100svh;
+  color: var(--text);
+}
+
+.page-skeleton-line,
+.page-skeleton-pill,
+.page-skeleton-card-image,
+.page-skeleton-product-image {
+  display: block;
+  border-radius: 3px;
+  background:
+    linear-gradient(90deg, var(--bg3) 0%, var(--bg4) 50%, var(--bg3) 100%);
+  background-size: 200% 100%;
+  animation: page-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes page-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.page-skeleton-shop {
+  padding-top: 90px;
+}
+
+.page-skeleton-shop-header {
+  padding: 40px 24px 32px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.page-skeleton-shop-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-skeleton-pill {
+  width: 84px;
+  height: 38px;
+}
+
+.page-skeleton-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 24px;
+  box-sizing: border-box;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* The real card info block is clamp(10px, 2.5vw, 14px) of vertical padding
+   plus category, name and price lines. */
+.page-skeleton-card-info {
+  padding: clamp(10px, 2.5vw, 14px) 4px;
+}
+
+.page-skeleton-card-image {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+}
+
+.page-skeleton-product {
+  padding-top: 90px;
+}
+
+.page-skeleton-product-container {
+  box-sizing: border-box;
+  max-width: 1300px;
+  width: 100%;
+  margin: 0 auto;
+  padding: clamp(16px, 4vw, 40px) clamp(12px, 4vw, 24px);
+}
+
+.page-skeleton-product-back {
+  width: 108px;
+  height: 34px;
+  margin-bottom: 16px;
+}
+
+.page-skeleton-product-crumbs {
+  width: min(280px, 55%);
+  height: 14px;
+  margin-bottom: 32px;
+}
+
+.page-skeleton-product-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(20px, 5vw, 64px);
+  align-items: start;
+}
+
+.page-skeleton-product-image {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+}
+
+.page-skeleton-product-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+@media (max-width: 768px) {
+  .page-skeleton-product-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+
+@media (max-width: 380px) {
+  .page-skeleton-shop,
+  .page-skeleton-product {
+    padding-top: 76px;
+  }
+
+  .page-skeleton-shop-toolbar,
+  .page-skeleton-shop-grid {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .page-skeleton-product-container {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-skeleton-line,
+  .page-skeleton-pill,
+  .page-skeleton-card-image,
+  .page-skeleton-product-image {
+    animation: none;
+  }
+}
+
+/* Keep the placeholder grid proportionate: four cards fill one row on desktop,
+   two at tablet width and a single card on phones, so the skeleton never grows
+   into a long empty column list. */
+@media (max-width: 1023px) {
+  .page-skeleton-card:nth-child(n + 3) { display: none; }
+}
+
+@media (max-width: 560px) {
+  .page-skeleton-card:nth-child(n + 2) { display: none; }
+}
+
 @media (max-width: 768px) {
   .product-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
 

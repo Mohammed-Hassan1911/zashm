@@ -301,7 +301,13 @@ console.log('\n[5] SQL function hardening');
   ok(files.length >= 6, 'migration files are present');
 
   for (const file of files) {
-    const sql = read(`supabase/${file}`);
+    // Count definitions only: comment prose such as "a trailing ROLLBACK …
+    // cancels every CREATE FUNCTION above" is not a definition and must not be
+    // required to pin search_path (nor inflate the pinned count).
+    const sql = read(`supabase/${file}`)
+      .split('\n')
+      .filter((line) => !/^\s*--/.test(line))
+      .join('\n');
     const functions = (sql.match(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION/gi) || []).length;
     const pinned = (sql.match(/SET\s+search_path\s*=\s*public\s*,\s*pg_temp/gi) || []).length;
     eq(pinned >= functions, true, `${file}: every function pins search_path (${pinned}/${functions})`);

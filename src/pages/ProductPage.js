@@ -3,16 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
-import { discountPercent, effectivePrice, regularPrice } from '../lib/pricing';
+import { discountPercent, effectivePrice, hasInvalidVariantConfig, hasVariantStock, regularPrice, sellableStockFor } from '../lib/pricing';
 import { resolveRoute } from '../lib/routes';
 import { getColorSwatch } from '../lib/productColors.mjs';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
 export default function ProductPage() {
-  const { selectedProduct, addToCart, toggleWishlist, wishlist, products, productsLoading, setPage, addRecentlyViewed } = useStore();
+  const { selectedProduct, addToCart, toggleWishlist, wishlist, products, productsLoading, productsLoadStatus, setPage, addRecentlyViewed } = useStore();
   const productId = resolveRoute().productId;
   const p = (products || []).find(product => String(product.id) === String(productId)) ||
     (productId == null ? selectedProduct : null);
@@ -177,15 +178,27 @@ export default function ProductPage() {
   // Crawlers get a real 404 from middleware.ts; this keeps the client-rendered
   // state honest too (noindex + no canonical pointing at a dead URL).
   useEffect(() => {
-    if (p || productsLoading) return undefined;
+    if (p) return undefined;
+    if (productsLoading || productsLoadStatus === 'idle' || productsLoadStatus === 'loading') return undefined;
     setPageMeta({ title: 'Product Not Found', robots: 'noindex, nofollow' });
     clearCanonical();
     return undefined;
-  }, [p, productsLoading]);
+  }, [p, productsLoading, productsLoadStatus]);
 
-  if (!p) return (
+  // A cold /product/:id load has no product row yet. Show the product-shaped
+  // skeleton while the catalogue is still loading instead of a short "not
+  // found" box that later grows into the full page (that growth shifted the
+  // footer). Only a settled, successful load without the row is a real 404.
+  const productPending = !p && (
+    productsLoading ||
+    productsLoadStatus === 'idle' ||
+    productsLoadStatus === 'loading'
+  );
+  if (!p) return productPending ? (
+    <ProductPageSkeleton />
+  ) : (
     <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>
-      <p style={{ color: 'var(--text2)' }}>{productsLoading ? 'Loading product...' : 'Product not found.'}</p>
+      <p style={{ color: 'var(--text2)' }}>{'Product not found.'}</p>
       <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>Back to Shop</button>
     </div>
   );
@@ -194,15 +207,12 @@ export default function ProductPage() {
   const related = (products || []).filter(pr => pr.active !== false && (pr.category ?? 'General') === (p.category ?? 'General') && pr.id !== p.id).slice(0, 4);
   const discount = discountPercent(p);
 
-  const currentVariantKey = `${selSize}-${selColor}`;
-  // المصدر الحقيقي للمخزون هو variantStock عند وجود متغيرات؛ المفتاح غير المعرّف = صفر
-  // (وليس الرجوع للمخزون العام لأنه مجموع كل المتغيرات). الحقل العام يُستخدم فقط
-  // للمنتجات التي لا تحتوي متغيرات إطلاقًا.
-  const hasVariantStock = !!(p.variantStock && typeof p.variantStock === 'object' && !Array.isArray(p.variantStock) && Object.keys(p.variantStock).length > 0);
-  const currentVariantStock = hasVariantStock
-    ? (Number(p.variantStock[currentVariantKey]) || 0)
-    : (p.stock ?? 0);
-  const isOutOfStock = currentVariantStock <= 0;
+  // المخزون القابل للبيع هو التوليفة المعرّفة فقط — src/lib/pricing.js هو المرجع
+  // الواحد للواجهة والخادم: مفتاح متبقٍّ من لون محذوف لا يُباع، ووجود
+  // variantStock بلا مقاسات/ألوان معرّفة إعداد غير صالح ولا يُشترى إطلاقًا.
+  const currentVariantStock = sellableStockFor(p, selSize, selColor);
+  const variantConfigInvalid = hasInvalidVariantConfig(p);
+  const isOutOfStock = variantConfigInvalid || currentVariantStock <= 0;
 
   const showToast = (msg, type) => {
     toast(msg, type);
@@ -377,7 +387,7 @@ export default function ProductPage() {
               <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>Color: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
-                  const isColorOOS = hasVariantStock ? !(p.sizes || []).some(s => (p.variantStock[`${s}-${c}`] || 0) > 0) : false;
+                  const isColorOOS = hasVariantStock(p) ? !(p.sizes || []).some(s => sellableStockFor(p, s, c) > 0) : false;
                   const isSelected = selColor === c;
                   
                   return (
@@ -412,7 +422,7 @@ export default function ProductPage() {
     {(p.sizes || []).map(s => {
       // تحويل الطرفين لنصوص لضمان دقة المقارنة والاختيار
       const isSelected = String(selSize) === String(s);
-      const isSizeOOSWithSelectedColor = hasVariantStock ? (p.variantStock[`${s}-${selColor}`] || 0) <= 0 : false;
+      const isSizeOOSWithSelectedColor = sellableStockFor(p, s, selColor) <= 0;
 
       return (
         <motion.button 
@@ -493,8 +503,10 @@ export default function ProductPage() {
             </div>
 
             <p role="status" aria-live="polite" style={{ color: isOutOfStock ? '#e74c3c' : currentVariantStock > 5 ? 'var(--green)' : '#f39c12', fontSize: 12, marginBottom: 24, fontWeight: 600 }}>
-              {isOutOfStock 
-                ? `✕ This variant (${selSize} - ${selColor}) is currently sold out!` 
+              {variantConfigInvalid
+                ? '✕ This product is not available to order right now.'
+                : isOutOfStock
+                ? `✕ This variant (${selSize} - ${selColor}) is currently sold out!`
                 : currentVariantStock > 5 
                   ? `✓ In stock (${currentVariantStock} available for this selection)` 
                   : `⚠ Only ${currentVariantStock} left in stock for this selection!`}

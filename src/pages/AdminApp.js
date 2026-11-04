@@ -11,7 +11,7 @@ import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
 import { paginate, sanitizeInput, validateProductForm, setPageMeta } from '../lib/security';
 import { getColorSwatch } from '../lib/productColors.mjs';
-import { effectivePrice, orphanedVariantStock } from '../lib/pricing';
+import { effectivePrice, hasInvalidVariantConfig, orphanedVariantStock, declaredVariantStockTotal, uniqueDeclaredOptions } from '../lib/pricing';
 import {
   computeSalesOverview,
   RANGE_OPTIONS,
@@ -1122,6 +1122,37 @@ const EMPTY_PRODUCT_FORM = {
   label:'', tags:'', description:'', sku:'', images:[], active:true, variantStock:{}
 };
 
+// Parse the comma-separated size/colour inputs (or an already-parsed array).
+function parseOptionList(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return value.split(',');
+  return [];
+}
+
+// Duplicate detection mirrors the API comparison (trim + collapsed whitespace +
+// case) so what the form accepts is exactly what the server accepts. The first
+// spelling is kept; a repeated size/colour is a validation error, never merged
+// silently, because renaming options could orphan variantStock keys.
+function normalizeOptionLabel(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function duplicateOptionLabels(values) {
+  const seen = new Set();
+  const duplicates = [];
+  for (const raw of values) {
+    const value = String(raw ?? '').trim();
+    if (!value) continue;
+    const key = normalizeOptionLabel(value);
+    if (seen.has(key)) {
+      if (!duplicates.includes(key)) duplicates.push(key);
+    } else {
+      seen.add(key);
+    }
+  }
+  return duplicates;
+}
+
 function ProductsPanel({ canEdit, showForm, setShowForm }) {
   const {
     adminProducts, adminProductsLoading, adminProductsLoadStatus, adminProductsError,
@@ -1149,6 +1180,12 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
 
   const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
   const [formErrors, setFormErrors] = useState({});
+  // Re-adding a previously removed size/colour must not silently make its old
+  // variantStock units sellable again. We remember which keys were orphaned when
+  // the form opened and require an explicit confirmation before saving a set of
+  // declared options that would revive any of them.
+  const orphanBaselineRef = useRef([]);
+  const [restoreAck, setRestoreAck] = useState('');
   const PER_PAGE = 16;
 
   const filtered = products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.includes(search) || p.category.toLowerCase().includes(search.toLowerCase()));
@@ -1174,7 +1211,18 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     setForm(f => {
       if (k === 'images') trackTempUploads(f.images, f.sizeGuide, v, f.sizeGuide);
       if (k === 'sizeGuide') trackTempUploads(f.images, f.sizeGuide, f.images, v);
-      return { ...f, [k]: v };
+      const next = { ...f, [k]: v };
+      // Adding, removing or editing a size/colour changes the declared
+      // combinations, so the stock total must follow immediately. This is what
+      // keeps the saved payload from carrying a stale total after a deletion.
+      if (k === 'sizes' || k === 'colors') {
+        const sizes = uniqueDeclaredOptions(parseOptionList(next.sizes));
+        const colors = uniqueDeclaredOptions(parseOptionList(next.colors));
+        if (sizes.length > 0 && colors.length > 0) {
+          next.stock = declaredVariantStockTotal(next.variantStock || {}, sizes, colors);
+        }
+      }
+      return next;
     });
     setFormErrors(e => ({ ...e, [k]: null }));
   };
@@ -1192,6 +1240,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     setShowForm(false);
     setForm({ ...EMPTY_PRODUCT_FORM });
     setFormErrors({});
+    orphanBaselineRef.current = [];
+    setRestoreAck('');
 
     try {
       if (pending.length) {
@@ -1272,6 +1322,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     setEditing(null);
     setForm({ ...EMPTY_PRODUCT_FORM });
     setFormErrors({});
+    orphanBaselineRef.current = [];
+    setRestoreAck('');
     tempUploadsRef.current = new Set();
     cancelInFlightRef.current = false;
     setShowForm(true);
@@ -1279,12 +1331,31 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
 
   const openEdit = (p) => {
     setEditing(p);
+    const editSizes = Array.isArray(p.sizes) ? p.sizes : (p.sizes || '');
+    const editColors = Array.isArray(p.colors) ? p.colors : (p.colors || '');
+    const editVariantStock = p.variantStock || {};
+    const editSizeList = uniqueDeclaredOptions(parseOptionList(editSizes));
+    const editColorList = uniqueDeclaredOptions(parseOptionList(editColors));
+    // Never show a stale global counter: for a variant product the declared
+    // combinations are the stock. Opening the form does not write anything.
+    const declaredTotal = editSizeList.length > 0 && editColorList.length > 0
+      ? declaredVariantStockTotal(editVariantStock, editSizeList, editColorList)
+      : null;
+    // Snapshot the combinations that are historical/orphaned right now. If the
+    // admin later re-adds one, those units only become sellable after consent.
+    orphanBaselineRef.current = orphanedVariantStock({
+      variantStock: editVariantStock,
+      sizes: editSizeList,
+      colors: editColorList,
+    }).filter(o => Number(o.qty) > 0).map(o => o.key);
+    setRestoreAck('');
     setForm({
       ...p,
       salePrice: p.salePrice || '',
-      sizes: Array.isArray(p.sizes) ? p.sizes.join(',') : (p.sizes || ''),
-      colors: Array.isArray(p.colors) ? p.colors.join(',') : (p.colors || ''),
-      variantStock: p.variantStock || {},
+      sizes: editSizes,
+      colors: editColors,
+      variantStock: editVariantStock,
+      stock: declaredTotal === null ? p.stock : declaredTotal,
 
       label: p.label || '',
       tags: p.tags || ''
@@ -1317,19 +1388,46 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       return;
     }
 
-    const cleanSizes = typeof form.sizes === 'string'
-      ? form.sizes.split(',').map(s => s.trim()).filter(Boolean)
-      : (Array.isArray(form.sizes) ? form.sizes : []);
+    const rawSizes = parseOptionList(form.sizes).map(s => String(s ?? '').trim()).filter(Boolean);
+    const rawColors = parseOptionList(form.colors).map(c => String(c ?? '').trim()).filter(Boolean);
 
-    const cleanColors = typeof form.colors === 'string'
-      ? form.colors.split(',').map(c => c.trim()).filter(Boolean)
-      : (Array.isArray(form.colors) ? form.colors : []);
+    const duplicateSizes = duplicateOptionLabels(rawSizes);
+    const duplicateColors = duplicateOptionLabels(rawColors);
+    if (duplicateSizes.length > 0 || duplicateColors.length > 0) {
+      const parts = [];
+      if (duplicateSizes.length) parts.push(`size${duplicateSizes.length === 1 ? '' : 's'}: ${duplicateSizes.join(', ')}`);
+      if (duplicateColors.length) parts.push(`colour${duplicateColors.length === 1 ? '' : 's'}: ${duplicateColors.join(', ')}`);
+      toast.error(`⚠️ Duplicate ${parts.join(' · ')}. Each size and colour can appear only once.`);
+      return;
+    }
+
+    // Duplicates are rejected above; the unique lists are what get saved.
+    const cleanSizes = uniqueDeclaredOptions(rawSizes);
+    const cleanColors = uniqueDeclaredOptions(rawColors);
+
+    // Re-adding an old size/colour revives historical variantStock units. That
+    // is a stock decision, not an automatic side effect: require the explicit
+    // confirmation shown in the matrix before saving such a change.
+    const revivedKeys = (orphanBaselineRef.current || []).filter((key) =>
+      cleanSizes.some((size) => cleanColors.some((color) => `${size}-${color}` === key))
+      && Number((form.variantStock || {})[key]) > 0
+    );
+    if (revivedKeys.length > 0 && restoreAck !== revivedKeys.join('|')) {
+      toast.error(`⚠️ Re-adding these options would make ${revivedKeys.length} historical stock entr${revivedKeys.length === 1 ? 'y' : 'ies'} sellable again. Confirm the restore in the stock matrix first.`);
+      return;
+    }
 
     const rawSalePrice = form.salePrice === '' || form.salePrice === null || form.salePrice === undefined ? null : parseFloat(form.salePrice);
     if (rawSalePrice !== null && Number.isFinite(rawSalePrice) && rawSalePrice >= parsedPrice) {
       toast.error('The sale price must be lower than the original price.');
       return;
     }
+
+    // products.stock is the declared size × colour total. The API recomputes it
+    // again, so this is only for an immediate, consistent payload.
+    const declaredStock = cleanSizes.length > 0 && cleanColors.length > 0
+      ? declaredVariantStockTotal(form.variantStock || {}, cleanSizes, cleanColors)
+      : null;
 
     const productData = {
       name: form.name,
@@ -1338,7 +1436,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       // Rule: 0 / empty / invalid sale price means "no discount" → store null.
       salePrice: rawSalePrice !== null && Number.isFinite(rawSalePrice) && rawSalePrice > 0 ? rawSalePrice : null,
       description: form.description,
-      stock: parseInt(form.stock || 0),
+      stock: declaredStock === null ? parseInt(form.stock || 0) : declaredStock,
       variantStock: form.variantStock || {},
       sku: form.sku || '',
       colors: cleanColors,
@@ -1398,6 +1496,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       }
 
       tempUploadsRef.current = new Set();
+      orphanBaselineRef.current = [];
+      setRestoreAck('');
       if (form._isAddingNewCat) update('_isAddingNewCat', false);
       setShowForm(false);
     } catch (err) {
@@ -1647,13 +1747,23 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                   <div>
                     <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:1, textTransform:'uppercase' }}>Sizes (comma-separated)</label>
                     <input value={form.sizes||''} onChange={e => update('sizes', e.target.value)} placeholder="S,M,L,XL" style={{ width:'100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
+                    {duplicateOptionLabels(parseOptionList(form.sizes)).length > 0 && (
+                      <p role="alert" style={{ color:'var(--red)', fontSize:11, margin:'6px 0 0' }}>
+                        Duplicate size: {duplicateOptionLabels(parseOptionList(form.sizes)).join(', ')} — each size can appear only once.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:1, textTransform:'uppercase' }}>Colors (comma-separated)</label>
                     <input value={form.colors||''} onChange={e => update('colors', e.target.value)} placeholder="Black,White" style={{ width:'100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
+                    {duplicateOptionLabels(parseOptionList(form.colors)).length > 0 && (
+                      <p role="alert" style={{ color:'var(--red)', fontSize:11, margin:'6px 0 0' }}>
+                        Duplicate colour: {duplicateOptionLabels(parseOptionList(form.colors)).join(', ')} — each colour can appear only once.
+                      </p>
+                    )}
                     <div aria-label="Color previews" style={{ display:'flex', flexWrap:'wrap', gap:10, marginTop:9 }}>
-                      {(typeof form.colors === 'string' ? form.colors.split(',') : Array.isArray(form.colors) ? form.colors : [])
-                        .map(color => color.trim()).filter(Boolean).map((color, index) => (
+                      {uniqueDeclaredOptions(parseOptionList(form.colors))
+                        .map((color, index) => (
                           <span key={`${color}-${index}`} style={{ display:'inline-flex', alignItems:'center', gap:6, color:'var(--text2)', fontSize:11 }}>
                             <span aria-hidden="true" style={{ width:16, height:16, borderRadius:'50%', background:getColorSwatch(color), border:'1px solid rgba(255,255,255,0.35)', display:'inline-block' }} />
                             {color}
@@ -1667,13 +1777,25 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                   <label style={{ fontSize:11, color:'var(--gold)', display:'block', marginBottom:12, letterSpacing:1, textTransform:'uppercase', fontWeight:600 }}>🎨 Size & Color Stock Matrix *</label>
                   <div style={{ display:'grid', gap:8 }}>
                     {(() => {
-                      const currentSizes = typeof form.sizes === 'string' ? form.sizes.split(',').map(s => s.trim()).filter(Boolean) : (Array.isArray(form.sizes) ? form.sizes : []);
-                      const currentColors = typeof form.colors === 'string' ? form.colors.split(',').map(c => c.trim()).filter(Boolean) : (Array.isArray(form.colors) ? form.colors : []);
+                      const currentSizes = uniqueDeclaredOptions(parseOptionList(form.sizes));
+                      const currentColors = uniqueDeclaredOptions(parseOptionList(form.colors));
 
                       if (currentSizes.length === 0 || currentColors.length === 0) {
+                        const invalidVariantConfig = hasInvalidVariantConfig({
+                          variantStock: form.variantStock || {},
+                          sizes: currentSizes,
+                          colors: currentColors,
+                        });
                         return (
                           <div>
-                            <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'4px 0' }}>No sizes or colors defined — this product sells without variants.</p>
+                            {invalidVariantConfig && (
+                              <p role="alert" style={{ fontSize:11, color:'var(--red)', textAlign:'center', padding:'6px 0', margin:'0 0 8px', border:'1px solid var(--red)', borderRadius:4 }}>
+                                ⚠ This product has per-variant stock but no size and colour defined, so it cannot be ordered at
+                                all — checkout and the database both refuse it. Add the sizes and colours, or clear the variant
+                                stock to sell it as a single product.
+                              </p>
+                            )}
+                            <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'4px 0' }}>{invalidVariantConfig ? 'Global stock (not sellable while variant stock exists)' : 'No sizes or colors defined — this product sells without variants.'}</p>
                             <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, letterSpacing:1, textTransform:'uppercase' }}>Stock (units)</label>
                             <input
                               type="number"
@@ -1688,17 +1810,9 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
 
                       // Sum only the declared size × color keys. Parsing keys with
                       // split('-') breaks for hyphenated colors ("Off-White"), and
-                      // orphaned keys must not leak into the total.
-                      const totalFor = (matrix) => {
-                        let total = 0;
-                        for (const size of currentSizes) {
-                          for (const color of currentColors) {
-                            const qty = Number(matrix[`${size}-${color}`]);
-                            if (Number.isFinite(qty) && qty > 0) total += qty;
-                          }
-                        }
-                        return total;
-                      };
+                      // orphaned keys must not leak into the total. Duplicate
+                      // declared labels are de-duplicated by the shared helper.
+                      const totalFor = (matrix) => declaredVariantStockTotal(matrix, currentSizes, currentColors);
 
                       const commitVariantStock = (matrixKey, qty) => {
                         const safeQty = Math.max(0, Number.isFinite(Number(qty)) ? Number(qty) : 0);
@@ -1714,16 +1828,59 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                       });
 
                       const rows = [];
-                      if (orphaned.length > 0) {
+                      // Units that were orphaned when the form opened and whose
+                      // combination is declared again now. They stay excluded
+                      // until the admin explicitly confirms the restore.
+                      const revivedOrphans = (orphanBaselineRef.current || [])
+                        .filter((key) => currentSizes.some((size) => currentColors.some((color) => `${size}-${color}` === key)))
+                        .map((key) => ({ key, qty: Number((form.variantStock || {})[key]) || 0 }))
+                        .filter((entry) => entry.qty > 0);
+                      const revivedSignature = revivedOrphans.map((entry) => entry.key).join('|');
+                      if (revivedOrphans.length > 0) {
+                        const revivedUnits = revivedOrphans.reduce((sum, entry) => sum + entry.qty, 0);
                         rows.push(
-                          <div key="__orphaned__" style={{ padding:'10px 12px', background:'rgba(243,156,18,0.08)', border:'1px solid #f39c12', borderRadius:4, marginBottom:8 }}>
-                            <p style={{ fontSize:11, color:'#f39c12', fontWeight:600, margin:'0 0 6px' }}>⚠ Orphaned stock entries (size/color no longer defined)</p>
+                          <div key="__revived__" role="alert" style={{ padding:'10px 12px', background:'rgba(201,168,76,0.08)', border:'1px solid var(--gold)', borderRadius:4, marginBottom:8 }}>
+                            <p style={{ fontSize:11, color:'var(--gold)', fontWeight:600, margin:'0 0 6px' }}>
+                              ⚠ Re-adding this option would make {revivedUnits} historical unit{revivedUnits === 1 ? '' : 's'} sellable again
+                            </p>
+                            <ul style={{ margin:'0 0 8px', paddingLeft:16, fontSize:11, color:'var(--text2)' }}>
+                              {revivedOrphans.map((entry) => <li key={entry.key}>{entry.key}: {entry.qty}</li>)}
+                            </ul>
+                            {restoreAck === revivedSignature ? (
+                              <p role="status" style={{ fontSize:11, color:'#27ae60', margin:0 }}>
+                                ✓ Restore confirmed — these units become sellable when you save.
+                              </p>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setRestoreAck(revivedSignature)}
+                                style={{ padding:'7px 12px', borderRadius:4, border:'1px solid var(--gold)', background:'var(--gold)', color:'var(--bg)', fontSize:11, fontWeight:600, cursor:'pointer' }}
+                              >
+                                Confirm restoring these units
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      if (orphaned.length > 0) {
+                        const orphanUnits = orphaned.reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
+                        rows.push(
+                          <div key="__orphaned__" role="alert" style={{ padding:'10px 12px', background:'rgba(243,156,18,0.08)', border:'1px solid #f39c12', borderRadius:4, marginBottom:8 }}>
+                            <p style={{ fontSize:11, color:'#f39c12', fontWeight:600, margin:'0 0 6px' }}>
+                              ⚠ {orphaned.length} orphaned stock entr{orphaned.length === 1 ? 'y' : 'ies'} — {orphanUnits} unit{orphanUnits === 1 ? '' : 's'} that cannot be sold
+                            </p>
                             <p style={{ fontSize:11, color:'var(--text2)', margin:'0 0 8px' }}>
-                              These keys are kept untouched and are excluded from the total and from customer-facing availability:
+                              These size/color combinations are no longer defined on the product, so they are excluded from the
+                              stock total, from the customer storefront and from checkout (the API and the database both refuse
+                              them). Nothing is deleted and no quantity is changed — they stay here untouched until you decide.
+                              Re-adding the size or colour below makes its units sellable again.
                             </p>
                             <ul style={{ margin:0, paddingLeft:16, fontSize:11, color:'var(--text2)' }}>
                               {orphaned.map(o => <li key={o.key}>{o.key}: {o.qty}</li>)}
                             </ul>
+                            <p style={{ fontSize:11, color:'var(--text3)', margin:'8px 0 0' }}>
+                              Stock total shown here and saved on the product = declared combinations only ({totalFor(form.variantStock || {})} units).
+                            </p>
                           </div>
                         );
                       }
@@ -1755,7 +1912,16 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                     })()}
                   </div>
                   <div style={{ marginTop:12, textAlign:'right', fontSize:12, color:'var(--text2)' }}>
-                    Total Stock: <strong style={{ color:'var(--gold)' }}>{form.stock || 0}</strong> pcs
+                    Total Stock:{' '}
+                    <strong style={{ color:'var(--gold)' }}>
+                      {(() => {
+                        const sizes = uniqueDeclaredOptions(parseOptionList(form.sizes));
+                        const colors = uniqueDeclaredOptions(parseOptionList(form.colors));
+                        return sizes.length > 0 && colors.length > 0
+                          ? declaredVariantStockTotal(form.variantStock || {}, sizes, colors)
+                          : (form.stock || 0);
+                      })()}
+                    </strong>{' '}pcs
                   </div>
                 </div>
 

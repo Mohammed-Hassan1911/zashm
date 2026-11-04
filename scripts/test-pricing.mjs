@@ -16,6 +16,8 @@ import {
   discountPercent,
   availableStock,
   orphanedVariantStock,
+  uniqueDeclaredOptions,
+  declaredVariantStockTotal,
 } from '../src/lib/pricing.js';
 
 let pass = 0;
@@ -80,6 +82,36 @@ console.log('\n[4] availableStock: orphaned variant keys never surface');
   eq(availableStock({ stock: -4 }), 0, 'negative stock clamps to 0');
   eq(availableStock({ sizes: ['M'], colors: ['Off-White'], variantStock: { 'M-Off-White': 6 } }), 6, 'hyphenated color names match exactly');
   eq(availableStock({ sizes: ['M'], colors: ['Black'], variantStock: { 'M-Black': 'x' } }), 0, 'garbage qty → 0');
+}
+
+console.log('\n[4b] duplicated declared options count once');
+{
+  eq(uniqueDeclaredOptions(['S', ' s ', 'M', 'M']), ['S', 'M'],
+    'trim + case-insensitive duplicates collapse to the first spelling');
+  eq(uniqueDeclaredOptions([' X ', '', '   ', 'X']), ['X'],
+    'blank option labels are dropped');
+  eq(uniqueDeclaredOptions('S'), [], 'non-array input yields no options');
+
+  const legacy = {
+    price: 1, stock: 24,
+    sizes: ['S', 'S', 'M', 'M'], colors: ['Black', 'Black'],
+    variantStock: { 'S-Black': 7, 'M-Black': 5, 'S-White': 4 },
+  };
+  eq(declaredVariantStockTotal(legacy.variantStock, legacy.sizes, legacy.colors), 12,
+    'shared helper sums each declared combination once (7 + 5, not 24)');
+  eq(availableStock(legacy), 12, 'storefront availability is not inflated by duplicate lines');
+  eq(orphanedVariantStock(legacy), [{ key: 'S-White', qty: 4 }],
+    'the orphan key is still only reported, never counted');
+
+  const caseVariant = {
+    price: 1, stock: 99,
+    sizes: ['s', 'S'], colors: ['Black'],
+    variantStock: { 's-Black': 7, 'S-Black': 5 },
+  };
+  eq(availableStock(caseVariant), 7,
+    'case-only duplicates collapse to the first spelling without renaming the stored key');
+  eq(orphanedVariantStock(caseVariant), [{ key: 'S-Black', qty: 5 }],
+    'the other spelling is reported as an orphan instead of being silently summed');
 }
 
 console.log('\n[5] orphanedVariantStock: report only, never mutate');

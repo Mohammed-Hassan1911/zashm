@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, Suspense } from 'react';
+import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import './index.css';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store';
@@ -23,6 +23,7 @@ import Header from './components/shop/Header';
 import CartDrawer from './components/shop/CartDrawer';
 import MobileNav from './components/shop/MobileNav';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import { ShopPageSkeleton, ProductPageSkeleton } from './components/ui/PageSkeletons';
 import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
 import WhatsAppButton from './components/ui/WhatsAppButton';
 import { setPageMeta } from './lib/seo';
@@ -79,6 +80,12 @@ function AppInner() {
   const refreshOrders = useStore((state) => state.refreshOrders);
 
   const [activeModal, setActiveModal] = useState(null);
+  // The footer is only added once the first page has actually committed. While a
+  // lazy page chunk is still loading, the placeholder above it decides the
+  // document height; mounting the footer at that moment made it jump when the
+  // real content replaced the loader (CLS 0.103 / 0.146 at 1440px).
+  const [firstPageReady, setFirstPageReady] = useState(false);
+  const markPageReady = useCallback(() => setFirstPageReady(true), []);
   const trackedFirstView = useRef(false);
   const previousPage = useRef(currentPage);
 
@@ -213,6 +220,7 @@ function AppInner() {
               transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
             >
               <Suspense fallback={<PageLoading page={currentPage} />}>
+                <PageReadySignal onReady={markPageReady} />
                 {currentPage === 'home' && <HomePage />}
                 {currentPage === 'shop' && <ShopPage />}
                 {currentPage === 'product' && <ProductPage />}
@@ -225,7 +233,7 @@ function AppInner() {
             </motion.div>
           </AnimatePresence>
 
-          <Footer setModal={setActiveModal} />
+          {firstPageReady && <Footer setModal={setActiveModal} />}
           <MobileNav />
           <BackToTop />
           <WhatsAppButton />
@@ -235,6 +243,15 @@ function AppInner() {
       )}
     </div>
   );
+}
+
+// Lives inside the page Suspense boundary, so its effect runs only after the
+// real page has committed — never while the loading fallback is on screen.
+function PageReadySignal({ onReady }) {
+  useEffect(() => {
+    onReady();
+  }, [onReady]);
+  return null;
 }
 
 function PageLoading({ page }) {
@@ -250,6 +267,12 @@ function PageLoading({ page }) {
       </div>
     );
   }
+  // /shop and /product are the two routes that were shifting the footer at
+  // 1440px. Their skeletons mirror the real layout (same padding, same grid
+  // and the same 3:4 image box) instead of a short generic spinner, so the
+  // footer keeps its final position while the chunk loads.
+  if (page === 'shop') return <ShopPageSkeleton />;
+  if (page === 'product') return <ProductPageSkeleton />;
   return <AppStartupScreen compact />;
 }
 

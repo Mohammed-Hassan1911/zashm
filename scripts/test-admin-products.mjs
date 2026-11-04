@@ -227,6 +227,39 @@ console.log('\n[4] the router wires GET');
   ok(/requirePerm\(req,\s*res,\s*'products\.read'\)/.test(src), 'GET requires products.read');
 }
 
+console.log('\n[4b] product payload: duplicate options and server-recomputed stock');
+{
+  const base = {
+    name: 'QA Jacket', category: 'Jackets', price: 100, stock: 999,
+    sizes: ['M', ' m ', 'M', 'L'], colors: ['Black', 'black', 'Black'],
+    variantStock: { 'M-Black': 6, 'L-Black': 4, 'M-White': 9 },
+  };
+  const p = lib.validateProductPayload(base);
+  ok(p, 'a valid payload is accepted');
+  eq(p.sizes, ['M', 'L'], 'duplicate sizes are dropped, first spelling kept');
+  eq(p.colors, ['Black'], 'duplicate colours are dropped, first spelling kept');
+  eq(p.stock, 10, 'stock is recomputed from declared combinations only (not 999, not 19)');
+  eq(p.variantStock['M-White'], 9, 'an orphan variant key keeps its quantity in the payload');
+
+  const noDeclared = lib.validateProductPayload({
+    name: 'Legacy Tee', category: 'Tees', price: 50, stock: 12,
+    sizes: [], colors: [], variantStock: { 'M-White': 3 },
+  });
+  eq(noDeclared.stock, 12, 'legacy products without declared options keep their submitted counter');
+
+  const onlySizes = lib.validateProductPayload({
+    name: 'Half Tee', category: 'Tees', price: 50, stock: 7,
+    sizes: ['M'], colors: [], variantStock: { 'M-White': 3 },
+  });
+  eq(onlySizes.stock, 7, 'a half-declared product is not silently zeroed');
+
+  const clamped = lib.validateProductPayload({
+    ...base,
+    variantStock: { 'M-Black': -1, 'L-Black': 4 },
+  });
+  eq(clamped, null, 'a negative variant quantity is still rejected');
+}
+
 console.log('\n[5] admin page navigation and add-product wiring');
 {
   const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
