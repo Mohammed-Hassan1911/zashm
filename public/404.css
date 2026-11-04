@@ -1,0 +1,71 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a0a;
+  color: #f5f0e8;
+  font-family: Georgia, 'Times New Roman', serif;
+  text-align: center;
+  padding: 32px 24px;
+}
+.wrap { max-width: 520px; }
+.brand {
+  letter-spacing: 8px;
+  color: #c9a84c;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin: 0 0 28px;
+}
+h1 {
+  font-size: clamp(64px, 18vw, 120px);
+  font-weight: 300;
+  letter-spacing: 10px;
+  margin: 0 0 14px;
+  line-height: 1;
+}
+.sub {
+  font-family: system-ui, -apple-system, sans-serif;
+  color: rgba(245, 240, 232, 0.6);
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin: 0 0 36px;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-block;
+  padding: 14px 32px;
+  border: 1px solid #c9a84c;
+  color: #c9a84c;
+  text-decoration: none;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border-radius: 2px;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.btn:hover,
+.btn:focus-visible {
+  background: #c9a84c;
+  color: #0a0a0a;
+  outline: none;
+}
+.btn.secondary {
+  border-color: rgba(245, 240, 232, 0.25);
+  color: rgba(245, 240, 232, 0.8);
+}
+.btn.secondary:hover,
+.btn.secondary:focus-visible {
+  background: rgba(245, 240, 232, 0.1);
+  color: #f5f0e8;
+}
