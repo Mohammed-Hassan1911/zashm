@@ -58,7 +58,11 @@ async function fetchPublicProducts({ supabaseOrigin, anonKey }) {
   const products = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const url = new URL('/rest/v1/products_public', supabaseOrigin);
-    url.searchParams.set('select', 'id,stock,variantStock');
+    // sizes/colors are required, not optional: isAvailable() computes the
+    // declared size × colour pool for a variant product, so a row fetched
+    // without them looks sold out and every product silently disappears from
+    // the sitemap. Both columns are part of the public view's allow-list.
+    url.searchParams.set('select', 'id,stock,variantStock,sizes,colors');
     url.searchParams.set('order', 'id.asc');
 
     const signal = AbortSignal.timeout(8000);

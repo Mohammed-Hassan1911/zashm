@@ -119,8 +119,8 @@ console.log('\n[3] public data source and pagination');
 
   eq(requests.length, 2, 'fetches all pages of public product rows');
   ok(requests.every(({ url }) => url.includes('/rest/v1/products_public?') &&
-     url.includes('select=id%2Cstock%2CvariantStock') && !url.includes('/products?')),
-  'queries only the sanitized products_public view and required public fields');
+     url.includes('select=id%2Cstock%2CvariantStock%2Csizes%2Ccolors') && !url.includes('/products?')),
+  'queries only the sanitized products_public view and every field availability needs');
   eq(requests[0].options.headers.apikey, 'public-anon-test-key', 'uses the public anon key');
   eq(requests[0].options.headers.Authorization, 'Bearer public-anon-test-key',
     'never uses the configured service-role key');
@@ -132,6 +132,80 @@ console.log('\n[3] public data source and pagination');
     'successful sitemap response advertises the one-hour cache policy');
   eq(response.headers['Vercel-CDN-Cache-Control'], response.headers['Cache-Control'],
     'Vercel CDN receives the same explicit successful cache policy');
+}
+
+console.log('\n[3b] variant product through the real fetch path');
+{
+  // Production regression: products_public was queried without sizes/colors,
+  // so isAvailable() saw an empty declared pool on every variant product and
+  // the live sitemap listed no product at all. This section runs the handler
+  // against a PostgREST stand-in that returns ONLY the requested columns — the
+  // same way the real endpoint behaves — so a missing column in the select can
+  // never pass unnoticed again.
+  const oldEnv = {};
+  const envNames = [
+    'SUPABASE_URL', 'VITE_SUPABASE_URL', 'REACT_APP_SUPABASE_URL',
+    'SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY', 'REACT_APP_SUPABASE_ANON_KEY',
+    'PUBLIC_BASE_URL',
+  ];
+  for (const name of envNames) oldEnv[name] = process.env[name];
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  delete process.env.PUBLIC_BASE_URL;
+
+  // Same shape the view returns for the live product: 18 sellable units across
+  // declared combinations, 8 of them in keys whose colour is no longer declared.
+  const row = {
+    id: 1793739505270547,
+    name: 'Jacket Boxy',
+    stock: 18,
+    sizes: ['S', 'M', 'L', 'XL'],
+    colors: ['Black', 'Burgundy'],
+    variantStock: {
+      'S-Black': 7, 'M-Black': 5, 'L-Black': 5, 'M-Burgundy': 1,
+      'M-White': 4, 'L-White': 4,
+    },
+  };
+  const selects = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const select = new URL(String(url)).searchParams.get('select') || '';
+    selects.push(select);
+    const columns = select.split(',').map((value) => value.trim()).filter(Boolean);
+    const projected = {};
+    for (const column of columns) {
+      if (column in row) projected[column] = row[column];
+    }
+    return new Response(JSON.stringify([projected]), { status: 200 });
+  };
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const name of envNames) {
+      if (oldEnv[name] === undefined) delete process.env[name];
+      else process.env[name] = oldEnv[name];
+    }
+  }
+
+  eq(selects.length, 1, 'a single page is fetched for the live product');
+  const requested = (selects[0] || '').split(',').map((value) => value.trim());
+  ok(requested.includes('sizes') && requested.includes('colors'),
+    'the query requests the columns the availability rule reads');
+  ok(response.body.includes(`<loc>${origin}/product/${row.id}</loc>`),
+    'a product whose availability lives in its declared variants is listed');
+  eq(response.headers['Cache-Control'], 'public, s-maxage=3600, stale-while-revalidate=86400',
+    'a successful variant fetch keeps the one-hour cache policy');
+
+  // The same row minus the declared lists is an invalid configuration, not a
+  // product: it must stay out of the sitemap (mirrors atomic_place_order()).
+  const orphanOnly = { id: 7, stock: 4, variantStock: { 'M-White': 4 } };
+  const projectedOrphan = {};
+  for (const column of Object.keys(orphanOnly)) projectedOrphan[column] = orphanOnly[column];
+  const orphanXml = buildSitemapXml([projectedOrphan], origin);
+  ok(!orphanXml.includes('/product/7'),
+    'a variant pool with no declared sizes/colors is not advertised');
 }
 
 console.log('\n[4] safe handling of source failures');
