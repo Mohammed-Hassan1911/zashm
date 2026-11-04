@@ -575,12 +575,13 @@ try {
     const cart = read('src/pages/CartPage.js');
     await step('COD disclosure renders between the total and PLACE ORDER', () => {
       const totalAt = cart.indexOf('EGP {(finalTotal');
-      const codAt = cart.indexOf('الدفع نقدًا عند الاستلام');
+      const codAt = cart.indexOf('Cash on Delivery');
       const placeAt = cart.indexOf('PLACE ORDER');
       assert.ok(totalAt >= 0 && codAt > totalAt && placeAt > codAt,
-        'COD copy must sit after the total and before PLACE ORDER');
+        'payment selector must sit after the total and before PLACE ORDER');
       assert.ok(/Cash on Delivery/.test(cart), 'English COD label is present');
-      assert.ok(/when your order arrives|عند الاستلام/.test(cart), 'payment-on-arrival explanation is present');
+      assert.ok(/Pay in cash when your order arrives/.test(cart), 'payment-on-arrival explanation is present');
+      assert.ok(/Coming soon/.test(cart), 'card option is advertised as coming soon');
     });
 
     const app = read('src/App.js');
