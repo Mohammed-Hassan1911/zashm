@@ -1413,7 +1413,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       && Number((form.variantStock || {})[key]) > 0
     );
     if (revivedKeys.length > 0 && restoreAck !== revivedKeys.join('|')) {
-      toast.error(`⚠️ Re-adding these options would make ${revivedKeys.length} historical stock entr${revivedKeys.length === 1 ? 'y' : 'ies'} sellable again. Confirm the restore in the stock matrix first.`);
+      toast.error(`⚠️ Re-adding these options revives ${revivedKeys.length} historical stock unit${revivedKeys.length === 1 ? '' : 's'}. Confirm in the stock matrix first.`);
       return;
     }
 
@@ -1789,10 +1789,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                         return (
                           <div>
                             {invalidVariantConfig && (
-                              <p role="alert" style={{ fontSize:11, color:'var(--red)', textAlign:'center', padding:'6px 0', margin:'0 0 8px', border:'1px solid var(--red)', borderRadius:4 }}>
-                                ⚠ This product has per-variant stock but no size and colour defined, so it cannot be ordered at
-                                all — checkout and the database both refuse it. Add the sizes and colours, or clear the variant
-                                stock to sell it as a single product.
+                              <p role="alert" style={{ fontSize:10, color:'var(--red)', textAlign:'center', padding:'4px 6px', margin:'0 0 6px', border:'1px solid var(--red)', borderRadius:4, lineHeight:1.4 }}>
+                                ⚠ Variant stock exists but no sizes/colours defined — not sellable. Add sizes/colours or clear variant stock.
                               </p>
                             )}
                             <p style={{ fontSize:11, color:'var(--text3)', textAlign:'center', padding:'4px 0' }}>{invalidVariantConfig ? 'Global stock (not sellable while variant stock exists)' : 'No sizes or colors defined — this product sells without variants.'}</p>
