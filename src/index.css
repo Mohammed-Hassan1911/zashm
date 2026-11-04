@@ -1755,16 +1755,16 @@ main, [role="main"] {
 }
 @media (max-width: 768px) {
   .footer-col-title {
-    font-size: 9px;
-    letter-spacing: 1.3px;
-    margin-bottom: 12px;
+    font-size: 7.5px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
   }
 }
 @media (max-width: 420px) {
   .footer-col-title {
-    font-size: 8.5px;
-    letter-spacing: 1px;
-    margin-bottom: 10px;
+    font-size: 7px;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
   }
 }
 

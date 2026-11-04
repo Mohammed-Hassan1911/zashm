@@ -76,7 +76,7 @@ function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
     .trim();
   const normalizedMessage = message.toLowerCase();
   const Icon = type === 'success'
-    ? (/wishlist|favorite|المفضلة/.test(normalizedMessage) ? Heart : /bag|cart|السلة/.test(normalizedMessage) ? ShoppingBag : CheckCircle)
+    ? (/wishlist|favorite/.test(normalizedMessage) ? Heart : /bag|cart/.test(normalizedMessage) ? ShoppingBag : CheckCircle)
     : type === 'error'
       ? AlertCircle
       : type === 'warning'

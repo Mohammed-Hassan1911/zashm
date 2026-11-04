@@ -730,8 +730,8 @@ export default function ProductPage() {
                       color: 'var(--text2, #ccc)',
                     }}>
                       {(
-                        ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short', 'بناطيل', 'بنطلون', 'شورت'].some(word => (p.category ?? '').toLowerCase().includes(word)) ||
-                        ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short', 'بناطيل', 'بنطلون', 'شورت'].some(word => (p.name ?? '').toLowerCase().includes(word))
+                        ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short'].some(word => (p.category ?? '').toLowerCase().includes(word)) ||
+                        ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short'].some(word => (p.name ?? '').toLowerCase().includes(word))
                       ) ? (
                         <>
                           <thead>

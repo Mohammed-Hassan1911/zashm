@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, PackageSearch, Headset } from 'lucide-react';
+import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, CreditCard, PackageSearch, Headset } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import StockFeedback from '../components/shop/StockFeedback';
@@ -1255,27 +1255,92 @@ export function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Payment method: COD only. Stated next to the total and above
-                  the action so the shopper knows how they will pay before
-                  placing the order. */}
+              {/* Payment method selector. COD is the only live option today;
+                  card payments are shown as "Coming soon" so the shopper sees
+                  the roadmap without being able to select them. */}
               <div
-                role="note"
+                role="radiogroup"
+                aria-label="Payment method"
                 style={{
                   marginTop: 12,
-                  padding: '10px 12px',
-                  borderRadius: 4,
-                  border: '1px solid var(--border-gold)',
-                  background: 'rgba(201,168,76,0.07)',
-                  textAlign: 'center'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8
                 }}
               >
-                <p style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, fontSize:12, fontWeight:600, color:'var(--text)', lineHeight:1.5, margin:0 }}>
-                  <Banknote size={14} color="var(--gold)" aria-hidden="true" />
-                  الدفع نقدًا عند الاستلام (Cash on Delivery)
-                </p>
-                <p style={{ fontSize:11, color:'var(--text3)', lineHeight:1.6, margin:'4px 0 0' }}>
-                  You pay in cash when your order arrives. · ستدفع نقدًا عند وصول طلبك.
-                </p>
+                {/* Cash on Delivery — live */}
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    padding: '12px 14px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-gold)',
+                    background: 'rgba(201,168,76,0.07)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    value="cod"
+                    defaultChecked
+                    style={{ marginTop: 3, accentColor: 'var(--gold)', flexShrink: 0 }}
+                  />
+                  <Banknote size={18} color="var(--gold)" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4 }}>
+                        Cash on Delivery
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--gold)', padding: '2px 6px', borderRadius: 3, border: '1px solid var(--border-gold)', background: 'rgba(201,168,76,0.12)' }}>
+                        Available
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, margin: '3px 0 0' }}>
+                      Pay in cash when your order arrives. No prepayment required.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Card payments — coming soon */}
+                <div
+                  aria-disabled="true"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    padding: '12px 14px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg3)',
+                    opacity: 0.55,
+                    cursor: 'not-allowed'
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    value="card"
+                    disabled
+                    style={{ marginTop: 3, flexShrink: 0 }}
+                  />
+                  <CreditCard size={18} color="var(--text3)" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', lineHeight: 1.4 }}>
+                        Credit / Debit Card
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--text3)', padding: '2px 6px', borderRadius: 3, border: '1px solid var(--border)', background: 'var(--bg2)' }}>
+                        Coming soon
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, margin: '3px 0 0' }}>
+                      Visa, Mastercard and local cards — available in a future update.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <motion.button 
