@@ -279,8 +279,8 @@ export default function AdminApp() {
         )}
       </AnimatePresence>
 
-      <main style={{ flex:1, overflow:'hidden', minWidth:0, minHeight:0, display:'flex', flexDirection:'column' }}>
-        <div style={{ position:'sticky', top:0, zIndex:100, background:'rgba(10,10,10,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid var(--border)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <main className="admin-main" style={{ flex:1, overflow:'hidden', minWidth:0, minHeight:0, display:'flex', flexDirection:'column' }}>
+        <div className="admin-topbar" style={{ position:'sticky', top:0, zIndex:100, background:'rgba(10,10,10,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid var(--border)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <button
               className="show-mobile-flex" onClick={() => setMobileMenuOpen(true)}

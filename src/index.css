@@ -1780,3 +1780,28 @@ main, [role="main"] {
     font-size: 12px;
   }
 }
+
+/* ─── Admin dashboard: phone / small-screen tuning ─────────────────────────── */
+@media (max-width: 768px) {
+  .admin-container input,
+  .admin-container textarea,
+  .admin-container select {
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+  .admin-main {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-topbar {
+    padding: 10px 12px !important;
+    gap: 8px;
+  }
+  .admin-topbar h1 {
+    font-size: 16px !important;
+  }
+  .admin-container h1 { font-size: 16px !important; }
+  .admin-container h2 { font-size: 14px !important; }
+  .admin-container h3 { font-size: 13px !important; }
+  .admin-container table { font-size: 12px; }
+  .admin-container td, .admin-container th { padding: 8px 10px !important; }
+}
