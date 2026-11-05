@@ -148,7 +148,7 @@ const EXPECTED_NEW_ORDER_BODY = [
   '',
   '👤 بيانات العميل',
   '• الاسم: Fatima Ahmed',
-  '• الهاتف: 01012345678 — واتساب',
+  '• الهاتف: 01012345678 — واتساب: https://wa.me/201012345678',
   '📍 عنوان الشحن',
   '• المدينة: Cairo',
   '• العنوان: 12 Nile Street, Zamalek, Apt 4',
@@ -295,7 +295,7 @@ try {
       'بيانات العميل',
       'حالة الطلب: قيد المراجعة',
       'الاسم: Fatima Ahmed',
-      'الهاتف: 01012345678 — واتساب',
+      'الهاتف: 01012345678 — واتساب: https://wa.me/201012345678',
       'عنوان الشحن',
       'المدينة: Cairo',
       'العنوان: 12 Nile Street, Zamalek, Apt 4',
@@ -319,11 +319,11 @@ try {
       ok(sample.body.includes(fragment), `Bark mirrors ${fragment}`);
     }
 
-    // Line-for-line identical to Telegram once Markdown is removed; the only
+    // Line-for-line identical to Telegram once Markdown is unwrapped; the only
     // intentional difference is that Bark keeps the hyphens in the order id.
     const telegramPlain = telegram
       .split('\n')
-      .map((line) => line.replace(/\*/g, '').replace(/\[واتساب\]\(https:\/\/wa\.me\/\d+\)/, 'واتساب'))
+      .map((line) => line.replace(/\*/g, '').replace(/\[واتساب\]\((https:\/\/wa\.me\/\d+)\)/, 'واتساب: $1'))
       .join('\n');
     const barkLines = sample.body.split('\n');
     const tgLines = telegramPlain.split('\n');
@@ -335,7 +335,8 @@ try {
     eq(differing[0].telegram, '• رقم الطلب: ZSHMW30TESTABC123', 'Telegram strips hyphens from the id');
     eq(differing[0].bark, '• رقم الطلب: ZSH-MW30TEST-ABC123', 'Bark keeps the real order id');
     ok(sample.body.includes('📌 حالة الطلب: قيد المراجعة'), 'status line is present, like Telegram');
-    ok(!sample.body.includes('wa.me/'), 'no raw WhatsApp link the customer does not need');
+    ok(sample.body.includes('واتساب: https://wa.me/201012345678'), 'phone line links straight to WhatsApp');
+    ok(/wa\.me\/\d+/.test(sample.body), 'the WhatsApp link is a real deep link');
   });
 
   await section('[7] only a new order rings; every later status is a silent replacement', async () => {
@@ -500,7 +501,8 @@ try {
     ok(!lines.includes('👤 Fake Admin'), 'no forged customer line from the customer name');
     ok(!lines.includes('👤 Injected'), 'no forged line from the item name');
     ok(lines.includes('• الاسم: Eve 💰 Total EGP 1 👤 Fake Admin'), 'newlines are collapsed to spaces');
-    ok(lines.includes('• الهاتف: 0101 2345678 — واتساب'), 'phone newline is collapsed');
+    ok(lines.includes('• الهاتف: 0101 2345678 — واتساب: https://wa.me/201012345678'), 'phone newline is collapsed');
+    ok(!/wa\.me\/\s/.test(hostile.body), 'no empty WhatsApp link is produced');
     ok(lines.includes('• العنوان: 12 Street 📍 Fake City'), 'address newlines are collapsed');
     ok(lines.includes('• المدينة: Cairo'), 'city line is present');
     ok(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u2028\u2029\u200B]/.test(hostile.body),
@@ -660,8 +662,7 @@ try {
       libSrc.indexOf('function buildOrderPlainMessage'),
       libSrc.indexOf('function buildOrderFailureMessage')
     );
-    ok(plainSrc.includes('${phoneText} — واتساب'), 'phone line matches Telegram wording');
-    ok(!plainSrc.includes('wa.me/'), 'no raw WhatsApp link in the copy-paste message');
+    ok(plainSrc.includes('— واتساب: https://wa.me/${wa}'), 'phone line links straight to WhatsApp');
     ok(plainSrc.includes('📌 حالة الطلب: ${style.line}'), 'status line is rendered in the body');
     ok(libSrc.includes('📌 *حالة الطلب:* قيد المراجعة'), 'Telegram renders the same status line');
     ok(plainSrc.indexOf('🚚 تتبع الطلب') < plainSrc.indexOf('• رقم الطلب:'),

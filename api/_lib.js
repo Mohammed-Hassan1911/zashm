@@ -1533,12 +1533,17 @@ function buildOrderPlainMessage(order = {}, trackingUrl, itemLimit = BARK_MAX_IT
     ? `🚚 تتبع الطلب\n${track.slice(0, 300)}\n${orderId ? `• رقم الطلب: ${orderId}\n` : ''}`
     : (orderId ? `• رقم الطلب: ${orderId}\n` : '');
 
+  const wa = phoneText ? waNumber(phoneText) : '';
+  const phoneLine = phoneText
+    ? `• الهاتف: ${phoneText}${wa ? ` — واتساب: https://wa.me/${wa}` : ''}\n`
+    : '';
+
   return `
 ZASHM | ${style.label}
 📌 حالة الطلب: ${style.line}
 
 👤 بيانات العميل
-${nameText ? `• الاسم: ${nameText}\n` : ''}${phoneText ? `• الهاتف: ${phoneText} — واتساب\n` : ''}${altPhoneLine}${emailLine}📍 عنوان الشحن
+${nameText ? `• الاسم: ${nameText}\n` : ''}${phoneLine}${altPhoneLine}${emailLine}📍 عنوان الشحن
 ${cityText ? `• المدينة: ${cityText}\n` : '• المدينة: غير محدد\n'}${addressText ? `• العنوان: ${addressText}\n` : ''}${notesLine}
 🛍️ المنتجات
 ${itemsText || 'لا توجد منتجات'}
