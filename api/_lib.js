@@ -1345,6 +1345,8 @@ const FAILURE_ALERT_TIMEOUT_MS = 5000;
 // APNs allows 4096 bytes for the whole payload. Keep the body well below it so
 // the title, subtitle, id, group, sound, url and JSON envelope always fit.
 const BARK_BODY_MAX_BYTES = 2800;
+// Hard ceiling for the serialized request, leaving room for the APNs envelope.
+const BARK_PAYLOAD_MAX_BYTES = 3900;
 const BARK_TITLE_MAX_BYTES = 200;
 const BARK_SUBTITLE_MAX_BYTES = 200;
 
@@ -1557,6 +1559,19 @@ ${footer}
   `.trim();
 }
 
+/** Remove the WhatsApp deep link from the copyable text while keeping the
+ * "— واتساب" hint.
+ *
+ * The notification body keeps the link so tapping it opens the customer's chat;
+ * the `copy` payload omits it, so long-pressing → Copy yields the exact message
+ * the owner forwards to the customer, with no raw wa.me URL in it.
+ */
+function stripWhatsAppLink(text) {
+  return String(text == null ? '' : text)
+    .replace(/ — واتساب: https:\/\/wa\.me\/\d+/g, ' — واتساب')
+    .replace(/[ \t]*https:\/\/wa\.me\/\d*/g, '');
+}
+
 /**
  * Build the Bark notification for an order event.
  *
@@ -1662,6 +1677,9 @@ function buildOrderBarkNotification({
     title,
     subtitle,
     body,
+    // Same text without the wa.me URL: this is what "Copy" yields, so the
+    // message pasted into WhatsApp to the customer stays clean.
+    copy: stripWhatsAppLink(body),
     group: BARK_GROUP,
     sound: silent ? '' : BARK_SOUND,
     level: silent ? 'passive' : 'active',
@@ -1677,7 +1695,7 @@ function barkOrderNotificationId(orderId) {
   return `zashm-order-${safeId}`;
 }
 
-async function sendBarkNotification({ title, subtitle, body, id, group, sound, level, url, timeoutMs } = {}) {
+async function sendBarkNotification({ title, subtitle, body, copy, id, group, sound, level, url, timeoutMs } = {}) {
   const deviceKey = env('BARK_DEVICE_KEY');
   if (!deviceKey) {
     // Optional channel — warn once per invocation so a missing env var is never
@@ -1702,6 +1720,16 @@ async function sendBarkNotification({ title, subtitle, body, id, group, sound, l
   // Bark requires the replacement id to be a JSON string (numbers don't work).
   if (id != null && String(id).trim() !== '') payload.id = String(id).slice(0, 128);
   if (url) payload.url = String(url).slice(0, 500);
+
+  // "Copy" content: the customer-ready text without the wa.me link. Only sent
+  // when it actually differs and the whole payload still fits an APNs push.
+  const copyText = barkClampBytes(String(copy == null ? '' : copy), BARK_BODY_MAX_BYTES).trim();
+  if (copyText && copyText !== payload.body) {
+    const withCopy = { ...payload, copy: copyText };
+    if (barkByteLength(JSON.stringify(withCopy)) < BARK_PAYLOAD_MAX_BYTES) {
+      payload.copy = copyText;
+    }
+  }
 
   try {
     const boundedTimeout = Number(timeoutMs);

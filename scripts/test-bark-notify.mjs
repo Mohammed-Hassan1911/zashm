@@ -218,8 +218,10 @@ try {
     ok(!body.call, 'no repeating ringtone');
     ok(body.url.endsWith('/admin?tab=orders'), 'tap opens the admin orders view');
     eq(Object.keys(body).sort(),
-      ['body', 'device_key', 'group', 'id', 'level', 'sound', 'subtitle', 'title', 'url'],
+      ['body', 'copy', 'device_key', 'group', 'id', 'level', 'sound', 'subtitle', 'title', 'url'],
       'only the expected fields are sent');
+    eq(body.copy, sample.copy, 'copy payload is passed through');
+    ok(!body.copy.includes('wa.me/'), 'copy payload has no WhatsApp link');
 
     eq(logs.length, 0, 'success logs nothing');
     eq(warnings.length, 0, 'success warns nothing');
@@ -320,7 +322,8 @@ try {
     }
 
     // Line-for-line identical to Telegram once Markdown is unwrapped; the only
-    // intentional difference is that Bark keeps the hyphens in the order id.
+    // intentional differences are the order id hyphens and the WhatsApp link,
+    // which only the notification body carries.
     const telegramPlain = telegram
       .split('\n')
       .map((line) => line.replace(/\*/g, '').replace(/\[واتساب\]\((https:\/\/wa\.me\/\d+)\)/, 'واتساب: $1'))
@@ -331,12 +334,32 @@ try {
     const differing = tgLines
       .map((line, index) => (line === barkLines[index] ? null : { index, telegram: line, bark: barkLines[index] }))
       .filter(Boolean);
-    eq(differing.length, 1, 'only one line differs from Telegram');
+    eq(differing.length, 1, 'only one line differs from Telegram (the order id)');
     eq(differing[0].telegram, '• رقم الطلب: ZSHMW30TESTABC123', 'Telegram strips hyphens from the id');
     eq(differing[0].bark, '• رقم الطلب: ZSH-MW30TEST-ABC123', 'Bark keeps the real order id');
     ok(sample.body.includes('📌 حالة الطلب: قيد المراجعة'), 'status line is present, like Telegram');
     ok(sample.body.includes('واتساب: https://wa.me/201012345678'), 'phone line links straight to WhatsApp');
     ok(/wa\.me\/\d+/.test(sample.body), 'the WhatsApp link is a real deep link');
+
+    // The copy payload is the message the owner forwards: no raw wa.me URL.
+    ok(!sample.copy.includes('wa.me'), 'copy payload has no WhatsApp link');
+    ok(sample.copy.includes('• الهاتف: 01012345678 — واتساب'), 'copy payload keeps the WhatsApp hint');
+    const copyLines = sample.copy.split('\n');
+    eq(copyLines.length, barkLines.length, 'copy keeps the same line count as the notification');
+    const copyDiff = barkLines
+      .map((line, index) => (line === copyLines[index] ? null : index))
+      .filter((index) => index !== null);
+    const phoneIndex = barkLines.findIndex((line) => line.startsWith('• الهاتف:'));
+    ok(phoneIndex > 0, 'phone line exists');
+    eq(copyDiff, [phoneIndex], 'only the phone line differs between body and copy');
+    eq(copyLines[phoneIndex], '• الهاتف: 01012345678 — واتساب', 'copy phone line is clean');
+    // And the copy is exactly what the customer should receive.
+    const telegramClean = telegramPlain.replace(/ — واتساب: https:\/\/wa\.me\/\d+/, ' — واتساب');
+    eq(
+      copyLines.filter((line, index) => line !== telegramClean.split('\n')[index]).length,
+      1,
+      'copy differs from Telegram only by the order id'
+    );
   });
 
   await section('[7] only a new order rings; every later status is a silent replacement', async () => {
@@ -475,6 +498,17 @@ try {
     const wire = sentBody();
     ok(bytes(JSON.stringify(wire)) < 4096, 'entire APNs payload fits in 4096 bytes');
     ok(bytes(wire.body) <= 2800, 'wire body is capped too');
+    ok(!('copy' in wire), 'oversized payload drops the copy field instead of overflowing');
+
+    // A normal order still carries the clean copy text.
+    capture();
+    process.env.BARK_DEVICE_KEY = DEVICE_KEY;
+    stubFetch(async () => barkResponse(200, { code: 200 }));
+    await sendBarkNotification(sample);
+    const normalWire = sentBody();
+    ok(typeof normalWire.copy === 'string', 'normal payload includes copy');
+    ok(!normalWire.copy.includes('wa.me'), 'copy has no WhatsApp link');
+    ok(bytes(JSON.stringify(normalWire)) < 4096, 'normal payload fits too');
   });
 
   await section('[10] customer input is sanitized and cannot forge notification lines', async () => {
@@ -508,6 +542,8 @@ try {
     ok(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u2028\u2029\u200B]/.test(hostile.body),
       'control and line-separator characters are removed');
     eq(lines.filter((line) => line.startsWith('• الإجمالي: ')).length, 1, 'only the real total remains');
+    ok(!hostile.copy.includes('wa.me/'), 'copy payload never contains a WhatsApp link');
+    eq(hostile.copy.split('\n').length, lines.length, 'copy keeps the same line count');
 
     // Absurdly long single fields are capped instead of pushed wholesale.
     const longName = 'A'.repeat(500);
@@ -663,6 +699,10 @@ try {
       libSrc.indexOf('function buildOrderFailureMessage')
     );
     ok(plainSrc.includes('— واتساب: https://wa.me/${wa}'), 'phone line links straight to WhatsApp');
+    ok(libSrc.includes('function stripWhatsAppLink'), 'link stripping is centralised');
+    ok(libSrc.includes('copy: stripWhatsAppLink(body)'), 'notification ships a link-free copy payload');
+    ok(/function stripWhatsAppLink[\s\S]{0,400}\.replace\(\/ — واتساب:/.test(libSrc),
+      'only the WhatsApp suffix is stripped, the hint stays');
     ok(plainSrc.includes('📌 حالة الطلب: ${style.line}'), 'status line is rendered in the body');
     ok(libSrc.includes('📌 *حالة الطلب:* قيد المراجعة'), 'Telegram renders the same status line');
     ok(plainSrc.indexOf('🚚 تتبع الطلب') < plainSrc.indexOf('• رقم الطلب:'),
