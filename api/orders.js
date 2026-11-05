@@ -15,8 +15,8 @@ const {
   parseOrderRow,
   sendTelegramNotification,
   buildOrderTelegramMessage,
-  buildOrderNtfyPayload,
-  sendNtfyNotification,
+  buildOrderBarkNotification,
+  sendBarkNotification,
   trackingUrlFor,
   verifyTrackToken,
   EGYPT_PHONE_RE,
@@ -467,25 +467,19 @@ async function placeOrder(req, res) {
       console.error('Telegram notification failed:', e.message);
     }
 
-    // Backup push channel (ntfy.sh) — independent of Telegram, fire-and-forget.
-    // Non-PII only: the topic is public/readable, so it carries order id, total,
-    // city and status. Customer details stay in the Telegram message.
+    // Bark (iOS) push — fire-and-forget, independent of Telegram.
+    // Non-PII only: order id, total, city and status. The same notification id
+    // is reused for every lifecycle event so iOS replaces it instead of stacking.
     try {
-      const payload = buildOrderNtfyPayload({
+      const payload = buildOrderBarkNotification({
         id: orderRow.id,
         total: orderRow.total,
         city: orderRow.city,
         status: 'Pending',
-        kind: 'created',
       });
-      await sendNtfyNotification({
-        title: payload.title,
-        message: payload.message,
-        tags: 'shopping_cart,bell',
-        priority: 4,
-      });
+      await sendBarkNotification(payload);
     } catch (e) {
-      console.error('ntfy notification failed:', e.message);
+      console.error('Bark notification failed:', e.message);
     }
 
     const order = parseOrderRow({ ...orderRow, items: orderItems, timestamps });

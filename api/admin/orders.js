@@ -13,8 +13,8 @@ const {
   ORDER_STATUSES,
   parseOrderRow,
   trackingUrlFor,
-  sendNtfyNotification,
-  buildOrderNtfyPayload,
+  sendBarkNotification,
+  buildOrderBarkNotification,
 } = require('../_lib');
 
 function getId(req, body) {
@@ -139,24 +139,21 @@ async function updateOrder(req, res) {
       console.warn('Order status changed with reconciliation warnings:', JSON.stringify(warnings));
     }
 
-    // Backup push channel (ntfy.sh) — fire-and-forget, never blocks.
-    // Non-PII only (order id, total, city, status): the topic is readable.
-    try {
-      const payload = buildOrderNtfyPayload({
-        id,
-        total: order.total,
-        city: order.city,
-        status: newStatus,
-        kind: 'status',
-      });
-      await sendNtfyNotification({
-        title: payload.title,
-        message: payload.message,
-        tags: newStatus === 'Cancelled' ? 'x,warning' : (newStatus === 'Delivered' ? 'white_check_mark' : 'package'),
-        priority: newStatus === 'Cancelled' ? 4 : 3,
-      });
-    } catch (e) {
-      console.error('ntfy (status) failed:', e.message);
+    // Bark (iOS) push — fire-and-forget, never blocks. Non-PII only: order id,
+    // total, city and status. `changed === false` means an idempotent retry for
+    // a transition that already happened, so no second notification is sent.
+    if (r.changed !== false) {
+      try {
+        const payload = buildOrderBarkNotification({
+          id,
+          total: order.total,
+          city: order.city,
+          status: newStatus,
+        });
+        await sendBarkNotification(payload);
+      } catch (e) {
+        console.error('Bark (status) failed:', e.message);
+      }
     }
 
     return json(res, 200, {
@@ -218,18 +215,13 @@ async function deleteOrder(req, res) {
       console.warn('Order deleted with restore warnings:', JSON.stringify(warnings));
     }
 
-    // Backup push channel (ntfy.sh) — fire-and-forget, never blocks.
-    // The deleted order may still hold customer details, so send the id only.
+    // Bark (iOS) push — fire-and-forget, never blocks. Same notification id as
+    // the order, so iOS replaces the existing notification with "Deleted".
     try {
-      const payload = buildOrderNtfyPayload({ id, kind: 'deleted' });
-      await sendNtfyNotification({
-        title: payload.title,
-        message: payload.message,
-        tags: 'wastebasket',
-        priority: 2,
-      });
+      const payload = buildOrderBarkNotification({ id, status: 'Deleted' });
+      await sendBarkNotification(payload);
     } catch (e) {
-      console.error('ntfy (delete) failed:', e.message);
+      console.error('Bark (delete) failed:', e.message);
     }
 
     return json(res, 200, {

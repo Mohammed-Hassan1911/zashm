@@ -1306,117 +1306,131 @@ async function sendTelegramNotification(messageText) {
   return resp.ok;
 }
 
-// ─── NTFY (server-side, optional backup push channel) ───────────────────────
-// Optional backup notification channel (ntfy.sh or self-hosted). Independent of
-// Telegram: if Telegram is down/compromised, ntfy still delivers. Fire-and-forget;
-// never throws and never blocks the request. Configured via NTFY_TOPIC (required)
-// and optional NTFY_SERVER (default https://ntfy.sh) + NTFY_TOKEN (access token).
+// ─── BARK (server-side, iOS push channel) ───────────────────────────────────
+// Official Bark API: POST https://api.day.app/push with a JSON body. The device
+// key lives only in BARK_DEVICE_KEY (Vercel env) and is never exposed to the
+// browser, a response, or a log line. Fire-and-forget: never throws and never
+// blocks the order request. Telegram remains the primary/detail channel.
 
-/** Header values must be printable ASCII: Node's fetch (undici) throws
- * "Cannot convert argument to a ByteString" for any code point > 255 BEFORE
- * the request is sent. A single em dash in the Title header silently killed
- * every ntfy push. Titles/tags are therefore downgraded to ASCII; the message
- * body stays UTF-8 and keeps the Arabic text. */
-function headerSafe(v) {
-  return String(v == null ? '' : v)
-    .replace(/[^\x20-\x7E]+/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const BARK_PUSH_URL = 'https://api.day.app/push';
+const BARK_GROUP = 'zashm-orders';
+const BARK_SOUND = 'minuet'; // pleasant built-in; no critical alerts, no repeat ring
+const BARK_TIMEOUT_MS = 8000;
+const BARK_SEPARATOR = '━'.repeat(14);
 
-async function sendNtfyNotification({ title, message, tags, priority } = {}) {
-  const topic = env('NTFY_TOPIC');
-  if (!topic) {
-    // Not configured — optional channel, but say so once in the logs so a
-    // missing env var is never mistaken for a silent delivery failure.
-    console.warn('ntfy notification skipped: NTFY_TOPIC not configured');
-    return false;
-  }
-  const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
-  const token = env('NTFY_TOKEN');
-  const safeTitle = headerSafe(title || 'ZASHM').slice(0, 120);
-  const safeMessage = String(message || '').replace(/[\r\n]+/g, '\n').slice(0, 3800);
-  const safeTags = headerSafe(String(tags || '').replace(/[^a-zA-Z0-9_,\-]/g, '')).slice(0, 120);
-  const prio = Number.isFinite(Number(priority)) ? Math.min(5, Math.max(1, Number(priority))) : 3;
-  try {
-    const headers = {
-      'Title': safeTitle,
-      'Priority': String(prio),
-      'Content-Type': 'text/plain; charset=utf-8',
-    };
-    if (safeTags) headers['Tags'] = safeTags;
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const resp = await fetch(`${server}/${encodeURIComponent(topic)}`, {
-      method: 'POST',
-      headers,
-      body: safeMessage,
-    });
-    if (!resp.ok) {
-      // Surface non-2xx responses (401 bad token, 404 topic, 429 rate limit…)
-      // without ever leaking the topic/token or customer text. Success stays
-      // silent, failures are diagnosable in the function logs.
-      let snippet = '';
-      try {
-        snippet = String(await resp.text()).replace(/\s+/g, ' ').slice(0, 200);
-      } catch (e) {
-        /* body unavailable */
-      }
-      const redact = (s) => {
-        let out = String(s);
-        if (topic) out = out.split(topic).join('[topic]');
-        if (token) out = out.split(token).join('[token]');
-        return out;
-      };
-      console.error(
-        'ntfy notification failed:',
-        `HTTP ${resp.status}`,
-        redact(snippet)
-      );
-      return false;
-    }
-    return true;
-  } catch (e) {
-    // Network/DNS/timeout — no secrets, no customer data in the message.
-    console.error('ntfy notification failed:', 'network', (e && e.name) || 'Error');
-    return false;
-  }
-}
+/** Status → title styling. Order of the map is irrelevant; unknown statuses
+ * fall back to a neutral package icon so a future status never breaks a push. */
+const BARK_STATUS_STYLE = {
+  Pending: { emoji: '🛍️', label: 'New Order' },
+  Confirmed: { emoji: '🟢', label: 'Order Confirmed' },
+  Processing: { emoji: '⚙️', label: 'Order Processing' },
+  Shipped: { emoji: '🚚', label: 'Order Shipped' },
+  Delivered: { emoji: '✅', label: 'Order Delivered' },
+  Cancelled: { emoji: '🚫', label: 'Order Cancelled' },
+  Deleted: { emoji: '🔴', label: 'Order Deleted' },
+};
 
 /**
- * Non-PII summary for an ntfy order notification.
+ * Build the Bark notification for an order event.
  *
- * ntfy topics are readable by anyone who knows the name (and by anyone holding
- * the phone/showing the lock screen), so this payload is restricted to order
- * id, total, city and status. Customer name, phone, alt phone, email, street
- * address, notes, and item names MUST stay out of it — they belong to the
- * Telegram message, which is delivered to a private chat.
+ * `id` is the whole point: Bark replaces the notification with the same id
+ * instead of stacking a new one, so every event for one order (creation,
+ * each status change, deletion) must reuse the exact same id. `group` only
+ * organizes notifications — it does not replace anything.
+ *
+ * Privacy: only order id, total, city and status leave the server. Customer
+ * names, phones, emails, street addresses, notes and item details stay in the
+ * Telegram message, which goes to a private chat.
  */
-function buildOrderNtfyPayload({ id, total, city, status, kind } = {}) {
-  const safeId = String(id == null ? '' : id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'unknown';
-  const statusText = String(status == null ? '' : status)
-    .replace(/[^A-Za-z ]/g, '')
-    .trim()
-    .slice(0, 30) || 'Pending';
-  const totalText = `EGP ${Number(total || 0).toLocaleString()}`;
+function buildOrderBarkNotification({ id, total, city, status = 'Pending' } = {}) {
+  const safeId = String(id == null ? '' : id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || 'unknown';
+  const rawStatus = String(status == null ? '' : status).trim();
+  const style = BARK_STATUS_STYLE[rawStatus] || { emoji: '📦', label: 'Order Updated' };
+  const statusText = rawStatus.replace(/[^A-Za-z ]/g, '').trim().slice(0, 30) || 'Pending';
   const cityText = String(city == null ? '' : city)
     .replace(/[\r\n]+/g, ' ')
     .trim()
     .slice(0, 40);
 
-  let title;
-  if (kind === 'created') title = `New order ${safeId} - ${totalText}`;
-  else if (kind === 'deleted') title = `Order ${safeId} deleted`;
-  else title = `Order ${safeId} - ${statusText}`;
+  const title = `${style.emoji} ZASHM | ${style.label} #${safeId}`;
+  const hasTotal = total !== undefined && total !== null && Number.isFinite(Number(total));
+  const lines = [BARK_SEPARATOR];
+  if (hasTotal) lines.push(`💰 Total: EGP ${Number(total).toLocaleString()}`);
+  if (cityText) lines.push(`📍 City: ${cityText}`);
+  lines.push(`📦 Status: ${statusText}`);
+  lines.push(BARK_SEPARATOR);
+  lines.push(statusText === 'Deleted' ? 'The order was removed from ZASHM.' : 'Tap to review the order.');
 
-  const lines = [`Order ${safeId}`];
-  if (kind !== 'deleted') {
-    lines.push(`Total ${totalText}`);
-    if (cityText) lines.push(`City ${cityText}`);
-    lines.push(`Status ${statusText}`);
-  } else {
-    lines.push('Status Deleted');
+  return {
+    id: barkOrderNotificationId(id),
+    title,
+    body: lines.join('\n'),
+    group: BARK_GROUP,
+    sound: BARK_SOUND,
+    level: 'active',
+    url: `${PUBLIC_BASE_URL().replace(/\/+$/, '')}/admin?tab=orders`,
+  };
+}
+
+/** Same id for the whole lifecycle — exported so call sites and tests share
+ * one definition instead of hand-building the string three times. */
+function barkOrderNotificationId(orderId) {
+  const safeId = String(orderId == null ? '' : orderId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || 'unknown';
+  return `zashm-order-${safeId}`;
+}
+
+async function sendBarkNotification({ title, body, id, group, sound, level, url } = {}) {
+  const deviceKey = env('BARK_DEVICE_KEY');
+  if (!deviceKey) {
+    // Optional channel — warn once per invocation so a missing env var is never
+    // mistaken for a silent delivery failure.
+    console.warn('Bark push skipped: BARK_DEVICE_KEY not configured');
+    return false;
   }
-  return { title, message: lines.join('\n') };
+
+  const payload = {
+    device_key: deviceKey,
+    title: String(title || 'ZASHM').slice(0, 200),
+    body: String(body || '').slice(0, 3000),
+    group: String(group || BARK_GROUP).slice(0, 64),
+    sound: String(sound || BARK_SOUND).slice(0, 64),
+    level: String(level || 'active').slice(0, 20),
+  };
+  // Bark requires the replacement id to be a JSON string (numbers don't work).
+  if (id != null && String(id).trim() !== '') payload.id = String(id).slice(0, 128);
+  if (url) payload.url = String(url).slice(0, 500);
+
+  try {
+    const resp = await fetch(BARK_PUSH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(payload),
+      // A hung Bark server must never hold the order request open.
+      signal: AbortSignal.timeout(BARK_TIMEOUT_MS),
+    });
+
+    let data = null;
+    try {
+      data = await resp.json();
+    } catch (e) {
+      /* non-JSON response */
+    }
+    const code = data && Number(data.code);
+    if (!resp.ok || (Number.isFinite(code) && code !== 200)) {
+      // Bark echoes the device key inside its error message
+      // ("failed to get [KEY] device token"), so redact it before logging.
+      // Never log the title/body — they carry order data.
+      const reason = String((data && data.message) || '').replace(/\s+/g, ' ').slice(0, 200);
+      const safeReason = reason.split(deviceKey).join('[device_key]');
+      console.error('Bark push failed:', `HTTP ${resp.status}`, safeReason);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    // Network/DNS/timeout/abort — log the error type only.
+    console.error('Bark push failed:', 'network', (e && e.name) || 'Error');
+    return false;
+  }
 }
 
 function buildOrderTelegramMessage(order, trackingUrl) {
@@ -1711,8 +1725,9 @@ module.exports = {
   maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
-  buildOrderNtfyPayload,
-  sendNtfyNotification,
+  buildOrderBarkNotification,
+  barkOrderNotificationId,
+  sendBarkNotification,
   detectImageType,
   sanitizeStoragePath,
   filePathFromPublicUrl,
