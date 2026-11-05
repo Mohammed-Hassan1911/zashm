@@ -1311,14 +1311,19 @@ async function sendTelegramNotification(messageText) {
 // Telegram: if Telegram is down/compromised, ntfy still delivers. Fire-and-forget;
 // never throws and never blocks the request. Configured via NTFY_TOPIC (required)
 // and optional NTFY_SERVER (default https://ntfy.sh) + NTFY_TOKEN (access token).
-async function sendNtfyNotification({ title, message, tags, priority } = {}) {
+async function sendNtfyNotification({ title, message, tags, priority, result } = {}) {
+  const report = (extra) => {
+    if (result && typeof result === 'object') Object.assign(result, extra);
+  };
   const topic = env('NTFY_TOPIC');
   if (!topic) {
     // Not configured — optional channel, but say so once in the logs so a
     // missing env var is never mistaken for a silent delivery failure.
+    report({ configured: false });
     console.warn('ntfy notification skipped: NTFY_TOPIC not configured');
     return false;
   }
+  report({ configured: true });
   const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
   const token = env('NTFY_TOKEN');
   const safeTitle = String(title || 'ZASHM').replace(/[\r\n]/g, ' ').slice(0, 120);
@@ -1359,14 +1364,35 @@ async function sendNtfyNotification({ title, message, tags, priority } = {}) {
         `HTTP ${resp.status}`,
         redact(snippet)
       );
+      report({ status: resp.status });
       return false;
     }
+    report({ status: resp.status });
     return true;
   } catch (e) {
     // Network/DNS/timeout — no secrets, no customer data in the message.
+    report({ network: true, error: (e && e.name) || 'Error' });
     console.error('ntfy notification failed:', 'network', (e && e.name) || 'Error');
     return false;
   }
+}
+
+/** Boolean-only view of the ntfy configuration for ops diagnostics.
+ * Never returns the topic, token, or any value an attacker could reuse. */
+function ntfyConfigSummary() {
+  const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
+  let serverHost = '';
+  try {
+    serverHost = new URL(server).host;
+  } catch (e) {
+    serverHost = 'invalid';
+  }
+  return {
+    configured: Boolean(env('NTFY_TOPIC')),
+    serverHost,
+    serverIsDefault: !env('NTFY_SERVER'),
+    tokenConfigured: Boolean(env('NTFY_TOKEN')),
+  };
 }
 
 function buildOrderTelegramMessage(order, trackingUrl) {
@@ -1662,6 +1688,7 @@ module.exports = {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   sendNtfyNotification,
+  ntfyConfigSummary,
   detectImageType,
   sanitizeStoragePath,
   filePathFromPublicUrl,

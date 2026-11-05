@@ -217,6 +217,109 @@ try {
     ok(block.includes('.slice(0, 200)'), 'response body is truncated');
   });
 
+  await section('[10] outcome capture reports configured/status/network without values', async () => {
+    capture();
+    process.env.NTFY_TOPIC = TOPIC;
+    delete process.env.NTFY_TOKEN;
+    stubFetch(async () => jsonResponse(200, '{}'));
+    let outcome = {};
+    eq(await sendNtfyNotification({ ...sample, result: outcome }), true, '2xx returns true');
+    eq(outcome.configured, true, 'configured flag');
+    eq(outcome.status, 200, 'status captured');
+
+    outcome = {};
+    stubFetch(async () => jsonResponse(401, 'unauthorized'));
+    eq(await sendNtfyNotification({ ...sample, result: outcome }), false, '401 returns false');
+    eq(outcome.status, 401, 'failure status captured');
+
+    outcome = {};
+    global.fetch = async () => {
+      const err = new TypeError('fetch failed');
+      throw err;
+    };
+    eq(await sendNtfyNotification({ ...sample, result: outcome }), false, 'network returns false');
+    eq(outcome.network, true, 'network flag captured');
+    eq(outcome.error, 'TypeError', 'error name captured');
+
+    outcome = {};
+    delete process.env.NTFY_TOPIC;
+    eq(await sendNtfyNotification({ ...sample, result: outcome }), false, 'unconfigured returns false');
+    eq(outcome.configured, false, 'configured=false captured');
+  });
+
+  await section('[11] /api/admin/notify-test is admin-only and value-free', async () => {
+    const routePath = require.resolve('../api/admin/notify-test.js');
+    const libPath = require.resolve('../api/_lib.js');
+    const realLib = require('../api/_lib.js');
+    const seen = { status: null, body: null, urls: [] };
+    let authorized = true;
+    let sent = 0;
+
+    delete require.cache[routePath];
+    Object.assign(require.cache[libPath], {
+      id: libPath,
+      filename: libPath,
+      loaded: true,
+      exports: {
+        ...realLib,
+        json: (_res, status, body) => { seen.status = status; seen.body = body; },
+        applyCors: () => {},
+        handleOptions: () => false,
+        clientIp: () => '203.0.113.9',
+        rateLimitShared: async () => ({ allowed: true }),
+        tooMany: () => { seen.status = 429; },
+        requirePerm: async () => (authorized ? { name: 'Admin', role: 'admin' } : null),
+        sendNtfyNotification: async ({ result } = {}) => {
+          sent += 1;
+          if (result) Object.assign(result, { configured: true, status: 200 });
+          return true;
+        },
+        ntfyConfigSummary: () => ({
+          configured: true,
+          serverHost: 'ntfy.sh',
+          serverIsDefault: true,
+          tokenConfigured: false,
+        }),
+      },
+    });
+
+    const handler = require(routePath);
+    const res = { setHeader() {}, end() {} };
+
+    await handler({ method: 'POST', headers: {}, query: {} }, res);
+    eq(seen.status, 200, 'authorized self-test returns 200');
+    eq(sent, 1, 'exactly one notification sent');
+    eq(seen.body.ntfy.delivered, true, 'delivered flag surfaced');
+    eq(seen.body.ntfy.httpStatus, 200, 'HTTP status surfaced');
+    eq(seen.body.ntfy.tokenConfigured, false, 'tokenConfigured is a boolean');
+    eq(seen.body.telegram.configured, false, 'telegram config is boolean-only');
+    const serialized = JSON.stringify(seen.body);
+    ok(!serialized.includes(TOPIC), 'response never contains the topic');
+    ok(!serialized.includes(TOKEN), 'response never contains the token');
+    ok(!/[0-9a-f]{32,}/i.test(serialized), 'response contains no secret-looking value');
+
+    authorized = false;
+    seen.status = null;
+    seen.body = null;
+    await handler({ method: 'POST', headers: {}, query: {} }, res);
+    eq(seen.status, null, 'unauthenticated request writes no body (401 handled by requirePerm)');
+    eq(sent, 1, 'no notification sent without a session');
+
+    authorized = true;
+    await handler({ method: 'GET', headers: {}, query: {} }, res);
+    eq(seen.status, 405, 'GET is rejected');
+    eq(sent, 1, 'method guard runs before the send');
+
+    const routeSrc = read('api/admin/notify-test.js');
+    ok(routeSrc.includes("requirePerm(req, res, 'orders.read')"), 'requires orders.read');
+    ok(routeSrc.includes('rateLimitShared'), 'rate limited');
+    ok(!/process\.env\.NTFY_TOPIC/.test(routeSrc), 'route never touches the topic value directly');
+    ok(!routeSrc.includes('Authorization'), 'route never handles tokens');
+
+    delete require.cache[routePath];
+    require.cache[libPath].exports = realLib;
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) {
     for (const f of failures) console.log(`  · ${f}`);
