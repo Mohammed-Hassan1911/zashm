@@ -14,6 +14,7 @@ const {
   parseOrderRow,
   trackingUrlFor,
   sendNtfyNotification,
+  buildOrderNtfyPayload,
 } = require('../_lib');
 
 function getId(req, body) {
@@ -139,10 +140,18 @@ async function updateOrder(req, res) {
     }
 
     // Backup push channel (ntfy.sh) — fire-and-forget, never blocks.
+    // Non-PII only (order id, total, city, status): the topic is readable.
     try {
+      const payload = buildOrderNtfyPayload({
+        id,
+        total: order.total,
+        city: order.city,
+        status: newStatus,
+        kind: 'status',
+      });
       await sendNtfyNotification({
-        title: `Order ${id} — ${newStatus}`,
-        message: `EGP ${Number(order.total || 0).toLocaleString()} · ${order.city || ''} · ${oldStatus} → ${newStatus}`,
+        title: payload.title,
+        message: payload.message,
         tags: newStatus === 'Cancelled' ? 'x,warning' : (newStatus === 'Delivered' ? 'white_check_mark' : 'package'),
         priority: newStatus === 'Cancelled' ? 4 : 3,
       });
@@ -210,10 +219,12 @@ async function deleteOrder(req, res) {
     }
 
     // Backup push channel (ntfy.sh) — fire-and-forget, never blocks.
+    // The deleted order may still hold customer details, so send the id only.
     try {
+      const payload = buildOrderNtfyPayload({ id, kind: 'deleted' });
       await sendNtfyNotification({
-        title: `Order ${id} deleted`,
-        message: `Order ${id} was deleted by admin.`,
+        title: payload.title,
+        message: payload.message,
         tags: 'wastebasket',
         priority: 2,
       });

@@ -217,117 +217,7 @@ try {
     ok(block.includes('.slice(0, 200)'), 'response body is truncated');
   });
 
-  await section('[10] outcome capture reports configured/status/network without values', async () => {
-    capture();
-    process.env.NTFY_TOPIC = TOPIC;
-    delete process.env.NTFY_TOKEN;
-    stubFetch(async () => jsonResponse(200, '{}'));
-    let outcome = {};
-    eq(await sendNtfyNotification({ ...sample, result: outcome }), true, '2xx returns true');
-    eq(outcome.configured, true, 'configured flag');
-    eq(outcome.status, 200, 'status captured');
-
-    outcome = {};
-    stubFetch(async () => jsonResponse(401, 'unauthorized'));
-    eq(await sendNtfyNotification({ ...sample, result: outcome }), false, '401 returns false');
-    eq(outcome.status, 401, 'failure status captured');
-
-    outcome = {};
-    global.fetch = async () => {
-      const err = new TypeError('fetch failed');
-      throw err;
-    };
-    eq(await sendNtfyNotification({ ...sample, result: outcome }), false, 'network returns false');
-    eq(outcome.network, true, 'network flag captured');
-    eq(outcome.error, 'TypeError', 'error name captured');
-
-    outcome = {};
-    delete process.env.NTFY_TOPIC;
-    eq(await sendNtfyNotification({ ...sample, result: outcome }), false, 'unconfigured returns false');
-    eq(outcome.configured, false, 'configured=false captured');
-  });
-
-  await section('[11] /api/admin/notify-test is admin-only and value-free', async () => {
-    const routePath = require.resolve('../api/admin/notify-test.js');
-    const libPath = require.resolve('../api/_lib.js');
-    const realLib = require('../api/_lib.js');
-    const seen = { status: null, body: null, urls: [] };
-    let authorized = true;
-    let sent = 0;
-    let optionsHandled = 0;
-
-    delete require.cache[routePath];
-    Object.assign(require.cache[libPath], {
-      id: libPath,
-      filename: libPath,
-      loaded: true,
-      exports: {
-        ...realLib,
-        json: (_res, status, body) => { seen.status = status; seen.body = body; },
-        applyCors: () => {},
-        handleOptions: () => { optionsHandled += 1; },
-        clientIp: () => '203.0.113.9',
-        rateLimitShared: async () => ({ allowed: true }),
-        tooMany: () => { seen.status = 429; },
-        requirePerm: async () => (authorized ? { name: 'Admin', role: 'admin' } : null),
-        sendNtfyNotification: async ({ result } = {}) => {
-          sent += 1;
-          if (result) Object.assign(result, { configured: true, status: 200 });
-          return true;
-        },
-        ntfyConfigSummary: () => ({
-          configured: true,
-          serverHost: 'ntfy.sh',
-          serverIsDefault: true,
-          tokenConfigured: false,
-        }),
-      },
-    });
-
-    const handler = require(routePath);
-    const res = { setHeader() {}, end() {} };
-
-    await handler({ method: 'POST', headers: {}, query: {} }, res);
-    eq(seen.status, 200, 'authorized self-test returns 200');
-    eq(sent, 1, 'exactly one notification sent');
-    eq(seen.body.ntfy.delivered, true, 'delivered flag surfaced');
-    eq(seen.body.ntfy.httpStatus, 200, 'HTTP status surfaced');
-    eq(seen.body.ntfy.tokenConfigured, false, 'tokenConfigured is a boolean');
-    eq(seen.body.telegram.configured, false, 'telegram config is boolean-only');
-    const serialized = JSON.stringify(seen.body);
-    ok(!serialized.includes(TOPIC), 'response never contains the topic');
-    ok(!serialized.includes(TOKEN), 'response never contains the token');
-    ok(!/[0-9a-f]{32,}/i.test(serialized), 'response contains no secret-looking value');
-
-    authorized = false;
-    seen.status = null;
-    seen.body = null;
-    await handler({ method: 'POST', headers: {}, query: {} }, res);
-    eq(seen.status, null, 'unauthenticated request writes no body (401 handled by requirePerm)');
-    eq(sent, 1, 'no notification sent without a session');
-
-    authorized = true;
-    await handler({ method: 'GET', headers: {}, query: {} }, res);
-    eq(seen.status, 405, 'GET is rejected');
-    eq(sent, 1, 'method guard runs before the send');
-
-    seen.status = null;
-    await handler({ method: 'OPTIONS', headers: {}, query: {} }, res);
-    eq(optionsHandled, 1, 'OPTIONS is delegated to handleOptions');
-    eq(seen.status, null, 'OPTIONS writes no JSON body');
-    eq(sent, 1, 'OPTIONS never sends a notification');
-
-    const routeSrc = read('api/admin/notify-test.js');
-    ok(routeSrc.includes("requirePerm(req, res, 'orders.read')"), 'requires orders.read');
-    ok(routeSrc.includes('rateLimitShared'), 'rate limited');
-    ok(!/process\.env\.NTFY_TOPIC/.test(routeSrc), 'route never touches the topic value directly');
-    ok(!routeSrc.includes('Authorization'), 'route never handles tokens');
-
-    delete require.cache[routePath];
-    require.cache[libPath].exports = realLib;
-  });
-
-  await section('[12] non-ASCII titles are downgraded so Node fetch can send them', async () => {
+  await section('[10] non-ASCII titles are downgraded so Node fetch can send them', async () => {
     capture();
     process.env.NTFY_TOPIC = TOPIC;
     process.env.NTFY_TOKEN = TOKEN;
@@ -348,7 +238,7 @@ try {
     ok(logs.length === 0, 'no failure logged for an ASCII-safe title');
   });
 
-  await section('[13] calling Node fetch with a non-ASCII header would throw (root-cause lock)', async () => {
+  await section('[11] calling Node fetch with a non-ASCII header would throw (root-cause lock)', async () => {
     // Documents the defect fixed in headerSafe: undici rejects code points > 255
     // in header values before the request is sent, so the em dash in
     // "New order ... — EGP ..." made every placement push fail silently.
@@ -364,6 +254,88 @@ try {
       threw = /ByteString/i.test(String(e && e.message));
     }
     ok(threw, 'Node fetch rejects non-ASCII header values');
+  });
+
+  await section('[12] ntfy order payloads never contain customer PII', async () => {
+    const { buildOrderNtfyPayload } = lib;
+    const order = {
+      id: 'ZSH-MW2TEST-ABC123',
+      total: 1865,
+      city: 'Cairo',
+      status: 'Pending',
+      customer: 'Fatima Secret',
+      phone: '01099998888',
+      phoneAlt: '01177776666',
+      email: 'fatima.secret@example.com',
+      address: '12 Hidden Street, Apt 4',
+      notes: 'Deliver after 8pm, ask for Fatima',
+      items: [{ name: 'Silk Abaya', size: 'M', color: 'Black', qty: 1 }],
+    };
+
+    const cases = [
+      buildOrderNtfyPayload({ ...order, kind: 'created' }),
+      buildOrderNtfyPayload({ ...order, kind: 'status', status: 'Shipped' }),
+      buildOrderNtfyPayload({ ...order, kind: 'deleted' }),
+    ];
+
+    for (const payload of cases) {
+      const text = `${payload.title}\n${payload.message}`;
+      for (const [label, value] of [
+        ['name', order.customer],
+        ['phone', order.phone],
+        ['alt phone', order.phoneAlt],
+        ['email', order.email],
+        ['address', order.address],
+        ['notes', order.notes],
+        ['item name', order.items[0].name],
+      ]) {
+        ok(!text.toLowerCase().includes(String(value).toLowerCase()), `${label} is absent`);
+      }
+      ok(!/@|https?:\/\//.test(text), 'no email address or link');
+      ok(!/\d{10,}/.test(text.replace(/ZSH-[A-Z0-9-]+/g, '')), 'no phone-length digit run');
+    }
+
+    const created = cases[0];
+    eq(created.title, 'New order ZSH-MW2TEST-ABC123 - EGP 1,865', 'created title uses id + total');
+    ok(created.message.includes('Total EGP 1,865'), 'total present');
+    ok(created.message.includes('City Cairo'), 'city present');
+    ok(created.message.includes('Status Pending'), 'status present');
+
+    const deleted = cases[2];
+    eq(deleted.title, 'Order ZSH-MW2TEST-ABC123 deleted', 'delete title');
+    eq(deleted.message, 'Order ZSH-MW2TEST-ABC123\nStatus Deleted', 'delete body is id + status only');
+
+    const weird = buildOrderNtfyPayload({
+      id: 'ZSH-X\nINJECTED',
+      total: 10,
+      city: 'Cairo\nSecond line',
+      status: 'Confirmed',
+      kind: 'status',
+    });
+    ok(!/[\r\n]/.test(weird.title), 'title has no newline (no header injection)');
+    ok(weird.message.split('\n').every((line) => line.length > 0), 'message lines are non-empty');
+    ok(weird.message.split('\n').length === 4, 'city cannot add extra lines');
+  });
+
+  await section('[13] every ntfy call site uses the PII-free builder', async () => {
+    const orders = read('api/orders.js');
+    const admin = read('api/admin/orders.js');
+
+    ok(orders.includes('buildOrderNtfyPayload({'), 'placement uses the builder');
+    ok(orders.includes('buildOrderNtfyPayload,'), 'placement imports the builder');
+    ok(!/sendNtfyNotification\(\{[\s\S]{0,200}orderRow\.customer/.test(orders), 'placement does not pass the name');
+    ok(!/sendNtfyNotification\(\{[\s\S]{0,200}orderRow\.phone/.test(orders), 'placement does not pass the phone');
+    ok(!orders.includes('itemsSummary'), 'item summary was removed from the push');
+
+    const adminStatus = admin.slice(admin.indexOf('ntfy (status) failed'), admin.indexOf('return json(res, 200, {'));
+    ok(admin.includes("kind: 'status'"), 'status change uses the builder');
+    ok(admin.includes("kind: 'deleted'"), 'delete uses the builder');
+    ok(!/order\.(customer|phone|phoneAlt|address|notes)/.test(admin.slice(admin.indexOf('Backup push channel'))),
+      'admin pushes never reference customer fields');
+
+    // Telegram keeps the full customer-facing detail.
+    ok(orders.includes('buildOrderTelegramMessage('), 'Telegram builder still used on placement');
+    ok(read('api/_lib.js').includes('order.customer'), 'Telegram message still renders the customer name');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

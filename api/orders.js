@@ -15,6 +15,7 @@ const {
   parseOrderRow,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  buildOrderNtfyPayload,
   sendNtfyNotification,
   trackingUrlFor,
   verifyTrackToken,
@@ -467,13 +468,19 @@ async function placeOrder(req, res) {
     }
 
     // Backup push channel (ntfy.sh) — independent of Telegram, fire-and-forget.
+    // Non-PII only: the topic is public/readable, so it carries order id, total,
+    // city and status. Customer details stay in the Telegram message.
     try {
-      const itemsSummary = (orderItems || [])
-        .map((it) => `${it.name} (${[it.size, it.color].filter(Boolean).join('/')}) x${it.qty}`)
-        .join(', ');
+      const payload = buildOrderNtfyPayload({
+        id: orderRow.id,
+        total: orderRow.total,
+        city: orderRow.city,
+        status: 'Pending',
+        kind: 'created',
+      });
       await sendNtfyNotification({
-        title: `New order ${orderRow.id} — EGP ${Number(orderRow.total || 0).toLocaleString()}`,
-        message: `${itemsSummary}\n${orderRow.customer} · ${orderRow.phone}\n${orderRow.city} · COD`,
+        title: payload.title,
+        message: payload.message,
         tags: 'shopping_cart,bell',
         priority: 4,
       });

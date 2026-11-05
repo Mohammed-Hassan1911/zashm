@@ -1324,19 +1324,14 @@ function headerSafe(v) {
     .trim();
 }
 
-async function sendNtfyNotification({ title, message, tags, priority, result } = {}) {
-  const report = (extra) => {
-    if (result && typeof result === 'object') Object.assign(result, extra);
-  };
+async function sendNtfyNotification({ title, message, tags, priority } = {}) {
   const topic = env('NTFY_TOPIC');
   if (!topic) {
     // Not configured — optional channel, but say so once in the logs so a
     // missing env var is never mistaken for a silent delivery failure.
-    report({ configured: false });
     console.warn('ntfy notification skipped: NTFY_TOPIC not configured');
     return false;
   }
-  report({ configured: true });
   const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
   const token = env('NTFY_TOKEN');
   const safeTitle = headerSafe(title || 'ZASHM').slice(0, 120);
@@ -1377,35 +1372,51 @@ async function sendNtfyNotification({ title, message, tags, priority, result } =
         `HTTP ${resp.status}`,
         redact(snippet)
       );
-      report({ status: resp.status });
       return false;
     }
-    report({ status: resp.status });
     return true;
   } catch (e) {
     // Network/DNS/timeout — no secrets, no customer data in the message.
-    report({ network: true, error: (e && e.name) || 'Error' });
     console.error('ntfy notification failed:', 'network', (e && e.name) || 'Error');
     return false;
   }
 }
 
-/** Boolean-only view of the ntfy configuration for ops diagnostics.
- * Never returns the topic, token, or any value an attacker could reuse. */
-function ntfyConfigSummary() {
-  const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
-  let serverHost = '';
-  try {
-    serverHost = new URL(server).host;
-  } catch (e) {
-    serverHost = 'invalid';
+/**
+ * Non-PII summary for an ntfy order notification.
+ *
+ * ntfy topics are readable by anyone who knows the name (and by anyone holding
+ * the phone/showing the lock screen), so this payload is restricted to order
+ * id, total, city and status. Customer name, phone, alt phone, email, street
+ * address, notes, and item names MUST stay out of it — they belong to the
+ * Telegram message, which is delivered to a private chat.
+ */
+function buildOrderNtfyPayload({ id, total, city, status, kind } = {}) {
+  const safeId = String(id == null ? '' : id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'unknown';
+  const statusText = String(status == null ? '' : status)
+    .replace(/[^A-Za-z ]/g, '')
+    .trim()
+    .slice(0, 30) || 'Pending';
+  const totalText = `EGP ${Number(total || 0).toLocaleString()}`;
+  const cityText = String(city == null ? '' : city)
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, 40);
+
+  let title;
+  if (kind === 'created') title = `New order ${safeId} - ${totalText}`;
+  else if (kind === 'deleted') title = `Order ${safeId} deleted`;
+  else title = `Order ${safeId} - ${statusText}`;
+
+  const lines = [`Order ${safeId}`];
+  if (kind !== 'deleted') {
+    lines.push(`Total ${totalText}`);
+    if (cityText) lines.push(`City ${cityText}`);
+    lines.push(`Status ${statusText}`);
+  } else {
+    lines.push('Status Deleted');
   }
-  return {
-    configured: Boolean(env('NTFY_TOPIC')),
-    serverHost,
-    serverIsDefault: !env('NTFY_SERVER'),
-    tokenConfigured: Boolean(env('NTFY_TOKEN')),
-  };
+  return { title, message: lines.join('\n') };
 }
 
 function buildOrderTelegramMessage(order, trackingUrl) {
@@ -1700,8 +1711,8 @@ module.exports = {
   maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  buildOrderNtfyPayload,
   sendNtfyNotification,
-  ntfyConfigSummary,
   detectImageType,
   sanitizeStoragePath,
   filePathFromPublicUrl,
