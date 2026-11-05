@@ -467,15 +467,21 @@ async function placeOrder(req, res) {
       console.error('Telegram notification failed:', e.message);
     }
 
-    // Bark (iOS) push — fire-and-forget, independent of Telegram.
-    // Non-PII only: order id, total, city and status. The same notification id
-    // is reused for every lifecycle event so iOS replaces it instead of stacking.
+    // Bark (iOS) push — fire-and-forget, independent of Telegram. The same
+    // notification id is reused for every lifecycle event so iOS replaces it
+    // instead of stacking, and every replacement carries the full order.
     try {
       const payload = buildOrderBarkNotification({
         id: orderRow.id,
         total: orderRow.total,
         city: orderRow.city,
         status: 'Pending',
+        customer: orderRow.customer,
+        phone: orderRow.phone,
+        address: orderRow.address,
+        items: orderItems,
+        createdAt: timestamps.created,
+        date: orderRow.date,
       });
       await sendBarkNotification(payload);
     } catch (e) {

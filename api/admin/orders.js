@@ -139,16 +139,24 @@ async function updateOrder(req, res) {
       console.warn('Order status changed with reconciliation warnings:', JSON.stringify(warnings));
     }
 
-    // Bark (iOS) push — fire-and-forget, never blocks. Non-PII only: order id,
-    // total, city and status. `changed === false` means an idempotent retry for
-    // a transition that already happened, so no second notification is sent.
+    // Bark (iOS) push — fire-and-forget, never blocks. Full order detail is
+    // carried by every replacement. `changed === false` means an idempotent
+    // retry for a transition that already happened, so no second notification
+    // is sent.
     if (r.changed !== false) {
       try {
+        const full = parseOrderRow(order) || order;
         const payload = buildOrderBarkNotification({
           id,
-          total: order.total,
-          city: order.city,
+          total: full.total,
+          city: full.city,
           status: newStatus,
+          customer: full.customer,
+          phone: full.phone,
+          address: full.address,
+          items: full.items,
+          createdAt: full.timestamps && full.timestamps.created,
+          date: full.date,
         });
         await sendBarkNotification(payload);
       } catch (e) {
@@ -190,6 +198,21 @@ async function deleteOrder(req, res) {
 
   try {
     const sb = supabaseAdmin();
+    // Read the row BEFORE the atomic delete so the replacement notification can
+    // still show the full order. This read is notification-only: the delete
+    // itself stays a single atomic RPC, and a failed read never blocks it.
+    let existing = null;
+    try {
+      const { data: row, error: readErr } = await sb
+        .from('orders')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (!readErr && row) existing = parseOrderRow(row);
+    } catch (e) {
+      console.warn('Order delete: could not read order for notification');
+    }
+
     // ONE transaction: lock the order row, restore stock/coupon if (and only
     // if) the order was not already cancelled, then delete the row. If the
     // restore raises, the DELETE is rolled back and the order stays intact.
@@ -216,9 +239,22 @@ async function deleteOrder(req, res) {
     }
 
     // Bark (iOS) push — fire-and-forget, never blocks. Same notification id as
-    // the order, so iOS replaces the existing notification with "Deleted".
+    // the order, so iOS replaces the existing notification with "Deleted" and
+    // keeps the full detail captured above.
     try {
-      const payload = buildOrderBarkNotification({ id, status: 'Deleted' });
+      const full = existing || {};
+      const payload = buildOrderBarkNotification({
+        id,
+        status: 'Deleted',
+        total: full.total,
+        city: full.city,
+        customer: full.customer,
+        phone: full.phone,
+        address: full.address,
+        items: full.items,
+        createdAt: full.timestamps && full.timestamps.created,
+        date: full.date,
+      });
       await sendBarkNotification(payload);
     } catch (e) {
       console.error('Bark (delete) failed:', e.message);

@@ -1311,6 +1311,12 @@ async function sendTelegramNotification(messageText) {
 // key lives only in BARK_DEVICE_KEY (Vercel env) and is never exposed to the
 // browser, a response, or a log line. Fire-and-forget: never throws and never
 // blocks the order request. Telegram remains the primary/detail channel.
+//
+// One order = one replaceable notification: every event (creation, each status
+// change, deletion) reuses `zashm-order-<orderId>` as the Bark `id`, so iOS
+// replaces the existing notification instead of stacking a new one. The same id
+// also means every replacement carries the FULL order picture, never a
+// degraded summary.
 
 const BARK_PUSH_URL = 'https://api.day.app/push';
 const BARK_GROUP = 'zashm-orders';
@@ -1318,17 +1324,146 @@ const BARK_SOUND = 'minuet'; // pleasant built-in; no critical alerts, no repeat
 const BARK_TIMEOUT_MS = 8000;
 const BARK_SEPARATOR = '━'.repeat(14);
 
-/** Status → title styling. Order of the map is irrelevant; unknown statuses
+// APNs allows 4096 bytes for the whole payload. Keep the body well below it so
+// the title, subtitle, id, group, sound, url and JSON envelope always fit.
+const BARK_BODY_MAX_BYTES = 2800;
+const BARK_TITLE_MAX_BYTES = 200;
+const BARK_SUBTITLE_MAX_BYTES = 200;
+
+// Keep the item list short enough to scan on an iPhone; the rest is summarised.
+const BARK_MAX_ITEMS = 5;
+
+// Cash on Delivery is the only payment method checkout offers. There is no
+// payment_method column in `orders`; keep this in sync with
+// src/pages/CartPage.js if card payments ever go live (and persist it then).
+const BARK_PAYMENT_METHOD = 'Cash on Delivery';
+
+/** Status → title styling and the badge used inside the body. Unknown statuses
  * fall back to a neutral package icon so a future status never breaks a push. */
 const BARK_STATUS_STYLE = {
-  Pending: { emoji: '🛍️', label: 'New Order' },
-  Confirmed: { emoji: '🟢', label: 'Order Confirmed' },
-  Processing: { emoji: '⚙️', label: 'Order Processing' },
-  Shipped: { emoji: '🚚', label: 'Order Shipped' },
-  Delivered: { emoji: '✅', label: 'Order Delivered' },
-  Cancelled: { emoji: '🚫', label: 'Order Cancelled' },
-  Deleted: { emoji: '🔴', label: 'Order Deleted' },
+  Pending: { emoji: '🛍️', label: 'New Order', badge: '🟡' },
+  Confirmed: { emoji: '🟢', label: 'Order Confirmed', badge: '🟢' },
+  Processing: { emoji: '⚙️', label: 'Order Processing', badge: '⚙️' },
+  Shipped: { emoji: '🚚', label: 'Order Shipped', badge: '🚚' },
+  Delivered: { emoji: '✅', label: 'Order Delivered', badge: '✅' },
+  Cancelled: { emoji: '🚫', label: 'Order Cancelled', badge: '🚫' },
+  Deleted: { emoji: '🔴', label: 'Order Deleted', badge: '🔴' },
 };
+
+/** UTF-8 size of a string (APNs limits are bytes, not characters). */
+function barkByteLength(value) {
+  return Buffer.byteLength(String(value == null ? '' : value), 'utf8');
+}
+
+/** Truncate to a UTF-8 byte budget without splitting an emoji/surrogate pair. */
+function barkClampBytes(value, maxBytes) {
+  const text = String(value == null ? '' : value);
+  if (barkByteLength(text) <= maxBytes) return text;
+  let out = '';
+  let used = 0;
+  for (const ch of text) {
+    const size = Buffer.byteLength(ch, 'utf8');
+    if (used + size > maxBytes) break;
+    out += ch;
+    used += size;
+  }
+  return out;
+}
+
+/** Single-line, length-capped, control-character-free text.
+ *
+ * Every customer-controlled value goes through this: a newline in a name or
+ * address could otherwise fake extra order lines or prices in the notification.
+ */
+function barkSafeText(value, maxChars) {
+  const cleaned = String(value == null ? '' : value)
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\u2028\u2029\uFEFF]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  let out = '';
+  let count = 0;
+  for (const ch of cleaned) {
+    if (count >= maxChars) break;
+    out += ch;
+    count += 1;
+  }
+  return out;
+}
+
+/** "EGP 1,865" — one formatter everywhere so the amount is unambiguous. */
+function barkMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  return `EGP ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n)}`;
+}
+
+/** Order date/time in Cairo time, e.g. "05 Nov 2026, 2:15 PM". Falls back to
+ * the stored date-only value when `timestamps.created` is missing. */
+function barkDateText(createdAt, fallbackDate) {
+  const created = createdAt ? new Date(createdAt) : null;
+  if (created && !Number.isNaN(created.getTime())) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Africa/Cairo',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }).formatToParts(created);
+      const get = (type) => {
+        const part = parts.find((p) => p.type === type);
+        return part ? part.value : '';
+      };
+      const hour = String(Number(get('hour')) || 12);
+      const period = get('dayPeriod').toUpperCase().replace(/\./g, '');
+      const text = `${get('day')} ${get('month')} ${get('year')}, ${hour}:${get('minute')} ${period}`.trim();
+      if (text) return text;
+    } catch (e) {
+      /* fall through to the date-only value */
+    }
+  }
+  const dateOnly = barkSafeText(fallbackDate, 20);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
+  if (m) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const idx = Number(m[2]) - 1;
+    if (idx >= 0 && idx < 12) return `${m[3]} ${months[idx]} ${m[1]}`;
+  }
+  return dateOnly;
+}
+
+/** One line per item: name · variant — qty × unit = subtotal, capped at
+ * BARK_MAX_ITEMS with an explicit "+N more items" summary. */
+function barkItemLines(items, limit) {
+  const list = Array.isArray(items) ? items : [];
+  const shown = list.slice(0, Math.max(0, limit));
+  const lines = [];
+  for (const item of shown) {
+    if (!item || typeof item !== 'object') continue;
+    const name = barkSafeText(item.name, 50) || 'Item';
+    const variant = [barkSafeText(item.size, 18), barkSafeText(item.color, 18)]
+      .filter(Boolean)
+      .join(' / ');
+    const qty = Math.max(1, Math.min(999, Math.trunc(Number(item.qty) || 1)));
+    let unit = Number(item.unitPrice);
+    const lineTotal = Number(item.price);
+    if (!Number.isFinite(unit)) {
+      unit = Number.isFinite(lineTotal) ? lineTotal / qty : NaN;
+    }
+    const total = Number.isFinite(lineTotal) ? lineTotal : unit * qty;
+    const amounts = Number.isFinite(unit) && Number.isFinite(total)
+      ? `${qty} × ${barkMoney(unit)} = ${barkMoney(total)}`
+      : `${qty} ×`;
+    lines.push(`• ${name}${variant ? ` · ${variant}` : ''} — ${amounts}`);
+  }
+  const hidden = list.length - shown.length;
+  if (hidden > 0) {
+    lines.push(`• +${hidden} more item${hidden === 1 ? '' : 's'}`);
+  }
+  return lines;
+}
 
 /**
  * Build the Bark notification for an order event.
@@ -1338,33 +1473,94 @@ const BARK_STATUS_STYLE = {
  * each status change, deletion) must reuse the exact same id. `group` only
  * organizes notifications — it does not replace anything.
  *
- * Privacy: only order id, total, city and status leave the server. Customer
- * names, phones, emails, street addresses, notes and item details stay in the
- * Telegram message, which goes to a private chat.
+ * Every event carries the full order picture (customer, delivery address and
+ * items) so the replacement notification never loses detail. All values are
+ * sanitized and size-capped before they reach the payload.
  */
-function buildOrderBarkNotification({ id, total, city, status = 'Pending' } = {}) {
+function buildOrderBarkNotification({
+  id,
+  total,
+  city,
+  status = 'Pending',
+  customer,
+  phone,
+  address,
+  items,
+  createdAt,
+  date,
+} = {}) {
   const safeId = String(id == null ? '' : id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || 'unknown';
   const rawStatus = String(status == null ? '' : status).trim();
-  const style = BARK_STATUS_STYLE[rawStatus] || { emoji: '📦', label: 'Order Updated' };
+  const style = Object.prototype.hasOwnProperty.call(BARK_STATUS_STYLE, rawStatus)
+    ? BARK_STATUS_STYLE[rawStatus]
+    : { emoji: '📦', label: 'Order Updated', badge: '📦' };
   const statusText = rawStatus.replace(/[^A-Za-z ]/g, '').trim().slice(0, 30) || 'Pending';
-  const cityText = String(city == null ? '' : city)
-    .replace(/[\r\n]+/g, ' ')
-    .trim()
-    .slice(0, 40);
 
-  const title = `${style.emoji} ZASHM | ${style.label} #${safeId}`;
-  const hasTotal = total !== undefined && total !== null && Number.isFinite(Number(total));
-  const lines = [BARK_SEPARATOR];
-  if (hasTotal) lines.push(`💰 Total: EGP ${Number(total).toLocaleString()}`);
-  if (cityText) lines.push(`📍 City: ${cityText}`);
-  lines.push(`📦 Status: ${statusText}`);
-  lines.push(BARK_SEPARATOR);
-  lines.push(statusText === 'Deleted' ? 'The order was removed from ZASHM.' : 'Tap to review the order.');
+  const nameText = barkSafeText(customer, 60);
+  const phoneText = barkSafeText(phone, 24);
+  const cityText = barkSafeText(city, 40);
+  const addressText = barkSafeText(address, 140);
+  const placeText = [addressText, cityText].filter(Boolean).join(', ');
+  const whenText = barkDateText(createdAt, date);
+  const totalText = barkMoney(total);
+  const itemCount = Array.isArray(items) ? items.length : 0;
+
+  const metaParts = [];
+  if (whenText) metaParts.push(`🕒 ${whenText}`);
+  metaParts.push(`💳 ${BARK_PAYMENT_METHOD}`);
+  const metaLine = whenText || nameText || placeText || itemCount ? metaParts.join(' · ') : '';
+  const statusLine = `${style.badge} Status: ${statusText}`;
+  const totalLine = totalText ? `💰 Total ${totalText}` : '';
+  const footer = statusText === 'Deleted'
+    ? 'The order was removed from ZASHM.'
+    : 'Tap to review the order.';
+
+  const render = (itemLimit) => {
+    const customerBlock = [];
+    if (nameText) customerBlock.push(`👤 ${nameText}`);
+    if (phoneText) customerBlock.push(`📞 ${phoneText}`);
+    if (placeText) customerBlock.push(`📍 ${placeText}`);
+
+    const itemLines = barkItemLines(items, itemLimit);
+    const itemBlock = itemLines.length ? [`🛍️ Items (${itemCount})`, ...itemLines] : [];
+
+    const headerBlock = [];
+    if (metaLine) headerBlock.push(metaLine);
+    headerBlock.push(statusLine);
+
+    const sections = [
+      headerBlock,
+      customerBlock,
+      itemBlock,
+      totalLine ? [totalLine] : [],
+    ].filter((section) => section.length > 0);
+
+    return `${sections.map((section) => section.join('\n')).join(`\n${BARK_SEPARATOR}\n`)}\n${footer}`;
+  };
+
+  // Field caps already keep normal orders far below the limit; this loop is the
+  // hard guarantee for pathological item lists, then a final byte clamp.
+  let itemLimit = BARK_MAX_ITEMS;
+  let body = render(itemLimit);
+  while (barkByteLength(body) > BARK_BODY_MAX_BYTES && itemLimit > 0) {
+    itemLimit -= 1;
+    body = render(itemLimit);
+  }
+  if (barkByteLength(body) > BARK_BODY_MAX_BYTES) {
+    body = `${barkClampBytes(body, BARK_BODY_MAX_BYTES - 1)}…`;
+  }
+
+  const title = barkClampBytes(`${style.emoji} ${style.label} · #${safeId}`, BARK_TITLE_MAX_BYTES);
+  const subtitle = barkClampBytes(
+    [totalText, nameText].filter(Boolean).join(' · '),
+    BARK_SUBTITLE_MAX_BYTES
+  );
 
   return {
     id: barkOrderNotificationId(id),
     title,
-    body: lines.join('\n'),
+    subtitle,
+    body,
     group: BARK_GROUP,
     sound: BARK_SOUND,
     level: 'active',
@@ -1379,7 +1575,7 @@ function barkOrderNotificationId(orderId) {
   return `zashm-order-${safeId}`;
 }
 
-async function sendBarkNotification({ title, body, id, group, sound, level, url } = {}) {
+async function sendBarkNotification({ title, subtitle, body, id, group, sound, level, url } = {}) {
   const deviceKey = env('BARK_DEVICE_KEY');
   if (!deviceKey) {
     // Optional channel — warn once per invocation so a missing env var is never
@@ -1390,12 +1586,14 @@ async function sendBarkNotification({ title, body, id, group, sound, level, url 
 
   const payload = {
     device_key: deviceKey,
-    title: String(title || 'ZASHM').slice(0, 200),
-    body: String(body || '').slice(0, 3000),
+    title: barkClampBytes(String(title || 'ZASHM'), BARK_TITLE_MAX_BYTES),
+    body: barkClampBytes(String(body || ''), BARK_BODY_MAX_BYTES),
     group: String(group || BARK_GROUP).slice(0, 64),
     sound: String(sound || BARK_SOUND).slice(0, 64),
     level: String(level || 'active').slice(0, 20),
   };
+  const subtitleText = barkClampBytes(String(subtitle || ''), BARK_SUBTITLE_MAX_BYTES).trim();
+  if (subtitleText) payload.subtitle = subtitleText;
   // Bark requires the replacement id to be a JSON string (numbers don't work).
   if (id != null && String(id).trim() !== '') payload.id = String(id).slice(0, 128);
   if (url) payload.url = String(url).slice(0, 500);
@@ -1419,7 +1617,7 @@ async function sendBarkNotification({ title, body, id, group, sound, level, url 
     if (!resp.ok || (Number.isFinite(code) && code !== 200)) {
       // Bark echoes the device key inside its error message
       // ("failed to get [KEY] device token"), so redact it before logging.
-      // Never log the title/body — they carry order data.
+      // Never log the title/body/subtitle — they carry customer data.
       const reason = String((data && data.message) || '').replace(/\s+/g, ' ').slice(0, 200);
       const safeReason = reason.split(deviceKey).join('[device_key]');
       console.error('Bark push failed:', `HTTP ${resp.status}`, safeReason);
