@@ -1336,7 +1336,12 @@ async function sendNtfyNotification({ title, message, tags, priority } = {}) {
       headers,
       body: safeMessage,
     });
-    return resp.ok;
+    if (!resp.ok) {
+      const errBody = await resp.text().catch(() => '');
+      console.error('ntfy notification failed:', resp.status, errBody.slice(0, 200));
+      return false;
+    }
+    return true;
   } catch (e) {
     console.error('ntfy notification failed:', e && e.message);
     return false;
