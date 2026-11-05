@@ -494,7 +494,7 @@ export default function ProductPage() {
                 aria-pressed={isWished}
                 onClick={() => {
                   toggleWishlist(p.id);
-                  toast(isWished ? 'Removed from wishlist' : 'Added to wishlist', isWished ? 'info' : 'success');
+                  toast(isWished ? 'Removed from wishlist' : 'Added to wishlist', isWished ? 'neutral' : 'success');
                 }}
                 style={{ width: 52, height: 52, borderRadius: 2, border: `2px solid ${isWished ? '#e74c3c' : 'var(--border)'}`, background: 'transparent', color: isWished ? '#e74c3c' : 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
                 whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>

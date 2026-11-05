@@ -65,6 +65,7 @@ const TOAST_DURATION = {
   error: 3500,
   warning: 3500,
   info: 3000,
+  neutral: 3000,
 };
 
 function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
@@ -175,6 +176,10 @@ toast.warning = (message) => {
 
 toast.info = (message) => {
   if (addToastGlobal) addToastGlobal({ message, type: 'info' });
+};
+
+toast.neutral = (message) => {
+  if (addToastGlobal) addToastGlobal({ message, type: 'neutral' });
 };
 
 // 🎯 Order Notification (تم تعطيله لعدم إظهاره للعميل)
