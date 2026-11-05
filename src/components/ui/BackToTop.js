@@ -79,7 +79,7 @@ function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
   const Icon = type === 'success'
     ? (/wishlist|favorite/.test(normalizedMessage) ? Heart : /bag|cart/.test(normalizedMessage) ? ShoppingBag : CheckCircle)
     : type === 'error'
-      ? AlertCircle
+      ? (/wishlist|favorite/.test(normalizedMessage) ? Heart : AlertCircle)
       : type === 'warning'
         ? AlertTriangle
         : Info;
