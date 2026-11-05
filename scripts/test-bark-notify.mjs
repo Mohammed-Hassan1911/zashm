@@ -127,10 +127,13 @@ const ORDER = {
   ],
 };
 
-const sample = buildOrderBarkNotification(ORDER);
+// `initial: true` is what the placement path passes; it is the only audible case.
+const sample = buildOrderBarkNotification({ ...ORDER, initial: true });
 
+// Every lifecycle event WITHOUT `initial` — including a move back to Pending —
+// must be a silent replacement of the single existing notification.
 const LIFECYCLE = [
-  ['Pending', '🛍️', 'طلب جديد', 'قيد المراجعة', 'active', 'minuet'],
+  ['Pending', '🛍️', 'طلب جديد', 'قيد المراجعة', 'passive', ''],
   ['Confirmed', '🟢', 'تم تأكيد الطلب', 'تم تأكيد الطلب', 'passive', ''],
   ['Processing', '⚙️', 'جاري تجهيز الطلب', 'قيد التجهيز', 'passive', ''],
   ['Shipped', '🚚', 'تم شحن الطلب', 'تم الشحن', 'passive', ''],
@@ -142,12 +145,10 @@ const LIFECYCLE = [
 const EXPECTED_NEW_ORDER_BODY = [
   'ZASHM | طلب جديد',
   '📌 حالة الطلب: قيد المراجعة',
-  '• رقم الطلب: ZSH-MW30TEST-ABC123',
   '',
   '👤 بيانات العميل',
   '• الاسم: Fatima Ahmed',
-  '• الهاتف: 01012345678 — واتساب: https://wa.me/201012345678',
-  '',
+  '• الهاتف: 01012345678 — واتساب',
   '📍 عنوان الشحن',
   '• المدينة: Cairo',
   '• العنوان: 12 Nile Street, Zamalek, Apt 4',
@@ -163,6 +164,7 @@ const EXPECTED_NEW_ORDER_BODY = [
   '',
   '🚚 تتبع الطلب',
   TRACKING_URL,
+  '• رقم الطلب: ZSH-MW30TEST-ABC123',
   '',
   '💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.',
 ].join('\n');
@@ -291,9 +293,9 @@ try {
 
     for (const fragment of [
       'بيانات العميل',
+      'حالة الطلب: قيد المراجعة',
       'الاسم: Fatima Ahmed',
-      'الهاتف: 01012345678',
-      'واتساب: https://wa.me/201012345678',
+      'الهاتف: 01012345678 — واتساب',
       'عنوان الشحن',
       'المدينة: Cairo',
       'العنوان: 12 Nile Street, Zamalek, Apt 4',
@@ -316,6 +318,24 @@ try {
       ok(telegram.includes(fragment), `Telegram still has ${fragment}`);
       ok(sample.body.includes(fragment), `Bark mirrors ${fragment}`);
     }
+
+    // Line-for-line identical to Telegram once Markdown is removed; the only
+    // intentional difference is that Bark keeps the hyphens in the order id.
+    const telegramPlain = telegram
+      .split('\n')
+      .map((line) => line.replace(/\*/g, '').replace(/\[واتساب\]\(https:\/\/wa\.me\/\d+\)/, 'واتساب'))
+      .join('\n');
+    const barkLines = sample.body.split('\n');
+    const tgLines = telegramPlain.split('\n');
+    eq(tgLines.length, barkLines.length, 'same number of lines as Telegram');
+    const differing = tgLines
+      .map((line, index) => (line === barkLines[index] ? null : { index, telegram: line, bark: barkLines[index] }))
+      .filter(Boolean);
+    eq(differing.length, 1, 'only one line differs from Telegram');
+    eq(differing[0].telegram, '• رقم الطلب: ZSHMW30TESTABC123', 'Telegram strips hyphens from the id');
+    eq(differing[0].bark, '• رقم الطلب: ZSH-MW30TEST-ABC123', 'Bark keeps the real order id');
+    ok(sample.body.includes('📌 حالة الطلب: قيد المراجعة'), 'status line is present, like Telegram');
+    ok(!sample.body.includes('wa.me/'), 'no raw WhatsApp link the customer does not need');
   });
 
   await section('[7] only a new order rings; every later status is a silent replacement', async () => {
@@ -326,7 +346,8 @@ try {
       eq(payload.subtitle, 'EGP 1,865 · Fatima Ahmed', `${status} subtitle`);
       eq(payload.level, level, `${status} level`);
       eq(payload.sound, sound, `${status} sound`);
-      ok(payload.body.includes(`📌 حالة الطلب: ${statusLine}`), `${status} status line`);
+      eq(payload.body.split('\n')[0], `ZASHM | ${label}`, `${status} headline`);
+      eq(payload.body.split('\n')[1], `📌 حالة الطلب: ${statusLine}`, `${status} status line`);
 
       for (const fragment of [
         '• الاسم: Fatima Ahmed',
@@ -350,6 +371,20 @@ try {
       }
     }
 
+    // Placement (`initial: true`) is the ONLY audible event.
+    const first = buildOrderBarkNotification({ ...ORDER, status: 'Pending', initial: true });
+    eq(first.level, 'active', 'placement is an active alert');
+    eq(first.sound, 'minuet', 'placement rings once');
+
+    // Moving an order BACK to Pending — from any status — stays completely silent.
+    for (const from of ['Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled']) {
+      const back = buildOrderBarkNotification({ ...ORDER, status: 'Pending' });
+      eq(back.level, 'passive', `${from} → Pending is passive`);
+      eq(back.sound, '', `${from} → Pending has no sound`);
+      eq(back.id, first.id, `${from} → Pending replaces the same notification`);
+      eq(back.title, first.title, `${from} → Pending reuses the new-order title`);
+    }
+
     // The wire payload for a status update really is silent.
     capture();
     process.env.BARK_DEVICE_KEY = DEVICE_KEY;
@@ -359,6 +394,15 @@ try {
     eq(wire.level, 'passive', 'status update is passive');
     ok(!('sound' in wire), 'status update omits sound entirely');
     ok(!wire.call, 'no repeating ring');
+
+    capture();
+    process.env.BARK_DEVICE_KEY = DEVICE_KEY;
+    stubFetch(async () => barkResponse(200, { code: 200 }));
+    await sendBarkNotification(buildOrderBarkNotification({ ...ORDER, status: 'Pending' }));
+    const backWire = sentBody();
+    eq(backWire.level, 'passive', 'back-to-Pending wire is passive');
+    ok(!('sound' in backWire), 'back-to-Pending sends no sound key');
+    ok(!backWire.call, 'back-to-Pending does not ring');
   });
 
   await section('[8] one stable notification id for the whole order lifecycle', async () => {
@@ -456,7 +500,7 @@ try {
     ok(!lines.includes('👤 Fake Admin'), 'no forged customer line from the customer name');
     ok(!lines.includes('👤 Injected'), 'no forged line from the item name');
     ok(lines.includes('• الاسم: Eve 💰 Total EGP 1 👤 Fake Admin'), 'newlines are collapsed to spaces');
-    ok(lines.includes('• الهاتف: 0101 2345678 — واتساب: https://wa.me/201012345678'), 'phone newline is collapsed');
+    ok(lines.includes('• الهاتف: 0101 2345678 — واتساب'), 'phone newline is collapsed');
     ok(lines.includes('• العنوان: 12 Street 📍 Fake City'), 'address newlines are collapsed');
     ok(lines.includes('• المدينة: Cairo'), 'city line is present');
     ok(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u2028\u2029\u200B]/.test(hostile.body),
@@ -592,6 +636,7 @@ try {
     ok(orders.includes('items: orderItems'), 'placement passes the items');
     ok(orders.includes('tracking_url: trackingUrl'), 'placement passes the tracking link');
     ok(orders.includes('createdAt: timestamps.created'), 'placement passes the order time');
+    ok(orders.includes('initial: true'), 'placement marks the notification as the first one (audible)');
     ok(orders.indexOf('sendTelegramNotification(message)') < orders.indexOf('buildOrderBarkNotification({'),
       'Telegram still sends first and is not replaced');
     ok(orders.includes("console.error('Bark notification failed:'"), 'placement failure is contained');
@@ -606,6 +651,23 @@ try {
     ok(/if \(r\.changed !== false\) \{/.test(admin), 'idempotent retries do not re-notify');
     ok(admin.includes("console.error('Bark (status) failed:'"), 'status failure is contained');
     ok(admin.includes("console.error('Bark (delete) failed:'"), 'delete failure is contained');
+    ok(!admin.includes('initial:'), 'status/delete never mark a notification as the first one');
+    ok(/const audible = rawStatus === 'Failed' \|\| \(initial === true && rawStatus === 'Pending'\)/.test(libSrc),
+      'only placement (initial + Pending) is audible');
+
+    // The plain-text body must mirror the Telegram template line for line.
+    const plainSrc = libSrc.slice(
+      libSrc.indexOf('function buildOrderPlainMessage'),
+      libSrc.indexOf('function buildOrderFailureMessage')
+    );
+    ok(plainSrc.includes('${phoneText} — واتساب'), 'phone line matches Telegram wording');
+    ok(!plainSrc.includes('wa.me/'), 'no raw WhatsApp link in the copy-paste message');
+    ok(plainSrc.includes('📌 حالة الطلب: ${style.line}'), 'status line is rendered in the body');
+    ok(libSrc.includes('📌 *حالة الطلب:* قيد المراجعة'), 'Telegram renders the same status line');
+    ok(plainSrc.indexOf('🚚 تتبع الطلب') < plainSrc.indexOf('• رقم الطلب:'),
+      'order number comes after the tracking link, like Telegram');
+    ok(plainSrc.indexOf('📍 عنوان الشحن') < plainSrc.indexOf('🛍️ المنتجات'),
+      'shipping address precedes the items, like Telegram');
 
     // Failure fallback: every database-failure exit alerts; business refusals do not.
     ok(orders.includes('sendOrderFailureAlert,'), 'placement imports the failure alert');

@@ -534,6 +534,7 @@ async function placeOrder(req, res) {
         createdAt: timestamps.created,
         date: orderRow.date,
         status: 'Pending',
+        initial: true,
       });
       await sendBarkNotification(payload);
     } catch (e) {

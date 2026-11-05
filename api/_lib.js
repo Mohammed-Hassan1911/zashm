@@ -1486,12 +1486,13 @@ function barkItemLines(items, limit) {
   return lines;
 }
 
-/** Plain-text order message, mirroring buildOrderTelegramMessage field by field.
+/** Plain-text order message, exactly mirroring buildOrderTelegramMessage.
  *
- * Telegram renders Markdown; Bark is plain text. Keeping both shapes identical
- * means the owner can long-press the Bark notification, copy it, and send it to
- * the customer as-is to confirm the order. Every customer-controlled value is
- * sanitized so it cannot forge an extra line.
+ * Telegram renders Markdown; Bark is plain text. Keeping both templates
+ * identical (same sections, same order, same line breaks) means the owner can
+ * long-press the Bark notification, copy it, and send it to the customer as-is
+ * to confirm the order. Every customer-controlled value is sanitized so it
+ * cannot forge an extra line.
  */
 function buildOrderPlainMessage(order = {}, trackingUrl, itemLimit = BARK_MAX_ITEMS) {
   const rawStatus = barkSafeText(order.status, 40);
@@ -1510,78 +1511,45 @@ function buildOrderPlainMessage(order = {}, trackingUrl, itemLimit = BARK_MAX_IT
   const itemsText = barkItemLines(order.items, itemLimit).join('\n');
   const shipping = Number(order.shippingCost);
   const discount = Number(order.discount);
-  const subtotal = Number(order.subtotal);
-  const total = Number(order.total);
-  const money = (value) => (Number.isFinite(value) ? barkMoney(value) : '');
-
-  const lines = [];
-  lines.push(`ZASHM | ${style.label}`);
-  lines.push(`📌 حالة الطلب: ${style.line}`);
-  if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
-  lines.push('');
-
-  const customerLines = [];
-  if (nameText) customerLines.push(`• الاسم: ${nameText}`);
-  if (phoneText) {
-    const wa = waNumber(phoneText);
-    customerLines.push(`• الهاتف: ${phoneText}${wa ? ` — واتساب: https://wa.me/${wa}` : ''}`);
-  }
-  if (phoneAltText) customerLines.push(`• هاتف بديل: ${phoneAltText}`);
-  if (emailText) customerLines.push(`• الإيميل: ${emailText}`);
-  if (customerLines.length) {
-    lines.push('👤 بيانات العميل');
-    lines.push(...customerLines);
-    lines.push('');
-  }
-
-  const addressLines = [];
-  if (cityText) addressLines.push(`• المدينة: ${cityText}`);
-  if (addressText) addressLines.push(`• العنوان: ${addressText}`);
-  if (notesText) addressLines.push(`• ملاحظات: ${notesText}`);
-  if (addressLines.length) {
-    lines.push('📍 عنوان الشحن');
-    lines.push(...addressLines);
-    lines.push('');
-  }
-
-  if (itemsText) {
-    lines.push('🛍️ المنتجات');
-    lines.push(itemsText);
-    lines.push('');
-  }
-
-  const summaryLines = [];
-  const subtotalText = money(subtotal);
-  const shippingText = money(shipping);
-  const discountText = money(discount);
-  const totalText = money(total);
-  if (subtotalText) summaryLines.push(`• المجموع الفرعي: ${subtotalText}`);
-  if (shippingText && shipping > 0) summaryLines.push(`• الشحن: ${shippingText}`);
-  if (discountCodeText) summaryLines.push(`• كود الخصم: ${discountCodeText}`);
-  if (discountText && discount > 0) summaryLines.push(`• قيمة الخصم: ${discountText}`);
-  if (totalText) summaryLines.push(`• الإجمالي: ${totalText}`);
-  if (summaryLines.length) {
-    lines.push('💰 ملخص الحساب');
-    lines.push(...summaryLines);
-    lines.push('');
-  }
-
+  const subtotal = Number.isFinite(Number(order.subtotal)) ? Number(order.subtotal) : 0;
+  const total = Number.isFinite(Number(order.total)) ? Number(order.total) : 0;
   const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
-  if (track) {
-    lines.push('🚚 تتبع الطلب');
-    lines.push(track.slice(0, 300));
-    lines.push('');
-  }
 
-  if (rawStatus === 'Deleted') {
-    lines.push('🚫 تم حذف هذا الأوردر من ZASHM.');
-  } else if (rawStatus === 'Cancelled') {
-    lines.push('🚫 تم إلغاء هذا الأوردر.');
-  } else {
-    lines.push('💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.');
-  }
+  // Same line layout as buildOrderTelegramMessage: identical sections, identical
+  // order, identical line breaks, and the same "غير محدد" city fallback.
+  const shippingLine = shipping > 0 ? `• الشحن: ${barkMoney(shipping)}\n` : '';
+  const altPhoneLine = phoneAltText ? `• هاتف بديل: ${phoneAltText}\n` : '';
+  const emailLine = emailText ? `• الإيميل: ${emailText}\n` : '';
+  const notesLine = notesText ? `• ملاحظات: ${notesText}\n` : '';
+  const discountLine = discountCodeText ? `• كود الخصم: ${discountCodeText}\n` : '';
+  const discountAmountLine = discount > 0 ? `• قيمة الخصم: ${barkMoney(discount)}\n` : '';
+  const footer = rawStatus === 'Deleted'
+    ? '🚫 تم حذف هذا الأوردر من ZASHM.'
+    : rawStatus === 'Cancelled'
+      ? '🚫 تم إلغاء هذا الأوردر.'
+      : '💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.';
 
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const trackingBlock = track
+    ? `🚚 تتبع الطلب\n${track.slice(0, 300)}\n${orderId ? `• رقم الطلب: ${orderId}\n` : ''}`
+    : (orderId ? `• رقم الطلب: ${orderId}\n` : '');
+
+  return `
+ZASHM | ${style.label}
+📌 حالة الطلب: ${style.line}
+
+👤 بيانات العميل
+${nameText ? `• الاسم: ${nameText}\n` : ''}${phoneText ? `• الهاتف: ${phoneText} — واتساب\n` : ''}${altPhoneLine}${emailLine}📍 عنوان الشحن
+${cityText ? `• المدينة: ${cityText}\n` : '• المدينة: غير محدد\n'}${addressText ? `• العنوان: ${addressText}\n` : ''}${notesLine}
+🛍️ المنتجات
+${itemsText || 'لا توجد منتجات'}
+
+💰 ملخص الحساب
+• المجموع الفرعي: ${barkMoney(subtotal)}
+${shippingLine}${discountLine}${discountAmountLine}• الإجمالي: ${barkMoney(total)}
+
+${trackingBlock}
+${footer}
+  `.trim();
 }
 
 /**
@@ -1613,6 +1581,7 @@ function buildOrderBarkNotification({
   discountCode,
   city,
   status = 'Pending',
+  initial = false,
   customer,
   phone,
   phoneAlt,
@@ -1634,7 +1603,11 @@ function buildOrderBarkNotification({
   const nameText = barkSafeText(customer, 60);
   const totalText = barkMoney(total);
 
-  const silent = rawStatus !== 'Pending' && rawStatus !== 'Failed';
+  // Only the very first notification (order placement) is audible. A later
+  // status change — including moving an order BACK to Pending — replaces the
+  // same notification silently. `initial` is passed only by the placement path.
+  const audible = rawStatus === 'Failed' || (initial === true && rawStatus === 'Pending');
+  const silent = !audible;
 
   const render = (limit) => buildOrderPlainMessage(
     {
@@ -1929,6 +1902,7 @@ function buildOrderTelegramMessage(order, trackingUrl) {
     : '';
   return `
 *ZASHM | طلب جديد*
+📌 *حالة الطلب:* قيد المراجعة
 
 👤 *بيانات العميل*
 • الاسم: ${mdSafe(order.customer)}
