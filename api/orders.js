@@ -15,6 +15,7 @@ const {
   parseOrderRow,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  sendNtfyNotification,
   trackingUrlFor,
   verifyTrackToken,
   EGYPT_PHONE_RE,
@@ -463,6 +464,21 @@ async function placeOrder(req, res) {
       await sendTelegramNotification(message);
     } catch (e) {
       console.error('Telegram notification failed:', e.message);
+    }
+
+    // Backup push channel (ntfy.sh) — independent of Telegram, fire-and-forget.
+    try {
+      const itemsSummary = (orderItems || [])
+        .map((it) => `${it.name} (${[it.size, it.color].filter(Boolean).join('/')}) x${it.qty}`)
+        .join(', ');
+      await sendNtfyNotification({
+        title: `New order ${orderRow.id} — EGP ${Number(orderRow.total || 0).toLocaleString()}`,
+        message: `${itemsSummary}\n${orderRow.customer} · ${orderRow.phone}\n${orderRow.city} · COD`,
+        tags: 'shopping_cart,bell',
+        priority: 4,
+      });
+    } catch (e) {
+      console.error('ntfy notification failed:', e.message);
     }
 
     const order = parseOrderRow({ ...orderRow, items: orderItems, timestamps });

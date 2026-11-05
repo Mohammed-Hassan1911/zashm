@@ -64,6 +64,7 @@ const libPath = require.resolve('../api/_lib.js');
 let response = null;
 let rpcCalls = [];
 let telegramSends = 0;
+let ntfySends = 0;
 let productRows = [];
 
 const fakeSb = {
@@ -109,6 +110,7 @@ Object.assign(require.cache[libPath], {
     generateOrderId: () => 'ZSH-TESTPROBE000001-0001',
     parseOrderRow: (row) => ({ ...row }),
     sendTelegramNotification: async () => { telegramSends += 1; },
+    sendNtfyNotification: async () => { ntfySends += 1; },
     buildOrderTelegramMessage: () => 'test message',
     trackingUrlFor: () => 'https://test.invalid/track',
     verifyTrackToken: () => true,
@@ -123,6 +125,7 @@ async function place(items, rows, extra = {}) {
   response = null;
   rpcCalls = [];
   telegramSends = 0;
+  ntfySends = 0;
   productRows = rows;
   currentBody = {
     items,
@@ -254,6 +257,7 @@ console.log('\n[1] direct POST to /api/orders with an undeclared variation');
   eq(items[0].unitPrice, 2000, 'server prices a declared variation from the DB sale price');
   eq(rpcCalls[0].args.p_order.subtotal, 6000, 'server-authoritative subtotal');
   eq(telegramSends, 1, 'a successful order notifies Telegram');
+  eq(ntfySends, 1, 'a successful order notifies ntfy (backup channel)');
 }
 
 console.log('\n[1b] cart behaviour when an orphan line sits next to a valid line');

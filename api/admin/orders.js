@@ -13,6 +13,7 @@ const {
   ORDER_STATUSES,
   parseOrderRow,
   trackingUrlFor,
+  sendNtfyNotification,
 } = require('../_lib');
 
 function getId(req, body) {
@@ -136,6 +137,19 @@ async function updateOrder(req, res) {
     if (warnings.length) {
       console.warn('Order status changed with reconciliation warnings:', JSON.stringify(warnings));
     }
+
+    // Backup push channel (ntfy.sh) — fire-and-forget, never blocks.
+    try {
+      await sendNtfyNotification({
+        title: `Order ${id} — ${newStatus}`,
+        message: `EGP ${Number(order.total || 0).toLocaleString()} · ${order.city || ''} · ${oldStatus} → ${newStatus}`,
+        tags: newStatus === 'Cancelled' ? 'x,warning' : (newStatus === 'Delivered' ? 'white_check_mark' : 'package'),
+        priority: newStatus === 'Cancelled' ? 4 : 3,
+      });
+    } catch (e) {
+      console.error('ntfy (status) failed:', e.message);
+    }
+
     return json(res, 200, {
       success: true,
       status: r.status || newStatus,
@@ -194,6 +208,19 @@ async function deleteOrder(req, res) {
     if (warnings.length) {
       console.warn('Order deleted with restore warnings:', JSON.stringify(warnings));
     }
+
+    // Backup push channel (ntfy.sh) — fire-and-forget, never blocks.
+    try {
+      await sendNtfyNotification({
+        title: `Order ${id} deleted`,
+        message: `Order ${id} was deleted by admin.`,
+        tags: 'wastebasket',
+        priority: 2,
+      });
+    } catch (e) {
+      console.error('ntfy (delete) failed:', e.message);
+    }
+
     return json(res, 200, {
       success: true,
       stockRestored: r.stockRestored === true,

@@ -1306,6 +1306,43 @@ async function sendTelegramNotification(messageText) {
   return resp.ok;
 }
 
+// ─── NTFY (server-side, optional backup push channel) ───────────────────────
+// Optional backup notification channel (ntfy.sh or self-hosted). Independent of
+// Telegram: if Telegram is down/compromised, ntfy still delivers. Fire-and-forget;
+// never throws and never blocks the request. Configured via NTFY_TOPIC (required)
+// and optional NTFY_SERVER (default https://ntfy.sh) + NTFY_TOKEN (access token).
+async function sendNtfyNotification({ title, message, tags, priority } = {}) {
+  const topic = env('NTFY_TOPIC');
+  if (!topic) {
+    // Not configured — silently skip (ntfy is optional).
+    return false;
+  }
+  const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
+  const token = env('NTFY_TOKEN');
+  const safeTitle = String(title || 'ZASHM').replace(/[\r\n]/g, ' ').slice(0, 120);
+  const safeMessage = String(message || '').replace(/[\r\n]+/g, '\n').slice(0, 3800);
+  const safeTags = String(tags || '').replace(/[^a-zA-Z0-9_,\-]/g, '').slice(0, 120);
+  const prio = Number.isFinite(Number(priority)) ? Math.min(5, Math.max(1, Number(priority))) : 3;
+  try {
+    const headers = {
+      'Title': safeTitle,
+      'Priority': String(prio),
+      'Content-Type': 'text/plain; charset=utf-8',
+    };
+    if (safeTags) headers['Tags'] = safeTags;
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch(`${server}/${encodeURIComponent(topic)}`, {
+      method: 'POST',
+      headers,
+      body: safeMessage,
+    });
+    return resp.ok;
+  } catch (e) {
+    console.error('ntfy notification failed:', e && e.message);
+    return false;
+  }
+}
+
 function buildOrderTelegramMessage(order, trackingUrl) {
   const itemsText = (order.items || [])
     .map((item) => {
@@ -1598,6 +1635,7 @@ module.exports = {
   maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  sendNtfyNotification,
   detectImageType,
   sanitizeStoragePath,
   filePathFromPublicUrl,
