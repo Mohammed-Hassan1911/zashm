@@ -254,6 +254,7 @@ try {
     const seen = { status: null, body: null, urls: [] };
     let authorized = true;
     let sent = 0;
+    let optionsHandled = 0;
 
     delete require.cache[routePath];
     Object.assign(require.cache[libPath], {
@@ -264,7 +265,7 @@ try {
         ...realLib,
         json: (_res, status, body) => { seen.status = status; seen.body = body; },
         applyCors: () => {},
-        handleOptions: () => false,
+        handleOptions: () => { optionsHandled += 1; },
         clientIp: () => '203.0.113.9',
         rateLimitShared: async () => ({ allowed: true }),
         tooMany: () => { seen.status = 429; },
@@ -309,6 +310,12 @@ try {
     await handler({ method: 'GET', headers: {}, query: {} }, res);
     eq(seen.status, 405, 'GET is rejected');
     eq(sent, 1, 'method guard runs before the send');
+
+    seen.status = null;
+    await handler({ method: 'OPTIONS', headers: {}, query: {} }, res);
+    eq(optionsHandled, 1, 'OPTIONS is delegated to handleOptions');
+    eq(seen.status, null, 'OPTIONS writes no JSON body');
+    eq(sent, 1, 'OPTIONS never sends a notification');
 
     const routeSrc = read('api/admin/notify-test.js');
     ok(routeSrc.includes("requirePerm(req, res, 'orders.read')"), 'requires orders.read');

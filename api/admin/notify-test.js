@@ -27,7 +27,7 @@ const {
  */
 module.exports = async function handler(req, res) {
   applyCors(req, res);
-  if (handleOptions(req, res)) return;
+  if (req.method === 'OPTIONS') return handleOptions(req, res);
 
   if (req.method !== 'POST') {
     return json(res, 405, { error: 'Method not allowed' });
