@@ -1311,6 +1311,19 @@ async function sendTelegramNotification(messageText) {
 // Telegram: if Telegram is down/compromised, ntfy still delivers. Fire-and-forget;
 // never throws and never blocks the request. Configured via NTFY_TOPIC (required)
 // and optional NTFY_SERVER (default https://ntfy.sh) + NTFY_TOKEN (access token).
+
+/** Header values must be printable ASCII: Node's fetch (undici) throws
+ * "Cannot convert argument to a ByteString" for any code point > 255 BEFORE
+ * the request is sent. A single em dash in the Title header silently killed
+ * every ntfy push. Titles/tags are therefore downgraded to ASCII; the message
+ * body stays UTF-8 and keeps the Arabic text. */
+function headerSafe(v) {
+  return String(v == null ? '' : v)
+    .replace(/[^\x20-\x7E]+/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function sendNtfyNotification({ title, message, tags, priority, result } = {}) {
   const report = (extra) => {
     if (result && typeof result === 'object') Object.assign(result, extra);
@@ -1326,9 +1339,9 @@ async function sendNtfyNotification({ title, message, tags, priority, result } =
   report({ configured: true });
   const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
   const token = env('NTFY_TOKEN');
-  const safeTitle = String(title || 'ZASHM').replace(/[\r\n]/g, ' ').slice(0, 120);
+  const safeTitle = headerSafe(title || 'ZASHM').slice(0, 120);
   const safeMessage = String(message || '').replace(/[\r\n]+/g, '\n').slice(0, 3800);
-  const safeTags = String(tags || '').replace(/[^a-zA-Z0-9_,\-]/g, '').slice(0, 120);
+  const safeTags = headerSafe(String(tags || '').replace(/[^a-zA-Z0-9_,\-]/g, '')).slice(0, 120);
   const prio = Number.isFinite(Number(priority)) ? Math.min(5, Math.max(1, Number(priority))) : 3;
   try {
     const headers = {

@@ -327,6 +327,45 @@ try {
     require.cache[libPath].exports = realLib;
   });
 
+  await section('[12] non-ASCII titles are downgraded so Node fetch can send them', async () => {
+    capture();
+    process.env.NTFY_TOPIC = TOPIC;
+    process.env.NTFY_TOKEN = TOKEN;
+    stubFetch(async () => jsonResponse(200, '{}'));
+    await sendNtfyNotification({
+      title: 'New order ZSH-TEST — EGP 865',
+      message: 'طلب جديد\nJacket x1',
+      tags: 'شحن,bell',
+      priority: 4,
+    });
+    const headers = calls[0].init.headers;
+    eq(headers.Title, 'New order ZSH-TEST - EGP 865', 'em dash is replaced in the Title');
+    eq(headers.Tags, ',bell', 'non-ASCII tag characters are stripped');
+    for (const [name, value] of Object.entries(headers)) {
+      ok(!/[^\x20-\x7E]/.test(String(value)), `${name} header is printable ASCII`);
+    }
+    eq(calls[0].init.body, 'طلب جديد\nJacket x1', 'UTF-8 body is preserved');
+    ok(logs.length === 0, 'no failure logged for an ASCII-safe title');
+  });
+
+  await section('[13] calling Node fetch with a non-ASCII header would throw (root-cause lock)', async () => {
+    // Documents the defect fixed in headerSafe: undici rejects code points > 255
+    // in header values before the request is sent, so the em dash in
+    // "New order ... — EGP ..." made every placement push fail silently.
+    let threw = false;
+    global.fetch = realFetch;
+    try {
+      await fetch('http://127.0.0.1:9/never-sent', {
+        method: 'POST',
+        headers: { Title: 'New order ZSH-TEST \u2014 EGP 865' },
+        body: 'x',
+      });
+    } catch (e) {
+      threw = /ByteString/i.test(String(e && e.message));
+    }
+    ok(threw, 'Node fetch rejects non-ASCII header values');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) {
     for (const f of failures) console.log(`  · ${f}`);
