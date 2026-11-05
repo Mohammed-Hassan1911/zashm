@@ -1290,19 +1290,35 @@ function waNumber(v) {
   return d;
 }
 
-async function sendTelegramNotification(messageText) {
+async function sendTelegramNotification(messageText, options = {}) {
   const token = env('TELEGRAM_BOT_TOKEN');
   const chatId = env('TELEGRAM_CHAT_ID');
   if (!token || !chatId) {
     console.warn('Telegram notification skipped: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not configured');
     return false;
   }
-  const clean = messageText.replace(/→/g, ':').replace(/_/g, '');
-  const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  // Normal order messages keep the existing Markdown mode. The failure alert
+  // contains customer-controlled text, so it opts into plain text (null) to
+  // remove any Markdown/link injection surface.
+  const parseMode = options.parseMode === undefined ? 'Markdown' : options.parseMode;
+  const text = parseMode === 'Markdown'
+    ? messageText.replace(/→/g, ':').replace(/_/g, '')
+    : messageText;
+  const body = { chat_id: chatId, text };
+  if (parseMode) body.parse_mode = parseMode;
+  const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: clean, parse_mode: 'Markdown' }),
-  });
+    body: JSON.stringify(body),
+  };
+  // Normal order notifications keep their existing unbounded behaviour. The
+  // failure alert passes a timeout so a hung Telegram API cannot delay the
+  // customer's error response for the full serverless limit.
+  const timeoutMs = Number(options.timeoutMs);
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    init.signal = AbortSignal.timeout(timeoutMs);
+  }
+  const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, init);
   return resp.ok;
 }
 
@@ -1322,7 +1338,9 @@ const BARK_PUSH_URL = 'https://api.day.app/push';
 const BARK_GROUP = 'zashm-orders';
 const BARK_SOUND = 'minuet'; // pleasant built-in; no critical alerts, no repeat ring
 const BARK_TIMEOUT_MS = 8000;
-const BARK_SEPARATOR = '━'.repeat(14);
+// A failed order is answered with an error while both alerts are in flight, so
+// this path uses a tighter bound than the normal (post-commit) notification.
+const FAILURE_ALERT_TIMEOUT_MS = 5000;
 
 // APNs allows 4096 bytes for the whole payload. Keep the body well below it so
 // the title, subtitle, id, group, sound, url and JSON envelope always fit.
@@ -1330,24 +1348,32 @@ const BARK_BODY_MAX_BYTES = 2800;
 const BARK_TITLE_MAX_BYTES = 200;
 const BARK_SUBTITLE_MAX_BYTES = 200;
 
-// Keep the item list short enough to scan on an iPhone; the rest is summarised.
-const BARK_MAX_ITEMS = 5;
+// Keep the item list complete for the common order; pathological carts fall
+// back to "+N more" so the notification always fits the APNs budget.
+const BARK_MAX_ITEMS = 10;
 
-// Cash on Delivery is the only payment method checkout offers. There is no
-// payment_method column in `orders`; keep this in sync with
-// src/pages/CartPage.js if card payments ever go live (and persist it then).
-const BARK_PAYMENT_METHOD = 'Cash on Delivery';
-
-/** Status → title styling and the badge used inside the body. Unknown statuses
- * fall back to a neutral package icon so a future status never breaks a push. */
+/** Status → Arabic title + status line. The body is deliberately written like
+ * the Telegram message so the owner can forward it to the customer and confirm
+ * the order. Unknown statuses fall back to a neutral package icon and label so
+ * a future status never breaks a push. */
 const BARK_STATUS_STYLE = {
-  Pending: { emoji: '🛍️', label: 'New Order', badge: '🟡' },
-  Confirmed: { emoji: '🟢', label: 'Order Confirmed', badge: '🟢' },
-  Processing: { emoji: '⚙️', label: 'Order Processing', badge: '⚙️' },
-  Shipped: { emoji: '🚚', label: 'Order Shipped', badge: '🚚' },
-  Delivered: { emoji: '✅', label: 'Order Delivered', badge: '✅' },
-  Cancelled: { emoji: '🚫', label: 'Order Cancelled', badge: '🚫' },
-  Deleted: { emoji: '🔴', label: 'Order Deleted', badge: '🔴' },
+  Pending: { emoji: '🛍️', label: 'طلب جديد', line: 'قيد المراجعة' },
+  Confirmed: { emoji: '🟢', label: 'تم تأكيد الطلب', line: 'تم تأكيد الطلب' },
+  Processing: { emoji: '⚙️', label: 'جاري تجهيز الطلب', line: 'قيد التجهيز' },
+  Shipped: { emoji: '🚚', label: 'تم شحن الطلب', line: 'تم الشحن' },
+  Delivered: { emoji: '✅', label: 'تم توصيل الطلب', line: 'تم التوصيل' },
+  Cancelled: { emoji: '🚫', label: 'تم إلغاء الطلب', line: 'ملغي' },
+  Deleted: { emoji: '🔴', label: 'تم حذف الطلب', line: 'محذوف' },
+  Failed: { emoji: '⚠️', label: 'طلب لم يُحفظ', line: 'لم يُحفظ في قاعدة البيانات' },
+};
+
+// Arabic reason shown in the failure alert. The raw database error is never
+// sent (and never logged): the owner only needs to know which step failed.
+const ORDER_FAILURE_REASONS = {
+  product_lookup: 'تعذر قراءة بيانات المنتجات من قاعدة البيانات',
+  coupon_lookup: 'تعذر التحقق من كود الخصم',
+  save_failed: 'تعذر حفظ الأوردر في قاعدة البيانات',
+  unexpected: 'خطأ غير متوقع في السيرفر',
 };
 
 /** UTF-8 size of a string (APNs limits are bytes, not characters). */
@@ -1434,35 +1460,128 @@ function barkDateText(createdAt, fallbackDate) {
   return dateOnly;
 }
 
-/** One line per item: name · variant — qty × unit = subtotal, capped at
- * BARK_MAX_ITEMS with an explicit "+N more items" summary. */
+/** One line per item, in the same shape as the Telegram message:
+ * "• Silk Abaya (M / Black) × 1 — EGP 1,300". The price is the server-computed
+ * line total. Missing product data (a failed database read) still produces a
+ * readable line instead of dropping the item. */
 function barkItemLines(items, limit) {
   const list = Array.isArray(items) ? items : [];
   const shown = list.slice(0, Math.max(0, limit));
   const lines = [];
   for (const item of shown) {
     if (!item || typeof item !== 'object') continue;
-    const name = barkSafeText(item.name, 50) || 'Item';
+    const name = barkSafeText(item.name, 70) || `منتج #${Math.max(0, Math.trunc(Number(item.productId) || 0))}`;
     const variant = [barkSafeText(item.size, 18), barkSafeText(item.color, 18)]
       .filter(Boolean)
       .join(' / ');
     const qty = Math.max(1, Math.min(999, Math.trunc(Number(item.qty) || 1)));
-    let unit = Number(item.unitPrice);
     const lineTotal = Number(item.price);
-    if (!Number.isFinite(unit)) {
-      unit = Number.isFinite(lineTotal) ? lineTotal / qty : NaN;
-    }
-    const total = Number.isFinite(lineTotal) ? lineTotal : unit * qty;
-    const amounts = Number.isFinite(unit) && Number.isFinite(total)
-      ? `${qty} × ${barkMoney(unit)} = ${barkMoney(total)}`
-      : `${qty} ×`;
-    lines.push(`• ${name}${variant ? ` · ${variant}` : ''} — ${amounts}`);
+    const amount = Number.isFinite(lineTotal) ? ` — ${barkMoney(lineTotal)}` : '';
+    lines.push(`• ${name}${variant ? ` (${variant})` : ''} × ${qty}${amount}`);
   }
   const hidden = list.length - shown.length;
   if (hidden > 0) {
     lines.push(`• +${hidden} more item${hidden === 1 ? '' : 's'}`);
   }
   return lines;
+}
+
+/** Plain-text order message, mirroring buildOrderTelegramMessage field by field.
+ *
+ * Telegram renders Markdown; Bark is plain text. Keeping both shapes identical
+ * means the owner can long-press the Bark notification, copy it, and send it to
+ * the customer as-is to confirm the order. Every customer-controlled value is
+ * sanitized so it cannot forge an extra line.
+ */
+function buildOrderPlainMessage(order = {}, trackingUrl, itemLimit = BARK_MAX_ITEMS) {
+  const rawStatus = barkSafeText(order.status, 40);
+  const style = Object.prototype.hasOwnProperty.call(BARK_STATUS_STYLE, rawStatus)
+    ? BARK_STATUS_STYLE[rawStatus]
+    : { emoji: '📦', label: 'تحديث الطلب', line: rawStatus || 'قيد المراجعة' };
+  const orderId = barkSafeText(order.id, 48);
+  const nameText = barkSafeText(order.customer, 60);
+  const phoneText = barkSafeText(order.phone, 24);
+  const phoneAltText = barkSafeText(order.phoneAlt, 24);
+  const emailText = barkSafeText(order.email, 120);
+  const cityText = barkSafeText(order.city, 40);
+  const addressText = barkSafeText(order.address, 220);
+  const notesText = barkSafeText(order.notes, 260);
+  const discountCodeText = barkSafeText(order.discountCode, 30);
+  const itemsText = barkItemLines(order.items, itemLimit).join('\n');
+  const shipping = Number(order.shippingCost);
+  const discount = Number(order.discount);
+  const subtotal = Number(order.subtotal);
+  const total = Number(order.total);
+  const money = (value) => (Number.isFinite(value) ? barkMoney(value) : '');
+
+  const lines = [];
+  lines.push(`ZASHM | ${style.label}`);
+  lines.push(`📌 حالة الطلب: ${style.line}`);
+  if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
+  lines.push('');
+
+  const customerLines = [];
+  if (nameText) customerLines.push(`• الاسم: ${nameText}`);
+  if (phoneText) {
+    const wa = waNumber(phoneText);
+    customerLines.push(`• الهاتف: ${phoneText}${wa ? ` — واتساب: https://wa.me/${wa}` : ''}`);
+  }
+  if (phoneAltText) customerLines.push(`• هاتف بديل: ${phoneAltText}`);
+  if (emailText) customerLines.push(`• الإيميل: ${emailText}`);
+  if (customerLines.length) {
+    lines.push('👤 بيانات العميل');
+    lines.push(...customerLines);
+    lines.push('');
+  }
+
+  const addressLines = [];
+  if (cityText) addressLines.push(`• المدينة: ${cityText}`);
+  if (addressText) addressLines.push(`• العنوان: ${addressText}`);
+  if (notesText) addressLines.push(`• ملاحظات: ${notesText}`);
+  if (addressLines.length) {
+    lines.push('📍 عنوان الشحن');
+    lines.push(...addressLines);
+    lines.push('');
+  }
+
+  if (itemsText) {
+    lines.push('🛍️ المنتجات');
+    lines.push(itemsText);
+    lines.push('');
+  }
+
+  const summaryLines = [];
+  const subtotalText = money(subtotal);
+  const shippingText = money(shipping);
+  const discountText = money(discount);
+  const totalText = money(total);
+  if (subtotalText) summaryLines.push(`• المجموع الفرعي: ${subtotalText}`);
+  if (shippingText && shipping > 0) summaryLines.push(`• الشحن: ${shippingText}`);
+  if (discountCodeText) summaryLines.push(`• كود الخصم: ${discountCodeText}`);
+  if (discountText && discount > 0) summaryLines.push(`• قيمة الخصم: ${discountText}`);
+  if (totalText) summaryLines.push(`• الإجمالي: ${totalText}`);
+  if (summaryLines.length) {
+    lines.push('💰 ملخص الحساب');
+    lines.push(...summaryLines);
+    lines.push('');
+  }
+
+  const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
+  if (track) {
+    lines.push('🚚 تتبع الطلب');
+    lines.push(track.slice(0, 300));
+    lines.push('');
+  }
+
+  if (rawStatus === 'Deleted') {
+    lines.push('🚫 تم حذف هذا الأوردر من ZASHM.');
+  } else if (rawStatus === 'Cancelled') {
+    lines.push('🚫 تم إلغاء هذا الأوردر.');
+  } else {
+    lines.push('💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.');
+  }
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /**
@@ -1473,76 +1592,80 @@ function barkItemLines(items, limit) {
  * each status change, deletion) must reuse the exact same id. `group` only
  * organizes notifications — it does not replace anything.
  *
- * Every event carries the full order picture (customer, delivery address and
- * items) so the replacement notification never loses detail. All values are
- * sanitized and size-capped before they reach the payload.
+ * Delivery behaviour is status-aware:
+ *   * Pending (a new order)  → active + sound: it is the one alert the owner
+ *     must not miss.
+ *   * Every later status     → passive, no sound: the same notification is
+ *     replaced silently, so the owner never gets a second ring (or a stack of
+ *     notifications) when an order moves through the lifecycle.
+ *   * Failed                  → active + sound: the order did NOT reach the
+ *     database and needs manual follow-up.
+ *
+ * The body mirrors the Telegram message so it can be forwarded to the customer
+ * to confirm the order. All values are sanitized and size-capped first.
  */
 function buildOrderBarkNotification({
   id,
   total,
+  subtotal,
+  shippingCost,
+  discount,
+  discountCode,
   city,
   status = 'Pending',
   customer,
   phone,
+  phoneAlt,
+  email,
   address,
+  notes,
   items,
   createdAt,
   date,
+  tracking_url,
+  trackingUrl,
 } = {}) {
   const safeId = String(id == null ? '' : id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || 'unknown';
   const rawStatus = String(status == null ? '' : status).trim();
   const style = Object.prototype.hasOwnProperty.call(BARK_STATUS_STYLE, rawStatus)
     ? BARK_STATUS_STYLE[rawStatus]
-    : { emoji: '📦', label: 'Order Updated', badge: '📦' };
-  const statusText = rawStatus.replace(/[^A-Za-z ]/g, '').trim().slice(0, 30) || 'Pending';
+    : { emoji: '📦', label: 'تحديث الطلب', line: rawStatus.slice(0, 40) || 'قيد المراجعة' };
 
   const nameText = barkSafeText(customer, 60);
-  const phoneText = barkSafeText(phone, 24);
-  const cityText = barkSafeText(city, 40);
-  const addressText = barkSafeText(address, 140);
-  const placeText = [addressText, cityText].filter(Boolean).join(', ');
-  const whenText = barkDateText(createdAt, date);
   const totalText = barkMoney(total);
-  const itemCount = Array.isArray(items) ? items.length : 0;
 
-  const metaParts = [];
-  if (whenText) metaParts.push(`🕒 ${whenText}`);
-  metaParts.push(`💳 ${BARK_PAYMENT_METHOD}`);
-  const metaLine = whenText || nameText || placeText || itemCount ? metaParts.join(' · ') : '';
-  const statusLine = `${style.badge} Status: ${statusText}`;
-  const totalLine = totalText ? `💰 Total ${totalText}` : '';
-  const footer = statusText === 'Deleted'
-    ? 'The order was removed from ZASHM.'
-    : 'Tap to review the order.';
+  const silent = rawStatus !== 'Pending' && rawStatus !== 'Failed';
 
-  const render = (itemLimit) => {
-    const customerBlock = [];
-    if (nameText) customerBlock.push(`👤 ${nameText}`);
-    if (phoneText) customerBlock.push(`📞 ${phoneText}`);
-    if (placeText) customerBlock.push(`📍 ${placeText}`);
-
-    const itemLines = barkItemLines(items, itemLimit);
-    const itemBlock = itemLines.length ? [`🛍️ Items (${itemCount})`, ...itemLines] : [];
-
-    const headerBlock = [];
-    if (metaLine) headerBlock.push(metaLine);
-    headerBlock.push(statusLine);
-
-    const sections = [
-      headerBlock,
-      customerBlock,
-      itemBlock,
-      totalLine ? [totalLine] : [],
-    ].filter((section) => section.length > 0);
-
-    return `${sections.map((section) => section.join('\n')).join(`\n${BARK_SEPARATOR}\n`)}\n${footer}`;
-  };
+  const render = (limit) => buildOrderPlainMessage(
+    {
+      id,
+      status: rawStatus,
+      customer,
+      phone,
+      phoneAlt,
+      email,
+      address,
+      city,
+      notes,
+      items,
+      subtotal,
+      shippingCost,
+      discount,
+      discountCode,
+      total,
+      createdAt,
+      date,
+      tracking_url: tracking_url || trackingUrl,
+    },
+    tracking_url || trackingUrl,
+    limit
+  );
 
   // Field caps already keep normal orders far below the limit; this loop is the
   // hard guarantee for pathological item lists, then a final byte clamp.
   let itemLimit = BARK_MAX_ITEMS;
   let body = render(itemLimit);
-  while (barkByteLength(body) > BARK_BODY_MAX_BYTES && itemLimit > 0) {
+  while (barkByteLength(body) > BARK_BODY_MAX_BYTES && itemLimit > 1) {
     itemLimit -= 1;
     body = render(itemLimit);
   }
@@ -1550,7 +1673,7 @@ function buildOrderBarkNotification({
     body = `${barkClampBytes(body, BARK_BODY_MAX_BYTES - 1)}…`;
   }
 
-  const title = barkClampBytes(`${style.emoji} ${style.label} · #${safeId}`, BARK_TITLE_MAX_BYTES);
+  const title = barkClampBytes(`${style.emoji} ZASHM | ${style.label} · #${safeId}`, BARK_TITLE_MAX_BYTES);
   const subtitle = barkClampBytes(
     [totalText, nameText].filter(Boolean).join(' · '),
     BARK_SUBTITLE_MAX_BYTES
@@ -1562,11 +1685,12 @@ function buildOrderBarkNotification({
     subtitle,
     body,
     group: BARK_GROUP,
-    sound: BARK_SOUND,
-    level: 'active',
+    sound: silent ? '' : BARK_SOUND,
+    level: silent ? 'passive' : 'active',
     url: `${PUBLIC_BASE_URL().replace(/\/+$/, '')}/admin?tab=orders`,
   };
 }
+
 
 /** Same id for the whole lifecycle — exported so call sites and tests share
  * one definition instead of hand-building the string three times. */
@@ -1575,7 +1699,7 @@ function barkOrderNotificationId(orderId) {
   return `zashm-order-${safeId}`;
 }
 
-async function sendBarkNotification({ title, subtitle, body, id, group, sound, level, url } = {}) {
+async function sendBarkNotification({ title, subtitle, body, id, group, sound, level, url, timeoutMs } = {}) {
   const deviceKey = env('BARK_DEVICE_KEY');
   if (!deviceKey) {
     // Optional channel — warn once per invocation so a missing env var is never
@@ -1589,9 +1713,12 @@ async function sendBarkNotification({ title, subtitle, body, id, group, sound, l
     title: barkClampBytes(String(title || 'ZASHM'), BARK_TITLE_MAX_BYTES),
     body: barkClampBytes(String(body || ''), BARK_BODY_MAX_BYTES),
     group: String(group || BARK_GROUP).slice(0, 64),
-    sound: String(sound || BARK_SOUND).slice(0, 64),
     level: String(level || 'active').slice(0, 20),
   };
+  // An empty sound means "silent" (status updates). Omitting the field entirely
+  // is what makes Bark deliver the replacement quietly instead of ringing again.
+  const soundText = barkClampBytes(String(sound == null ? '' : sound).trim(), 64);
+  if (soundText) payload.sound = soundText;
   const subtitleText = barkClampBytes(String(subtitle || ''), BARK_SUBTITLE_MAX_BYTES).trim();
   if (subtitleText) payload.subtitle = subtitleText;
   // Bark requires the replacement id to be a JSON string (numbers don't work).
@@ -1599,12 +1726,15 @@ async function sendBarkNotification({ title, subtitle, body, id, group, sound, l
   if (url) payload.url = String(url).slice(0, 500);
 
   try {
+    const boundedTimeout = Number(timeoutMs);
     const resp = await fetch(BARK_PUSH_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify(payload),
       // A hung Bark server must never hold the order request open.
-      signal: AbortSignal.timeout(BARK_TIMEOUT_MS),
+      signal: AbortSignal.timeout(
+        Number.isFinite(boundedTimeout) && boundedTimeout > 0 ? boundedTimeout : BARK_TIMEOUT_MS
+      ),
     });
 
     let data = null;
@@ -1629,6 +1759,152 @@ async function sendBarkNotification({ title, subtitle, body, id, group, sound, l
     console.error('Bark push failed:', 'network', (e && e.name) || 'Error');
     return false;
   }
+}
+
+/** Human-readable reference for a failed order attempt. It deliberately never
+ * contains the customer's phone/name (the id is stored by Bark and appears in
+ * logs on the device), only a timestamp and random suffix so two attempts in
+ * the same second cannot collide. */
+function newFailureReference() {
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+  return `FAILED-${stamp}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+}
+
+/** Plain-text failure alert sent to Telegram and Bark when an order could not
+ * be stored. It carries whatever data is already available: after a product or
+ * coupon read failure the item names/prices are unknown, but the customer's
+ * contact details (already validated) are always present so the owner can call
+ * them and take the order manually. */
+function buildOrderFailureMessage({
+  reference,
+  reason,
+  orderId,
+  customer,
+  items,
+  subtotal,
+  shippingCost,
+  discount,
+  discountCode,
+  total,
+  createdAt,
+} = {}) {
+  const ref = barkSafeText(reference, 48) || 'FAILED';
+  const attemptId = barkSafeText(orderId, 48);
+  const reasonText = ORDER_FAILURE_REASONS[String(reason || '')] || ORDER_FAILURE_REASONS.unexpected;
+  const nameText = barkSafeText(customer && customer.name, 60);
+  const phoneText = barkSafeText(customer && customer.phone, 24);
+  const phoneAltText = barkSafeText(customer && customer.phoneAlt, 24);
+  const emailText = barkSafeText(customer && customer.email, 120);
+  const cityText = barkSafeText(customer && customer.city, 40);
+  const addressText = barkSafeText(customer && customer.address, 220);
+  const notesText = barkSafeText(customer && customer.notes, 260);
+  const discountCodeText = barkSafeText(discountCode, 30);
+  const whenText = barkDateText(createdAt);
+  const shipping = Number(shippingCost);
+  const discountAmount = Number(discount);
+  const subtotalAmount = Number(subtotal);
+  const totalAmount = Number(total);
+  const money = (value) => (Number.isFinite(value) ? barkMoney(value) : '');
+
+  const lines = [];
+  lines.push('⚠️ ZASHM | تنبيه: الأوردر لم يُحفظ');
+  lines.push(`🔖 المرجع: ${ref}`);
+  if (attemptId) lines.push(`• رقم المحاولة: ${attemptId}`);
+  if (whenText) lines.push(`🕒 الوقت: ${whenText}`);
+  lines.push(`📌 السبب: ${reasonText}`);
+  lines.push('');
+
+  const customerLines = [];
+  if (nameText) customerLines.push(`• الاسم: ${nameText}`);
+  if (phoneText) {
+    const wa = waNumber(phoneText);
+    customerLines.push(`• الهاتف: ${phoneText}${wa ? ` — واتساب: https://wa.me/${wa}` : ''}`);
+  }
+  if (phoneAltText) customerLines.push(`• هاتف بديل: ${phoneAltText}`);
+  if (emailText) customerLines.push(`• الإيميل: ${emailText}`);
+  if (customerLines.length) {
+    lines.push('👤 بيانات العميل');
+    lines.push(...customerLines);
+    lines.push('');
+  }
+
+  const addressLines = [];
+  if (cityText) addressLines.push(`• المدينة: ${cityText}`);
+  if (addressText) addressLines.push(`• العنوان: ${addressText}`);
+  if (notesText) addressLines.push(`• ملاحظات: ${notesText}`);
+  if (addressLines.length) {
+    lines.push('📍 عنوان الشحن');
+    lines.push(...addressLines);
+    lines.push('');
+  }
+
+  const itemLines = barkItemLines(items, BARK_MAX_ITEMS);
+  if (itemLines.length) {
+    lines.push('🛍️ المنتجات');
+    lines.push(...itemLines);
+    lines.push('');
+  }
+
+  const summaryLines = [];
+  const subtotalText = money(subtotalAmount);
+  const shippingText = money(shipping);
+  const discountText = money(discountAmount);
+  const totalText = money(totalAmount);
+  if (subtotalText) summaryLines.push(`• المجموع الفرعي: ${subtotalText}`);
+  if (shippingText && shipping > 0) summaryLines.push(`• الشحن: ${shippingText}`);
+  if (discountCodeText) summaryLines.push(`• كود الخصم: ${discountCodeText}`);
+  if (discountText && discountAmount > 0) summaryLines.push(`• قيمة الخصم: ${discountText}`);
+  if (totalText) summaryLines.push(`• الإجمالي: ${totalText}`);
+  if (summaryLines.length) {
+    lines.push('💰 ملخص الحساب');
+    lines.push(...summaryLines);
+    lines.push('');
+  }
+
+  lines.push('⚠️ الأوردر لم يصل إلى قاعدة البيانات. تواصل مع العميل يدويًا لتأكيد الطلب.');
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Bark version of the failure alert: separate id (FAILED-…) so it can never
+ * replace a real order notification, and active + sound because a lost order is
+ * exactly the event the owner must not miss. */
+function buildOrderFailureBarkNotification(context = {}) {
+  const reference = barkSafeText(context.reference, 48) || 'FAILED';
+  const body = barkClampBytes(
+    buildOrderFailureMessage({ ...context, reference }),
+    BARK_BODY_MAX_BYTES
+  );
+  const nameText = barkSafeText(context.customer && context.customer.name, 60);
+  const totalText = barkMoney(context.total);
+  return {
+    id: barkOrderNotificationId(reference),
+    title: barkClampBytes(`⚠️ ZASHM | طلب لم يُحفظ · #${reference}`, BARK_TITLE_MAX_BYTES),
+    subtitle: barkClampBytes([totalText, nameText].filter(Boolean).join(' · '), BARK_SUBTITLE_MAX_BYTES),
+    body,
+    group: BARK_GROUP,
+    sound: BARK_SOUND,
+    level: 'active',
+    url: `${PUBLIC_BASE_URL().replace(/\/+$/, '')}/admin?tab=orders`,
+  };
+}
+
+/** Send the failure alert to both channels at once. One slow/down channel can
+ * never stop the other, and the caller never sees an exception: this path runs
+ * while the customer is waiting for an error response. */
+async function sendOrderFailureAlert(context = {}) {
+  const reference = context.reference || newFailureReference();
+  const message = buildOrderFailureMessage({ ...context, reference });
+  const bark = buildOrderFailureBarkNotification({ ...context, reference });
+  const [telegram, push] = await Promise.allSettled([
+    sendTelegramNotification(message, { timeoutMs: FAILURE_ALERT_TIMEOUT_MS, parseMode: null }),
+    sendBarkNotification({ ...bark, timeoutMs: FAILURE_ALERT_TIMEOUT_MS }),
+  ]);
+  return {
+    reference,
+    telegram: telegram.status === 'fulfilled' && telegram.value === true,
+    bark: push.status === 'fulfilled' && push.value === true,
+  };
 }
 
 function buildOrderTelegramMessage(order, trackingUrl) {
@@ -1923,7 +2199,12 @@ module.exports = {
   maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  buildOrderPlainMessage,
   buildOrderBarkNotification,
+  buildOrderFailureMessage,
+  buildOrderFailureBarkNotification,
+  sendOrderFailureAlert,
+  newFailureReference,
   barkOrderNotificationId,
   sendBarkNotification,
   detectImageType,

@@ -13,6 +13,7 @@ const {
   ORDER_STATUSES,
   parseOrderRow,
   trackingUrlFor,
+  getShippingCost,
   sendBarkNotification,
   buildOrderBarkNotification,
 } = require('../_lib');
@@ -147,14 +148,11 @@ async function updateOrder(req, res) {
       try {
         const full = parseOrderRow(order) || order;
         const payload = buildOrderBarkNotification({
-          id,
-          total: full.total,
-          city: full.city,
+          ...full,
+          id: full.id || id,
           status: newStatus,
-          customer: full.customer,
-          phone: full.phone,
-          address: full.address,
-          items: full.items,
+          shippingCost: full.shippingCost != null ? full.shippingCost : getShippingCost(full.city),
+          tracking_url: full.tracking_url || trackingUrlFor(full.id || id),
           createdAt: full.timestamps && full.timestamps.created,
           date: full.date,
         });
@@ -244,14 +242,11 @@ async function deleteOrder(req, res) {
     try {
       const full = existing || {};
       const payload = buildOrderBarkNotification({
-        id,
+        ...full,
+        id: full.id || id,
         status: 'Deleted',
-        total: full.total,
-        city: full.city,
-        customer: full.customer,
-        phone: full.phone,
-        address: full.address,
-        items: full.items,
+        shippingCost: full.shippingCost != null ? full.shippingCost : getShippingCost(full.city),
+        tracking_url: full.tracking_url || trackingUrlFor(full.id || id),
         createdAt: full.timestamps && full.timestamps.created,
         date: full.date,
       });

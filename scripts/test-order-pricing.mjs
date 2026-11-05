@@ -63,6 +63,11 @@ function makeDb() {
     raceBarrier: 0,
     raceWaiters: [],
     raceGate: null,
+    // Failure injection for the notification-fallback tests.
+    failProducts: false,
+    failCoupons: false,
+    failRpc: false,
+    rpcThrow: false,
   };
 
   function seed({
@@ -80,6 +85,10 @@ function makeDb() {
     state.raceBarrier = 0;
     state.raceWaiters = [];
     state.raceGate = null;
+    state.failProducts = false;
+    state.failCoupons = false;
+    state.failRpc = false;
+    state.rpcThrow = false;
     state.products.set(1, {
       id: 1,
       name: 'Test Piece',
@@ -123,6 +132,9 @@ function makeDb() {
         order() { return q; },
         async maybeSingle() {
           await sleep(1);
+          if (table === 'coupons' && state.failCoupons) {
+            return { data: null, error: { message: 'database unavailable', code: 'XX000' } };
+          }
           let rows = [];
           if (table === 'products') rows = [...state.products.values()];
           if (table === 'coupons') rows = [...state.coupons.values()];
@@ -136,6 +148,9 @@ function makeDb() {
           const run = (async () => {
             await sleep(1);
             if (table === 'products') {
+              if (state.failProducts) {
+                return { data: null, error: { message: 'database unavailable', code: 'XX000' } };
+              }
               const rows = [...state.products.values()]
                 .filter((p) => !q._ids || q._ids.includes(Number(p.id)));
               return { data: JSON.parse(JSON.stringify(rows)), error: null };
@@ -150,8 +165,12 @@ function makeDb() {
 
     async rpc(name, args) {
       state.rpcCalls.push({ name, args });
+      if (state.rpcThrow) throw new Error('database connection lost');
       if (name !== 'atomic_place_order') {
         return { data: { ok: false, reason: 'unexpected_rpc' }, error: null };
+      }
+      if (state.failRpc) {
+        return { data: null, error: { message: 'database unavailable' } };
       }
       if (state.rpcResult) return { data: state.rpcResult, error: null };
 
@@ -601,6 +620,170 @@ console.log('\n[10] idempotency race: same key + same cart + coupon');
   eq(state.coupons.get('SAVE10').usageCount, 1, 'the retry did not consume the coupon twice');
   eq(state.products.get(1).stock, 8, 'stock was decremented exactly once');
   eq(state.ordersByKey.size, 1, 'only one order row exists for the key');
+}
+
+// ─── [11] DB failure: both channels get a manual-follow-up alert ────────────
+const realFetch = global.fetch;
+const realError = console.error;
+let notifyCalls = [];
+
+function captureNotifications() {
+  notifyCalls = [];
+  global.fetch = async (url, init) => {
+    notifyCalls.push({ url: String(url), init });
+    if (String(url).includes('api.day.app')) {
+      return { ok: true, status: 200, json: async () => ({ code: 200, message: 'success' }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  };
+}
+function releaseNotifications() {
+  global.fetch = realFetch;
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  delete process.env.TELEGRAM_CHAT_ID;
+  delete process.env.BARK_DEVICE_KEY;
+}
+function notificationsTo(fragment) {
+  return notifyCalls.filter((call) => call.url.includes(fragment));
+}
+function barkWire() {
+  const call = notificationsTo('api.day.app')[0];
+  return call ? JSON.parse(call.init.body) : null;
+}
+function telegramText() {
+  const call = notificationsTo('api.telegram.org')[0];
+  return call ? JSON.parse(call.init.body).text : '';
+}
+
+function startAlerts() {
+  captureNotifications();
+  console.error = () => {};
+  process.env.TELEGRAM_BOT_TOKEN = '123456:TEST_TELEGRAM_TOKEN';
+  process.env.TELEGRAM_CHAT_ID = '99887766';
+  process.env.BARK_DEVICE_KEY = 'bark_TEST_DEVICE_KEY_0123456789';
+}
+
+console.log('\n[11] database failure: Telegram + Bark fallback alert');
+{
+  seed();
+  state.failProducts = true;
+  startAlerts();
+  try {
+    const r = await place();
+    eq(r.status, 500, 'product read failure returns 500');
+    eq(notificationsTo('api.telegram.org').length, 1, 'Telegram receives the fallback alert');
+    eq(notificationsTo('api.day.app').length, 1, 'Bark receives the fallback alert');
+
+    const bark = barkWire();
+    eq(bark.level, 'active', 'failure push is active');
+    eq(bark.sound, 'minuet', 'failure push rings');
+    ok(bark.id.startsWith('zashm-order-FAILED-'), 'failure uses its own notification id');
+    ok(bark.title.includes('طلب لم يُحفظ'), 'Bark title announces the failure');
+    ok(bark.body.includes('Test Shopper'), 'customer name is included');
+    ok(bark.body.includes('01012345678'), 'phone is included (manual follow-up)');
+    ok(bark.body.includes('تعذر قراءة بيانات المنتجات'), 'reason is the product read');
+    ok(bark.body.includes('منتج #1'), 'cart line survives without a product name');
+    ok(!bark.body.includes('رقم المحاولة'), 'no attempt id exists before the RPC');
+    ok(bark.body.includes('تواصل مع العميل يدويًا'), 'owner is told to follow up manually');
+
+    const tg = telegramText();
+    ok(tg.includes('FAILED-'), 'Telegram carries the reference');
+    ok(tg.includes('Test Shopper'), 'Telegram carries the customer');
+    ok(tg.includes('01012345678'), 'Telegram carries the phone');
+    ok(tg.includes('تعذر قراءة بيانات المنتجات'), 'Telegram carries the reason');
+  } finally {
+    releaseNotifications();
+    console.error = realError;
+  }
+}
+
+// ─── [12] coupon read failure is a DB failure too ──────────────────────────
+console.log('\n[12] coupon read failure still alerts both channels');
+{
+  seed({ coupon: couponRow() });
+  state.failCoupons = true;
+  startAlerts();
+  try {
+    const r = await place({ coupon: 'SAVE10' });
+    eq(r.status, 500, 'coupon read failure returns 500');
+    eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
+    eq(notificationsTo('api.day.app').length, 1, 'Bark alert');
+    ok(barkWire().body.includes('تعذر التحقق من كود الخصم'), 'coupon reason is explicit');
+    ok(barkWire().body.includes('Test Piece'), 'known products are still listed');
+  } finally {
+    releaseNotifications();
+    console.error = realError;
+  }
+}
+
+// ─── [13] RPC failure keeps the server-computed order detail ───────────────
+console.log('\n[13] atomic_place_order failure keeps prices in the alert');
+{
+  seed();
+  state.failRpc = true;
+  startAlerts();
+  try {
+    const r = await place();
+    eq(r.status, 500, 'RPC error returns 500');
+    eq(notificationsTo('api.day.app').length, 1, 'Bark alert');
+    eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
+    const bark = barkWire();
+    ok(bark.body.includes('Test Piece'), 'item name is included');
+    ok(bark.body.includes('الإجمالي: EGP 265'), 'server total is included');
+    ok(bark.body.includes('تعذر حفظ الأوردر'), 'save reason is explicit');
+    ok(bark.body.includes('رقم المحاولة: ZSH-'), 'attempt id is included for reconciliation');
+  } finally {
+    releaseNotifications();
+    console.error = realError;
+  }
+}
+
+// ─── [14] unexpected throw also alerts (only before the commit) ─────────────
+console.log('\n[14] unexpected server error alerts before the commit');
+{
+  seed();
+  state.rpcThrow = true;
+  startAlerts();
+  try {
+    const r = await place();
+    eq(r.status, 500, 'unexpected error returns 500');
+    eq(notificationsTo('api.day.app').length, 1, 'Bark alert');
+    eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
+    ok(barkWire().body.includes('خطأ غير متوقع'), 'unexpected reason is explicit');
+  } finally {
+    releaseNotifications();
+    console.error = realError;
+  }
+}
+
+// ─── [15] business refusals stay silent; success notifies normally ─────────
+console.log('\n[15] normal refusals stay silent, successful orders notify normally');
+{
+  seed({ active: false });
+  captureNotifications();
+  try {
+    const r = await place();
+    eq(r.status, 422, 'inactive product is a business refusal');
+    eq(notifyCalls.length, 0, 'no failure alert for a business refusal');
+  } finally {
+    global.fetch = realFetch;
+  }
+
+  seed();
+  startAlerts();
+  try {
+    const r = await place();
+    eq(r.status, 200, 'order succeeds');
+    eq(notifyCalls.length, 2, 'one Telegram + one Bark notification');
+    const bark = barkWire();
+    eq(bark.level, 'active', 'the first notification is active');
+    eq(bark.sound, 'minuet', 'the first notification rings');
+    ok(bark.title.includes('طلب جديد'), 'it is the new-order notification');
+    ok(!bark.body.includes('لم يُحفظ'), 'no failure wording on a stored order');
+    ok(telegramText().includes('Test Shopper'), 'Telegram still sends the normal order message');
+  } finally {
+    releaseNotifications();
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

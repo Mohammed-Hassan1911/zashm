@@ -17,6 +17,8 @@ const {
   buildOrderTelegramMessage,
   buildOrderBarkNotification,
   sendBarkNotification,
+  sendOrderFailureAlert,
+  newFailureReference,
   trackingUrlFor,
   verifyTrackToken,
   EGYPT_PHONE_RE,
@@ -68,14 +70,51 @@ async function placeOrder(req, res) {
   }
 
   const { items, customer } = validated;
-  const sb = supabaseAdmin();
+
+  // Everything needed to alert the owner if the order cannot be stored. It is
+  // filled in as the request progresses (server-computed prices replace the
+  // cart-only view as soon as they are known). `orderStored` prevents a false
+  // "not saved" alert if a later step throws after the database commit.
+  let orderStored = false;
+  let sb;
+  const failureSnapshot = {
+    customer,
+    items: items.map((item) => ({
+      productId: item.productId,
+      name: '',
+      size: item.size,
+      color: item.color,
+      qty: item.qty,
+    })),
+    subtotal: null,
+    shippingCost: null,
+    discount: 0,
+    discountCode: '',
+    total: null,
+    orderId: '',
+    createdAt: new Date().toISOString(),
+  };
+  const alertFailure = async (reason) => {
+    try {
+      await sendOrderFailureAlert({
+        reference: newFailureReference(),
+        reason,
+        ...failureSnapshot,
+      });
+    } catch (e) {
+      // Notification failures must never change the response the customer gets.
+      console.error('Order failure alert failed:', e && e.message);
+    }
+  };
 
   try {
+    sb = supabaseAdmin();
     // 1. Load authoritative product data (prices, stock) from the database.
     const ids = [...new Set(items.map((i) => i.productId))];
     const { data: products, error: prodErr } = await sb.from('products').select('*').in('id', ids);
     if (prodErr) {
       console.error('Order product lookup failed:', prodErr.message);
+      await alertFailure('product_lookup');
       return json(res, 500, { success: false, error: 'Could not load products' });
     }
     const productMap = new Map((products || []).map((p) => [Number(p.id), p]));
@@ -248,6 +287,8 @@ async function placeOrder(req, res) {
 
     // 3. Server-side totals: DB prices + quantities + coupon + shipping.
     const subtotal = orderItems.reduce((s, i) => s + i.price, 0);
+    failureSnapshot.items = orderItems;
+    failureSnapshot.subtotal = subtotal;
 
     let couponRow = null;
     let discount = 0;
@@ -261,6 +302,7 @@ async function placeOrder(req, res) {
         .maybeSingle();
       if (couponErr) {
         console.error('Order coupon lookup failed:', couponErr.code || 'unknown');
+        await alertFailure('coupon_lookup');
         return json(res, 500, { success: false, error: 'Could not validate the discount code. Please try again.' });
       }
       // The customer asked for a discount, so never silently charge full price.
@@ -281,9 +323,14 @@ async function placeOrder(req, res) {
 
     const shippingCost = getShippingCost(customer.city);
     const total = Math.max(0, subtotal + shippingCost - discount);
+    failureSnapshot.shippingCost = shippingCost;
+    failureSnapshot.discount = discount;
+    failureSnapshot.discountCode = couponCode;
+    failureSnapshot.total = total;
 
     // 4. Create the order row (items/timestamps as jsonb for the atomic RPC).
     const orderId = generateOrderId();
+    failureSnapshot.orderId = orderId;
     const trackingUrl = trackingUrlFor(orderId);
     const orderDate = clampClientDate(body.customer && body.customer.date);
     const timestamps = { created: new Date().toISOString() };
@@ -318,6 +365,7 @@ async function placeOrder(req, res) {
     });
     if (rpcErr) {
       console.error('atomic_place_order failed:', rpcErr.message);
+      await alertFailure('save_failed');
       return json(res, 500, { success: false, error: 'Could not save the order. Please try again.' });
     }
     const r = Array.isArray(rpcData) ? (rpcData[0] || {}) : (rpcData || {});
@@ -432,7 +480,11 @@ async function placeOrder(req, res) {
         const msg = 'This discount code is no longer available. Please remove it and try again.';
         return json(res, 422, { success: false, error: msg, errors: [msg] });
       }
-      return json(res, 422, { success: false, error: 'Could not place the order. Please review your bag and try again.' });
+      // An unknown reason is a server/database fault, not a business refusal:
+      // alert the owner and let the client retry instead of blaming the bag.
+      console.error('atomic_place_order returned an unknown reason');
+      await alertFailure('save_failed');
+      return json(res, 500, { success: false, error: 'Could not save the order. Please try again.' });
     }
 
     // 4c. Idempotent retry: this checkout already committed. Return the stored
@@ -449,12 +501,14 @@ async function placeOrder(req, res) {
       }
       const dupOrder = parseOrderRow(existing);
       dupOrder.shippingCost = getShippingCost(dupOrder.city);
+      orderStored = true;
       return json(res, 200, { success: true, duplicate: true, order: dupOrder });
     }
 
     // 5. Coupon usage counters are incremented atomically INSIDE
     //    atomic_place_order (same transaction as the INSERT/stock decrement), so
     //    there is no separate read-modify-write here to race or lose updates.
+    orderStored = true;
 
     // 6. Telegram notification (server secret; failure never blocks the order).
     try {
@@ -469,19 +523,17 @@ async function placeOrder(req, res) {
 
     // Bark (iOS) push — fire-and-forget, independent of Telegram. The same
     // notification id is reused for every lifecycle event so iOS replaces it
-    // instead of stacking, and every replacement carries the full order.
+    // instead of stacking, and every replacement carries the full order. This
+    // first one is the only audible alert; later status changes are passive.
     try {
       const payload = buildOrderBarkNotification({
-        id: orderRow.id,
-        total: orderRow.total,
-        city: orderRow.city,
-        status: 'Pending',
-        customer: orderRow.customer,
-        phone: orderRow.phone,
-        address: orderRow.address,
+        ...orderRow,
         items: orderItems,
+        shippingCost,
+        tracking_url: trackingUrl,
         createdAt: timestamps.created,
         date: orderRow.date,
+        status: 'Pending',
       });
       await sendBarkNotification(payload);
     } catch (e) {
@@ -495,6 +547,7 @@ async function placeOrder(req, res) {
     return json(res, 200, { success: true, order });
   } catch (err) {
     console.error('Place order error:', err && err.message);
+    if (!orderStored) await alertFailure('unexpected');
     return json(res, 500, { success: false, error: 'Order failed. Please try again.' });
   }
 }

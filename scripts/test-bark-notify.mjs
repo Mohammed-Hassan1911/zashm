@@ -4,8 +4,12 @@
 //   * POST https://api.day.app/push with a JSON body, key only in the body;
 //   * one stable notification id per order for every lifecycle event, so Bark
 //     replaces the notification instead of stacking a new one;
-//   * the redesigned notification: full order, customer, delivery and item
-//     detail on every event (including Deleted), 5-item cap with "+N more";
+//   * the body mirrors the Telegram message (Arabic, plain text) so the owner
+//     can forward it to the customer and confirm the order;
+//   * a new order is the only audible alert; later status changes replace the
+//     same notification silently (passive, no sound);
+//   * a failed database write sends a separate FAILED-… alert to both Bark and
+//     Telegram (active + sound) with whatever customer data is available;
 //   * every customer-provided value is sanitized and size-capped;
 //   * customer detail is never written to the logs;
 //   * Bark failures never throw and never leak the device key;
@@ -44,9 +48,18 @@ async function section(name, fn) {
 
 // ─── load the real module (no network) ──────────────────────────────────────
 const lib = require('../api/_lib.js');
-const { sendBarkNotification, buildOrderBarkNotification, barkOrderNotificationId } = lib;
+const {
+  sendBarkNotification,
+  buildOrderBarkNotification,
+  buildOrderFailureBarkNotification,
+  sendOrderFailureAlert,
+  barkOrderNotificationId,
+  newFailureReference,
+} = lib;
 
 const DEVICE_KEY = 'bark_DEVICEKEY_SECRET_0123456789abcdef';
+const TELEGRAM_TOKEN = '123456:TEST_TELEGRAM_TOKEN';
+const TELEGRAM_CHAT = '99887766';
 const realFetch = global.fetch;
 const realError = console.error;
 const realWarn = console.warn;
@@ -56,7 +69,7 @@ let calls = [];
 
 function stubFetch(impl) {
   global.fetch = async (url, init) => {
-    calls.push({ url, init });
+    calls.push({ url: String(url), init });
     return impl(url, init);
   };
 }
@@ -80,12 +93,25 @@ function restore() {
   console.error = realError;
   console.warn = realWarn;
   delete process.env.BARK_DEVICE_KEY;
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  delete process.env.TELEGRAM_CHAT_ID;
 }
 const sentBody = () => JSON.parse(calls[0].init.body);
 const bytes = (value) => Buffer.byteLength(String(value), 'utf8');
+const callsTo = (fragment) => calls.filter((call) => call.url.includes(fragment));
+const telegramBody = () => {
+  const call = callsTo('api.telegram.org');
+  return call.length ? JSON.parse(call[0].init.body) : null;
+};
+
+const TRACKING_URL = 'https://za-shm.vercel.app/?track=ZSH-MW30TEST-ABC123&tk=v1.1762344900000.abcdefabcdefabcdefabcdefabcdef12';
 
 const ORDER = {
   id: 'ZSH-MW30TEST-ABC123',
+  subtotal: 1800,
+  shippingCost: 65,
+  discount: 0,
+  discountCode: null,
   total: 1865,
   city: 'Cairo',
   status: 'Pending',
@@ -94,6 +120,7 @@ const ORDER = {
   address: '12 Nile Street, Zamalek, Apt 4',
   createdAt: '2026-11-05T12:15:00.000Z', // 14:15 in Cairo (UTC+2)
   date: '2026-11-05',
+  tracking_url: TRACKING_URL,
   items: [
     { name: 'Silk Abaya', size: 'M', color: 'Black', qty: 1, unitPrice: 1300, price: 1300 },
     { name: 'Leather Belt', size: '85', color: 'Tan', qty: 2, unitPrice: 250, price: 500 },
@@ -102,32 +129,61 @@ const ORDER = {
 
 const sample = buildOrderBarkNotification(ORDER);
 
-const SEP = '━'.repeat(14);
 const LIFECYCLE = [
-  ['Pending', '🛍️', 'New Order', '🟡'],
-  ['Confirmed', '🟢', 'Order Confirmed', '🟢'],
-  ['Processing', '⚙️', 'Order Processing', '⚙️'],
-  ['Shipped', '🚚', 'Order Shipped', '🚚'],
-  ['Delivered', '✅', 'Order Delivered', '✅'],
-  ['Cancelled', '🚫', 'Order Cancelled', '🚫'],
-  ['Deleted', '🔴', 'Order Deleted', '🔴'],
+  ['Pending', '🛍️', 'طلب جديد', 'قيد المراجعة', 'active', 'minuet'],
+  ['Confirmed', '🟢', 'تم تأكيد الطلب', 'تم تأكيد الطلب', 'passive', ''],
+  ['Processing', '⚙️', 'جاري تجهيز الطلب', 'قيد التجهيز', 'passive', ''],
+  ['Shipped', '🚚', 'تم شحن الطلب', 'تم الشحن', 'passive', ''],
+  ['Delivered', '✅', 'تم توصيل الطلب', 'تم التوصيل', 'passive', ''],
+  ['Cancelled', '🚫', 'تم إلغاء الطلب', 'ملغي', 'passive', ''],
+  ['Deleted', '🔴', 'تم حذف الطلب', 'محذوف', 'passive', ''],
 ];
 
 const EXPECTED_NEW_ORDER_BODY = [
-  '🕒 05 Nov 2026, 2:15 PM · 💳 Cash on Delivery',
-  '🟡 Status: Pending',
-  SEP,
-  '👤 Fatima Ahmed',
-  '📞 01012345678',
-  '📍 12 Nile Street, Zamalek, Apt 4, Cairo',
-  SEP,
-  '🛍️ Items (2)',
-  '• Silk Abaya · M / Black — 1 × EGP 1,300 = EGP 1,300',
-  '• Leather Belt · 85 / Tan — 2 × EGP 250 = EGP 500',
-  SEP,
-  '💰 Total EGP 1,865',
-  'Tap to review the order.',
+  'ZASHM | طلب جديد',
+  '📌 حالة الطلب: قيد المراجعة',
+  '• رقم الطلب: ZSH-MW30TEST-ABC123',
+  '',
+  '👤 بيانات العميل',
+  '• الاسم: Fatima Ahmed',
+  '• الهاتف: 01012345678 — واتساب: https://wa.me/201012345678',
+  '',
+  '📍 عنوان الشحن',
+  '• المدينة: Cairo',
+  '• العنوان: 12 Nile Street, Zamalek, Apt 4',
+  '',
+  '🛍️ المنتجات',
+  '• Silk Abaya (M / Black) × 1 — EGP 1,300',
+  '• Leather Belt (85 / Tan) × 2 — EGP 500',
+  '',
+  '💰 ملخص الحساب',
+  '• المجموع الفرعي: EGP 1,800',
+  '• الشحن: EGP 65',
+  '• الإجمالي: EGP 1,865',
+  '',
+  '🚚 تتبع الطلب',
+  TRACKING_URL,
+  '',
+  '💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.',
 ].join('\n');
+
+const FAILURE = {
+  reference: 'FAILED-20261106-153000-AB12',
+  reason: 'save_failed',
+  customer: {
+    name: 'Fatima Ahmed',
+    phone: '01012345678',
+    address: '12 Nile Street, Zamalek, Apt 4',
+    city: 'Cairo',
+    notes: 'Deliver after 8pm',
+  },
+  items: [{ name: 'Silk Abaya', size: 'M', color: 'Black', qty: 1, price: 1300 }],
+  subtotal: 1800,
+  shippingCost: 65,
+  discount: 0,
+  total: 1865,
+  createdAt: '2026-11-05T12:15:00.000Z',
+};
 
 try {
   console.log('Bark notification channel');
@@ -155,8 +211,8 @@ try {
     eq(body.id, 'zashm-order-ZSH-MW30TEST-ABC123', 'stable notification id');
     eq(typeof body.id, 'string', 'id is a JSON string (Bark requirement)');
     eq(body.group, 'zashm-orders', 'consistent notification group');
-    eq(body.sound, 'minuet', 'pleasant built-in sound');
-    eq(body.level, 'active', 'active level — never a critical alert');
+    eq(body.sound, 'minuet', 'a new order rings once');
+    eq(body.level, 'active', 'a new order is an active alert');
     ok(!body.call, 'no repeating ringtone');
     ok(body.url.endsWith('/admin?tab=orders'), 'tap opens the admin orders view');
     eq(Object.keys(body).sort(),
@@ -224,8 +280,8 @@ try {
     ok(!warnings[0].includes(DEVICE_KEY), 'no key in the warning');
   });
 
-  await section('[6] NEW ORDER carries the full order, customer, delivery and item details', async () => {
-    eq(sample.title, '🛍️ New Order · #ZSH-MW30TEST-ABC123', 'title prioritises the order number');
+  await section('[6] NEW ORDER is a forwardable copy of the Telegram message', async () => {
+    eq(sample.title, '🛍️ ZASHM | طلب جديد · #ZSH-MW30TEST-ABC123', 'title prioritises the order number');
     eq(sample.subtitle, 'EGP 1,865 · Fatima Ahmed', 'subtitle prioritises total + customer');
     eq(sample.body, EXPECTED_NEW_ORDER_BODY, 'exact NEW ORDER body');
     eq(sample.id, 'zashm-order-ZSH-MW30TEST-ABC123', 'stable id');
@@ -234,53 +290,75 @@ try {
     eq(sample.level, 'active', 'level');
 
     for (const fragment of [
-      '05 Nov 2026, 2:15 PM',
-      '💳 Cash on Delivery',
-      'Status: Pending',
-      '👤 Fatima Ahmed',
-      '📞 01012345678',
-      '📍 12 Nile Street, Zamalek, Apt 4, Cairo',
-      '🛍️ Items (2)',
-      '• Silk Abaya · M / Black — 1 × EGP 1,300 = EGP 1,300',
-      '• Leather Belt · 85 / Tan — 2 × EGP 250 = EGP 500',
-      '💰 Total EGP 1,865',
+      'بيانات العميل',
+      'الاسم: Fatima Ahmed',
+      'الهاتف: 01012345678',
+      'واتساب: https://wa.me/201012345678',
+      'عنوان الشحن',
+      'المدينة: Cairo',
+      'العنوان: 12 Nile Street, Zamalek, Apt 4',
+      'المنتجات',
+      'Silk Abaya (M / Black) × 1 — EGP 1,300',
+      'Leather Belt (85 / Tan) × 2 — EGP 500',
+      'المجموع الفرعي: EGP 1,800',
+      'الشحن: EGP 65',
+      'الإجمالي: EGP 1,865',
+      'تتبع الطلب',
+      TRACKING_URL,
+      'رقم الطلب: ZSH-MW30TEST-ABC123',
+      'حابين نأكد مع حضرتك الأوردر',
     ]) {
       ok(sample.body.includes(fragment), `body contains ${fragment}`);
     }
-    eq(sample.body.split(SEP).length - 1, 3, 'three clean section separators');
-    eq(sample.body.split('\n').filter((line) => line.startsWith('💰 Total')).length, 1,
-      'exactly one total line');
+    // The same sections the Telegram builder renders.
+    const telegram = lib.buildOrderTelegramMessage({ ...ORDER, items: ORDER.items }, TRACKING_URL);
+    for (const fragment of ['الاسم', 'الهاتف', 'عنوان الشحن', 'المنتجات', 'ملخص الحساب', 'تتبع الطلب']) {
+      ok(telegram.includes(fragment), `Telegram still has ${fragment}`);
+      ok(sample.body.includes(fragment), `Bark mirrors ${fragment}`);
+    }
   });
 
-  await section('[7] every status replacement keeps the full detail', async () => {
-    for (const [status, emoji, label, badge] of LIFECYCLE) {
+  await section('[7] only a new order rings; every later status is a silent replacement', async () => {
+    for (const [status, emoji, label, statusLine, level, sound] of LIFECYCLE) {
       const payload = buildOrderBarkNotification({ ...ORDER, status });
 
-      eq(payload.title, `${emoji} ${label} · #ZSH-MW30TEST-ABC123`, `${status} title`);
+      eq(payload.title, `${emoji} ZASHM | ${label} · #ZSH-MW30TEST-ABC123`, `${status} title`);
       eq(payload.subtitle, 'EGP 1,865 · Fatima Ahmed', `${status} subtitle`);
-      ok(payload.body.includes(`${badge} Status: ${status}`), `${status} status line`);
+      eq(payload.level, level, `${status} level`);
+      eq(payload.sound, sound, `${status} sound`);
+      ok(payload.body.includes(`📌 حالة الطلب: ${statusLine}`), `${status} status line`);
 
       for (const fragment of [
-        '05 Nov 2026, 2:15 PM',
-        '💳 Cash on Delivery',
-        '👤 Fatima Ahmed',
-        '📞 01012345678',
-        '📍 12 Nile Street, Zamalek, Apt 4, Cairo',
-        '🛍️ Items (2)',
-        '• Silk Abaya · M / Black',
-        '• Leather Belt · 85 / Tan',
-        '💰 Total EGP 1,865',
+        '• الاسم: Fatima Ahmed',
+        '• الهاتف: 01012345678',
+        '• العنوان: 12 Nile Street, Zamalek, Apt 4',
+        '• Silk Abaya (M / Black) × 1 — EGP 1,300',
+        '• Leather Belt (85 / Tan) × 2 — EGP 500',
+        '• الإجمالي: EGP 1,865',
       ]) {
         ok(payload.body.includes(fragment), `${status} keeps ${fragment}`);
       }
 
       if (status === 'Deleted') {
-        ok(payload.body.endsWith('The order was removed from ZASHM.'), 'deleted footer');
-        ok(!payload.body.includes('Tap to review the order.'), 'deleted has no tap hint');
+        ok(payload.body.endsWith('تم حذف هذا الأوردر من ZASHM.'), 'deleted footer');
+        ok(!payload.body.includes('حابين نأكد'), 'deleted has no confirmation line');
+      } else if (status === 'Cancelled') {
+        ok(payload.body.endsWith('تم إلغاء هذا الأوردر.'), 'cancelled footer');
       } else {
-        ok(payload.body.endsWith('Tap to review the order.'), `${status} tap hint`);
+        ok(payload.body.endsWith('حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.'),
+          `${status} confirmation line`);
       }
     }
+
+    // The wire payload for a status update really is silent.
+    capture();
+    process.env.BARK_DEVICE_KEY = DEVICE_KEY;
+    stubFetch(async () => barkResponse(200, { code: 200 }));
+    await sendBarkNotification(buildOrderBarkNotification({ ...ORDER, status: 'Shipped' }));
+    const wire = sentBody();
+    eq(wire.level, 'passive', 'status update is passive');
+    ok(!('sound' in wire), 'status update omits sound entirely');
+    ok(!wire.call, 'no repeating ring');
   });
 
   await section('[8] one stable notification id for the whole order lifecycle', async () => {
@@ -297,6 +375,11 @@ try {
       'id is sanitized to safe characters');
     eq(barkOrderNotificationId(''), 'zashm-order-unknown', 'missing id degrades safely');
     eq(typeof barkOrderNotificationId(ORDER.id), 'string', 'id is always a string');
+
+    // The failure alert must never replace a real order notification.
+    const failure = buildOrderFailureBarkNotification(FAILURE);
+    eq(failure.id, 'zashm-order-FAILED-20261106-153000-AB12', 'failure uses its own id');
+    ok(failure.id !== buildOrderBarkNotification(ORDER).id, 'failure id cannot replace the order');
   });
 
   await section('[9] the item list is capped and the payload stays under the APNs budget', async () => {
@@ -310,16 +393,15 @@ try {
     }));
 
     const capped = buildOrderBarkNotification({ ...ORDER, items: manyItems });
-    ok(capped.body.includes('🛍️ Items (12)'), 'header keeps the real item count');
-    ok(capped.body.includes('• Item 5 '), 'fifth item is shown');
-    ok(!capped.body.includes('• Item 6 '), 'sixth item is not shown');
-    ok(capped.body.includes('• +7 more items'), 'remaining items are summarised');
-    eq(capped.body.split('\n').filter((line) => line.startsWith('• Item ')).length, 5,
-      'exactly five item lines');
+    ok(capped.body.includes('• Item 10 '), 'tenth item is shown');
+    ok(!capped.body.includes('• Item 11 '), 'eleventh item is not shown');
+    ok(capped.body.includes('• +2 more items'), 'remaining items are summarised');
+    eq(capped.body.split('\n').filter((line) => line.startsWith('• Item ')).length, 10,
+      'exactly ten item lines');
 
     const single = buildOrderBarkNotification({
       ...ORDER,
-      items: [...manyItems.slice(0, 5), manyItems[5]],
+      items: [...manyItems.slice(0, 10), manyItems[10]],
     });
     ok(single.body.includes('• +1 more item'), 'singular wording for one hidden item');
 
@@ -373,12 +455,13 @@ try {
     ok(!lines.includes('💰 Total EGP 1'), 'no forged total line from the customer name');
     ok(!lines.includes('👤 Fake Admin'), 'no forged customer line from the customer name');
     ok(!lines.includes('👤 Injected'), 'no forged line from the item name');
-    ok(lines.includes('👤 Eve 💰 Total EGP 1 👤 Fake Admin'), 'newlines are collapsed to spaces');
-    ok(lines.includes('📞 0101 2345678'), 'phone newline is collapsed');
-    ok(lines.includes('📍 12 Street 📍 Fake City, Cairo'), 'address newlines are collapsed');
+    ok(lines.includes('• الاسم: Eve 💰 Total EGP 1 👤 Fake Admin'), 'newlines are collapsed to spaces');
+    ok(lines.includes('• الهاتف: 0101 2345678 — واتساب: https://wa.me/201012345678'), 'phone newline is collapsed');
+    ok(lines.includes('• العنوان: 12 Street 📍 Fake City'), 'address newlines are collapsed');
+    ok(lines.includes('• المدينة: Cairo'), 'city line is present');
     ok(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u2028\u2029\u200B]/.test(hostile.body),
       'control and line-separator characters are removed');
-    eq(lines.filter((line) => line.startsWith('💰 Total ')).length, 1, 'only the real total remains');
+    eq(lines.filter((line) => line.startsWith('• الإجمالي: ')).length, 1, 'only the real total remains');
 
     // Absurdly long single fields are capped instead of pushed wholesale.
     const longName = 'A'.repeat(500);
@@ -389,7 +472,7 @@ try {
       address: longAddress,
     });
     ok(!capped.body.includes('A'.repeat(61)), 'customer name capped at 60 characters');
-    ok(!capped.body.includes('B'.repeat(141)), 'address capped at 140 characters');
+    ok(!capped.body.includes('B'.repeat(221)), 'address capped at 220 characters');
   });
 
   await section('[11] PII scope: included by design, never logged, no extras', async () => {
@@ -401,18 +484,14 @@ try {
     };
     const payload = buildOrderBarkNotification({ ...privateOrder, status: 'Shipped' });
 
-    // The approved design includes the operational fields the admin needs.
-    ok(payload.body.includes('Fatima Ahmed'), 'customer name is included');
-    ok(payload.body.includes('01012345678'), 'phone is included');
-    ok(payload.body.includes('12 Nile Street, Zamalek, Apt 4'), 'address is included');
-    ok(payload.body.includes('Silk Abaya'), 'items are included');
-
-    // These are intentionally never sent.
-    ok(!payload.body.includes(privateOrder.phoneAlt), 'alt phone is not included');
-    ok(!payload.body.includes(privateOrder.email), 'email is not included');
-    ok(!payload.body.includes('Deliver after 8pm'), 'notes are not included');
-    ok(!payload.body.includes('@'), 'no email address');
-    ok(!payload.body.includes('01177776666'), 'no alt phone');
+    // The body mirrors Telegram, so every operational field is included.
+    ok(payload.body.includes('• الاسم: Fatima Ahmed'), 'customer name is included');
+    ok(payload.body.includes('• الهاتف: 01012345678'), 'phone is included');
+    ok(payload.body.includes('• هاتف بديل: 01177776666'), 'alt phone is included');
+    ok(payload.body.includes('• الإيميل: fatima.secret@example.com'), 'email is included');
+    ok(payload.body.includes('• العنوان: 12 Nile Street, Zamalek, Apt 4'), 'address is included');
+    ok(payload.body.includes('• ملاحظات: Deliver after 8pm, ask for Fatima'), 'notes are included');
+    ok(payload.body.includes('• Silk Abaya (M / Black)'), 'items are included');
 
     capture();
     process.env.BARK_DEVICE_KEY = DEVICE_KEY;
@@ -423,12 +502,85 @@ try {
     const log = logs.join('\n');
     ok(!log.includes('Fatima'), 'name never logged');
     ok(!log.includes('01012345678'), 'phone never logged');
+    ok(!log.includes('01177776666'), 'alt phone never logged');
+    ok(!log.includes('fatima.secret@example.com'), 'email never logged');
     ok(!log.includes('12 Nile Street'), 'address never logged');
     ok(!log.includes('Silk Abaya'), 'item never logged');
     ok(!log.includes(DEVICE_KEY), 'key never logged');
   });
 
-  await section('[12] call sites, duplicate guard and Telegram safety (source lock)', async () => {
+  await section('[12] a failed order alerts BOTH Telegram and Bark', async () => {
+    capture();
+    process.env.BARK_DEVICE_KEY = DEVICE_KEY;
+    process.env.TELEGRAM_BOT_TOKEN = TELEGRAM_TOKEN;
+    process.env.TELEGRAM_CHAT_ID = TELEGRAM_CHAT;
+    stubFetch(async (url) => {
+      if (String(url).includes('api.day.app')) return barkResponse(200, { code: 200 });
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    });
+
+    const result = await sendOrderFailureAlert(FAILURE);
+
+    eq(result.reference, FAILURE.reference, 'the reference is preserved');
+    eq(result.telegram, true, 'Telegram accepted the alert');
+    eq(result.bark, true, 'Bark accepted the alert');
+    eq(calls.length, 2, 'exactly one request per channel');
+
+    const tg = telegramBody();
+    ok(tg, 'Telegram request exists');
+    ok(!('parse_mode' in tg), 'failure alert is plain text (no Markdown/link injection)');
+    ok(tg.text.includes('الأوردر لم يُحفظ'), 'Telegram says the order was not saved');
+    ok(tg.text.includes('FAILED-20261106-153000-AB12'), 'Telegram carries the reference');
+    ok(tg.text.includes('الاسم: Fatima Ahmed'), 'Telegram carries the customer name');
+    ok(tg.text.includes('الهاتف: 01012345678'), 'Telegram carries the phone');
+    ok(tg.text.includes('العنوان: 12 Nile Street'), 'Telegram carries the address');
+    ok(tg.text.includes('Silk Abaya'), 'Telegram carries the known items');
+    ok(tg.text.includes('الإجمالي: EGP 1,865'), 'Telegram carries the server total');
+    ok(tg.text.includes('تواصل مع العميل يدويًا'), 'Telegram tells the owner what to do');
+    ok(!tg.text.includes('fetch failed'), 'no raw error leaks into Telegram');
+
+    const bark = callsTo('api.day.app')[0];
+    const wire = JSON.parse(bark.init.body);
+    eq(wire.id, 'zashm-order-FAILED-20261106-153000-AB12', 'separate failure id');
+    eq(wire.level, 'active', 'failure alert is active');
+    eq(wire.sound, 'minuet', 'failure alert rings');
+    ok(wire.title.includes('طلب لم يُحفظ'), 'Bark title says the order was not saved');
+    ok(wire.body.includes('FAILED-20261106-153000-AB12'), 'Bark carries the reference');
+    ok(wire.body.includes('الاسم: Fatima Ahmed'), 'Bark carries the customer name');
+    ok(wire.body.includes('الهاتف: 01012345678'), 'Bark carries the phone');
+    ok(wire.body.includes('تواصل مع العميل يدويًا'), 'Bark tells the owner what to do');
+    ok(!wire.body.includes('fetch failed'), 'no raw error leaks into Bark');
+
+    // One channel being down must not stop the other.
+    capture();
+    process.env.BARK_DEVICE_KEY = DEVICE_KEY;
+    process.env.TELEGRAM_BOT_TOKEN = TELEGRAM_TOKEN;
+    process.env.TELEGRAM_CHAT_ID = TELEGRAM_CHAT;
+    stubFetch(async (url) => {
+      if (String(url).includes('api.day.app')) return barkResponse(500, { code: 500, message: 'down' });
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    });
+    const partial = await sendOrderFailureAlert(FAILURE);
+    eq(partial.telegram, true, 'Telegram still succeeds when Bark is down');
+    eq(partial.bark, false, 'Bark failure is reported, not thrown');
+  });
+
+  await section('[13] failure-alert metadata degrades safely without DB data', async () => {
+    const partial = buildOrderFailureBarkNotification({
+      reference: newFailureReference(),
+      reason: 'product_lookup',
+      customer: { name: 'Omar', phone: '01111111111', city: 'Giza', address: '6 Pyramids Road' },
+      items: [{ productId: 7, size: 'L', color: 'Red', qty: 2 }],
+    });
+    ok(partial.body.includes('تعذر قراءة بيانات المنتجات'), 'reason is mapped to Arabic');
+    ok(partial.body.includes('منتج #7'), 'unknown product still has a readable placeholder');
+    ok(partial.body.includes('× 2'), 'quantity survives');
+    ok(!partial.body.includes('الإجمالي:'), 'no invented total without server prices');
+    ok(partial.body.includes('تواصل مع العميل يدويًا'), 'manual follow-up instruction');
+    ok(/^FAILED-\d{14}-[A-F0-9]{4}$/.test(newFailureReference()), 'reference shape');
+  });
+
+  await section('[14] call sites: full order object, silent updates, failure paths', async () => {
     const orders = read('api/orders.js');
     const admin = read('api/admin/orders.js');
     const libSrc = read('api/_lib.js');
@@ -436,10 +588,9 @@ try {
     ok(orders.includes('buildOrderBarkNotification({'), 'placement uses the builder');
     ok(orders.includes('sendBarkNotification,'), 'placement imports the sender');
     ok(/sendBarkNotification\(payload\)/.test(orders), 'placement sends the built payload');
-    ok(orders.includes('customer: orderRow.customer'), 'placement passes the customer');
-    ok(orders.includes('phone: orderRow.phone'), 'placement passes the phone');
-    ok(orders.includes('address: orderRow.address'), 'placement passes the address');
+    ok(orders.includes('...orderRow'), 'placement passes the full order row');
     ok(orders.includes('items: orderItems'), 'placement passes the items');
+    ok(orders.includes('tracking_url: trackingUrl'), 'placement passes the tracking link');
     ok(orders.includes('createdAt: timestamps.created'), 'placement passes the order time');
     ok(orders.indexOf('sendTelegramNotification(message)') < orders.indexOf('buildOrderBarkNotification({'),
       'Telegram still sends first and is not replaced');
@@ -448,16 +599,31 @@ try {
     ok(admin.includes('buildOrderBarkNotification({'), 'admin status/delete use the builder');
     ok(admin.includes('status: newStatus'), 'status change reflects the new status');
     ok(admin.includes("status: 'Deleted'"), 'deletion uses the Deleted status');
-    ok(admin.includes('customer: full.customer'), 'status update passes the customer');
-    ok(admin.includes('items: full.items'), 'status update passes the items');
+    ok(admin.includes('...full'), 'status/delete pass the full order row');
+    ok(admin.includes('shippingCost:'), 'status/delete pass shipping');
+    ok(admin.includes('tracking_url:'), 'status/delete pass the tracking link');
     ok(admin.includes('parseOrderRow(row)'), 'deletion reads the order before removing it');
     ok(/if \(r\.changed !== false\) \{/.test(admin), 'idempotent retries do not re-notify');
     ok(admin.includes("console.error('Bark (status) failed:'"), 'status failure is contained');
     ok(admin.includes("console.error('Bark (delete) failed:'"), 'delete failure is contained');
 
-    // The Telegram message still carries the full customer detail.
-    ok(libSrc.includes("requireSecret('TELEGRAM_BOT_TOKEN')") ||
-      libSrc.includes('TELEGRAM_BOT_TOKEN'), 'Telegram configuration untouched');
+    // Failure fallback: every database-failure exit alerts; business refusals do not.
+    ok(orders.includes('sendOrderFailureAlert,'), 'placement imports the failure alert');
+    ok(orders.includes("alertFailure('product_lookup')"), 'product read failure alerts');
+    ok(orders.includes("alertFailure('coupon_lookup')"), 'coupon read failure alerts');
+    ok(orders.includes("alertFailure('save_failed')"), 'RPC failure alerts');
+    ok(orders.includes("alertFailure('unexpected')"), 'unexpected failure alerts');
+    ok(orders.includes('if (!orderStored) await alertFailure'), 'no false alert after a commit');
+    ok(orders.includes('orderStored = true'), 'the stored flag is set on success');
+    ok(/reason === 'unavailable'[\s\S]{0,900}?return json\(res, 422/.test(orders)
+      && !/reason === 'unavailable'[\s\S]{0,900}?alertFailure/.test(orders),
+      'stock refusal stays silent');
+    ok(/reason === 'coupon_unavailable'[\s\S]{0,300}?return json\(res, 422/.test(orders)
+      && !/reason === 'coupon_unavailable'[\s\S]{0,300}?alertFailure/.test(orders),
+      'coupon refusal stays silent');
+
+    // The Telegram order message still carries the full customer detail.
+    ok(libSrc.includes('TELEGRAM_BOT_TOKEN'), 'Telegram configuration untouched');
     ok(/function buildOrderTelegramMessage[\s\S]{0,4000}order\.customer/.test(libSrc),
       'Telegram still renders the customer name');
     ok(/function buildOrderTelegramMessage[\s\S]{0,4000}order\.phone/.test(libSrc),
@@ -466,7 +632,7 @@ try {
       'Telegram still renders the notes');
   });
 
-  await section('[13] ntfy is completely removed', async () => {
+  await section('[15] ntfy is completely removed', async () => {
     const offenders = [];
     for (const file of [
       'api/_lib.js', 'api/orders.js', 'api/admin/orders.js', 'api/admin/products.js',
@@ -485,10 +651,11 @@ try {
     eq(lib.ntfyConfigSummary, undefined, 'ntfyConfigSummary is not exported');
   });
 
-  await section('[14] a hung Bark server cannot hold the request open', async () => {
+  await section('[16] a hung Bark server cannot hold the request open', async () => {
     const src = read('api/_lib.js');
     ok(src.includes('const BARK_TIMEOUT_MS = 8000'), 'an explicit timeout constant exists');
-    ok(src.includes('signal: AbortSignal.timeout(BARK_TIMEOUT_MS)'), 'fetch is bounded by it');
+    ok(src.includes('const FAILURE_ALERT_TIMEOUT_MS = 5000'), 'the failure path has a tighter bound');
+    ok(/AbortSignal\.timeout\([\s\S]{0,160}BARK_TIMEOUT_MS/.test(src), 'fetch is bounded by it');
     ok(src.includes("const BARK_PUSH_URL = 'https://api.day.app/push'"), 'official endpoint is pinned');
   });
 } finally {
