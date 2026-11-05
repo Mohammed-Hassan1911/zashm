@@ -7,6 +7,7 @@ import StockFeedback from '../components/shop/StockFeedback';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
 import { filterGovernorates, getShippingCost, toCanonicalGovernorate } from '../lib/egyptCities';
 import { clearCheckoutIdempotencyKey, getCheckoutIdempotencyKey } from '../lib/orderIdempotency.mjs';
+import { buildCheckoutErrorNotice, focusCheckoutField } from '../lib/checkoutErrors.mjs';
 import { effectivePrice } from '../lib/pricing';
 import { clearOrderConfirmation, readOrderConfirmation, saveOrderConfirmation } from '../lib/orderConfirmation.mjs';
 
@@ -484,7 +485,24 @@ export function CheckoutPage() {
     }
 
     const errs = validateOrderFormCustom(form);
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    if (Object.keys(errs).length > 0) {
+      // The inline errors stay (they sit under the exact field), but the shopper
+      // may be scrolled away from the field they need to fix. One short notice
+      // names the first wrong field and its reason, lists any others, then takes
+      // the shopper straight to it.
+      setErrors(errs);
+      const notice = buildCheckoutErrorNotice(errs);
+      if (notice) {
+        toast(notice.message, 'error');
+        const focusField = () => focusCheckoutField(notice.id);
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(focusField);
+        } else {
+          focusField();
+        }
+      }
+      return;
+    }
 
     isPlacingOrder.current = true;
     setSubmitting(true);

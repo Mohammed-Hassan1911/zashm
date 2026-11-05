@@ -107,7 +107,7 @@ console.log('\n[3] cart quantity and remove controls have accessible names');
 
 const envDir = await mkdtemp(path.join(tmpdir(), 'zashm-ux-test-env-'));
 const dom = new JSDOM(
-  '<!doctype html><html><body><button id="opener">Shopping bag</button><div id="root"></div><div id="stock-root"></div></body></html>',
+  '<!doctype html><html><body><button id="opener">Shopping bag</button><div id="root"></div><div id="stock-root"></div><div id="toast-root"></div></body></html>',
   { url: 'http://localhost/' },
 );
 
@@ -188,6 +188,7 @@ function mocksPlugin() {
         import React from 'react';
         export const motion = new Proxy({}, { get: (_, tag) => React.forwardRef((props, ref) => React.createElement(String(tag), { ...props, ref })) });
         export function AnimatePresence({ children }) { return children; }
+        export function useReducedMotion() { return true; }
       `;
       return null;
     },
@@ -605,6 +606,110 @@ try {
       assert.ok(/productsLoadStatus === 'idle'|productsLoadStatus === 'loading'/.test(product),
         'only a settled load can produce "Product not found"');
     });
+  }
+
+  console.log('\n[7] a failed Place Order names the wrong field and its reason');
+  {
+    const { CHECKOUT_FIELDS, buildCheckoutErrorNotice, focusCheckoutField } =
+      await server.ssrLoadModule('/src/lib/checkoutErrors.mjs');
+
+    await step('fields are listed in the visual order of the form', () => {
+      assert.deepEqual(CHECKOUT_FIELDS.map((f) => f.key),
+        ['name', 'phone', 'phoneAlt', 'email', 'address', 'city']);
+      assert.deepEqual(CHECKOUT_FIELDS.map((f) => f.id),
+        ['checkout-name', 'checkout-phone', 'checkout-phone-alt', 'checkout-email',
+          'checkout-address', 'checkout-governorate'],
+        'each field points at the real input id');
+    });
+
+    await step('one wrong field is named with its own message', () => {
+      const notice = buildCheckoutErrorNotice({
+        phone: 'Invalid phone number. Must be 11 digits starting with 01.',
+      });
+      assert.deepEqual(notice, {
+        message: 'Phone Number: Invalid phone number. Must be 11 digits starting with 01.',
+        field: 'phone',
+        label: 'Phone Number',
+        id: 'checkout-phone',
+        alsoCheck: [],
+      });
+    });
+
+    await step('several wrong fields point at the first one and list the rest', () => {
+      const notice = buildCheckoutErrorNotice({
+        city: 'Please select your governorate from the list.',
+        name: 'Full name is required.',
+        address: 'Street address is required.',
+      });
+      assert.equal(notice.field, 'name', 'first field on the page leads');
+      assert.equal(notice.id, 'checkout-name');
+      assert.equal(notice.message,
+        'Full Name: Full name is required.\nAlso check: Street Address, Governorate.');
+      assert.deepEqual(notice.alsoCheck, ['Street Address', 'Governorate']);
+    });
+
+    await step('an empty or cleared form produces no notice', () => {
+      assert.equal(buildCheckoutErrorNotice({}), null);
+      assert.equal(buildCheckoutErrorNotice(null), null);
+      assert.equal(buildCheckoutErrorNotice({ name: '   ', city: null }), null,
+        'blank messages are ignored');
+    });
+
+    await step('focus moves to the named field even after scrolling', () => {
+      const input = document.createElement('input');
+      input.id = 'checkout-phone';
+      document.body.appendChild(input);
+      let scrolled = null;
+      let focusOptions = null;
+      input.scrollIntoView = (options) => { scrolled = options; };
+      const baseFocus = input.focus.bind(input);
+      input.focus = (options) => { focusOptions = options; baseFocus(); };
+
+      assert.equal(focusCheckoutField('checkout-phone'), true);
+      assert.equal(document.activeElement, input, 'the wrong field is focused');
+      assert.equal(focusOptions && focusOptions.preventScroll, true,
+        'focus must not undo the scroll');
+      assert.equal(scrolled && scrolled.block, 'center', 'the field is brought into view');
+      input.remove();
+      assert.equal(focusCheckoutField('checkout-missing'), false, 'missing ids fail safely');
+      assert.equal(focusCheckoutField(''), false, 'an empty id fails safely');
+    });
+
+    const cart = read('src/pages/CartPage.js');
+    await step('the form shows the notice, keeps inline errors and cannot be locked by a typo', () => {
+      const validationAt = cart.indexOf('const errs = validateOrderFormCustom(form);');
+      const noticeAt = cart.indexOf('buildCheckoutErrorNotice(errs)');
+      const toastAt = cart.indexOf("toast(notice.message, 'error')");
+      const focusAt = cart.indexOf('focusCheckoutField(notice.id)');
+      const lockAt = cart.indexOf('isPlacingOrder.current = true', validationAt);
+      assert.ok(validationAt >= 0, 'validation runs in handleOrder');
+      assert.ok(noticeAt > validationAt, 'the notice is built from the same errors');
+      assert.ok(toastAt > noticeAt, 'the notice is shown as an error toast');
+      assert.ok(focusAt > toastAt, 'the shopper is taken to the wrong field');
+      assert.ok(lockAt > focusAt, 'the submit lock is only taken after validation passes');
+      assert.ok(cart.includes('setErrors(errs)'), 'inline per-field errors are preserved');
+      assert.ok(cart.includes("aria-describedby={errors.name ? 'checkout-name-error'"),
+        'inline errors stay linked to their inputs');
+    });
+
+    const backToTop = await server.ssrLoadModule('/src/components/ui/BackToTop.js');
+    const toastRoot = createRoot(document.getElementById('toast-root'));
+    const notice = buildCheckoutErrorNotice({
+      phone: 'Invalid phone number. Must be 11 digits starting with 01.',
+      city: 'Please select your governorate from the list.',
+    });
+    await act(async () => toastRoot.render(React.createElement(backToTop.Toaster)));
+    await act(async () => { backToTop.toast(notice.message, 'error'); });
+
+    await step('the toast renders the two-line notice as an alert', () => {
+      const alert = document.querySelector('.zashm-toast[role="alert"]');
+      assert.ok(alert, 'the error toast renders with role="alert"');
+      const text = alert.textContent.replace(/\s+/g, ' ').trim();
+      assert.ok(text.includes('Phone Number: Invalid phone number.'), `field + reason, got "${text}"`);
+      assert.ok(text.includes('Also check: Governorate.'), `other fields are listed, got "${text}"`);
+    });
+
+    await act(async () => toastRoot.unmount());
   }
 } catch (error) {
   console.error('Fatal test harness error:', error);
