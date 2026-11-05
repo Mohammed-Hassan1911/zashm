@@ -1314,7 +1314,9 @@ async function sendTelegramNotification(messageText) {
 async function sendNtfyNotification({ title, message, tags, priority } = {}) {
   const topic = env('NTFY_TOPIC');
   if (!topic) {
-    // Not configured — silently skip (ntfy is optional).
+    // Not configured — optional channel, but say so once in the logs so a
+    // missing env var is never mistaken for a silent delivery failure.
+    console.warn('ntfy notification skipped: NTFY_TOPIC not configured');
     return false;
   }
   const server = (env('NTFY_SERVER') || 'https://ntfy.sh').replace(/\/+$/, '');
@@ -1337,13 +1339,32 @@ async function sendNtfyNotification({ title, message, tags, priority } = {}) {
       body: safeMessage,
     });
     if (!resp.ok) {
-      const errBody = await resp.text().catch(() => '');
-      console.error('ntfy notification failed:', resp.status, errBody.slice(0, 200));
+      // Surface non-2xx responses (401 bad token, 404 topic, 429 rate limit…)
+      // without ever leaking the topic/token or customer text. Success stays
+      // silent, failures are diagnosable in the function logs.
+      let snippet = '';
+      try {
+        snippet = String(await resp.text()).replace(/\s+/g, ' ').slice(0, 200);
+      } catch (e) {
+        /* body unavailable */
+      }
+      const redact = (s) => {
+        let out = String(s);
+        if (topic) out = out.split(topic).join('[topic]');
+        if (token) out = out.split(token).join('[token]');
+        return out;
+      };
+      console.error(
+        'ntfy notification failed:',
+        `HTTP ${resp.status}`,
+        redact(snippet)
+      );
       return false;
     }
     return true;
   } catch (e) {
-    console.error('ntfy notification failed:', e && e.message);
+    // Network/DNS/timeout — no secrets, no customer data in the message.
+    console.error('ntfy notification failed:', 'network', (e && e.name) || 'Error');
     return false;
   }
 }
