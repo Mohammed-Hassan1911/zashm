@@ -1511,7 +1511,11 @@ function buildOrderPlainMessage(order = {}, trackingUrl, itemLimit = BARK_MAX_IT
   const notesText = barkSafeText(order.notes, 260);
   const discountCodeText = barkSafeText(order.discountCode, 30);
   const itemsText = barkItemLines(order.items, itemLimit).join('\n');
-  const shipping = Number(order.shippingCost);
+  // shippingCost is not stored on the order row (it is derived from the city),
+  // so a message rebuilt from the database must derive it again.
+  const shipping = Number(
+    order.shippingCost != null ? order.shippingCost : getShippingCost(order.city)
+  );
   const discount = Number(order.discount);
   const subtotal = Number.isFinite(Number(order.subtotal)) ? Number(order.subtotal) : 0;
   const total = Number.isFinite(Number(order.total)) ? Number(order.total) : 0;

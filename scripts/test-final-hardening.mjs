@@ -292,6 +292,8 @@ console.log('\n[4] secure order tracking');
   ok(prefill.startsWith('ZASHM | '), 'prefilled text is the order message');
   ok(prefill.includes(`• رقم الطلب: ${orderId}`), 'prefilled text carries the order id');
   ok(prefill.includes('— واتساب'), 'WhatsApp hint is kept in the text');
+  ok(prefill.includes('• الشحن: EGP 65'),
+    'shipping is derived from the city when the row does not store it');
   ok(!prefill.includes('wa.me'), 'no WhatsApp link inside the prefilled text');
   ok(!prefill.includes('/admin'), 'no admin link inside the prefilled text');
   ok(!prefill.includes('/api/orders?'), 'no hand-off link inside the prefilled text');
