@@ -1680,6 +1680,10 @@ function buildOrderBarkNotification({
     // Same text without the wa.me URL: this is what "Copy" yields, so the
     // message pasted into WhatsApp to the customer stays clean.
     copy: stripWhatsAppLink(body),
+    // Auto-copy on the first notification only: iOS's native long-press Copy
+    // would also copy the title, subtitle and tap URL, so the clean text must
+    // be placed on the clipboard by Bark itself.
+    autoCopy: initial === true && rawStatus === 'Pending' ? '1' : '',
     group: BARK_GROUP,
     sound: silent ? '' : BARK_SOUND,
     level: silent ? 'passive' : 'active',
@@ -1695,7 +1699,7 @@ function barkOrderNotificationId(orderId) {
   return `zashm-order-${safeId}`;
 }
 
-async function sendBarkNotification({ title, subtitle, body, copy, id, group, sound, level, url, timeoutMs } = {}) {
+async function sendBarkNotification({ title, subtitle, body, copy, autoCopy, id, group, sound, level, url, timeoutMs } = {}) {
   const deviceKey = env('BARK_DEVICE_KEY');
   if (!deviceKey) {
     // Optional channel — warn once per invocation so a missing env var is never
@@ -1725,8 +1729,10 @@ async function sendBarkNotification({ title, subtitle, body, copy, id, group, so
   // when it actually differs and the whole payload still fits an APNs push.
   const copyText = barkClampBytes(String(copy == null ? '' : copy), BARK_BODY_MAX_BYTES).trim();
   if (copyText && copyText !== payload.body) {
-    const withCopy = { ...payload, copy: copyText };
+    const autoCopyFlag = String(autoCopy == null ? '' : autoCopy).trim() === '1';
+    const withCopy = autoCopyFlag ? { ...payload, autoCopy: '1', copy: copyText } : { ...payload, copy: copyText };
     if (barkByteLength(JSON.stringify(withCopy)) < BARK_PAYLOAD_MAX_BYTES) {
+      if (autoCopyFlag) payload.autoCopy = '1';
       payload.copy = copyText;
     }
   }

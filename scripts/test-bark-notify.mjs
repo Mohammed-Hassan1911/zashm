@@ -218,10 +218,11 @@ try {
     ok(!body.call, 'no repeating ringtone');
     ok(body.url.endsWith('/admin?tab=orders'), 'tap opens the admin orders view');
     eq(Object.keys(body).sort(),
-      ['body', 'copy', 'device_key', 'group', 'id', 'level', 'sound', 'subtitle', 'title', 'url'],
+      ['autoCopy', 'body', 'copy', 'device_key', 'group', 'id', 'level', 'sound', 'subtitle', 'title', 'url'],
       'only the expected fields are sent');
     eq(body.copy, sample.copy, 'copy payload is passed through');
     ok(!body.copy.includes('wa.me/'), 'copy payload has no WhatsApp link');
+    eq(body.autoCopy, '1', 'the first notification pre-fills the clipboard with the clean copy');
 
     eq(logs.length, 0, 'success logs nothing');
     eq(warnings.length, 0, 'success warns nothing');
@@ -417,6 +418,7 @@ try {
     const wire = sentBody();
     eq(wire.level, 'passive', 'status update is passive');
     ok(!('sound' in wire), 'status update omits sound entirely');
+    ok(!('autoCopy' in wire), 'status update never overwrites the clipboard');
     ok(!wire.call, 'no repeating ring');
 
     capture();
@@ -426,6 +428,7 @@ try {
     const backWire = sentBody();
     eq(backWire.level, 'passive', 'back-to-Pending wire is passive');
     ok(!('sound' in backWire), 'back-to-Pending sends no sound key');
+    ok(!('autoCopy' in backWire), 'back-to-Pending does not touch the clipboard');
     ok(!backWire.call, 'back-to-Pending does not ring');
   });
 
@@ -499,6 +502,7 @@ try {
     ok(bytes(JSON.stringify(wire)) < 4096, 'entire APNs payload fits in 4096 bytes');
     ok(bytes(wire.body) <= 2800, 'wire body is capped too');
     ok(!('copy' in wire), 'oversized payload drops the copy field instead of overflowing');
+    ok(!('autoCopy' in wire), 'oversized payload drops autoCopy too');
 
     // A normal order still carries the clean copy text.
     capture();
@@ -508,6 +512,7 @@ try {
     const normalWire = sentBody();
     ok(typeof normalWire.copy === 'string', 'normal payload includes copy');
     ok(!normalWire.copy.includes('wa.me'), 'copy has no WhatsApp link');
+    eq(normalWire.autoCopy, '1', 'normal payload auto-copies the clean text');
     ok(bytes(JSON.stringify(normalWire)) < 4096, 'normal payload fits too');
   });
 
@@ -701,6 +706,8 @@ try {
     ok(plainSrc.includes('— واتساب: https://wa.me/${wa}'), 'phone line links straight to WhatsApp');
     ok(libSrc.includes('function stripWhatsAppLink'), 'link stripping is centralised');
     ok(libSrc.includes('copy: stripWhatsAppLink(body)'), 'notification ships a link-free copy payload');
+    ok(libSrc.includes("autoCopy: initial === true && rawStatus === 'Pending' ? '1' : ''"),
+      'only the first notification auto-copies the clean text');
     ok(/function stripWhatsAppLink[\s\S]{0,400}\.replace\(\/ — واتساب:/.test(libSrc),
       'only the WhatsApp suffix is stripped, the hint stays');
     ok(plainSrc.includes('📌 حالة الطلب: ${style.line}'), 'status line is rendered in the body');
