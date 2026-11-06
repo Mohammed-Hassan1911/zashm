@@ -60,6 +60,8 @@ const {
 const DEVICE_KEY = 'bark_DEVICEKEY_SECRET_0123456789abcdef';
 const TELEGRAM_TOKEN = '123456:TEST_TELEGRAM_TOKEN';
 const TELEGRAM_CHAT = '99887766';
+// Needed so the WhatsApp hand-off link can be signed, exactly like production.
+process.env.SESSION_SECRET = 'test-session-secret-for-bark-notify-tests';
 const realFetch = global.fetch;
 const realError = console.error;
 const realWarn = console.warn;
@@ -130,6 +132,11 @@ const ORDER = {
 // `initial: true` is what the placement path passes; it is the only audible case.
 const sample = buildOrderBarkNotification({ ...ORDER, initial: true });
 
+// The WhatsApp hand-off link carries a freshly signed tracking token, so its
+// exact value changes per call. Everything else must match byte for byte.
+const WA_LINK_RE = /https:\/\/za-shm\.vercel\.app\/api\/orders\?track=ZSH-MW30TEST-ABC123&tk=v1\.\d{1,16}\.[0-9a-f]{32}&wa=1/;
+const normalizeWa = (text) => String(text).replace(WA_LINK_RE, 'WA_LINK');
+
 // Every lifecycle event WITHOUT `initial` — including a move back to Pending —
 // must be a silent replacement of the single existing notification.
 const LIFECYCLE = [
@@ -148,7 +155,7 @@ const EXPECTED_NEW_ORDER_BODY = [
   '',
   '👤 بيانات العميل',
   '• الاسم: Fatima Ahmed',
-  '• الهاتف: 01012345678 — واتساب: https://wa.me/201012345678',
+  '• الهاتف: 01012345678 — واتساب: WA_LINK',
   '📍 عنوان الشحن',
   '• المدينة: Cairo',
   '• العنوان: 12 Nile Street, Zamalek, Apt 4',
@@ -288,17 +295,18 @@ try {
   await section('[6] NEW ORDER is a forwardable copy of the Telegram message', async () => {
     eq(sample.title, '🛍️ ZASHM | طلب جديد · #ZSH-MW30TEST-ABC123', 'title prioritises the order number');
     eq(sample.subtitle, 'EGP 1,865 · Fatima Ahmed', 'subtitle prioritises total + customer');
-    eq(sample.body, EXPECTED_NEW_ORDER_BODY, 'exact NEW ORDER body');
+    eq(normalizeWa(sample.body), EXPECTED_NEW_ORDER_BODY, 'exact NEW ORDER body');
     eq(sample.id, 'zashm-order-ZSH-MW30TEST-ABC123', 'stable id');
     eq(sample.group, 'zashm-orders', 'group');
     eq(sample.sound, 'minuet', 'sound');
     eq(sample.level, 'active', 'level');
 
+    const bodyText = normalizeWa(sample.body);
     for (const fragment of [
       'بيانات العميل',
       'حالة الطلب: قيد المراجعة',
       'الاسم: Fatima Ahmed',
-      'الهاتف: 01012345678 — واتساب: https://wa.me/201012345678',
+      'الهاتف: 01012345678 — واتساب: WA_LINK',
       'عنوان الشحن',
       'المدينة: Cairo',
       'العنوان: 12 Nile Street, Zamalek, Apt 4',
@@ -313,54 +321,44 @@ try {
       'رقم الطلب: ZSH-MW30TEST-ABC123',
       'حابين نأكد مع حضرتك الأوردر',
     ]) {
-      ok(sample.body.includes(fragment), `body contains ${fragment}`);
+      ok(bodyText.includes(fragment), `body contains ${fragment}`);
     }
     // The same sections the Telegram builder renders.
     const telegram = lib.buildOrderTelegramMessage({ ...ORDER, items: ORDER.items }, TRACKING_URL);
     for (const fragment of ['الاسم', 'الهاتف', 'عنوان الشحن', 'المنتجات', 'ملخص الحساب', 'تتبع الطلب']) {
       ok(telegram.includes(fragment), `Telegram still has ${fragment}`);
-      ok(sample.body.includes(fragment), `Bark mirrors ${fragment}`);
+      ok(bodyText.includes(fragment), `Bark mirrors ${fragment}`);
     }
 
     // Line-for-line identical to Telegram once Markdown is unwrapped; the only
-    // intentional differences are the order id hyphens and the WhatsApp link,
-    // which only the notification body carries.
+    // intentional difference is that Bark keeps the hyphens in the order id.
     const telegramPlain = telegram
       .split('\n')
-      .map((line) => line.replace(/\*/g, '').replace(/\[واتساب\]\((https:\/\/wa\.me\/\d+)\)/, 'واتساب: $1'))
+      .map((line) => line.replace(/\*/g, '').replace(/\[واتساب\]\(https:\/\/wa\.me\/\d+\)/, 'واتساب'))
       .join('\n');
-    const barkLines = sample.body.split('\n');
+    const copyLines = sample.copy.split('\n');
     const tgLines = telegramPlain.split('\n');
-    eq(tgLines.length, barkLines.length, 'same number of lines as Telegram');
+    eq(tgLines.length, copyLines.length, 'same number of lines as Telegram');
     const differing = tgLines
-      .map((line, index) => (line === barkLines[index] ? null : { index, telegram: line, bark: barkLines[index] }))
+      .map((line, index) => (line === copyLines[index] ? null : { index, telegram: line, bark: copyLines[index] }))
       .filter(Boolean);
     eq(differing.length, 1, 'only one line differs from Telegram (the order id)');
     eq(differing[0].telegram, '• رقم الطلب: ZSHMW30TESTABC123', 'Telegram strips hyphens from the id');
     eq(differing[0].bark, '• رقم الطلب: ZSH-MW30TEST-ABC123', 'Bark keeps the real order id');
-    ok(sample.body.includes('📌 حالة الطلب: قيد المراجعة'), 'status line is present, like Telegram');
-    ok(sample.body.includes('واتساب: https://wa.me/201012345678'), 'phone line links straight to WhatsApp');
-    ok(/wa\.me\/\d+/.test(sample.body), 'the WhatsApp link is a real deep link');
 
-    // The copy payload is the message the owner forwards: no raw wa.me URL.
+    ok(sample.body.includes('📌 حالة الطلب: قيد المراجعة'), 'status line is present, like Telegram');
+    ok(WA_LINK_RE.test(sample.body), 'phone line hands off to the signed WhatsApp redirect');
+    ok(sample.body.split('\n').find((line) => line.includes('الهاتف'))
+      .endsWith('&wa=1'), 'hand-off link marks itself with wa=1');
+
+    // The copy payload is the message the owner forwards: no links at all.
     ok(!sample.copy.includes('wa.me'), 'copy payload has no WhatsApp link');
+    ok(!sample.copy.includes('/api/orders?'), 'copy payload has no hand-off link');
     ok(sample.copy.includes('• الهاتف: 01012345678 — واتساب'), 'copy payload keeps the WhatsApp hint');
-    const copyLines = sample.copy.split('\n');
-    eq(copyLines.length, barkLines.length, 'copy keeps the same line count as the notification');
-    const copyDiff = barkLines
-      .map((line, index) => (line === copyLines[index] ? null : index))
-      .filter((index) => index !== null);
-    const phoneIndex = barkLines.findIndex((line) => line.startsWith('• الهاتف:'));
+    eq(copyLines.length, sample.body.split('\n').length, 'copy keeps the same line count');
+    const phoneIndex = copyLines.findIndex((line) => line.startsWith('• الهاتف:'));
     ok(phoneIndex > 0, 'phone line exists');
-    eq(copyDiff, [phoneIndex], 'only the phone line differs between body and copy');
     eq(copyLines[phoneIndex], '• الهاتف: 01012345678 — واتساب', 'copy phone line is clean');
-    // And the copy is exactly what the customer should receive.
-    const telegramClean = telegramPlain.replace(/ — واتساب: https:\/\/wa\.me\/\d+/, ' — واتساب');
-    eq(
-      copyLines.filter((line, index) => line !== telegramClean.split('\n')[index]).length,
-      1,
-      'copy differs from Telegram only by the order id'
-    );
   });
 
   await section('[7] only a new order rings; every later status is a silent replacement', async () => {
@@ -540,7 +538,10 @@ try {
     ok(!lines.includes('👤 Fake Admin'), 'no forged customer line from the customer name');
     ok(!lines.includes('👤 Injected'), 'no forged line from the item name');
     ok(lines.includes('• الاسم: Eve 💰 Total EGP 1 👤 Fake Admin'), 'newlines are collapsed to spaces');
-    ok(lines.includes('• الهاتف: 0101 2345678 — واتساب: https://wa.me/201012345678'), 'phone newline is collapsed');
+    const phoneLine = lines.find((line) => line.startsWith('• الهاتف:'));
+    ok(phoneLine.startsWith('• الهاتف: 0101 2345678 — واتساب: https://za-shm.vercel.app/api/orders?track='),
+      'phone newline is collapsed');
+    ok(phoneLine.endsWith('&wa=1'), 'hand-off link is well formed');
     ok(!/wa\.me\/\s/.test(hostile.body), 'no empty WhatsApp link is produced');
     ok(lines.includes('• العنوان: 12 Street 📍 Fake City'), 'address newlines are collapsed');
     ok(lines.includes('• المدينة: Cairo'), 'city line is present');
@@ -703,8 +704,9 @@ try {
       libSrc.indexOf('function buildOrderPlainMessage'),
       libSrc.indexOf('function buildOrderFailureMessage')
     );
-    ok(plainSrc.includes('— واتساب: https://wa.me/${wa}'), 'phone line links straight to WhatsApp');
-    ok(libSrc.includes('function stripWhatsAppLink'), 'link stripping is centralised');
+    ok(plainSrc.includes('wa_url'), 'phone line uses the signed hand-off link when available');
+    ok(libSrc.includes('function whatsAppOrderLink'), 'hand-off link builder exists');
+    ok(libSrc.includes('&wa=1'), 'hand-off link is marked for the redirect route');
     ok(libSrc.includes('copy: stripWhatsAppLink(body)'), 'notification ships a link-free copy payload');
     ok(libSrc.includes("autoCopy: initial === true && rawStatus === 'Pending' ? '1' : ''"),
       'only the first notification auto-copies the clean text');

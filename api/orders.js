@@ -21,6 +21,8 @@ const {
   newFailureReference,
   trackingUrlFor,
   verifyTrackToken,
+  buildOrderClipboardMessage,
+  whatsAppDeepLink,
   EGYPT_PHONE_RE,
   cairoDateString,
   couponIsRedeemable,
@@ -29,6 +31,15 @@ const {
 
 const ORDER_ID_RE = /^ZSH-[A-Za-z0-9]{1,20}-[A-Za-z0-9]{1,8}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 302 used by the WhatsApp hand-off. Never cached: the target is signed and
+ * the order status can change between taps. */
+function redirect(res, location) {
+  res.statusCode = 302;
+  res.setHeader('Location', String(location));
+  res.setHeader('Cache-Control', 'no-store');
+  res.end();
+}
 
 function localOrderDate() {
   return cairoDateString();
@@ -582,6 +593,17 @@ async function trackOrder(req, res) {
 
     const order = parseOrderRow(data);
     order.tracking_url = trackingUrlFor(trackId);
+
+    // ?wa=1 turns the link in the owner's notification into a WhatsApp deep
+    // link with the customer message pre-filled. The tracking token is the
+    // credential, exactly like the tracking page.
+    if (String((req.query && req.query.wa) || '') === '1') {
+      const message = buildOrderClipboardMessage(order, order.tracking_url);
+      const target = whatsAppDeepLink(order.phone, message);
+      if (!target) return redirect(res, order.tracking_url);
+      return redirect(res, target);
+    }
+
     return json(res, 200, { found: true, access: 'full', order });
   } catch (err) {
     console.error('Track error:', err && err.message);

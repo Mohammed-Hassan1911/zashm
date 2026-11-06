@@ -281,6 +281,36 @@ console.log('\n[4] secure order tracking');
   eq(r.body.order.notes, 'secret note', 'notes included for the token holder');
   eq(db.queries.length, 1, 'valid token performs exactly one lookup');
 
+  // ?wa=1 hands off to WhatsApp with the customer message already typed.
+  db.queries = [];
+  r = await track({ track: orderId, tk: token, wa: '1' });
+  eq(r.status, 302, 'wa hand-off redirects');
+  const location = String(r.headers.location || '');
+  ok(location.startsWith('https://wa.me/201012345678?text='), 'wa link targets the normalised phone');
+  eq(r.headers['cache-control'], 'no-store', 'hand-off is never cached');
+  const prefill = decodeURIComponent(location.split('?text=')[1] || '');
+  ok(prefill.startsWith('ZASHM | '), 'prefilled text is the order message');
+  ok(prefill.includes(`• رقم الطلب: ${orderId}`), 'prefilled text carries the order id');
+  ok(prefill.includes('— واتساب'), 'WhatsApp hint is kept in the text');
+  ok(!prefill.includes('wa.me'), 'no WhatsApp link inside the prefilled text');
+  ok(!prefill.includes('/admin'), 'no admin link inside the prefilled text');
+  ok(!prefill.includes('/api/orders?'), 'no hand-off link inside the prefilled text');
+  eq(db.queries.length, 1, 'hand-off performs one lookup');
+
+  // The hand-off is behind the same token as the tracking page.
+  db.queries = [];
+  r = await track({ track: orderId, tk: 'f'.repeat(32), wa: '1' });
+  eq(r.body, { found: false }, 'wa hand-off without a valid token leaks nothing');
+  eq(db.queries.length, 0, 'wa hand-off without a token never touches the database');
+
+  // A record with no usable phone falls back to the tracking page.
+  db.orders[0].phone = '';
+  r = await track({ track: orderId, tk: token, wa: '1' });
+  eq(r.status, 302, 'missing phone still redirects');
+  ok(String(r.headers.location).includes('?track='), 'missing phone falls back to tracking');
+  db.orders[0].phone = '01012345678';
+
+
   const ordersSrc = read('api/orders.js');
   ok(!/access:\s*'status'/.test(ordersSrc), "the id-only 'status' access path is gone");
   ok(typeof lib.maskOrderForLimitedAccess === 'function', 'mask helper is still exported for compatibility');

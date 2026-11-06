@@ -1536,8 +1536,9 @@ function buildOrderPlainMessage(order = {}, trackingUrl, itemLimit = BARK_MAX_IT
     : (orderId ? `• رقم الطلب: ${orderId}\n` : '');
 
   const wa = phoneText ? waNumber(phoneText) : '';
+  const waHref = String(order.wa_url || '').trim();
   const phoneLine = phoneText
-    ? `• الهاتف: ${phoneText}${wa ? ` — واتساب: https://wa.me/${wa}` : ''}\n`
+    ? `• الهاتف: ${phoneText}${waHref ? ` — واتساب: ${waHref}` : (wa ? ` — واتساب: https://wa.me/${wa}` : '')}\n`
     : '';
 
   return `
@@ -1568,8 +1569,44 @@ ${footer}
  */
 function stripWhatsAppLink(text) {
   return String(text == null ? '' : text)
-    .replace(/ — واتساب: https:\/\/wa\.me\/\d+/g, ' — واتساب')
-    .replace(/[ \t]*https:\/\/wa\.me\/\d*/g, '');
+    .replace(/ — واتساب:\s*https?:\/\/[^\s]+/g, ' — واتساب')
+    .replace(/[ \t]*https?:\/\/wa\.me\/\d*/g, '');
+}
+
+/** wa.me deep link, optionally pre-filling the message. Returns '' when the
+ * phone number cannot be normalised, so callers never render a dead link. */
+function whatsAppDeepLink(phone, text) {
+  const number = waNumber(phone);
+  if (!number) return '';
+  const suffix = text ? `?text=${encodeURIComponent(String(text))}` : '';
+  return `https://wa.me/${number}${suffix}`;
+}
+
+/** Short link that opens the owner's WhatsApp with the confirmation message
+ * already typed for this order.
+ *
+ * The full message is ~1 KB of Arabic; percent-encoding it inside the push
+ * payload would blow past the APNs limit, so the notification carries this
+ * ~120-character redirect instead and the text is built on tap.
+ */
+function whatsAppOrderLink(orderId) {
+  const id = String(orderId == null ? '' : orderId).trim();
+  if (!id) return '';
+  try {
+    const base = PUBLIC_BASE_URL().replace(/\/+$/, '');
+    return `${base}/api/orders?track=${encodeURIComponent(id)}`
+      + `&tk=${encodeURIComponent(trackToken(id))}&wa=1`;
+  } catch (e) {
+    // No SESSION_SECRET (or signing failed): fall back to the plain wa.me link
+    // rather than losing the notification.
+    return '';
+  }
+}
+
+/** Customer-ready message for the clipboard / WhatsApp prefill: the order
+ * summary without the WhatsApp URL itself. */
+function buildOrderClipboardMessage(order = {}, trackingUrl) {
+  return stripWhatsAppLink(buildOrderPlainMessage(order, trackingUrl));
 }
 
 /**
@@ -1649,6 +1686,7 @@ function buildOrderBarkNotification({
       createdAt,
       date,
       tracking_url: tracking_url || trackingUrl,
+      wa_url: whatsAppOrderLink(id),
     },
     tracking_url || trackingUrl,
     limit
@@ -2213,6 +2251,9 @@ module.exports = {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildOrderPlainMessage,
+  buildOrderClipboardMessage,
+  whatsAppDeepLink,
+  whatsAppOrderLink,
   buildOrderBarkNotification,
   buildOrderFailureMessage,
   buildOrderFailureBarkNotification,
