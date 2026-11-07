@@ -217,9 +217,10 @@ that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
 
 ## 4b. Outage resilience — snapshot, same-origin image mirror, WhatsApp fallback
 
-**Status (2026-11-07): implemented in the repository, tests green, not committed
-or deployed.** Production still runs the previous bundle. No external account,
-credential, credit card, or environment variable is involved.
+**Status (2026-11-07): implemented, committed (ae6deea), pushed, and deployed to
+production (https://za-shm.vercel.app serves /assets/index-HD5wpGoL.css and
+the empty backup at /catalog-snapshot.json).** No external account, credential,
+credit card, or environment variable is involved.
 
 Goal: if Supabase (or its Storage) is unreachable, ZASHM keeps looking like a
 store instead of an empty error page, and a customer can still place an order on

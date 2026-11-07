@@ -543,7 +543,11 @@ Browser check at 816px: `innerText` is `Cairo · القاهرة`, `lang="ar"`,
 
 ### 13.8 Outage resilience: catalogue snapshot, same-origin image mirror, WhatsApp fallback (2026-11-07, local only)
 
-**Status:** implemented and tested locally; **uncommitted and undeployed**.
+**Status (2026-11-07): implemented, committed (ae6deea), pushed, and deployed to
+production (https://za-shm.vercel.app serves /assets/index-HD5wpGoL.css and
+the empty backup at /catalog-snapshot.json).** No external account, credential,
+credit card, or environment variable is involved.
+
 No external account, credential, credit card, or environment variable is needed.
 See `docs/security-production-checklist.md §4b` for the routine and verification
 checklist.
@@ -589,9 +593,17 @@ checklist.
 - **Browser verification:** with `VITE_SUPABASE_URL` pointed at an invalid host,
   the homepage rendered the real product from the snapshot, showed the backup
   banner and the WhatsApp CTA, and loaded the images from `/media/products/…`.
-  Live mode was verified separately (real Supabase images, no banner, Size Guide
-  pill, WhatsApp FAB at `z-index: 30000`, clean console).
-- **Still required:** when the first real product is published, drop its id from
+  Live mode was verified separately on 2026-11-07 (commit ae6deea deployed):
+  real Supabase images, no banner, Size Guide and selected-size pills identical
+  (26/28/30px heights at 320/375/768px), review fields 13px at >=769px and
+  16px at <=768px, WhatsApp FAB at `z-index: 30000`, clean console).
+- **Still required (future, on first real product):** drop its id from
   `scripts/resilience-exclude.json` (if it was added) and run
   `npm run resilience:sync -- --prune`; review the new snapshot and the
-  `public/media` size. Commit/push/deploy needs explicit owner approval.
+  `public/media` size, then commit/push/deploy with explicit owner approval.
+- **Deployment record (2026-11-07):** committed as `ae6deea`, pushed to
+  `origin/main`, deployed by Vercel Git integration. Live bundle
+  `/assets/index-HD5wpGoL.css` (matches local build hash) contains `review-form`
+  and `data-size-value`; `/catalog-snapshot.json` returns the empty backup with
+  `excludedIds: ["1793846979234526"]`. Full `npm test` (SQL 475/475) and
+  `npm run build` passed with no secrets.
