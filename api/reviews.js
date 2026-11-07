@@ -212,15 +212,21 @@ async function submitReview(req, res) {
       return json(res, 404, { error: 'Product not found.' });
     }
 
-    const { error } = await sb.from('product_reviews').insert([{
+    const insertRow = {
       productId,
       name,
       rating,
       comment,
-      phone,
       status: 'pending',
       ipHash: hashIp(ip),
-    }]);
+    };
+    if (phone) insertRow.phone = phone;
+
+    let { error } = await sb.from('product_reviews').insert([insertRow]);
+    if (error && phone && /phone/i.test(error.message || '') && /column/i.test(error.message || '')) {
+      delete insertRow.phone;
+      ({ error } = await sb.from('product_reviews').insert([insertRow]));
+    }
     if (error) throw error;
 
     return json(res, 201, {

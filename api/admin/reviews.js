@@ -83,14 +83,45 @@ async function listReviews(req, res) {
       countFor('rejected'),
     ]);
 
+  try {
+    const sb = supabaseAdmin();
+
+    const countFor = async (value) => {
+      const { count, error } = await sb
+        .from('product_reviews')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', value);
+      if (error) throw error;
+      return Number(count) || 0;
+    };
+
+    const [pending, approved, rejected] = await Promise.all([
+      countFor('pending'),
+      countFor('approved'),
+      countFor('rejected'),
+    ]);
+
+    const selectWithPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone';
+    const selectWithoutPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt"';
+
     let query = sb
       .from('product_reviews')
-      .select('id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone')
+      .select(selectWithPhone)
       .order('createdAt', { ascending: false })
       .limit(limit);
     if (status !== 'all') query = query.eq('status', status);
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+    if (error && /phone/i.test(error.message || '') && /column/i.test(error.message || '')) {
+      // Migration adding `phone` has not been applied yet; fall back.
+      let fallbackQuery = sb
+        .from('product_reviews')
+        .select(selectWithoutPhone)
+        .order('createdAt', { ascending: false })
+        .limit(limit);
+      if (status !== 'all') fallbackQuery = fallbackQuery.eq('status', status);
+      ({ data, error } = await fallbackQuery);
+    }
     if (error) throw error;
 
     const rows = Array.isArray(data) ? data : [];
@@ -177,7 +208,7 @@ async function updateReview(req, res) {
       .from('product_reviews')
       .update(write)
       .eq('id', id)
-      .select('id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone')
+      .select('id, "productId", name, rating, comment, status, "createdAt", "publishedAt"')
       .maybeSingle();
     if (updateError) throw updateError;
 
