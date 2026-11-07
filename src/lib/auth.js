@@ -134,6 +134,7 @@ export function AuthProvider({ children }) {
       orders: 'orders.read',
       products: 'products.read',
       discounts: 'discounts.read',
+      reviews: 'reviews.read',
       analytics: 'analytics.read',
       users: 'users.read',
       settings: 'settings.read',

@@ -118,6 +118,7 @@ export const PERMISSIONS = Object.freeze({
     'products.read', 'products.write',
     'orders.read', 'orders.write',
     'discounts.read', 'discounts.write',
+    'reviews.read', 'reviews.write',
     'analytics.read', 'dashboard.read',
   ],
   support: ['orders.read', 'dashboard.read'],

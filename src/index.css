@@ -1320,33 +1320,37 @@ section, main {
   }
 }
 
-/* Product page - fix Size Guide and small elements at very small widths */
+/* Product page - keep the larger Size Guide button readable at small widths */
 @media (max-width: 390px) {
   [data-size-guide] {
-    font-size: 10px !important;
+    font-size: 11px !important;
     letter-spacing: 0.8px !important;
     white-space: nowrap !important;
+    padding: 6px 12px !important;
   }
 }
 
 @media (max-width: 375px) {
   [data-size-guide] {
-    font-size: 9.5px !important;
+    font-size: 10.5px !important;
     letter-spacing: 0.6px !important;
+    padding: 6px 11px !important;
   }
 }
 
 @media (max-width: 360px) {
   [data-size-guide] {
-    font-size: 9px !important;
+    font-size: 10px !important;
     letter-spacing: 0.4px !important;
+    padding: 6px 10px !important;
   }
 }
 
 @media (max-width: 320px) {
   [data-size-guide] {
-    font-size: 8.5px !important;
+    font-size: 9px !important;
     letter-spacing: 0.3px !important;
+    padding: 5px 9px !important;
   }
 }
 

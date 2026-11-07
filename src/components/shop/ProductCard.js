@@ -4,6 +4,7 @@ import { Heart, Eye } from 'lucide-react';
 import { useStore } from '../../store';
 import { toast } from '../ui/BackToTop';
 import { availableStock, discountPercent, effectivePrice } from '../../lib/pricing';
+import StarRating from './StarRating';
 
 const LABEL_CLASS = {
   'New Arrival': 'label-new',
@@ -269,6 +270,16 @@ export default function ProductCard({ product, index = 0 }) {
         >
           {product?.name || 'Product'}
         </p>
+
+        <div
+          className="product-card-rating"
+          style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}
+        >
+          <StarRating rating={Number(product?.rating) || 0} size={12} />
+          <span style={{ fontSize: 10, color: 'var(--text3)' }}>
+            {Number(product?.reviews) > 0 ? `(${Number(product.reviews)})` : 'No reviews'}
+          </span>
+        </div>
 
         <div
           className="product-card-price"

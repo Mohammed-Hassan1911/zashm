@@ -25,10 +25,11 @@ import AdminLogin from '../components/admin/AdminLogin';
 import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUploader';
 import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
-import { deleteStorageFile } from '../lib/api';
+import { api, deleteStorageFile } from '../lib/api';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, Legend } from 'recharts';
 import Papa from 'papaparse';
 import { toast } from '../components/ui/BackToTop';
+import StarRating from '../components/shop/StarRating';
 
 const STATUS_COLORS = { Pending:'#f39c12', Confirmed:'#3498db', Processing:'#9b59b6', Shipped:'#c9a84c', Delivered:'#27ae60', Cancelled:'#e74c3c' };
 const STATUS_FLOW = ['Pending','Confirmed','Processing','Shipped','Delivered'];
@@ -103,6 +104,7 @@ const SIDEBAR = [
   { id:'orders', label:'Orders', icon:ShoppingCart, perm:'orders.read', badge:'pending' },
   { id:'products', label:'Products', icon:Package, perm:'products.read' },
   { id:'discounts', label:'Discounts', icon:Tag, perm:'discounts.read' },
+  { id:'reviews', label:'Reviews', icon:MessageSquare, perm:'reviews.read' },
   { id:'analytics', label:'Analytics', icon:BarChart2, perm:'analytics.read' },
   { id:'users', label:'Users', icon:Users, perm:'users.read' },
 ];
@@ -357,6 +359,7 @@ export default function AdminApp() {
             {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
             {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} showForm={productFormOpen} setShowForm={setProductFormOpen} />}
             {adminPage === 'discounts' && canAccess('discounts') && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
+            {adminPage === 'reviews' && canAccess('reviews') && <ReviewsPanel canEdit={canAccess('reviews.write')} />}
             {adminPage === 'analytics' && canAccess('analytics') && <AnalyticsPanel />}
 
             {adminPage === 'users' && canAccess('users') && <UsersPanel />}
@@ -2804,6 +2807,219 @@ function AnalyticsPanel() {
           ))}
         </div>
       </Card>
+    </div>
+  );
+}
+// ─── ReviewsPanel — moderate customer reviews ───────────────────────────────
+
+function ReviewsPanel({ canEdit }) {
+  const [status, setStatus] = useState('pending');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reviews, setReviews] = useState([]);
+  const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0, total: 0 });
+  const [busyId, setBusyId] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
+
+  const load = useCallback(async (nextStatus) => {
+    setLoading(true);
+    setError('');
+    try {
+      const payload = await api.get(`/admin/reviews?status=${encodeURIComponent(nextStatus)}`);
+      setReviews(Array.isArray(payload && payload.reviews) ? payload.reviews : []);
+      setCounts((payload && payload.counts) || { pending: 0, approved: 0, rejected: 0, total: 0 });
+    } catch (err) {
+      setError((err && err.message) || 'Could not load reviews.');
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(status); }, [status, load]);
+
+  const changeStatus = async (review, next) => {
+    if (!canEdit || busyId) return;
+    setBusyId(review.id);
+    try {
+      await api.patch('/admin/reviews', { id: review.id, status: next });
+      toast.success(
+        next === 'approved' ? 'Review approved and published.'
+          : next === 'rejected' ? 'Review hidden from the store.'
+            : 'Review moved back to pending.'
+      );
+      await load(status);
+    } catch (err) {
+      toast.error((err && err.message) || 'Could not update the review.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (review) => {
+    if (!canEdit || busyId) return;
+    setDeleteId(null);
+    setBusyId(review.id);
+    try {
+      await api.del('/admin/reviews', { id: review.id });
+      toast.success('Review deleted.');
+      await load(status);
+    } catch (err) {
+      toast.error((err && err.message) || 'Could not delete the review.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const actionStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '5px 10px',
+    borderRadius: 5,
+    fontSize: 11,
+    fontWeight: 500,
+    cursor: 'pointer',
+    background: 'var(--bg3)',
+    border: '1px solid var(--border)',
+    color: 'var(--text2)',
+  };
+
+  const tabs = [
+    ['pending', 'Pending'],
+    ['approved', 'Approved'],
+    ['rejected', 'Rejected'],
+  ];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
+        {tabs.map(([id, label]) => {
+          const active = status === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setStatus(id)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                borderRadius: 999,
+                fontSize: 12,
+                cursor: 'pointer',
+                background: active ? 'rgba(201,168,76,0.14)' : 'transparent',
+                border: `1px solid ${active ? 'rgba(201,168,76,0.45)' : 'var(--border)'}`,
+                color: active ? 'var(--gold)' : 'var(--text2)',
+              }}
+            >
+              {label}
+              <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.8 }}>{counts[id] || 0}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {loading && <p style={{ fontSize: 12, color: 'var(--text3)' }}>Loading reviews…</p>}
+
+      {!loading && error && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <AlertCircle size={16} color="#e74c3c" />
+          <span style={{ fontSize: 12, color: 'var(--text2)' }}>{error}</span>
+          <button type="button" onClick={() => load(status)} style={{ ...actionStyle, marginLeft: 'auto' }}>
+            <RefreshCw size={12} /> Retry
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && reviews.length === 0 && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
+          <DashEmpty
+            icon={MessageSquare}
+            title={status === 'pending' ? 'No reviews waiting' : `No ${status} reviews`}
+            hint={status === 'pending'
+              ? 'New customer reviews appear here for approval.'
+              : 'Nothing to show in this tab yet.'}
+          />
+        </div>
+      )}
+
+      {!loading && !error && reviews.length > 0 && (
+        <div style={{ display: 'grid', gap: 12 }}>
+          {reviews.map((review) => (
+            <motion.div
+              key={review.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}
+            >
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                {review.productImage ? (
+                  <img
+                    src={review.productImage}
+                    alt=""
+                    style={{ width: 44, height: 54, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', flexShrink: 0 }}
+                  />
+                ) : (
+                  <div style={{ width: 44, height: 54, borderRadius: 4, background: 'var(--bg3)', flexShrink: 0 }} />
+                )}
+
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <strong style={{ fontSize: 13 }}>{review.name}</strong>
+                    <StarRating rating={review.rating} size={12} />
+                    <span style={{ fontSize: 10, color: 'var(--text3)' }}>
+                      {review.productName || `Product #${review.productId}`}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--text2)', margin: '7px 0 0', overflowWrap: 'anywhere' }}>
+                    {review.comment}
+                  </p>
+                  <p style={{ fontSize: 10, color: 'var(--text3)', margin: '6px 0 0' }}>
+                    Submitted {review.createdAt ? new Date(review.createdAt).toLocaleString('en-GB') : '—'}
+                    {review.publishedAt ? ` · Published ${new Date(review.publishedAt).toLocaleDateString('en-GB')}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              {canEdit && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  {review.status !== 'approved' && (
+                    <button type="button" disabled={busyId === review.id} onClick={() => changeStatus(review, 'approved')} style={{ ...actionStyle, color: '#27ae60', borderColor: 'rgba(39,174,96,0.4)' }}>
+                      <CheckCircle size={12} /> Approve
+                    </button>
+                  )}
+                  {review.status !== 'rejected' && (
+                    <button type="button" disabled={busyId === review.id} onClick={() => changeStatus(review, 'rejected')} style={{ ...actionStyle, color: '#f39c12', borderColor: 'rgba(243,156,18,0.4)' }}>
+                      <Eye size={12} /> Hide
+                    </button>
+                  )}
+                  {review.status === 'rejected' && (
+                    <button type="button" disabled={busyId === review.id} onClick={() => changeStatus(review, 'pending')} style={actionStyle}>
+                      <Clock size={12} /> Move to pending
+                    </button>
+                  )}
+
+                  {deleteId === review.id ? (
+                    <>
+                      <span style={{ fontSize: 11, color: '#e74c3c', alignSelf: 'center' }}>Delete permanently?</span>
+                      <button type="button" disabled={busyId === review.id} onClick={() => remove(review)} style={{ ...actionStyle, color: '#e74c3c', borderColor: 'rgba(231,76,60,0.4)' }}>
+                        Yes, delete
+                      </button>
+                      <button type="button" onClick={() => setDeleteId(null)} style={actionStyle}>Cancel</button>
+                    </>
+                  ) : (
+                    <button type="button" disabled={busyId === review.id} onClick={() => setDeleteId(review.id)} style={{ ...actionStyle, marginLeft: 'auto', color: '#e74c3c' }}>
+                      <Trash2 size={12} /> Delete
+                    </button>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

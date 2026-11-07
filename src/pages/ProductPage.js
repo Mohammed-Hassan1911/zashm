@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
+import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+import ProductReviews from '../components/shop/ProductReviews';
 import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
@@ -412,8 +413,29 @@ export default function ProductPage() {
       <button 
         data-size-guide="true"
         onClick={() => setSizeGuideOpen(true)}
-        style={{ color: 'var(--gold)', fontSize: 11, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', letterSpacing: 1, whiteSpace: 'nowrap' }}
+        type="button"
+        style={{
+          color: 'var(--gold)',
+          fontSize: 12,
+          fontWeight: 600,
+          background: 'rgba(201,168,76,0.10)',
+          border: '1px solid var(--border-gold, rgba(201,168,76,0.5))',
+          borderRadius: 999,
+          cursor: 'pointer',
+          letterSpacing: 1,
+          whiteSpace: 'nowrap',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '7px 14px',
+          textTransform: 'uppercase',
+          lineHeight: 1,
+          transition: 'background 0.2s, border-color 0.2s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.20)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.10)'; }}
       >
+        <Ruler size={14} aria-hidden="true" />
         Size Guide
       </button>
     </div>
@@ -583,6 +605,8 @@ export default function ProductPage() {
             </div>
           </motion.div>
         </div>
+
+        <ProductReviews product={p} />
 
         {/* Related */}
         {related.length > 0 && (

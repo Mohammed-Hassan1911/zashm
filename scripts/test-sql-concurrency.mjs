@@ -479,7 +479,7 @@ function bootstrap(db) {
       image           text,
       "sizeGuide"     jsonb,
       rating          numeric,
-      reviews         jsonb
+      reviews         integer
     );
 
     CREATE TABLE public.orders (
@@ -2129,6 +2129,85 @@ async function stagedMigrationRollout() {
   console.log('\n[9] staged migrations apply cleanly and behave identically');
   apply(DB, 'supabase/reject_undefined_variants.sql');
   apply(DB, 'supabase/declared_only_stock_recompute.sql');
+  apply(DB, 'supabase/product_reviews.sql');
+
+  // ── product_reviews: table lockdown, aggregate trigger, refreshed view ──
+  eq(scalar(DB, `SELECT to_regclass('public.product_reviews') IS NOT NULL`), 't',
+    'product_reviews exists');
+  eq(scalar(DB, `SELECT relrowsecurity FROM pg_class
+                 WHERE oid = 'public.product_reviews'::regclass`), 't',
+    'product_reviews has RLS enabled');
+  eq(scalar(DB, `SELECT has_table_privilege('anon', 'public.product_reviews', 'SELECT')`), 'f',
+    'anon cannot read product_reviews');
+  eq(scalar(DB, `SELECT has_table_privilege('authenticated', 'public.product_reviews', 'INSERT')`), 'f',
+    'authenticated cannot insert product_reviews');
+  eq(scalar(DB, `SELECT has_table_privilege('service_role', 'public.product_reviews', 'SELECT')`), 't',
+    'service_role can read product_reviews');
+  eq(scalar(DB, `SELECT has_table_privilege('service_role', 'public.product_reviews', 'INSERT')`), 't',
+    'service_role can insert product_reviews');
+  eq(scalar(DB, `SELECT has_sequence_privilege('service_role', 'public.product_reviews_id_seq', 'USAGE')`), 't',
+    'service_role can use the identity sequence');
+  eq(scalarNum(DB, `SELECT count(*) FROM pg_trigger
+                    WHERE tgrelid = 'public.product_reviews'::regclass
+                      AND tgname = 'zshm_product_review_sync'
+                      AND NOT tgisinternal`), 1,
+    'the aggregate sync trigger is installed');
+  eq(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'products_public'
+                      AND column_name IN ('rating','reviews')`), 2,
+    'products_public now exposes rating and reviews');
+  eq(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'products_public'
+                      AND lower(column_name) = 'reservedstock'`), 0,
+    'products_public still hides reservedStock');
+
+  runSql(DB, `
+    INSERT INTO public.products (id, name, category, price, stock, active, rating, reviews)
+    VALUES (90, 'Review Tee', 'Tees', 100, 5, true, 0, 0)
+    ON CONFLICT (id) DO UPDATE SET active = true, rating = 0, reviews = 0;
+    INSERT INTO public.product_reviews ("productId", name, rating, comment, status)
+    VALUES (90, 'Ann', 5, 'Great', 'approved'),
+           (90, 'Bob', 4, 'Good', 'approved'),
+           (90, 'Cat', 1, 'Pending', 'pending');
+  `);
+  eq(scalarNum(DB, `SELECT reviews FROM public.products WHERE id = 90`), 2,
+    'only approved reviews are counted');
+  eq(scalar(DB, `SELECT round(rating::numeric, 1) FROM public.products WHERE id = 90`), '4.5',
+    'the average uses approved reviews only');
+
+  runSql(DB, `UPDATE public.product_reviews SET status = 'approved'
+              WHERE "productId" = 90 AND name = 'Cat';`);
+  eq(scalarNum(DB, `SELECT reviews FROM public.products WHERE id = 90`), 3,
+    'approving a pending review increments the count');
+  eq(scalar(DB, `SELECT round(rating::numeric, 1) FROM public.products WHERE id = 90`), '3.3',
+    'approving a pending review recomputes the average');
+
+  runSql(DB, `DELETE FROM public.product_reviews WHERE "productId" = 90 AND name = 'Bob';`);
+  eq(scalarNum(DB, `SELECT reviews FROM public.products WHERE id = 90`), 2,
+    'deleting an approved review decrements the count');
+  eq(scalar(DB, `SELECT round(rating::numeric, 1) FROM public.products WHERE id = 90`), '3.0',
+    'deleting an approved review recomputes the average');
+
+  runSql(DB, `INSERT INTO public.product_reviews ("productId", name, rating, comment, status)
+              VALUES (90, 'Dan', 1, 'Rejected', 'rejected');`);
+  eq(scalarNum(DB, `SELECT reviews FROM public.products WHERE id = 90`), 2,
+    'rejected reviews never affect the aggregate');
+
+  {
+    const anonView = runSql(DB, 'SET ROLE anon; SELECT rating, reviews FROM public.products_public WHERE id = 90;');
+    eq(anonView.status, 0, 'anon can read the aggregate from products_public');
+    ok(/3\.0\|2/.test(anonView.stdout.trim()), 'anon sees the approved aggregate');
+  }
+
+  {
+    const svcInsert = runSql(DB, `SET ROLE service_role;
+      INSERT INTO public.product_reviews ("productId", name, rating, comment, status)
+      VALUES (90, 'Svc', 5, 'Service insert', 'approved');`);
+    eq(svcInsert.status, 0, 'service_role can insert a review through the identity sequence');
+    eq(scalarNum(DB, `SELECT reviews FROM public.products WHERE id = 90`), 3,
+      'a direct service_role insert still fires the aggregate trigger');
+  }
+
 
   eq(scalarNum(DB, `SELECT count(*) FROM pg_proc
                     WHERE proname IN ('atomic_place_order', 'atomic_adjust_stock',

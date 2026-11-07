@@ -607,6 +607,7 @@ const PERMISSIONS = {
     'products.read', 'products.write',
     'orders.read', 'orders.write',
     'discounts.read', 'discounts.write',
+    'reviews.read', 'reviews.write',
     'analytics.read', 'dashboard.read',
   ],
   support: ['orders.read', 'dashboard.read'],
@@ -1425,7 +1426,6 @@ const FAILURE_ALERT_TIMEOUT_MS = 5000;
 // The common order is far below this; the byte clamp at send time trims
 // pathological carts instead of losing the whole notification.
 const ORDER_ITEM_MAX = 50;
-const SUPPORT_NAME = 'محمد';
 
 /** Status → Arabic label for the short internal update. Unknown statuses fall
  * back to a neutral package icon so a future status never breaks a message. */
@@ -1590,7 +1590,7 @@ function buildOrderTelegramMessage(order = {}, trackingUrl) {
 
   const lines = [];
   lines.push(`السلام عليكم أ/ ${firstName || 'عميلنا العزيز'} 👋`);
-  lines.push(`مع حضرتك ${SUPPORT_NAME} من فريق ZASHM. حابين نأكد مع حضرتك تفاصيل الأوردر قبل الشحن.`);
+  lines.push('مع حضرتك فريق ZASHM. حابين نأكد مع حضرتك تفاصيل الأوردر قبل الشحن.');
   lines.push('');
 
   lines.push('👤 بيانات العميل');
@@ -1627,7 +1627,7 @@ function buildOrderTelegramMessage(order = {}, trackingUrl) {
   if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
   lines.push('');
 
-  lines.push('✅ لو البيانات دي مظبوطة، ردّ علينا بـ ✅ ونكمّل التجهيز والشحن.');
+  lines.push('لو البيانات دي مظبوطة، ردّ علينا بـ ✅ ونكمّل التجهيز والشحن.');
   lines.push('✏️ ولو حابب تعدّل أي حاجة — الاسم، العنوان، المقاس، أو منتج — قولّنا قبل الشحن وإحنا هنظبّطها.');
 
   return lines.join('\n');

@@ -61,6 +61,20 @@ Two further files are required but are **not** counted in the seven above:
   before relying on database-backed limits. Without this migration and a
   healthy Upstash instance, limits are per warm serverless instance.
 
+### Product reviews (prepared, not applied)
+
+`supabase/product_reviews.sql` adds `public.product_reviews` (service-role
+only), the trigger that keeps `products.rating` / `products.reviews` in sync
+with **approved** reviews, and re-creates `products_public` with `rating` and
+`reviews` appended to the same allow-list. Apply it **before** deploying
+`api/reviews.js`, the storefront review section, or the admin Reviews tab;
+otherwise those requests fail. Verify afterwards with an **anon** key that the
+view exposes `rating`/`reviews`, still hides `reservedStock`, and that
+`product_reviews` returns 401/403. The file keeps the owner-rights view
+(`security_invoker = false, security_barrier = true`), grants SELECT on the
+view only, and never deletes or rewrites an existing review. No review exists
+in production until one is submitted after deployment.
+
 Deploy the updated frontend and `/api/orders` together: the API now requires
 the frontend's persistent idempotency key. Verify the atomic order-placement
 migration is applied before accepting production orders.
