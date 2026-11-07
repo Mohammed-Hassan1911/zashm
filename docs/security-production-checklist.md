@@ -44,7 +44,7 @@ They are idempotent where possible and none of them delete rows.
 | 4 | `supabase/admin_protection.sql` | Trigger that refuses to demote/delete the last admin (transaction advisory lock; covered by a real two-connection test). |
 | 5 | `supabase/security_hardening.sql` | Function `search_path` pinning / privilege revokes; inspects every existing `auth.users` trigger and refuses to add a second provisioning trigger. It never drops/replaces an existing trigger and no longer defines a duplicate last-admin function. |
 | 6 | `supabase/storage_hardening.sql` | `products` bucket: 5 MB limit, image MIME allow-list, RLS, and a restrictive policy preventing browser roles from listing product filenames while retaining public image downloads. Drops only policies provably scoped to `products`; blanket/other-bucket policies are kept for manual review. If the SQL role does not own `storage.objects` (normal in Supabase), it never runs `ALTER TABLE`/`DROP POLICY`; it reports the exact products-only policies for removal in **Dashboard > Storage > Policies**. Every policy dropped by the script is backed up verbatim and restorable with `zshm_restore_storage_policies()`. |
-| 7 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide`; `reservedStock` is not in it, and `active/tags/rating/reviews` are not selected), grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
+| 7 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide`; `reservedStock` is not in it, and `active/tags` are not selected). `rating`/`reviews` are added later by `supabase/product_reviews.sql` (see below); if Phase 1 is ever re-run it removes them and that file must be re-applied. Grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
 
 Two further files are required but are **not** counted in the seven above:
 
@@ -61,19 +61,28 @@ Two further files are required but are **not** counted in the seven above:
   before relying on database-backed limits. Without this migration and a
   healthy Upstash instance, limits are per warm serverless instance.
 
-### Product reviews (prepared, not applied)
+### Product reviews (applied & deployed 2026-11-07)
+
+**Status:** applied to production project `ptegprcbtfylqhbnbkih` and deployed
+in commit `6b7f339` (production deployment `dpl_FtVeud6W7KgXRsQ3LL7FE3wBNJY9`,
+alias `https://za-shm.vercel.app`). Verified with the anon key that
+`products_public` exposes `rating`/`reviews`, still hides `reservedStock`
+(a 400 when requested), `product_reviews` is service-role only (RLS on, no
+`anon`/`authenticated` grants), the sync trigger exists, and
+`GET /api/reviews?productId=1793846979234526` returns
+`{"summary":{"average":0,"count":0},"reviews":[]}`. Row counts were unchanged
+by the migration (orders 17, products 1, users 2, coupons 1; no review rows).
 
 `supabase/product_reviews.sql` adds `public.product_reviews` (service-role
 only), the trigger that keeps `products.rating` / `products.reviews` in sync
 with **approved** reviews, and re-creates `products_public` with `rating` and
-`reviews` appended to the same allow-list. Apply it **before** deploying
-`api/reviews.js`, the storefront review section, or the admin Reviews tab;
-otherwise those requests fail. Verify afterwards with an **anon** key that the
-view exposes `rating`/`reviews`, still hides `reservedStock`, and that
-`product_reviews` returns 401/403. The file keeps the owner-rights view
+`reviews` appended to the same allow-list. It must be applied **before**
+deploying `api/reviews.js`, the storefront review section, or the admin Reviews
+tab; otherwise those requests fail. The file keeps the owner-rights view
 (`security_invoker = false, security_barrier = true`), grants SELECT on the
 view only, and never deletes or rewrites an existing review. No review exists
-in production until one is submitted after deployment.
+in production until one is submitted after deployment, and submissions start
+`pending` until an admin approves them.
 
 Deploy the updated frontend and `/api/orders` together: the API now requires
 the frontend's persistent idempotency key. Verify the atomic order-placement
