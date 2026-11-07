@@ -2,11 +2,32 @@
 
 This file documents the items that **cannot be fixed from the repository alone**
 (they need a Supabase/Vercel dashboard action or an explicit schema decision).
-This file is guidance only; it applies nothing automatically. **Nothing in this file has been applied automatically** by the repository or by this audit — every migration and
-Dashboard change below is a manual action whose production status must be
-recorded in the final production-readiness audit, never assumed here.
+This file is guidance only; it does not apply anything by itself. Every
+migration and Dashboard change below is a manual action. The production status
+is recorded in §0 and must be re-verified, never assumed.
 
-Last updated: 2026-11-01
+Last updated: 2026-11-07
+
+---
+
+## 0. Production state (verified 2026-11-07)
+
+Project ref `ptegprcbtfylqhbnbkih`. Read-only catalog checks confirmed that
+migrations #1, #2, #4, #5, #6 and #7 — plus `coupons_lockdown.sql`,
+`session_revocation.sql`, `rate_limit_storage.sql` and
+`stock_hardening_constraints.sql` — were already applied. Migration #3
+(`supabase/atomic_edit_order.sql`) was applied on 2026-11-07 and verified:
+
+- `public.atomic_edit_order(text, integer, jsonb)` exists, is `SECURITY INVOKER`
+  with `search_path=public, pg_temp`;
+- `anon` / `authenticated` cannot execute it; `service_role` can;
+- a read-only smoke call (`select public.atomic_edit_order('ZSH-DOES-NOT-EXIST', 0, '{}'::jsonb)`)
+  returned `{"ok": false, "reason": "not_found"}`;
+- row counts did not change (orders 15, products 1, users 2, coupons 1).
+
+Deployment `zashm-2jtixyf86-zashm.vercel.app` (commit `2598e32`) is live at
+https://za-shm.vercel.app. The deployed admin chunk matches the local build and
+contains the order-edit UI; it has no Bark references and no server secrets.
 
 ---
 

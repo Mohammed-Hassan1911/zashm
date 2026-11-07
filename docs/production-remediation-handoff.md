@@ -133,6 +133,15 @@ ON CONFLICT (name) DO NOTHING;
 
 **ممنوع:** إنشاء العلم قبل خطوة 11، أو تشغيل Phase 3 قبل التحقق من الشبكة.
 
+> **حالة الإنتاج (تحقق 2026-11-07):** المشروع `ptegprcbtfylqhbnbkih` كان يحتوي
+> الخطوات 1، 2، 5، 6، 7 (`Phase 1` و`Phase 3`) و`coupons_lockdown` و`session_revocation`
+> و`rate_limit_storage` و`stock_hardening_constraints` مطبّقة بالفعل. طُبّقت الخطوة 3
+> (`supabase/atomic_edit_order.sql`) في 2026-11-07 بعد نسخ الحالة السابقة (الدالة لم تكن
+> موجودة)، وتحقّق أنها `SECURITY INVOKER` مع `search_path` مثبّت، وأن `anon`/`authenticated`
+> لا يملكان EXECUTE بينما `service_role` يملكه، وأن عدّد الصفوف لم يتغير (15 طلبًا، منتج
+> واحد، مستخدمان، كوبون واحد). نُشر الكود `2598e32` على
+> `zashm-2jtixyf86-zashm.vercel.app` ويعمل على https://za-shm.vercel.app.
+
 ### 4.3 إعدادات Vercel (لم تُنفَّذ)
 
 - Project → Settings → Environment Variables، لكل من **Production** و**Preview**:
