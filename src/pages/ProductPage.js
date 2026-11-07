@@ -437,7 +437,7 @@ export default function ProductPage() {
       style={sizePillStyle}
     >
       Size:
-      <span style={{ color: 'var(--text)', fontSize: 14, fontWeight: 700, letterSpacing: 0.5 }}>
+      <span style={{ color: 'var(--gold)', fontSize: 14, fontWeight: 700, letterSpacing: 0.5 }}>
         {selSize || '—'}
       </span>
     </span>

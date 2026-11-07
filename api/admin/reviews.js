@@ -85,7 +85,7 @@ async function listReviews(req, res) {
 
     let query = sb
       .from('product_reviews')
-      .select('id, "productId", name, rating, comment, status, "createdAt", "publishedAt"')
+      .select('id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone')
       .order('createdAt', { ascending: false })
       .limit(limit);
     if (status !== 'all') query = query.eq('status', status);
@@ -113,6 +113,7 @@ async function listReviews(req, res) {
         productName: product ? String(product.name || '') : '',
         productImage: product ? String(product.image || '') : '',
         name: String(row.name || ''),
+        phone: row.phone ? String(row.phone) : null,
         rating: Number(row.rating) || 0,
         comment: String(row.comment || ''),
         status: String(row.status || 'pending'),
@@ -176,7 +177,7 @@ async function updateReview(req, res) {
       .from('product_reviews')
       .update(write)
       .eq('id', id)
-      .select('id, "productId", name, rating, comment, status, "createdAt", "publishedAt"')
+      .select('id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone')
       .maybeSingle();
     if (updateError) throw updateError;
 

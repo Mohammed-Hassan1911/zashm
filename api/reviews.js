@@ -37,6 +37,7 @@ const REVIEWS_DEFAULT_LIMIT = 20;
 const REVIEWS_MAX_LIMIT = 50;
 const NAME_MAX = 40;
 const COMMENT_MAX = 600;
+const PHONE_MAX = 30;
 
 /** Collapse control characters/whitespace and neutralise angle brackets. React
  * already escapes the rendered text; this keeps stored data clean and prevents
@@ -81,7 +82,24 @@ function readReviewPayload(body) {
   const comment = cleanReviewText(source.comment, COMMENT_MAX);
   if (comment.length < 2) return { ok: false, error: 'Please write a short review (at least 2 characters).' };
 
-  return { ok: true, honeypot: false, value: { productId, name, rating, comment } };
+  let phone = null;
+  if (typeof source.phone === 'string' && source.phone.trim()) {
+    const cleanedPhone = source.phone
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/[<>]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, PHONE_MAX);
+    if (cleanedPhone.length < 5) {
+      return { ok: false, error: 'Please enter a valid phone number.' };
+    }
+    if (!/^[0-9+\-\s().]+$/.test(cleanedPhone)) {
+      return { ok: false, error: 'Please enter a valid phone number.' };
+    }
+    phone = cleanedPhone;
+  }
+
+  return { ok: true, honeypot: false, value: { productId, name, rating, comment, phone } };
 }
 
 /** Salted, truncated IP hash for abuse investigation only. Never displayed. */
@@ -179,7 +197,7 @@ async function submitReview(req, res) {
     return json(res, 201, { success: true, pending: true });
   }
 
-  const { productId, name, rating, comment } = parsed.value;
+  const { productId, name, rating, comment, phone } = parsed.value;
 
   try {
     const sb = supabaseAdmin();
@@ -199,6 +217,7 @@ async function submitReview(req, res) {
       name,
       rating,
       comment,
+      phone,
       status: 'pending',
       ipHash: hashIp(ip),
     }]);

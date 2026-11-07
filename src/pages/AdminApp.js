@@ -2968,6 +2968,15 @@ function ReviewsPanel({ canEdit }) {
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <strong style={{ fontSize: 13 }}>{review.name}</strong>
+                    {review.phone && (
+                      <a
+                        href={`tel:${review.phone.replace(/\s+/g, '')}`}
+                        style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--border-gold, rgba(201,168,76,0.4))', borderRadius: 4, padding: '2px 8px' }}
+                        title="Customer phone (admin only)"
+                      >
+                        {review.phone}
+                      </a>
+                    )}
                     <StarRating rating={review.rating} size={12} />
                     <span style={{ fontSize: 10, color: 'var(--text3)' }}>
                       {review.productName || `Product #${review.productId}`}

@@ -1062,7 +1062,7 @@ select option { background: var(--bg3); }
 }
 
 .size-guide-overlay {
-  align-items: flex-start;
+  align-items: center;
   box-sizing: border-box;
 }
 

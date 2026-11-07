@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.product_reviews (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   "productId"   bigint      NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   name          text        NOT NULL,
+  phone         text,
   rating        smallint    NOT NULL,
   comment       text        NOT NULL,
   status        text        NOT NULL DEFAULT 'pending',
@@ -53,8 +54,26 @@ CREATE TABLE IF NOT EXISTS public.product_reviews (
   CONSTRAINT product_reviews_name_len
     CHECK (char_length(btrim(name)) BETWEEN 2 AND 40),
   CONSTRAINT product_reviews_comment_len
-    CHECK (char_length(btrim(comment)) BETWEEN 2 AND 600)
+    CHECK (char_length(btrim(comment)) BETWEEN 2 AND 600),
+  CONSTRAINT product_reviews_phone_len
+    CHECK (phone IS NULL OR char_length(btrim(phone)) BETWEEN 5 AND 30)
 );
+
+-- Idempotent column add for databases that already applied an earlier version
+-- of this migration (phone is a later addition).
+ALTER TABLE public.product_reviews
+  ADD COLUMN IF NOT EXISTS phone text;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'product_reviews_phone_len'
+  ) THEN
+    ALTER TABLE public.product_reviews
+      ADD CONSTRAINT product_reviews_phone_len
+      CHECK (phone IS NULL OR char_length(btrim(phone)) BETWEEN 5 AND 30);
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.product_reviews IS
   'Customer reviews. Service-role only; the storefront reads approved rows through /api/reviews.';
@@ -62,6 +81,8 @@ COMMENT ON COLUMN public.product_reviews.status IS
   'pending (awaiting moderation) | approved (public) | rejected (hidden)';
 COMMENT ON COLUMN public.product_reviews."ipHash" IS
   'Salted hash of the submitter IP, used only for abuse investigation. Never exposed.';
+COMMENT ON COLUMN public.product_reviews.phone IS
+  'Optional submitter phone, stored for follow-up only. Never exposed publicly (admin-only).';
 
 CREATE INDEX IF NOT EXISTS product_reviews_product_approved_idx
   ON public.product_reviews ("productId", "createdAt" DESC)

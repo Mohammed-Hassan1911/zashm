@@ -40,7 +40,7 @@ export default function ProductReviews({ product }) {
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState('');
   const [sent, setSent] = useState(false);
-  const [form, setForm] = useState({ name: '', rating: 0, comment: '', website: '' });
+  const [form, setForm] = useState({ name: '', rating: 0, comment: '', website: '', phone: '' });
   const [hoverStar, setHoverStar] = useState(0);
 
   const load = useCallback(async (signal) => {
@@ -93,9 +93,10 @@ export default function ProductReviews({ product }) {
         rating: form.rating,
         comment,
         website: form.website,
+        phone: form.phone.trim() || undefined,
       });
       setSent(true);
-      setForm({ name: '', rating: 0, comment: '', website: '' });
+      setForm({ name: '', rating: 0, comment: '', website: '', phone: '' });
       setFormOpen(false);
     } catch (err) {
       setFormError((err && err.message) || 'Could not send your review. Please try again.');
@@ -205,6 +206,19 @@ export default function ProductReviews({ product }) {
               />
             </div>
 
+            <div>
+              <label htmlFor="review-phone" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Phone (optional)</label>
+              <input
+                id="review-phone"
+                type="tel"
+                value={form.phone}
+                onChange={(e) => update('phone', e.target.value)}
+                maxLength={30}
+                autoComplete="tel"
+                placeholder="For follow-up only — not shown publicly"
+                style={inputStyle}
+              />
+            </div>
             <div role="radiogroup" aria-label="Your rating">
               <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your rating</span>
               <div style={{ display: 'flex', gap: 4 }} onMouseLeave={() => setHoverStar(0)}>
