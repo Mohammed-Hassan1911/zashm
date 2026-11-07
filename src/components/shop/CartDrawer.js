@@ -5,6 +5,7 @@ import { useStore } from '../../store';
 import { toast } from '../ui/BackToTop';
 import { focusFirstElement, redirectOutsideFocus, trapTabKey } from '../../lib/focus-trap';
 import { effectivePrice } from '../../lib/pricing';
+import SafeImage from '../ui/SafeImage';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="100"%3E%3Crect fill="%23222" width="80" height="100"/%3E%3C/svg%3E';
 
@@ -132,8 +133,7 @@ export default function CartDrawer() {
                       exit={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
                       style={{ display: 'flex', gap: 14, marginBottom: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 2, alignItems: 'center' }}
                     >
-                      <img src={(item.product?.images && item.product.images[0]) || FALLBACK_IMG} alt={item.product?.name || 'Product'}
-                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
+                      <SafeImage src={item.product?.images && item.product.images[0]} fallback={FALLBACK_IMG} alt={item.product?.name || 'Product'}
                         style={{ width: 80, height: 100, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} />
                       
                       {/* تفاصيل المنتج مع حماية المساحة المتاحة */}

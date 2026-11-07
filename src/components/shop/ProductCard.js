@@ -5,6 +5,7 @@ import { useStore } from '../../store';
 import { toast } from '../ui/BackToTop';
 import { availableStock, discountPercent, effectivePrice } from '../../lib/pricing';
 import StarRating from './StarRating';
+import { useImageFallback } from '../ui/SafeImage';
 
 const LABEL_CLASS = {
   'New Arrival': 'label-new',
@@ -39,6 +40,8 @@ export default function ProductCard({ product, index = 0 }) {
 
   const imageIndex = imgIdx < images.length ? imgIdx : 0;
   const currentImage = images[imageIndex] || FALLBACK_IMAGE;
+  // Live Supabase image → R2 mirror → neutral placeholder.
+  const image = useImageFallback(currentImage, FALLBACK_IMAGE);
 
   const handleView = () => {
     if (!product?.id) return;
@@ -115,14 +118,11 @@ export default function ProductCard({ product, index = 0 }) {
         onMouseLeave={() => setImgIdx(0)}
       >
         <motion.img
-          src={currentImage}
+          src={image.src}
           alt={product?.name || 'Product'}
           loading={index < 4 ? 'eager' : 'lazy'}
           decoding="async"
-          onError={(event) => {
-            event.currentTarget.onerror = null;
-            event.currentTarget.src = FALLBACK_IMAGE;
-          }}
+          onError={image.onError}
           style={{
             display: 'block',
             width: '100%',

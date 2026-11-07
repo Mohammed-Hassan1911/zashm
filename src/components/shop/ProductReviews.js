@@ -11,7 +11,6 @@ const inputStyle = {
   borderRadius: 4,
   color: 'var(--text)',
   padding: '10px 12px',
-  fontSize: 13,
   outline: 'none',
 };
 
@@ -177,6 +176,7 @@ export default function ProductReviews({ product }) {
       {formOpen && (
         <form
           onSubmit={submit}
+          className="review-form"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 18, marginBottom: 24 }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>

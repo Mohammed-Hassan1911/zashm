@@ -26,6 +26,7 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 import { ShopPageSkeleton, ProductPageSkeleton } from './components/ui/PageSkeletons';
 import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
 import WhatsAppButton from './components/ui/WhatsAppButton';
+import OutageNotice from './components/ui/OutageNotice';
 import { setPageMeta } from './lib/seo';
 import { trackPageView } from './lib/ga';
 import { resolveRoute } from './lib/routes';
@@ -258,6 +259,7 @@ function AppInner() {
       ) : (
         <>
           <Header />
+          <OutageNotice />
           <CartDrawer />
 
           <main>

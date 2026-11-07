@@ -4,6 +4,7 @@ import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import ProductReviews from '../components/shop/ProductReviews';
+import SafeImage, { useImageFallback } from '../components/ui/SafeImage';
 import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
@@ -12,6 +13,26 @@ import { resolveRoute } from '../lib/routes';
 import { getColorSwatch } from '../lib/productColors.mjs';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
+
+// Shared pill used by "Size Guide" and the selected-size readout, so both keep
+// exactly the same border, radius, background and height at every breakpoint.
+const sizePillStyle = {
+  color: 'var(--gold)',
+  fontSize: 12,
+  fontWeight: 600,
+  background: 'rgba(201,168,76,0.10)',
+  border: '1px solid var(--border-gold, rgba(201,168,76,0.5))',
+  borderRadius: 999,
+  letterSpacing: 1,
+  whiteSpace: 'nowrap',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '7px 14px',
+  textTransform: 'uppercase',
+  lineHeight: 1,
+  transition: 'background 0.2s, border-color 0.2s',
+};
 
 export default function ProductPage() {
   const { selectedProduct, addToCart, toggleWishlist, wishlist, products, productsLoading, productsLoadStatus, setPage, addRecentlyViewed } = useStore();
@@ -59,6 +80,8 @@ export default function ProductPage() {
 
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
+  // Live Supabase image → R2 mirror → placeholder.
+  const mainImage = useImageFallback(productImages[imgIdx] || productImages[0], FALLBACK_IMG);
   useEffect(() => {
     const container = productImageContainerRef.current;
     const image = productImageRef.current;
@@ -301,10 +324,10 @@ export default function ProductPage() {
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
                   ref={productImageRef}
-                  src={productImages[imgIdx]}
+                  src={mainImage.src}
                   alt={p.name}
                   draggable={false}
-                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
+                  onError={mainImage.onError}
                   initial={{ opacity: 0, scale: 1.05 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -350,7 +373,7 @@ export default function ProductPage() {
                   aria-current={imgIdx === i ? 'true' : undefined}
                   style={{ width: 80, height: 100, padding: 0, background: 'none', cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
                   whileHover={{ scale: 1.05 }}>
-                  <img src={img} alt="" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <SafeImage src={img} alt="" fallback={FALLBACK_IMG} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </motion.button>
               ))}
             </div>
@@ -408,30 +431,22 @@ export default function ProductPage() {
             {/* Sizes */}
 <div style={{ marginBottom: 28 }}>
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-    <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase' }}>Size: <span style={{ color: 'var(--text)' }}>{selSize}</span></p>
+    <span
+      data-size-value="true"
+      aria-label={selSize ? `Selected size: ${selSize}` : 'Selected size: none'}
+      style={sizePillStyle}
+    >
+      Size:
+      <span style={{ color: 'var(--text)', fontSize: 14, fontWeight: 700, letterSpacing: 0.5 }}>
+        {selSize || '—'}
+      </span>
+    </span>
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
       <button 
         data-size-guide="true"
         onClick={() => setSizeGuideOpen(true)}
         type="button"
-        style={{
-          color: 'var(--gold)',
-          fontSize: 12,
-          fontWeight: 600,
-          background: 'rgba(201,168,76,0.10)',
-          border: '1px solid var(--border-gold, rgba(201,168,76,0.5))',
-          borderRadius: 999,
-          cursor: 'pointer',
-          letterSpacing: 1,
-          whiteSpace: 'nowrap',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '7px 14px',
-          textTransform: 'uppercase',
-          lineHeight: 1,
-          transition: 'background 0.2s, border-color 0.2s',
-        }}
+        style={{ ...sizePillStyle, cursor: 'pointer' }}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.20)'; }}
         onMouseLeave={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.10)'; }}
       >
@@ -734,12 +749,12 @@ export default function ProductPage() {
 
               {(p.sizeGuide || p.sizeguide || p.size_guide) ? (
                 <div className="size-guide-image-frame" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', maxHeight: '60vh', overflowY: 'auto', borderRadius: 2, background: '#0a0a0a', padding: 12, border: '1px solid rgba(255,255,255,0.03)' }}>
-                  <img 
-                    src={p.sizeGuide || p.sizeguide || p.size_guide} 
-                    alt={`Size Guide Chart for ${p.name}`} 
-                    onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMG; }}
+                  <SafeImage
+                    src={p.sizeGuide || p.sizeguide || p.size_guide}
+                    alt={`Size Guide Chart for ${p.name}`}
+                    fallback={FALLBACK_IMG}
                     className="size-guide-image"
-                    style={{ width: '100%', height: 'auto', maxHeight: '50vh', objectFit: 'contain' }} 
+                    style={{ width: '100%', height: 'auto', maxHeight: '50vh', objectFit: 'contain' }}
                   />
                 </div>
               ) : (

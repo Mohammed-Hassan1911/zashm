@@ -606,6 +606,13 @@ try {
       assert.ok(/productsLoadStatus === 'idle'|productsLoadStatus === 'loading'/.test(product),
         'only a settled load can produce "Product not found"');
     });
+
+    await step('the selected size sits in the same pill as the Size Guide', () => {
+      assert.ok(/data-size-value="true"/.test(product), 'the selected size has its own pill');
+      assert.ok(/sizePillStyle/.test(product), 'both pills share one style object');
+      assert.ok(/\[data-size-guide\],\s*\n\s*\[data-size-value\]/.test(css),
+        'both pills shrink together at small widths');
+    });
   }
 
   console.log('\n[7] a failed Place Order names the wrong field and its reason');

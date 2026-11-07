@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api';
 import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
+import SafeImage from '../components/ui/SafeImage';
 
 const STATUS_COLORS = {
   Pending: '#f39c12',
@@ -307,7 +308,7 @@ export default function TrackOrder() {
                 {Array.isArray(currentOrder.items) ? (
                   currentOrder.items.map((item, i) => (
                     <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < currentOrder.items.length - 1 ? '1px dashed var(--border)' : 'none' }}>
-                      {item.image && <img src={item.image} alt={item.name} style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
+                      {item.image && <SafeImage src={item.image} alt={item.name} fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="50"%3E%3Crect fill="%23222" width="40" height="50"/%3E%3C/svg%3E'} style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</p>
                         <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>

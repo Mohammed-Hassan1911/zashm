@@ -539,3 +539,59 @@ Browser check at 816px: `innerText` is `Cairo · القاهرة`, `lang="ar"`,
   admin session was available in this environment; the conclusion comes from the
   measured platform responses above and the code path, not a live upload.
 
+
+
+### 13.8 Outage resilience: catalogue snapshot, same-origin image mirror, WhatsApp fallback (2026-11-07, local only)
+
+**Status:** implemented and tested locally; **uncommitted and undeployed**.
+No external account, credential, credit card, or environment variable is needed.
+See `docs/security-production-checklist.md §4b` for the routine and verification
+checklist.
+
+- **Catalogue:** `src/store.js` still prefers `products_public`; on a
+  network/5xx/empty failure it falls back to the same-origin
+  `public/catalog-snapshot.json`, records `productsSource: 'snapshot'` and
+  `productsDegraded: true`, and keeps the last persisted copy if the snapshot is
+  missing too. `src/components/ui/OutageNotice.js` renders an inline backup
+  banner with a WhatsApp action; it is never fixed-position, so it cannot cover
+  the header, drawers, or the floating actions.
+- **Images:** `src/components/ui/SafeImage.js` resolves live Supabase Storage →
+  committed copy under `/media/<bucket path>` → placeholder. `src/lib/resilience.js`
+  builds the same-origin mirror URL and refuses traversal or non-Supabase URLs.
+  `vercel.json` serves `/media/*` with `Cache-Control: public, max-age=31536000,
+  immutable`; upload filenames are random and never overwritten, so this is safe.
+- **Orders:** `placeOrder` now returns the HTTP `status`; checkout offers the
+  prefilled WhatsApp hand-off only on `0`/`408`/`≥500`, never on validation
+  errors. The server stays authoritative and the Telegram notification path is
+  unchanged.
+- **Tooling:** `scripts/resilience-sync.mjs` writes the snapshot and copies the
+  product/size-guide images into `public/media/`. It stores files atomically,
+  skips byte-identical copies, refuses keys outside `products/`, rejects any
+  single image above **1.5MB** (`MIRROR_MAX_FILE_MB`; stale mirrors of oversized
+  files are removed and the run exits non-zero), and aborts past a **200MB**
+  total budget (`MIRROR_MAX_MB`). `--prune` deletes mirrored files that no
+  snapshot product references (and the empty folders); `--force-prune` is needed
+  only when `products_public` itself returns zero rows. Product ids that must
+  stay out of the backup without touching Supabase are listed in
+  `scripts/resilience-exclude.json`. No R2 client or dependency remains.
+- **Data shipped:** `public/catalog-snapshot.json` is intentionally **empty**
+  (`count: 0`, `excludedIds: ["1793846979234526"]`) and `public/media/` contains
+  no images: the only live row is the temporary/test product, which the owner
+  asked to keep out of the shipped backup. Running the sync with `--prune`
+  removed the previous 5 images (~1.0MB). Once a real product is published,
+  remove its exclusion (if any) and re-run `npm run resilience:sync`.
+- **Tests:** `scripts/test-resilience.mjs` — 106 passed, 0 failed, including the
+  per-image/total limits, the exclusion list, the prune dry-run/real-run, and a
+  check that the committed mirror contains only referenced images. Full
+  `ZSHM_REQUIRE_SQL_TESTS=1 npm test` — every suite green (the real-PostgreSQL
+  harness reports 475 passed, 0 failed). `npm run build` passes and the bundle
+  contains no server secret.
+- **Browser verification:** with `VITE_SUPABASE_URL` pointed at an invalid host,
+  the homepage rendered the real product from the snapshot, showed the backup
+  banner and the WhatsApp CTA, and loaded the images from `/media/products/…`.
+  Live mode was verified separately (real Supabase images, no banner, Size Guide
+  pill, WhatsApp FAB at `z-index: 30000`, clean console).
+- **Still required:** when the first real product is published, drop its id from
+  `scripts/resilience-exclude.json` (if it was added) and run
+  `npm run resilience:sync -- --prune`; review the new snapshot and the
+  `public/media` size. Commit/push/deploy needs explicit owner approval.

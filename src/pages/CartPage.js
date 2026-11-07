@@ -4,6 +4,8 @@ import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, Check
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import StockFeedback from '../components/shop/StockFeedback';
+import SafeImage from '../components/ui/SafeImage';
+import { cartWhatsAppMessage, isOutageError, whatsappUrl } from '../lib/resilience';
 import { sanitizeInput, setPageMeta, normalizeEgyptPhone } from '../lib/security';
 import { filterGovernorates, getShippingCost, toCanonicalGovernorate } from '../lib/egyptCities';
 import { clearCheckoutIdempotencyKey, getCheckoutIdempotencyKey } from '../lib/orderIdempotency.mjs';
@@ -247,8 +249,7 @@ export function CartPage() {
                   <motion.div key={item?.key} layout initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0, height:0, overflow:'hidden' }}
                     style={{ display: 'flex', gap: 'clamp(12px, 3vw, 20px)', padding: 'clamp(14px, 3.5vw, 20px) 0', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ position:'relative' }}>
-                      <img src={item?.product?.images?.[0] ?? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'} alt={item?.product?.name ?? 'Product'}
-                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'; }}
+                      <SafeImage src={item?.product?.images?.[0]} fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'} alt={item?.product?.name ?? 'Product'}
                         style={{ width: 'clamp(74px, 22vw, 110px)', aspectRatio: '3 / 4', height: 'auto', objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} loading="lazy" />
                     </div>
                     <div style={{ flex: 1 }}>
@@ -369,6 +370,9 @@ export function CheckoutPage() {
   const [errors, setErrors] = useState({});
   const [stockErrors, setStockErrors] = useState([]);
   const [stockNotice, setStockNotice] = useState([]);
+  // True only when the order failed because the server/database was unreachable
+  // (network, timeout, 5xx) — then we hand the customer to WhatsApp.
+  const [orderOutage, setOrderOutage] = useState(false);
   const [success, setSuccess] = useState(() => readOrderConfirmation());
   const [submitting, setSubmitting] = useState(false);
   const [coupon, setCoupon] = useState('');
@@ -508,6 +512,7 @@ export function CheckoutPage() {
     setSubmitting(true);
     setStockErrors([]);
     setStockNotice([]);
+    setOrderOutage(false);
 
     try {
       const idempotencyKey = getCheckoutIdempotencyKey(safeCart);
@@ -569,6 +574,7 @@ export function CheckoutPage() {
           );
         });
         setStockNotice(notices);
+        setOrderOutage(isOutageError(result?.status));
         if (notices.length) {
           toast(notices[0], 'info');
         } else if (result?.blockedLocally) {
@@ -598,6 +604,7 @@ export function CheckoutPage() {
       const raw = error && error.message ? String(error.message) : '';
       setStockErrors([raw ? raw : ('Order failed. Please try again.')]);
       setStockNotice([]);
+      setOrderOutage(isOutageError(error && error.status));
       isPlacingOrder.current = false;
       setSubmitting(false);
     }
@@ -1042,6 +1049,23 @@ export function CheckoutPage() {
           style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>{'Checkout'}</motion.h1>
 
         <StockFeedback notice={stockNotice} errors={stockErrors} />
+        {orderOutage && (
+          <div className="outage-order-cta" role="status">
+            <p>
+              تعذّر إرسال الطلب للسيرفر دلوقتي. ابعتلنا طلبك على واتساب وهنكمّله معاك فورًا.
+              <br />
+              We couldn&apos;t reach the server. Send your order on WhatsApp and our team will complete it.
+            </p>
+            <a
+              className="gold-btn"
+              href={whatsappUrl(cartWhatsAppMessage(safeCart, finalTotal))}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              اطلب عبر واتساب / Order on WhatsApp
+            </a>
+          </div>
+        )}
         <LiveStockBanner issues={liveIssues} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="checkout-grid">
@@ -1205,7 +1229,7 @@ export function CheckoutPage() {
                 {safeCart.map(i => (
                   <div key={i?.key} style={{ display: 'flex', gap:10, justifyContent: 'space-between', marginBottom: 10, alignItems:'flex-start', width: '100%' }}>
                     <div style={{ display:'flex', gap:8 }}>
-                      <img src={i?.product?.images?.[0] ?? ''} alt="" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.visibility = 'hidden'; }} style={{ width:40, height:50, objectFit:'cover', borderRadius:2, flexShrink:0 }} loading="lazy" />
+                      <SafeImage src={i?.product?.images?.[0]} fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="50"%3E%3Crect fill="%23222" width="40" height="50"/%3E%3C/svg%3E'} alt="" style={{ width:40, height:50, objectFit:'cover', borderRadius:2, flexShrink:0 }} loading="lazy" />
                       <div>
                         <p style={{ fontSize:11, fontWeight:500, lineHeight:1.3 }}>{i?.product?.name ?? 'Unknown Product'}</p>
                         <p style={{ fontSize:10, color:'var(--text3)' }}>{i?.size ?? 'N/A'}/{i?.color ?? 'N/A'} ×{i?.qty ?? 0}</p>

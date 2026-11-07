@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { db, trackEvent } from './lib/security';
 import { supabase } from './lib/supabase'; // ربط سوبابيز الأونلاين
 import { api } from './lib/api';
+import { fetchCatalogSnapshot } from './lib/resilience';
 import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
 import { clearOrderConfirmation } from './lib/orderConfirmation.mjs';
 import { effectivePrice, hasInvalidVariantConfig, hasVariantStock, isSellableVariant, sellableStockFor } from './lib/pricing';
@@ -224,12 +225,27 @@ function normalizeProductRow(p) {
   };
 }
 
+// Backup catalogue: the same-origin snapshot written by
+// scripts/resilience-sync.mjs. Used only when the live view is unreachable.
+async function readSnapshotProducts() {
+  try {
+    const rows = await fetchCatalogSnapshot();
+    return rows.map(normalizeProductRow);
+  } catch (err) {
+    console.error('Catalogue snapshot unavailable:', (err && err.message) || err);
+    return null;
+  }
+}
+
 // ─── ZUSTAND STORE ──────────────────────────────────────────────────────────
 export const useStore = create((set, get) => ({
   products: db.getAll('products') || [],
   productsLoading: false,
   productsLoadStatus: 'idle',
   productsError: null,
+  // 'live' = Supabase view, 'snapshot' = backup JSON, 'cache' = persisted copy.
+  productsSource: 'cache',
+  productsDegraded: false,
   // Admin-only copy read from /api/admin/products. It is intentionally kept
   // separate from `products`: the storefront must stay on the sanitized public
   // view, while the admin panel needs inactive rows and `tags`.
@@ -245,22 +261,52 @@ export const useStore = create((set, get) => ({
   refreshProducts: async () => {
     set({ productsLoading: true, productsLoadStatus: 'loading', productsError: null });
     try {
-      // SEC-27: read the sanitized view (no reservedStock). The server is the
-      // single source of truth for availability at checkout.
-      const { data, error } = await supabase.from('products_public').select('*');
-      if (error) {
-        set({ productsLoadStatus: 'error', productsError: error.message || 'Could not load products' });
-        console.error('Failed to fetch online products:', error);
-      } else if (Array.isArray(data)) {
-        const secureData = data.map(normalizeProductRow);
-        db.setAll('products', secureData);
-        set({ products: secureData, productsLoadStatus: 'success', productsError: null });
-      } else {
-        set({ productsLoadStatus: 'error', productsError: 'No product data returned' });
+      let failure = null;
+      try {
+        // SEC-27: read the sanitized view (no reservedStock). The server is the
+        // single source of truth for availability at checkout.
+        const { data, error } = await supabase.from('products_public').select('*');
+        if (!error && Array.isArray(data)) {
+          const secureData = data.map(normalizeProductRow);
+          db.setAll('products', secureData);
+          set({
+            products: secureData,
+            productsLoadStatus: 'success',
+            productsSource: 'live',
+            productsDegraded: false,
+            productsError: null,
+          });
+          return;
+        }
+        failure = error
+          ? (error.message || 'Could not load products')
+          : 'No product data returned';
+      } catch (err) {
+        failure = (err && err.message) || 'Could not load products';
       }
-    } catch (err) {
-      set({ productsLoadStatus: 'error', productsError: err.message || 'Could not load products' });
-      console.error("Failed to fetch online products:", err);
+
+      // The live view is unreachable. Serve the catalogue snapshot so a new
+      // visitor still sees the collection, and flag the page as degraded so the
+      // WhatsApp fallback appears. Never hide cached rows behind a hard error.
+      console.error('Failed to fetch online products:', failure);
+      const snapshot = await readSnapshotProducts();
+      if (snapshot && snapshot.length > 0) {
+        db.setAll('products', snapshot);
+        set({
+          products: snapshot,
+          productsLoadStatus: 'success',
+          productsSource: 'snapshot',
+          productsDegraded: true,
+          productsError: failure,
+        });
+      } else {
+        set({
+          productsLoadStatus: 'error',
+          productsSource: 'cache',
+          productsDegraded: true,
+          productsError: failure,
+        });
+      }
     } finally {
       set({ productsLoading: false });
     }
@@ -710,7 +756,15 @@ export const useStore = create((set, get) => ({
         ? err.payload.errors
         : [err && err.message ? err.message : 'Order failed. Please try again.'];
       const stockIssues = (err && Array.isArray(err.payload?.stockIssues)) ? err.payload.stockIssues : [];
-      return { success: false, error: errors[0], errors, stockIssues };
+      return {
+        success: false,
+        error: errors[0],
+        errors,
+        stockIssues,
+        // 0 = network, 408 = timeout, >=500 = server down. The checkout UI uses
+        // this only to offer the WhatsApp fallback; the message is unchanged.
+        status: (err && typeof err.status === 'number') ? err.status : 0,
+      };
     }
 
     const order = payload.order;

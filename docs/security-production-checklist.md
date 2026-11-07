@@ -215,6 +215,94 @@ that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
 
 ---
 
+## 4b. Outage resilience — snapshot, same-origin image mirror, WhatsApp fallback
+
+**Status (2026-11-07): implemented in the repository, tests green, not committed
+or deployed.** Production still runs the previous bundle. No external account,
+credential, credit card, or environment variable is involved.
+
+Goal: if Supabase (or its Storage) is unreachable, ZASHM keeps looking like a
+store instead of an empty error page, and a customer can still place an order on
+WhatsApp.
+
+| Layer | Behaviour |
+|---|---|
+| Catalogue | `src/store.js` reads `products_public` first. On network/5xx/empty failure it serves `public/catalog-snapshot.json` (same origin, real public columns only), sets `productsSource: 'snapshot'`, and shows a non-blocking banner. If the snapshot is also missing it keeps the persisted copies already in `localStorage`. |
+| Images | `SafeImage` / `useImageFallback` try the live Supabase Storage URL, then the committed copy under `/media/<bucket path>`, then the neutral placeholder. Non-Supabase URLs and `..` paths are never mirrored. Vercel serves `/media/*` with `Cache-Control: public, max-age=31536000, immutable` (upload names are random and never overwritten). |
+| Ordering | `/api/orders` still runs only against the DB. When a placement fails with status `0`, `408` or `≥500`, checkout shows a bilingual WhatsApp hand-off prefilled with the bag (name, size, colour, qty, estimated total). Validation errors (`400`/`409`) do **not** offer it. |
+| Floating actions | The banner is inline and the WhatsApp CTA is a normal link; the always-visible WhatsApp FAB and scroll-to-top keep their `z-index: 30000` behaviour. |
+
+**Routine after catalogue or image changes (manual, no credentials):**
+
+```bash
+npm run resilience:dry -- --skip-images   # plan the snapshot only
+npm run resilience:sync -- --skip-images  # rewrite public/catalog-snapshot.json
+npm run resilience:dry                    # plan snapshot + image mirror
+npm run resilience:dry -- --prune         # plan snapshot + image mirror + deletions
+npm run resilience:sync -- --prune        # apply, deleting unreferenced images
+```
+
+The snapshot and the mirrored images are committed with the site, so they must
+be regenerated and reviewed before a release that changes the catalogue. The
+script refuses any single image above **1.5MB** (`MIRROR_MAX_FILE_MB`), removes
+a stale copy of an oversized file, and exits non-zero so the release is blocked
+until the image is compressed or the limit is deliberately raised. It also
+refuses to grow the whole mirror past **200MB** (override with `MIRROR_MAX_MB`
+only after reviewing the repository size). `--best-effort` exists for build
+hooks but a release run should fail loudly.
+
+**Removing a product (and reclaiming its mirror space):**
+
+- **Deleted in Supabase:** nothing else to do. `npm run resilience:sync` drops it
+  from the snapshot automatically and reports its orphaned images; add `--prune`
+  to delete them from `public/media`.
+- **Still live but must stay out of the backup** (temporary/test row, or a
+  product not meant to be browsable offline): add its id to
+  `scripts/resilience-exclude.json` under `excludedIds`, then run
+  `npm run resilience:sync -- --prune`. The row in Supabase is never modified.
+- Pruning deletes only files inside `public/media/products/` that no snapshot
+  product references (and removes the empty folders). A dry run lists them
+  first. The script refuses to prune when `products_public` itself returns zero
+  rows (possible revoked grant/RLS regression); `--force-prune` overrides that
+  only after confirming the empty catalogue is intended.
+
+**Current state:** the only live row is the temporary/test product
+`1793846979234526`, so it is listed in `scripts/resilience-exclude.json` and the
+shipped backup is intentionally empty (`count: 0`, no mirrored images) until a
+real product is published. Repeat visitors still get their persisted catalogue
+from `localStorage` during an outage; the banner and WhatsApp hand-off still
+appear.
+
+**Verification:**
+
+- Snapshot + image path: run Vite with an invalid `VITE_SUPABASE_URL`; the
+  homepage must render the catalogue, show the backup banner, and load the real
+  product images from `/media/products/…` (the failed Supabase requests are
+  expected). This was verified locally on 2026-11-07.
+- Order path: force `/api/orders` to `500`; checkout must keep the real error and
+  additionally show the WhatsApp hand-off; a `400` must not.
+- Secret check: `grep -rE "R2_|SERVICE_ROLE|SESSION_SECRET" build/assets` must be
+  empty.
+- Integrity: `scripts/test-resilience.mjs §8` fails if a snapshot image has no
+  committed mirror file, the mirror exceeds the budget, or it contains an
+  unreferenced image; §6c/§6d cover the exclusion list and the prune path.
+
+**Caveats:**
+
+- The snapshot is a point-in-time copy. Prices/stock shown from it are only a
+  browsing aid; the server remains authoritative and ordering via WhatsApp is
+  completed by the team.
+- The mirror protects against a Supabase outage, not a Vercel outage: if Vercel
+  is down the whole storefront (and the snapshot) is down anyway.
+- Committed images grow the repository. Re-run the sync only when the catalogue
+  changes, and check `du -sh public/media` before committing.
+- `scripts/test-resilience.mjs` covers URL mapping, traversal rejection, the
+  snapshot reader, outage classification, the WhatsApp message, the mirror
+  helpers/wiring, the per-image/total limits, the exclusion list, the prune path,
+  and the committed files (106 checks). It runs as part of `npm test`.
+
+---
+
 ## 5. Known remaining findings
 
 | ID | Status | Note |

@@ -275,6 +275,14 @@ console.log('\n[7] static wiring');
   ok(page.includes('ProductReviews'), 'the product page renders the reviews section');
   ok(reviewsUi.includes("api.post('/reviews'"), 'the form submits to the public endpoint');
   ok(reviewsUi.includes('pending') || reviewsUi.includes('once approved'), 'the form explains moderation');
+
+  const css = read('src/index.css');
+  const reviewCss = css.slice(css.indexOf('.review-form input'));
+  ok(reviewsUi.includes('className="review-form"'), 'the review form is scoped for mobile input sizing');
+  ok(!/fontSize:\s*13/.test(reviewsUi.slice(reviewsUi.indexOf('const inputStyle'), reviewsUi.indexOf('function formatDate'))),
+    'the field font size comes from CSS, not an inline override');
+  ok(/@media \(max-width: 768px\)[\s\S]{0,120}font-size:\s*16px/.test(reviewCss.slice(0, 320)),
+    'review fields use 16px on small screens (no iOS zoom on focus)');
   ok(adminUi.includes("adminPage === 'reviews'"), 'the admin console has a reviews route');
   ok(adminUi.includes("id:'reviews'"), 'the admin sidebar links to reviews');
 
