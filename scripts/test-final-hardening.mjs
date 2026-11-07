@@ -106,7 +106,7 @@ async function track(query) {
   return { status: res.statusCode, body: res.body, headers: res.headers };
 }
 
-// ─── [1] Telegram markdown/CRLF injection ───────────────────────────────────
+// ─── [1] Telegram plain-text integrity / CRLF injection ─────────────────────
 console.log('\n[1] Telegram message sanitisation');
 {
   const hostile = 'Alice\n*Total: 0* _urgent_ `x` [link](https://evil)';
@@ -130,17 +130,25 @@ console.log('\n[1] Telegram message sanitisation');
     'https://example.test/?track=ZSH-ABC123-DEADBEEF&tk=abc'
   );
 
+  // The message is forwarded to the customer as-is, so it is plain text: no
+  // Markdown escaping at all. `*`, `_` and `-` must survive, and the only
+  // sanitisation that matters is that a newline cannot forge an extra line.
   const nameLine = message.split('\n').find((l) => l.includes('الاسم:'));
   ok(nameLine !== undefined, 'customer line exists');
-  ok(!nameLine.includes('*'), 'customer line cannot inject bold markers');
-  ok(!nameLine.includes('_'), 'customer line cannot inject italics markers');
   ok(!nameLine.includes('\n'), 'customer value stays on one line');
-  ok(nameLine.includes('Alice') && nameLine.includes('Total: 0'), 'content is preserved as plain text');
+  ok(nameLine.includes('*Total: 0*'), 'markdown characters are preserved verbatim');
+  ok(nameLine.includes('_urgent_'), 'underscores survive (emails stay copyable)');
+  eq(message.split('\n').filter((l) => l.includes('💰')).length, 1,
+    'customer input cannot forge a summary section');
 
   const itemLine = message.split('\n').find((l) => l.includes('Shirt'));
-  ok(itemLine !== undefined && !itemLine.includes('*'), 'item name cannot inject bold markers');
-  ok(!message.includes('*FREE*'), 'no forged markdown survives anywhere');
+  ok(itemLine !== undefined && itemLine.includes('Shirt *FREE*'), 'item name stays on one line');
+  ok(!message.includes('\n*FREE*'), 'no forged line survives anywhere');
   ok(!message.includes('\r'), 'no carriage returns survive');
+
+  ok(message.includes('• الإيميل: a@example.com'), 'email is copied verbatim');
+  ok(message.includes('• رقم الطلب: ZSH-ABC123-DEADBEEF'), 'order id keeps its hyphens');
+  ok(message.startsWith('السلام عليكم أ/ Alice 👋'), 'greeting uses the first name');
 
   const longName = 'A'.repeat(600);
   const truncated = lib.buildOrderTelegramMessage(
@@ -148,7 +156,7 @@ console.log('\n[1] Telegram message sanitisation');
     'https://example.test'
   );
   const truncatedLine = truncated.split('\n').find((l) => l.includes('الاسم:'));
-  ok(truncatedLine.length < 450, 'values are capped at 400 characters');
+  ok(truncatedLine.length <= '• الاسم: '.length + 60, 'values are capped at 60 characters');
 }
 
 // ─── [2] order id generation ────────────────────────────────────────────────
@@ -289,12 +297,11 @@ console.log('\n[4] secure order tracking');
   ok(location.startsWith('https://wa.me/201012345678?text='), 'wa link targets the normalised phone');
   eq(r.headers['cache-control'], 'no-store', 'hand-off is never cached');
   const prefill = decodeURIComponent(location.split('?text=')[1] || '');
-  ok(prefill.startsWith('ZASHM | '), 'prefilled text is the order message');
+  ok(prefill.startsWith('السلام عليكم'), 'prefilled text is the customer confirmation message');
   ok(prefill.includes(`• رقم الطلب: ${orderId}`), 'prefilled text carries the order id');
-  ok(prefill.includes('— واتساب'), 'WhatsApp hint is kept in the text');
+  ok(prefill.includes('• واتساب: https://wa.me/201012345678'), 'customer WhatsApp link is included');
   ok(prefill.includes('• الشحن: EGP 65'),
     'shipping is derived from the city when the row does not store it');
-  ok(!prefill.includes('wa.me'), 'no WhatsApp link inside the prefilled text');
   ok(!prefill.includes('/admin'), 'no admin link inside the prefilled text');
   ok(!prefill.includes('/api/orders?'), 'no hand-off link inside the prefilled text');
   eq(db.queries.length, 1, 'hand-off performs one lookup');

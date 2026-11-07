@@ -389,6 +389,10 @@ function setStatusSql(id, expected, next) {
 function deleteOrderSql(id) {
   return `SELECT public.atomic_delete_order(${textLit(id)});`;
 }
+function editOrderSql(id, rev, patch) {
+  return `SELECT public.atomic_edit_order(
+    ${textLit(id)}, ${rev}, ${dollar(JSON.stringify(patch))}::jsonb);`;
+}
 
 function seedShop(db) {
   const r = runSql(db, `
@@ -614,6 +618,7 @@ async function main() {
   console.log('\n[1] applying migrations');
   apply(DB, 'supabase/atomic_place_order.sql');
   apply(DB, 'supabase/atomic_order_lifecycle.sql');
+  apply(DB, 'supabase/atomic_edit_order.sql');
   apply(DB, 'supabase/admin_protection.sql');
   apply(DB, 'supabase/coupons_lockdown.sql');
   apply(DB, 'supabase/users_orders_lockdown.sql');
@@ -1557,8 +1562,248 @@ async function main() {
       'cancel still restores stock');
   }
 
-  // [4i] users/orders/coupons lockdown: browser roles are denied, service_role works.
-  console.log('\n[4i] users/orders/coupons lockdown');
+  // [4i] atomic_edit_order: revision, net stock, coupon and status gates.
+  console.log('\n[4i] atomic_edit_order: customer + item correction');
+  seedShop(DB);
+  {
+    const placed = lastJson(runSql(DB, placeSql(makeOrder({
+      id: 'ORD-EDIT-1',
+      items: [{ productId: 1, qty: 2, size: 'M', color: 'Black', unitPrice: 50, price: 100 }],
+      discountCode: 'SAVE10',
+      subtotal: 100,
+      discount: 10,
+      total: 155,
+    }), null)).out);
+    eq(placed.ok, true, 'the base order places');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 8,
+      'placing the base order reserves two units');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 1,
+      'placing the base order consumes the coupon once');
+  }
+
+  {
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 0, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'updated',
+      subtotal: 100, discount: 10, total: 155, discountCode: 'SAVE10',
+    })).out);
+    eq(r.ok, true, 'a customer-only edit succeeds');
+    eq(r.rev, 1, 'the revision advances to 1');
+    eq(scalar(DB, `SELECT customer FROM public.orders WHERE id='ORD-EDIT-1'`), 'Edited Name',
+      'the customer name is updated');
+    eq(scalar(DB, `SELECT phone FROM public.orders WHERE id='ORD-EDIT-1'`), '01123456789',
+      'the phone is updated');
+    eq(scalarNum(DB, `SELECT ("timestamps"->>'rev')::int FROM public.orders WHERE id='ORD-EDIT-1'`), 1,
+      'timestamps.rev is stored');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 8,
+      'a customer-only edit does not touch stock');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 1,
+      'a customer-only edit does not touch coupon usage');
+  }
+
+  {
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 1, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'updated',
+      subtotal: 250, discount: 25, total: 290, discountCode: 'SAVE10',
+      items: [{ productId: 1, qty: 5, size: 'M', color: 'Black', name: 'Tee', unitPrice: 50, price: 250 }],
+    })).out);
+    eq(r.ok, true, 'increasing the quantity succeeds');
+    eq(r.rev, 2, 'the revision advances to 2');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 5,
+      'only the three extra units are deducted (8 → 5)');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 1,
+      'keeping the same coupon does not consume it again');
+    eq(scalarNum(DB, `SELECT discount FROM public.orders WHERE id='ORD-EDIT-1'`), 25,
+      'the percentage discount is recomputed from the new subtotal');
+  }
+
+  {
+    // All five units are already reserved. A same-quantity edit is a NET ZERO
+    // change and must not need availability.
+    runSql(DB, `UPDATE public.products
+                   SET stock = 0, "variantStock" = '{"M-Black": 0}'::jsonb
+                 WHERE id = 1;`);
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 2, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'same qty',
+      subtotal: 250, discount: 25, total: 290, discountCode: 'SAVE10',
+      items: [{ productId: 1, qty: 5, size: 'M', color: 'Black', name: 'Tee', unitPrice: 50, price: 250 }],
+    })).out);
+    eq(r.ok, true, 'a same-quantity edit succeeds with zero available stock');
+    eq(r.rev, 3, 'the net-zero edit advances the revision');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 0,
+      'net-zero stock is unchanged');
+  }
+
+  {
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 3, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'too many',
+      subtotal: 300, discount: 30, total: 335, discountCode: 'SAVE10',
+      items: [{ productId: 1, qty: 6, size: 'M', color: 'Black', name: 'Tee', unitPrice: 50, price: 300 }],
+    })).out);
+    eq(r.ok, false, 'increasing beyond available stock is rejected');
+    eq(r.reason, 'unavailable', 'the rejection names the stock reason');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 0,
+      'the rejected increase writes no stock');
+    eq(scalarNum(DB, `SELECT (items->0->>'qty')::int FROM public.orders WHERE id='ORD-EDIT-1'`), 5,
+      'the rejected edit leaves the stored items unchanged');
+    eq(scalarNum(DB, `SELECT ("timestamps"->>'rev')::int FROM public.orders WHERE id='ORD-EDIT-1'`), 3,
+      'the rejected edit leaves the revision unchanged');
+  }
+
+  {
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 3, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'smaller',
+      subtotal: 100, discount: 10, total: 155, discountCode: 'SAVE10',
+      items: [{ productId: 1, qty: 2, size: 'M', color: 'Black', name: 'Tee', unitPrice: 50, price: 100 }],
+    })).out);
+    eq(r.ok, true, 'reducing the quantity succeeds');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), 3,
+      'the three released units are restored (0 → 3)');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 1,
+      'the coupon counter is unchanged');
+  }
+
+  {
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 4, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'no coupon',
+      subtotal: 100, discount: 0, total: 165, discountCode: '',
+    })).out);
+    eq(r.ok, true, 'removing the coupon succeeds');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 0,
+      'removing the coupon releases exactly one use');
+    eq(scalar(DB, `SELECT "discountCode" FROM public.orders WHERE id='ORD-EDIT-1'`), '',
+      'the order no longer references a coupon');
+    eq(scalarNum(DB, `SELECT total FROM public.orders WHERE id='ORD-EDIT-1'`), 165,
+      'shipping is still included in the new total');
+  }
+
+  {
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 5, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'coupon again',
+      subtotal: 100, discount: 10, total: 155, discountCode: 'SAVE10',
+    })).out);
+    eq(r.ok, true, 'adding a coupon back succeeds');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 1,
+      'the re-added coupon is consumed once');
+  }
+
+  {
+    runSql(DB, `
+      INSERT INTO public.coupons
+        (code, type, value, "discountValue", active, "startDate", "endDate",
+         "usageLimit", "usageCount", "minOrderAmount", "maxDiscount")
+      VALUES ('NEW20', 'fixed', 20, 20, true, '2020-01-01', '2099-12-31', 5, 0, 0, 0)
+      ON CONFLICT (code) DO NOTHING;
+    `);
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 6, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: 'edited@example.com',
+      address: 'New address 123', city: 'Cairo', notes: 'new coupon',
+      subtotal: 100, discount: 20, total: 145, discountCode: 'NEW20',
+    })).out);
+    eq(r.ok, true, 'switching to another coupon succeeds');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='SAVE10'`), 0,
+      'the old coupon is released');
+    eq(scalarNum(DB, `SELECT "usageCount" FROM public.coupons WHERE code='NEW20'`), 1,
+      'the new coupon is consumed');
+  }
+
+  {
+    const before = scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`);
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 6, {
+      customer: 'Stale', phone: '01123456789', phoneAlt: '', email: '', address: 'New address 123',
+      city: 'Cairo', notes: '', subtotal: 100, discount: 20, total: 145, discountCode: 'NEW20',
+    })).out);
+    eq(r.ok, false, 'a stale revision is rejected');
+    eq(r.reason, 'rev_conflict', 'the rejection names rev_conflict');
+    eq(Number(r.rev), 7, 'the current revision is returned');
+    eq(scalar(DB, `SELECT customer FROM public.orders WHERE id='ORD-EDIT-1'`), 'Edited Name',
+      'the stale edit wrote nothing');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), before,
+      'the stale edit did not touch stock');
+  }
+
+  {
+    const moved = lastJson(runSql(DB, setStatusSql('ORD-EDIT-1', 'Pending', 'Shipped')).out);
+    eq(moved.ok, true, 'the order can move to Shipped');
+    const itemsEdit = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 7, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: '',
+      address: 'New address 123', city: 'Cairo', notes: '',
+      subtotal: 50, discount: 0, total: 115, discountCode: '',
+      items: [{ productId: 1, qty: 1, size: 'M', color: 'Black', name: 'Tee', unitPrice: 50, price: 50 }],
+    })).out);
+    eq(itemsEdit.ok, false, 'items cannot be edited after shipment');
+    eq(itemsEdit.reason, 'items_locked', 'the rejection names items_locked');
+
+    const customerEdit = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 7, {
+      customer: 'Shipped Customer', phone: '01123456789', phoneAlt: '', email: '',
+      address: 'New address 123', city: 'Cairo', notes: '',
+      subtotal: 100, discount: 20, total: 145, discountCode: 'NEW20',
+    })).out);
+    eq(customerEdit.ok, true, 'customer details stay editable after shipment');
+    eq(customerEdit.rev, 8, 'the customer edit advances the revision');
+  }
+
+  {
+    // Move back to a pre-fulfilment status so the two remaining item edits are
+    // judged on their own failure (coupon / missing product), not items_locked.
+    // Items are editable only in Pending/Confirmed — Processing is already
+    // fulfilment, so the status must return to Confirmed.
+    const reopened = lastJson(runSql(DB, setStatusSql('ORD-EDIT-1', 'Shipped', 'Confirmed')).out);
+    eq(reopened.ok, true, 'the order can move back to Confirmed without touching stock');
+    eq(scalar(DB, `SELECT status FROM public.orders WHERE id='ORD-EDIT-1'`), 'Confirmed',
+      'the order really is Confirmed before the remaining item edits');
+
+    const before = scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`);
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 8, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: '',
+      address: 'New address 123', city: 'Cairo', notes: '',
+      subtotal: 150, discount: 0, total: 215, discountCode: 'NEW20',
+      items: [{ productId: 1, qty: 3, size: 'M', color: 'Black', name: 'Tee', unitPrice: 50, price: 150 }],
+    })).out);
+    eq(r.ok, false, 'a discount that does not match the coupon is rejected');
+    eq(r.reason, 'coupon_changed', 'the rejection names coupon_changed');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), before,
+      'the coupon failure rolls the stock change back');
+    eq(scalarNum(DB, `SELECT (items->0->>'qty')::int FROM public.orders WHERE id='ORD-EDIT-1'`), 2,
+      'the coupon failure leaves the stored items unchanged');
+    eq(scalarNum(DB, `SELECT ("timestamps"->>'rev')::int FROM public.orders WHERE id='ORD-EDIT-1'`), 8,
+      'the coupon failure leaves the revision unchanged');
+  }
+
+  {
+    const before = scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`);
+    const r = lastJson(runSql(DB, editOrderSql('ORD-EDIT-1', 8, {
+      customer: 'Edited Name', phone: '01123456789', phoneAlt: '', email: '',
+      address: 'New address 123', city: 'Cairo', notes: '',
+      subtotal: 50, discount: 0, total: 115, discountCode: '',
+      items: [{ productId: 999, qty: 1, size: 'M', color: 'Black', name: 'Gone' }],
+    })).out);
+    eq(r.ok, false, 'a new line whose product disappeared is rejected');
+    eq(r.reason, 'missing_product', 'the rejection names the missing product');
+    eq(scalarNum(DB, `SELECT stock FROM public.products WHERE id=1`), before,
+      'the missing-product failure writes no stock');
+  }
+
+  {
+    eq(scalar(DB, `SELECT has_function_privilege('anon',
+              'public.atomic_edit_order(text,integer,jsonb)', 'EXECUTE')`), 'f',
+      'anon cannot execute atomic_edit_order');
+    eq(scalar(DB, `SELECT has_function_privilege('authenticated',
+              'public.atomic_edit_order(text,integer,jsonb)', 'EXECUTE')`), 'f',
+      'authenticated cannot execute atomic_edit_order');
+    eq(scalar(DB, `SELECT has_function_privilege('service_role',
+              'public.atomic_edit_order(text,integer,jsonb)', 'EXECUTE')`), 't',
+      'service_role can execute atomic_edit_order');
+  }
+
+  // [4j] users/orders/coupons lockdown: browser roles are denied, service_role works.
+  console.log('\n[4j] users/orders/coupons lockdown');
   {
     for (const table of ['users', 'orders', 'coupons']) {
       eq(scalar(DB, `SELECT has_table_privilege('anon', 'public.${table}', 'SELECT')`), 'f',

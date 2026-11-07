@@ -64,7 +64,6 @@ const libPath = require.resolve('../api/_lib.js');
 let response = null;
 let rpcCalls = [];
 let telegramSends = 0;
-let barkSends = 0;
 let productRows = [];
 
 const fakeSb = {
@@ -110,7 +109,6 @@ Object.assign(require.cache[libPath], {
     generateOrderId: () => 'ZSH-TESTPROBE000001-0001',
     parseOrderRow: (row) => ({ ...row }),
     sendTelegramNotification: async () => { telegramSends += 1; },
-    sendBarkNotification: async () => { barkSends += 1; },
     buildOrderTelegramMessage: () => 'test message',
     trackingUrlFor: () => 'https://test.invalid/track',
     verifyTrackToken: () => true,
@@ -125,7 +123,6 @@ async function place(items, rows, extra = {}) {
   response = null;
   rpcCalls = [];
   telegramSends = 0;
-  barkSends = 0;
   productRows = rows;
   currentBody = {
     items,
@@ -257,7 +254,7 @@ console.log('\n[1] direct POST to /api/orders with an undeclared variation');
   eq(items[0].unitPrice, 2000, 'server prices a declared variation from the DB sale price');
   eq(rpcCalls[0].args.p_order.subtotal, 6000, 'server-authoritative subtotal');
   eq(telegramSends, 1, 'a successful order notifies Telegram');
-  eq(barkSends, 1, 'a successful order notifies Bark (iOS push channel)');
+  eq(realLib.sendBarkNotification, undefined, 'Bark is not part of the notification path');
 }
 
 console.log('\n[1b] cart behaviour when an orphan line sits next to a valid line');

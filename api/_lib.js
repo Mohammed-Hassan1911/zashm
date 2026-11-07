@@ -960,6 +960,84 @@ function validateOrderPayload(body) {
   };
 }
 
+/**
+ * Validate an admin order edit. The customer block is always required (the
+ * dashboard sends the complete current values), while `items` and `couponCode`
+ * are optional: omitting them means "keep the stored value". Item validation
+ * mirrors validateOrderPayload so an edited cart obeys exactly the same bounds
+ * as a newly placed one.
+ */
+function validateOrderEditPayload(body) {
+  const errors = [];
+  const c = (body && body.customer) || {};
+  const name = cleanText(c.name, 2, 100);
+  const address = cleanText(c.address, 5, 300);
+  const phone = normalizePhone(c.phone);
+  const city = str(c.city).trim();
+
+  if (name === null) errors.push('Please enter the customer full name (at least 2 characters).');
+  if (!EGYPT_PHONE_RE.test(phone)) errors.push('Please enter a valid Egyptian mobile number (e.g. 01XXXXXXXXX).');
+  const phoneAlt = c.phoneAlt ? normalizePhone(c.phoneAlt) : '';
+  if (phoneAlt && (!EGYPT_PHONE_RE.test(phoneAlt) || phoneAlt === phone)) {
+    errors.push('The alternative phone number is invalid or the same as the primary one.');
+  }
+  const email = str(c.email).trim();
+  if (email && (email.length > 200 || !EMAIL_RE.test(email))) errors.push('Please enter a valid email address.');
+  if (address === null) errors.push('Please enter a complete street address (at least 5 characters).');
+  if (!EGYPT_GOVERNORATES.includes(city)) errors.push('Please select the governorate from the list.');
+
+  let items = null;
+  if (body && body.items !== undefined) {
+    if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 30) {
+      errors.push('The order must contain between 1 and 30 items.');
+    } else {
+      items = [];
+      for (const raw of body.items) {
+        const productId = intInRange(raw && raw.productId, 1, Number.MAX_SAFE_INTEGER);
+        const qty = intInRange(raw && raw.qty, 1, 20);
+        if (productId === null || qty === null) {
+          errors.push('Invalid item or quantity in the edited order.');
+          items = null;
+          break;
+        }
+        items.push({
+          productId,
+          qty,
+          size: str(raw.size).slice(0, 50),
+          color: str(raw.color).slice(0, 50),
+        });
+      }
+    }
+  }
+
+  let couponProvided = false;
+  let couponCode = null;
+  if (body && Object.prototype.hasOwnProperty.call(body, 'couponCode')) {
+    couponProvided = true;
+    couponCode = str(body.couponCode).trim().toUpperCase();
+    if (couponCode && !COUPON_CODE_RE.test(couponCode)) {
+      errors.push('A valid discount code is required.');
+    }
+  }
+
+  if (errors.length) return { ok: false, errors };
+  return {
+    ok: true,
+    customer: {
+      name,
+      phone,
+      phoneAlt,
+      email,
+      address,
+      city,
+      notes: str(c.notes).slice(0, 500),
+    },
+    items,
+    couponProvided,
+    couponCode,
+  };
+}
+
 function validateProductPayload(p) {
   const errors = [];
   const name = cleanText(p.name, 1, 200);
@@ -1121,15 +1199,19 @@ function computeCouponDiscount(coupon, subtotal) {
  * disagree about active / date window / usage limit. `today` is a Cairo
  * YYYY-MM-DD string.
  */
-function couponIsRedeemable(row, today) {
+function couponIsRedeemable(row, today, { allowExhausted = false } = {}) {
   if (!row || typeof row !== 'object') return false;
   if (row.active !== true) return false;
   const start = str(row.startDate);
   const end = str(row.endDate);
   if (!start || !end || !(start <= today && end >= today)) return false;
-  const used = Number(row.usageCount || 0);
-  const limit = Number(row.usageLimit || 0);
-  if (!Number.isFinite(used) || !Number.isFinite(limit) || !(used < limit)) return false;
+  // When an existing order is edited and keeps its coupon, this order already
+  // consumed a unit, so the exhausted usage limit must not reject it.
+  if (!allowExhausted) {
+    const used = Number(row.usageCount || 0);
+    const limit = Number(row.usageLimit || 0);
+    if (!Number.isFinite(used) || !Number.isFinite(limit) || !(used < limit)) return false;
+  }
   return couponDiscountValue(row) !== null;
 }
 
@@ -1269,17 +1351,6 @@ function maskOrderForLimitedAccess(order) {
 
 // ─── TELEGRAM (server-side, secret token) ───────────────────────────────────
 
-function mdSafe(v) {
-  // Telegram uses Markdown: user-controlled text must not be able to inject
-  // markup OR new lines (a newline could fake extra order lines / prices).
-  return String(v == null ? '' : v)
-    .replace(/[\r\n\t]+/g, ' ')
-    .replace(/[_*`[\]()~>#+=|{}!-]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 400);
-}
-
 /** Converts a phone to an international dial string for https://wa.me/ links
  * (Egyptian 01x... → 20 1x..., "+2..." kept, otherwise "+20" is prepended). */
 function waNumber(v) {
@@ -1290,6 +1361,17 @@ function waNumber(v) {
   return d;
 }
 
+/**
+ * POST a message to the configured Telegram chat.
+ *
+ * The order messages are PLAIN TEXT by default: this text is forwarded to the
+ * customer on WhatsApp, and a Markdown escaper would eat the `_` of an email
+ * address and the `-` of an order id. Pass `parseMode: 'Markdown'` only for a
+ * message that is deliberately formatted.
+ *
+ * `replyMarkup` becomes the inline keyboard (action buttons), keeping the
+ * message body copyable without any URL inside it.
+ */
 async function sendTelegramNotification(messageText, options = {}) {
   const token = env('TELEGRAM_BOT_TOKEN');
   const chatId = env('TELEGRAM_CHAT_ID');
@@ -1297,23 +1379,23 @@ async function sendTelegramNotification(messageText, options = {}) {
     console.warn('Telegram notification skipped: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not configured');
     return false;
   }
-  // Normal order messages keep the existing Markdown mode. The failure alert
-  // contains customer-controlled text, so it opts into plain text (null) to
-  // remove any Markdown/link injection surface.
-  const parseMode = options.parseMode === undefined ? 'Markdown' : options.parseMode;
+  const parseMode = options.parseMode === undefined ? null : options.parseMode;
+  const clamped = clampBytes(String(messageText == null ? '' : messageText), TELEGRAM_MESSAGE_MAX_BYTES);
   const text = parseMode === 'Markdown'
-    ? messageText.replace(/→/g, ':').replace(/_/g, '')
-    : messageText;
+    ? clamped.replace(/→/g, ':').replace(/_/g, '')
+    : clamped;
   const body = { chat_id: chatId, text };
   if (parseMode) body.parse_mode = parseMode;
+  if (options.replyMarkup && typeof options.replyMarkup === 'object') {
+    body.reply_markup = options.replyMarkup;
+  }
   const init = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   };
-  // Normal order notifications keep their existing unbounded behaviour. The
-  // failure alert passes a timeout so a hung Telegram API cannot delay the
-  // customer's error response for the full serverless limit.
+  // A failed order is answered while its alert is in flight, so that path passes
+  // a timeout: a hung Telegram API must not hold the customer's error response.
   const timeoutMs = Number(options.timeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     init.signal = AbortSignal.timeout(timeoutMs);
@@ -1322,48 +1404,38 @@ async function sendTelegramNotification(messageText, options = {}) {
   return resp.ok;
 }
 
-// ─── BARK (server-side, iOS push channel) ───────────────────────────────────
-// Official Bark API: POST https://api.day.app/push with a JSON body. The device
-// key lives only in BARK_DEVICE_KEY (Vercel env) and is never exposed to the
-// browser, a response, or a log line. Fire-and-forget: never throws and never
-// blocks the order request. Telegram remains the primary/detail channel.
+// ─── ORDER NOTIFICATIONS (Telegram) ─────────────────────────────────────────
+// Telegram is the only notification channel. Two templates, two audiences:
 //
-// One order = one replaceable notification: every event (creation, each status
-// change, deletion) reuses `zashm-order-<orderId>` as the Bark `id`, so iOS
-// replaces the existing notification instead of stacking a new one. The same id
-// also means every replacement carries the FULL order picture, never a
-// degraded summary.
+//   1. `buildOrderTelegramMessage` — the customer confirmation text. It is the
+//      exact text the owner forwards on WhatsApp, so it is sent as PLAIN TEXT
+//      (no parse_mode) and never through a Markdown escaper: an underscore in
+//      an email or a hyphen in an order id must survive the copy untouched.
+//   2. `buildOrderStatusMessage` — a short internal line for a status change or
+//      a deletion. The owner does not forward it; it only has to be scannable.
+//
+// Every customer-controlled value goes through `safeLineText`, which collapses
+// newlines and control characters, so a name or an address can never forge an
+// extra order line or price.
 
-const BARK_PUSH_URL = 'https://api.day.app/push';
-const BARK_GROUP = 'zashm-orders';
-const BARK_SOUND = 'minuet'; // pleasant built-in; no critical alerts, no repeat ring
-const BARK_TIMEOUT_MS = 8000;
-// A failed order is answered with an error while both alerts are in flight, so
+const TELEGRAM_MESSAGE_MAX_BYTES = 3900; // hard API limit is 4096 characters
+// A failed order is answered with an error while the alert is in flight, so
 // this path uses a tighter bound than the normal (post-commit) notification.
 const FAILURE_ALERT_TIMEOUT_MS = 5000;
+// The common order is far below this; the byte clamp at send time trims
+// pathological carts instead of losing the whole notification.
+const ORDER_ITEM_MAX = 50;
+const SUPPORT_NAME = 'محمد';
 
-// APNs allows 4096 bytes for the whole payload. Keep the body well below it so
-// the title, subtitle, id, group, sound, url and JSON envelope always fit.
-const BARK_BODY_MAX_BYTES = 2800;
-// Hard ceiling for the serialized request, leaving room for the APNs envelope.
-const BARK_PAYLOAD_MAX_BYTES = 3900;
-const BARK_TITLE_MAX_BYTES = 200;
-const BARK_SUBTITLE_MAX_BYTES = 200;
-
-// Keep the item list complete for the common order; pathological carts fall
-// back to "+N more" so the notification always fits the APNs budget.
-const BARK_MAX_ITEMS = 10;
-
-/** Status → Arabic title + status line. The body is deliberately written like
- * the Telegram message so the owner can forward it to the customer and confirm
- * the order. Unknown statuses fall back to a neutral package icon and label so
- * a future status never breaks a push. */
-const BARK_STATUS_STYLE = {
+/** Status → Arabic label for the short internal update. Unknown statuses fall
+ * back to a neutral package icon so a future status never breaks a message. */
+const ORDER_STATUS_TEXT = {
   Pending: { emoji: '🛍️', label: 'طلب جديد', line: 'قيد المراجعة' },
   Confirmed: { emoji: '🟢', label: 'تم تأكيد الطلب', line: 'تم تأكيد الطلب' },
   Processing: { emoji: '⚙️', label: 'جاري تجهيز الطلب', line: 'قيد التجهيز' },
   Shipped: { emoji: '🚚', label: 'تم شحن الطلب', line: 'تم الشحن' },
   Delivered: { emoji: '✅', label: 'تم توصيل الطلب', line: 'تم التوصيل' },
+  Edited: { emoji: '✏️', label: 'تم تعديل الطلب', line: 'تم تعديل البيانات' },
   Cancelled: { emoji: '🚫', label: 'تم إلغاء الطلب', line: 'ملغي' },
   Deleted: { emoji: '🔴', label: 'تم حذف الطلب', line: 'محذوف' },
   Failed: { emoji: '⚠️', label: 'طلب لم يُحفظ', line: 'لم يُحفظ في قاعدة البيانات' },
@@ -1378,15 +1450,15 @@ const ORDER_FAILURE_REASONS = {
   unexpected: 'خطأ غير متوقع في السيرفر',
 };
 
-/** UTF-8 size of a string (APNs limits are bytes, not characters). */
-function barkByteLength(value) {
+/** UTF-8 size of a string. */
+function byteLength(value) {
   return Buffer.byteLength(String(value == null ? '' : value), 'utf8');
 }
 
 /** Truncate to a UTF-8 byte budget without splitting an emoji/surrogate pair. */
-function barkClampBytes(value, maxBytes) {
+function clampBytes(value, maxBytes) {
   const text = String(value == null ? '' : value);
-  if (barkByteLength(text) <= maxBytes) return text;
+  if (byteLength(text) <= maxBytes) return text;
   let out = '';
   let used = 0;
   for (const ch of text) {
@@ -1400,10 +1472,12 @@ function barkClampBytes(value, maxBytes) {
 
 /** Single-line, length-capped, control-character-free text.
  *
- * Every customer-controlled value goes through this: a newline in a name or
- * address could otherwise fake extra order lines or prices in the notification.
+ * Every customer-controlled value goes through this: a newline in a name or an
+ * address could otherwise fake extra order lines or prices. Markdown characters
+ * are NOT removed — these messages are plain text, and `_`/`-` are legitimate
+ * parts of an email address or an order id.
  */
-function barkSafeText(value, maxChars) {
+function safeLineText(value, maxChars) {
   const cleaned = String(value == null ? '' : value)
     .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\u2028\u2029\uFEFF]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -1419,7 +1493,7 @@ function barkSafeText(value, maxChars) {
 }
 
 /** "EGP 1,865" — one formatter everywhere so the amount is unambiguous. */
-function barkMoney(value) {
+function moneyEGP(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
   return `EGP ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n)}`;
@@ -1427,7 +1501,7 @@ function barkMoney(value) {
 
 /** Order date/time in Cairo time, e.g. "05 Nov 2026, 2:15 PM". Falls back to
  * the stored date-only value when `timestamps.created` is missing. */
-function barkDateText(createdAt, fallbackDate) {
+function orderDateText(createdAt, fallbackDate) {
   const created = createdAt ? new Date(createdAt) : null;
   if (created && !Number.isNaN(created.getTime())) {
     try {
@@ -1452,7 +1526,7 @@ function barkDateText(createdAt, fallbackDate) {
       /* fall through to the date-only value */
     }
   }
-  const dateOnly = barkSafeText(fallbackDate, 20);
+  const dateOnly = safeLineText(fallbackDate, 20);
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
   if (m) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1462,23 +1536,22 @@ function barkDateText(createdAt, fallbackDate) {
   return dateOnly;
 }
 
-/** One line per item, in the same shape as the Telegram message:
- * "• Silk Abaya (M / Black) × 1 — EGP 1,300". The price is the server-computed
- * line total. Missing product data (a failed database read) still produces a
- * readable line instead of dropping the item. */
-function barkItemLines(items, limit) {
+/** One line per item: "• Silk Abaya (M / Black) × 1 — EGP 1,300".
+ * The price is the server-computed line total. Missing product data (a failed
+ * database read) still produces a readable line instead of dropping the item. */
+function orderItemLines(items, limit = ORDER_ITEM_MAX) {
   const list = Array.isArray(items) ? items : [];
   const shown = list.slice(0, Math.max(0, limit));
   const lines = [];
   for (const item of shown) {
     if (!item || typeof item !== 'object') continue;
-    const name = barkSafeText(item.name, 70) || `منتج #${Math.max(0, Math.trunc(Number(item.productId) || 0))}`;
-    const variant = [barkSafeText(item.size, 18), barkSafeText(item.color, 18)]
+    const name = safeLineText(item.name, 70) || `منتج #${Math.max(0, Math.trunc(Number(item.productId) || 0))}`;
+    const variant = [safeLineText(item.size, 18), safeLineText(item.color, 18)]
       .filter(Boolean)
       .join(' / ');
     const qty = Math.max(1, Math.min(999, Math.trunc(Number(item.qty) || 1)));
     const lineTotal = Number(item.price);
-    const amount = Number.isFinite(lineTotal) ? ` — ${barkMoney(lineTotal)}` : '';
+    const amount = Number.isFinite(lineTotal) ? ` — ${moneyEGP(lineTotal)}` : '';
     lines.push(`• ${name}${variant ? ` (${variant})` : ''} × ${qty}${amount}`);
   }
   const hidden = list.length - shown.length;
@@ -1488,93 +1561,96 @@ function barkItemLines(items, limit) {
   return lines;
 }
 
-/** Plain-text order message, exactly mirroring buildOrderTelegramMessage.
+/**
+ * Customer confirmation message — the exact text the owner sends on WhatsApp.
  *
- * Telegram renders Markdown; Bark is plain text. Keeping both templates
- * identical (same sections, same order, same line breaks) means the owner can
- * long-press the Bark notification, copy it, and send it to the customer as-is
- * to confirm the order. Every customer-controlled value is sanitized so it
- * cannot forge an extra line.
+ * Sources, in order: the order row, then `tracking_url`/`trackingUrl`, then the
+ * explicit `trackingUrl` argument. `shippingCost` is not stored on the order
+ * row (it is derived from the city), so it is derived again when absent.
  */
-function buildOrderPlainMessage(order = {}, trackingUrl, itemLimit = BARK_MAX_ITEMS) {
-  const rawStatus = barkSafeText(order.status, 40);
-  const style = Object.prototype.hasOwnProperty.call(BARK_STATUS_STYLE, rawStatus)
-    ? BARK_STATUS_STYLE[rawStatus]
-    : { emoji: '📦', label: 'تحديث الطلب', line: rawStatus || 'قيد المراجعة' };
-  const orderId = barkSafeText(order.id, 48);
-  const nameText = barkSafeText(order.customer, 60);
-  const phoneText = barkSafeText(order.phone, 24);
-  const phoneAltText = barkSafeText(order.phoneAlt, 24);
-  const emailText = barkSafeText(order.email, 120);
-  const cityText = barkSafeText(order.city, 40);
-  const addressText = barkSafeText(order.address, 220);
-  const notesText = barkSafeText(order.notes, 260);
-  const discountCodeText = barkSafeText(order.discountCode, 30);
-  const itemsText = barkItemLines(order.items, itemLimit).join('\n');
-  // shippingCost is not stored on the order row (it is derived from the city),
-  // so a message rebuilt from the database must derive it again.
+function buildOrderTelegramMessage(order = {}, trackingUrl) {
+  const orderId = safeLineText(order.id, 48);
+  const nameText = safeLineText(order.customer, 60);
+  const phoneText = safeLineText(order.phone, 24);
+  const phoneAltText = safeLineText(order.phoneAlt, 24);
+  const emailText = safeLineText(order.email, 120);
+  const cityText = safeLineText(order.city, 40);
+  const addressText = safeLineText(order.address, 220);
+  const notesText = safeLineText(order.notes, 260);
+  const discountCodeText = safeLineText(order.discountCode, 30);
+  const subtotal = Number.isFinite(Number(order.subtotal)) ? Number(order.subtotal) : 0;
+  const discount = Number.isFinite(Number(order.discount)) ? Number(order.discount) : 0;
+  const total = Number.isFinite(Number(order.total)) ? Number(order.total) : 0;
   const shipping = Number(
     order.shippingCost != null ? order.shippingCost : getShippingCost(order.city)
   );
-  const discount = Number(order.discount);
-  const subtotal = Number.isFinite(Number(order.subtotal)) ? Number(order.subtotal) : 0;
-  const total = Number.isFinite(Number(order.total)) ? Number(order.total) : 0;
   const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
-
-  // Same line layout as buildOrderTelegramMessage: identical sections, identical
-  // order, identical line breaks, and the same "غير محدد" city fallback.
-  const shippingLine = shipping > 0 ? `• الشحن: ${barkMoney(shipping)}\n` : '';
-  const altPhoneLine = phoneAltText ? `• هاتف بديل: ${phoneAltText}\n` : '';
-  const emailLine = emailText ? `• الإيميل: ${emailText}\n` : '';
-  const notesLine = notesText ? `• ملاحظات: ${notesText}\n` : '';
-  const discountLine = discountCodeText ? `• كود الخصم: ${discountCodeText}\n` : '';
-  const discountAmountLine = discount > 0 ? `• قيمة الخصم: ${barkMoney(discount)}\n` : '';
-  const footer = rawStatus === 'Deleted'
-    ? '🚫 تم حذف هذا الأوردر من ZASHM.'
-    : rawStatus === 'Cancelled'
-      ? '🚫 تم إلغاء هذا الأوردر.'
-      : '💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.';
-
-  const trackingBlock = track
-    ? `🚚 تتبع الطلب\n${track.slice(0, 300)}\n${orderId ? `• رقم الطلب: ${orderId}\n` : ''}`
-    : (orderId ? `• رقم الطلب: ${orderId}\n` : '');
-
   const wa = phoneText ? waNumber(phoneText) : '';
-  const waHref = String(order.wa_url || '').trim();
-  const phoneLine = phoneText
-    ? `• الهاتف: ${phoneText}${waHref ? ` — واتساب: ${waHref}` : (wa ? ` — واتساب: https://wa.me/${wa}` : '')}\n`
-    : '';
+  const firstName = nameText.split(/\s+/)[0];
 
-  return `
-ZASHM | ${style.label}
-📌 حالة الطلب: ${style.line}
+  const lines = [];
+  lines.push(`السلام عليكم أ/ ${firstName || 'عميلنا العزيز'} 👋`);
+  lines.push(`مع حضرتك ${SUPPORT_NAME} من فريق ZASHM. حابين نأكد مع حضرتك تفاصيل الأوردر قبل الشحن.`);
+  lines.push('');
 
-👤 بيانات العميل
-${nameText ? `• الاسم: ${nameText}\n` : ''}${phoneLine}${altPhoneLine}${emailLine}📍 عنوان الشحن
-${cityText ? `• المدينة: ${cityText}\n` : '• المدينة: غير محدد\n'}${addressText ? `• العنوان: ${addressText}\n` : ''}${notesLine}
-🛍️ المنتجات
-${itemsText || 'لا توجد منتجات'}
+  lines.push('👤 بيانات العميل');
+  if (nameText) lines.push(`• الاسم: ${nameText}`);
+  if (phoneText) lines.push(`• الهاتف: ${phoneText}`);
+  if (wa) lines.push(`• واتساب: https://wa.me/${wa}`);
+  if (phoneAltText) lines.push(`• هاتف بديل: ${phoneAltText}`);
+  if (emailText) lines.push(`• الإيميل: ${emailText}`);
+  lines.push('');
 
-💰 ملخص الحساب
-• المجموع الفرعي: ${barkMoney(subtotal)}
-${shippingLine}${discountLine}${discountAmountLine}• الإجمالي: ${barkMoney(total)}
+  lines.push('📍 عنوان الشحن');
+  lines.push(`• المدينة: ${cityText || 'غير محدد'}`);
+  if (addressText) lines.push(`• العنوان: ${addressText}`);
+  if (notesText) lines.push(`• ملاحظات: ${notesText}`);
+  lines.push('');
 
-${trackingBlock}
-${footer}
-  `.trim();
+  lines.push('🛍️ المنتجات');
+  const itemLines = orderItemLines(order.items, ORDER_ITEM_MAX);
+  lines.push(...(itemLines.length ? itemLines : ['لا توجد منتجات']));
+  lines.push('');
+
+  lines.push('💰 ملخص الحساب');
+  lines.push(`• المجموع الفرعي: ${moneyEGP(subtotal)}`);
+  if (Number.isFinite(shipping) && shipping > 0) lines.push(`• الشحن: ${moneyEGP(shipping)}`);
+  if (discountCodeText) lines.push(`• كود الخصم: ${discountCodeText}`);
+  if (discount > 0) lines.push(`• قيمة الخصم: ${moneyEGP(discount)}`);
+  lines.push(`• الإجمالي: ${moneyEGP(total)}`);
+  lines.push('');
+
+  if (track) {
+    lines.push('🚚 تتبع الأوردر');
+    lines.push(track.slice(0, 300));
+  }
+  if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
+  lines.push('');
+
+  lines.push('✅ لو البيانات دي مظبوطة، ردّ علينا بـ ✅ ونكمّل التجهيز والشحن.');
+  lines.push('✏️ ولو حابب تعدّل أي حاجة — الاسم، العنوان، المقاس، أو منتج — قولّنا قبل الشحن وإحنا هنظبّطها.');
+
+  return lines.join('\n');
 }
 
-/** Remove the WhatsApp deep link from the copyable text while keeping the
- * "— واتساب" hint.
- *
- * The notification body keeps the link so tapping it opens the customer's chat;
- * the `copy` payload omits it, so long-pressing → Copy yields the exact message
- * the owner forwards to the customer, with no raw wa.me URL in it.
- */
-function stripWhatsAppLink(text) {
-  return String(text == null ? '' : text)
-    .replace(/ — واتساب:\s*https?:\/\/[^\s]+/g, ' — واتساب')
-    .replace(/[ \t]*https?:\/\/wa\.me\/\d*/g, '');
+/** Short internal update for a status change or a deletion. Deliberately not
+ * the customer text: the owner does not forward it, and a "تم الشحن" line must
+ * never be pasted into a customer chat as if it were the confirmation. */
+function buildOrderStatusMessage(order = {}, status) {
+  const rawStatus = String(status == null ? '' : status).trim();
+  const style = Object.prototype.hasOwnProperty.call(ORDER_STATUS_TEXT, rawStatus)
+    ? ORDER_STATUS_TEXT[rawStatus]
+    : { emoji: '📦', label: 'تحديث الطلب', line: safeLineText(rawStatus, 40) || 'قيد المراجعة' };
+  const orderId = safeLineText(order.id, 48);
+  const nameText = safeLineText(order.customer, 60);
+  const total = Number(order.total);
+
+  const lines = [`${style.emoji} ZASHM | ${style.label}`];
+  if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
+  if (nameText) lines.push(`• العميل: ${nameText}`);
+  lines.push(`• الحالة: ${style.line}`);
+  if (Number.isFinite(total)) lines.push(`• الإجمالي: ${moneyEGP(total)}`);
+  return lines.join('\n');
 }
 
 /** wa.me deep link, optionally pre-filling the message. Returns '' when the
@@ -1586,14 +1662,12 @@ function whatsAppDeepLink(phone, text) {
   return `https://wa.me/${number}${suffix}`;
 }
 
-/** Short link that opens the owner's WhatsApp with the confirmation message
- * already typed for this order.
- *
- * The full message is ~1 KB of Arabic; percent-encoding it inside the push
- * payload would blow past the APNs limit, so the notification carries this
- * ~120-character redirect instead and the text is built on tap.
+/** Signed link that opens the owner's WhatsApp with the confirmation message
+ * already typed. The full message is ~1.2 KB of Arabic; percent-encoding it
+ * directly would blow past Telegram's button-URL limit, so the button points at
+ * this short redirect and the text is built on tap.
  */
-function whatsAppOrderLink(orderId) {
+function whatsAppConfirmLink(orderId) {
   const id = String(orderId == null ? '' : orderId).trim();
   if (!id) return '';
   try {
@@ -1601,234 +1675,44 @@ function whatsAppOrderLink(orderId) {
     return `${base}/api/orders?track=${encodeURIComponent(id)}`
       + `&tk=${encodeURIComponent(trackToken(id))}&wa=1`;
   } catch (e) {
-    // No SESSION_SECRET (or signing failed): fall back to the plain wa.me link
-    // rather than losing the notification.
+    // No SESSION_SECRET (or signing failed): drop the button rather than
+    // shipping a dead link.
     return '';
   }
 }
 
-/** Customer-ready message for the clipboard / WhatsApp prefill: the order
- * summary without the WhatsApp URL itself. */
-function buildOrderClipboardMessage(order = {}, trackingUrl) {
-  return stripWhatsAppLink(buildOrderPlainMessage(order, trackingUrl));
-}
-
-/**
- * Build the Bark notification for an order event.
- *
- * `id` is the whole point: Bark replaces the notification with the same id
- * instead of stacking a new one, so every event for one order (creation,
- * each status change, deletion) must reuse the exact same id. `group` only
- * organizes notifications — it does not replace anything.
- *
- * Delivery behaviour is status-aware:
- *   * Pending (a new order)  → active + sound: it is the one alert the owner
- *     must not miss.
- *   * Every later status     → passive, no sound: the same notification is
- *     replaced silently, so the owner never gets a second ring (or a stack of
- *     notifications) when an order moves through the lifecycle.
- *   * Failed                  → active + sound: the order did NOT reach the
- *     database and needs manual follow-up.
- *
- * The body mirrors the Telegram message so it can be forwarded to the customer
- * to confirm the order. All values are sanitized and size-capped first.
- */
-function buildOrderBarkNotification({
-  id,
-  total,
-  subtotal,
-  shippingCost,
-  discount,
-  discountCode,
-  city,
-  status = 'Pending',
-  initial = false,
-  customer,
-  phone,
-  phoneAlt,
-  email,
-  address,
-  notes,
-  items,
-  createdAt,
-  date,
-  tracking_url,
-  trackingUrl,
-} = {}) {
-  const safeId = String(id == null ? '' : id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || 'unknown';
-  const rawStatus = String(status == null ? '' : status).trim();
-  const style = Object.prototype.hasOwnProperty.call(BARK_STATUS_STYLE, rawStatus)
-    ? BARK_STATUS_STYLE[rawStatus]
-    : { emoji: '📦', label: 'تحديث الطلب', line: rawStatus.slice(0, 40) || 'قيد المراجعة' };
-
-  const nameText = barkSafeText(customer, 60);
-  const totalText = barkMoney(total);
-
-  // Only the very first notification (order placement) is audible. A later
-  // status change — including moving an order BACK to Pending — replaces the
-  // same notification silently. `initial` is passed only by the placement path.
-  const audible = rawStatus === 'Failed' || (initial === true && rawStatus === 'Pending');
-  const silent = !audible;
-
-  const render = (limit) => buildOrderPlainMessage(
-    {
-      id,
-      status: rawStatus,
-      customer,
-      phone,
-      phoneAlt,
-      email,
-      address,
-      city,
-      notes,
-      items,
-      subtotal,
-      shippingCost,
-      discount,
-      discountCode,
-      total,
-      createdAt,
-      date,
-      tracking_url: tracking_url || trackingUrl,
-      wa_url: whatsAppOrderLink(id),
-    },
-    tracking_url || trackingUrl,
-    limit
-  );
-
-  // Field caps already keep normal orders far below the limit; this loop is the
-  // hard guarantee for pathological item lists, then a final byte clamp.
-  let itemLimit = BARK_MAX_ITEMS;
-  let body = render(itemLimit);
-  while (barkByteLength(body) > BARK_BODY_MAX_BYTES && itemLimit > 1) {
-    itemLimit -= 1;
-    body = render(itemLimit);
+/** Inline keyboard for a notification. The customer text stays clean; actions
+ * live in buttons, so copying the message never drags an admin URL with it. */
+function buildOrderTelegramActions(order = {}, trackingUrl, { includeWhatsApp = true } = {}) {
+  const rows = [];
+  const primary = [];
+  if (includeWhatsApp) {
+    const confirmLink = whatsAppConfirmLink(order.id);
+    if (confirmLink) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: confirmLink });
   }
-  if (barkByteLength(body) > BARK_BODY_MAX_BYTES) {
-    body = `${barkClampBytes(body, BARK_BODY_MAX_BYTES - 1)}…`;
-  }
-
-  const title = barkClampBytes(`${style.emoji} ZASHM | ${style.label} · #${safeId}`, BARK_TITLE_MAX_BYTES);
-  const subtitle = barkClampBytes(
-    [totalText, nameText].filter(Boolean).join(' · '),
-    BARK_SUBTITLE_MAX_BYTES
-  );
-
-  return {
-    id: barkOrderNotificationId(id),
-    title,
-    subtitle,
-    body,
-    // Same text without the wa.me URL: this is what "Copy" yields, so the
-    // message pasted into WhatsApp to the customer stays clean.
-    copy: stripWhatsAppLink(body),
-    // Auto-copy on the first notification only: iOS's native long-press Copy
-    // would also copy the title, subtitle and tap URL, so the clean text must
-    // be placed on the clipboard by Bark itself.
-    autoCopy: initial === true && rawStatus === 'Pending' ? '1' : '',
-    group: BARK_GROUP,
-    sound: silent ? '' : BARK_SOUND,
-    level: silent ? 'passive' : 'active',
+  const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
+  if (track) primary.push({ text: '🔗 صفحة الأوردر', url: track });
+  if (primary.length) rows.push(primary);
+  rows.push([{
+    text: '🛠 لوحة الطلبات',
     url: `${PUBLIC_BASE_URL().replace(/\/+$/, '')}/admin?tab=orders`,
-  };
-}
-
-
-/** Same id for the whole lifecycle — exported so call sites and tests share
- * one definition instead of hand-building the string three times. */
-function barkOrderNotificationId(orderId) {
-  const safeId = String(orderId == null ? '' : orderId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || 'unknown';
-  return `zashm-order-${safeId}`;
-}
-
-async function sendBarkNotification({ title, subtitle, body, copy, autoCopy, id, group, sound, level, url, timeoutMs } = {}) {
-  const deviceKey = env('BARK_DEVICE_KEY');
-  if (!deviceKey) {
-    // Optional channel — warn once per invocation so a missing env var is never
-    // mistaken for a silent delivery failure.
-    console.warn('Bark push skipped: BARK_DEVICE_KEY not configured');
-    return false;
-  }
-
-  const payload = {
-    device_key: deviceKey,
-    title: barkClampBytes(String(title || 'ZASHM'), BARK_TITLE_MAX_BYTES),
-    body: barkClampBytes(String(body || ''), BARK_BODY_MAX_BYTES),
-    group: String(group || BARK_GROUP).slice(0, 64),
-    level: String(level || 'active').slice(0, 20),
-  };
-  // An empty sound means "silent" (status updates). Omitting the field entirely
-  // is what makes Bark deliver the replacement quietly instead of ringing again.
-  const soundText = barkClampBytes(String(sound == null ? '' : sound).trim(), 64);
-  if (soundText) payload.sound = soundText;
-  const subtitleText = barkClampBytes(String(subtitle || ''), BARK_SUBTITLE_MAX_BYTES).trim();
-  if (subtitleText) payload.subtitle = subtitleText;
-  // Bark requires the replacement id to be a JSON string (numbers don't work).
-  if (id != null && String(id).trim() !== '') payload.id = String(id).slice(0, 128);
-  if (url) payload.url = String(url).slice(0, 500);
-
-  // "Copy" content: the customer-ready text without the wa.me link. Only sent
-  // when it actually differs and the whole payload still fits an APNs push.
-  const copyText = barkClampBytes(String(copy == null ? '' : copy), BARK_BODY_MAX_BYTES).trim();
-  if (copyText && copyText !== payload.body) {
-    const autoCopyFlag = String(autoCopy == null ? '' : autoCopy).trim() === '1';
-    const withCopy = autoCopyFlag ? { ...payload, autoCopy: '1', copy: copyText } : { ...payload, copy: copyText };
-    if (barkByteLength(JSON.stringify(withCopy)) < BARK_PAYLOAD_MAX_BYTES) {
-      if (autoCopyFlag) payload.autoCopy = '1';
-      payload.copy = copyText;
-    }
-  }
-
-  try {
-    const boundedTimeout = Number(timeoutMs);
-    const resp = await fetch(BARK_PUSH_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify(payload),
-      // A hung Bark server must never hold the order request open.
-      signal: AbortSignal.timeout(
-        Number.isFinite(boundedTimeout) && boundedTimeout > 0 ? boundedTimeout : BARK_TIMEOUT_MS
-      ),
-    });
-
-    let data = null;
-    try {
-      data = await resp.json();
-    } catch (e) {
-      /* non-JSON response */
-    }
-    const code = data && Number(data.code);
-    if (!resp.ok || (Number.isFinite(code) && code !== 200)) {
-      // Bark echoes the device key inside its error message
-      // ("failed to get [KEY] device token"), so redact it before logging.
-      // Never log the title/body/subtitle — they carry customer data.
-      const reason = String((data && data.message) || '').replace(/\s+/g, ' ').slice(0, 200);
-      const safeReason = reason.split(deviceKey).join('[device_key]');
-      console.error('Bark push failed:', `HTTP ${resp.status}`, safeReason);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    // Network/DNS/timeout/abort — log the error type only.
-    console.error('Bark push failed:', 'network', (e && e.name) || 'Error');
-    return false;
-  }
+  }]);
+  return { inline_keyboard: rows };
 }
 
 /** Human-readable reference for a failed order attempt. It deliberately never
- * contains the customer's phone/name (the id is stored by Bark and appears in
- * logs on the device), only a timestamp and random suffix so two attempts in
- * the same second cannot collide. */
+ * contains the customer's phone/name, only a timestamp and random suffix so two
+ * attempts in the same second cannot collide. */
 function newFailureReference() {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
   return `FAILED-${stamp}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
 }
 
-/** Plain-text failure alert sent to Telegram and Bark when an order could not
- * be stored. It carries whatever data is already available: after a product or
- * coupon read failure the item names/prices are unknown, but the customer's
- * contact details (already validated) are always present so the owner can call
- * them and take the order manually. */
+/** Plain-text failure alert sent to Telegram when an order could not be stored.
+ * It carries whatever data is already available: after a product or coupon read
+ * failure the item names/prices are unknown, but the customer's contact details
+ * (already validated) are always present so the owner can call them and take
+ * the order manually. */
 function buildOrderFailureMessage({
   reference,
   reason,
@@ -1842,23 +1726,23 @@ function buildOrderFailureMessage({
   total,
   createdAt,
 } = {}) {
-  const ref = barkSafeText(reference, 48) || 'FAILED';
-  const attemptId = barkSafeText(orderId, 48);
+  const ref = safeLineText(reference, 48) || 'FAILED';
+  const attemptId = safeLineText(orderId, 48);
   const reasonText = ORDER_FAILURE_REASONS[String(reason || '')] || ORDER_FAILURE_REASONS.unexpected;
-  const nameText = barkSafeText(customer && customer.name, 60);
-  const phoneText = barkSafeText(customer && customer.phone, 24);
-  const phoneAltText = barkSafeText(customer && customer.phoneAlt, 24);
-  const emailText = barkSafeText(customer && customer.email, 120);
-  const cityText = barkSafeText(customer && customer.city, 40);
-  const addressText = barkSafeText(customer && customer.address, 220);
-  const notesText = barkSafeText(customer && customer.notes, 260);
-  const discountCodeText = barkSafeText(discountCode, 30);
-  const whenText = barkDateText(createdAt);
+  const nameText = safeLineText(customer && customer.name, 60);
+  const phoneText = safeLineText(customer && customer.phone, 24);
+  const phoneAltText = safeLineText(customer && customer.phoneAlt, 24);
+  const emailText = safeLineText(customer && customer.email, 120);
+  const cityText = safeLineText(customer && customer.city, 40);
+  const addressText = safeLineText(customer && customer.address, 220);
+  const notesText = safeLineText(customer && customer.notes, 260);
+  const discountCodeText = safeLineText(discountCode, 30);
+  const whenText = orderDateText(createdAt);
   const shipping = Number(shippingCost);
   const discountAmount = Number(discount);
   const subtotalAmount = Number(subtotal);
   const totalAmount = Number(total);
-  const money = (value) => (Number.isFinite(value) ? barkMoney(value) : '');
+  const money = (value) => (Number.isFinite(value) ? moneyEGP(value) : '');
 
   const lines = [];
   lines.push('⚠️ ZASHM | تنبيه: الأوردر لم يُحفظ');
@@ -1892,10 +1776,10 @@ function buildOrderFailureMessage({
     lines.push('');
   }
 
-  const itemLines = barkItemLines(items, BARK_MAX_ITEMS);
-  if (itemLines.length) {
+  const failureItemLines = orderItemLines(items, ORDER_ITEM_MAX);
+  if (failureItemLines.length) {
     lines.push('🛍️ المنتجات');
-    lines.push(...itemLines);
+    lines.push(...failureItemLines);
     lines.push('');
   }
 
@@ -1920,91 +1804,21 @@ function buildOrderFailureMessage({
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** Bark version of the failure alert: separate id (FAILED-…) so it can never
- * replace a real order notification, and active + sound because a lost order is
- * exactly the event the owner must not miss. */
-function buildOrderFailureBarkNotification(context = {}) {
-  const reference = barkSafeText(context.reference, 48) || 'FAILED';
-  const body = barkClampBytes(
-    buildOrderFailureMessage({ ...context, reference }),
-    BARK_BODY_MAX_BYTES
-  );
-  const nameText = barkSafeText(context.customer && context.customer.name, 60);
-  const totalText = barkMoney(context.total);
-  return {
-    id: barkOrderNotificationId(reference),
-    title: barkClampBytes(`⚠️ ZASHM | طلب لم يُحفظ · #${reference}`, BARK_TITLE_MAX_BYTES),
-    subtitle: barkClampBytes([totalText, nameText].filter(Boolean).join(' · '), BARK_SUBTITLE_MAX_BYTES),
-    body,
-    group: BARK_GROUP,
-    sound: BARK_SOUND,
-    level: 'active',
-    url: `${PUBLIC_BASE_URL().replace(/\/+$/, '')}/admin?tab=orders`,
-  };
-}
-
-/** Send the failure alert to both channels at once. One slow/down channel can
- * never stop the other, and the caller never sees an exception: this path runs
- * while the customer is waiting for an error response. */
+/** Send the failure alert to Telegram. Never throws: this path runs while the
+ * customer is waiting for an error response. */
 async function sendOrderFailureAlert(context = {}) {
   const reference = context.reference || newFailureReference();
   const message = buildOrderFailureMessage({ ...context, reference });
-  const bark = buildOrderFailureBarkNotification({ ...context, reference });
-  const [telegram, push] = await Promise.allSettled([
-    sendTelegramNotification(message, { timeoutMs: FAILURE_ALERT_TIMEOUT_MS, parseMode: null }),
-    sendBarkNotification({ ...bark, timeoutMs: FAILURE_ALERT_TIMEOUT_MS }),
-  ]);
-  return {
-    reference,
-    telegram: telegram.status === 'fulfilled' && telegram.value === true,
-    bark: push.status === 'fulfilled' && push.value === true,
-  };
-}
-
-function buildOrderTelegramMessage(order, trackingUrl) {
-  const itemsText = (order.items || [])
-    .map((item) => {
-      const details = [item.size, item.color].filter(Boolean);
-      const detailsStr = details.length
-        ? ` (${mdSafe(details.join(' / '))})`
-        : '';
-      return `• ${mdSafe(item.name)}${detailsStr} × ${Number(item.qty || 0)} — EGP ${Number(item.price || 0).toLocaleString()}`;
-    })
-    .join('\n');
-  const shippingLine = order.shippingCost
-    ? `• الشحن: EGP ${Number(order.shippingCost).toLocaleString()}\n`
-    : '';
-  const altPhoneLine = order.phoneAlt ? `• هاتف بديل: ${mdSafe(order.phoneAlt)}\n` : '';
-  const emailLine = order.email ? `• الإيميل: ${mdSafe(order.email)}\n` : '';
-  const notesLine = order.notes ? `• ملاحظات: ${mdSafe(order.notes)}\n` : '';
-  const discountLine = order.discountCode ? `• كود الخصم: ${mdSafe(order.discountCode)}\n` : '';
-  const discountAmountLine = Number(order.discount || 0) > 0
-    ? `• قيمة الخصم: EGP ${Number(order.discount || 0).toLocaleString()}\n`
-    : '';
-  return `
-*ZASHM | طلب جديد*
-📌 *حالة الطلب:* قيد المراجعة
-
-👤 *بيانات العميل*
-• الاسم: ${mdSafe(order.customer)}
-• الهاتف: ${mdSafe(order.phone)} — [واتساب](https://wa.me/${waNumber(order.phone)})
-${altPhoneLine}${emailLine}📍 *عنوان الشحن*
-• المدينة: ${mdSafe(order.city) || 'غير محدد'}
-• العنوان: ${mdSafe(order.address)}
-${notesLine}
-🛍️ *المنتجات*
-${itemsText || 'لا توجد منتجات'}
-
-💰 *ملخص الحساب*
-• المجموع الفرعي: EGP ${Number(order.subtotal || 0).toLocaleString()}
-${shippingLine}${discountLine}${discountAmountLine}• الإجمالي: EGP ${Number(order.total || 0).toLocaleString()}
-
-🚚 *تتبع الطلب*
-${trackingUrl}
-• رقم الطلب: ${mdSafe(order.id)}
-
-💚 حابين نأكد مع حضرتك الأوردر، ولو عندك أي استفسار إحنا تحت أمرك في أي وقت.
-`.trim();
+  let telegram = false;
+  try {
+    telegram = (await sendTelegramNotification(message, {
+      timeoutMs: FAILURE_ALERT_TIMEOUT_MS,
+      parseMode: null,
+    })) === true;
+  } catch (e) {
+    console.error('Order failure alert failed:', e && e.name ? e.name : 'Error');
+  }
+  return { reference, telegram };
 }
 
 // ─── STORAGE HELPERS ────────────────────────────────────────────────────────
@@ -2237,6 +2051,7 @@ module.exports = {
   trackingUrlFor,
   PUBLIC_BASE_URL,
   validateOrderPayload,
+  validateOrderEditPayload,
   cairoDateString,
   validateProductPayload,
   validateCouponPayload,
@@ -2254,17 +2069,13 @@ module.exports = {
   maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
-  buildOrderPlainMessage,
-  buildOrderClipboardMessage,
+  buildOrderStatusMessage,
+  buildOrderTelegramActions,
   whatsAppDeepLink,
-  whatsAppOrderLink,
-  buildOrderBarkNotification,
+  whatsAppConfirmLink,
   buildOrderFailureMessage,
-  buildOrderFailureBarkNotification,
   sendOrderFailureAlert,
   newFailureReference,
-  barkOrderNotificationId,
-  sendBarkNotification,
   detectImageType,
   sanitizeStoragePath,
   filePathFromPublicUrl,

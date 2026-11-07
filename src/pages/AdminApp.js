@@ -11,7 +11,8 @@ import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
 import { paginate, sanitizeInput, validateProductForm, setPageMeta } from '../lib/security';
 import { getColorSwatch } from '../lib/productColors.mjs';
-import { effectivePrice, hasInvalidVariantConfig, orphanedVariantStock, declaredVariantStockTotal, uniqueDeclaredOptions } from '../lib/pricing';
+import { EGYPT_GOVERNORATES } from '../lib/egyptCities';
+import { effectivePrice, hasInvalidVariantConfig, orphanedVariantStock, declaredVariantStockTotal, uniqueDeclaredOptions, isSellableVariant } from '../lib/pricing';
 import {
   computeSalesOverview,
   RANGE_OPTIONS,
@@ -664,12 +665,339 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
 const quickActionStyle = { display:'flex', gap:7, alignItems:'center', padding:'7px 13px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text2)', cursor:'pointer', fontSize:12, transition:'all 0.15s' };
 const linkActionStyle = { background:'none', border:'none', color:'var(--gold)', cursor:'pointer', fontSize:11, fontWeight:600, padding:0 };
 
+// ─── ORDER EDIT MODAL ─────────────────────────────────────────────────────────
+// Customer details are always editable; items only in Pending/Confirmed. The
+// server reprices everything and reconciles stock by net difference, so this
+// form sends identifiers/quantities — never a price or a total.
+const EDITABLE_ITEM_STATUSES = ['Pending', 'Confirmed'];
+
+function normalizeEditItem(item) {
+  return {
+    productId: Number(item && item.productId) || 0,
+    qty: Number(item && item.qty) || 1,
+    size: String((item && item.size) || ''),
+    color: String((item && item.color) || ''),
+  };
+}
+
+function editItemsKey(items) {
+  return (Array.isArray(items) ? items : [])
+    .map(normalizeEditItem)
+    .map(i => `${i.productId}|${i.size}|${i.color}|${i.qty}`)
+    .sort()
+    .join(';');
+}
+
+function OrderEditModal({ order, products, onClose }) {
+  const editOrder = useStore((s) => s.editOrder);
+  const itemsLocked = !EDITABLE_ITEM_STATUSES.includes(order.status);
+  const initialKey = useMemo(() => editItemsKey(order.items), [order.id]);
+  const initialCode = useMemo(() => String(order.discountCode || '').trim().toUpperCase(), [order.id]);
+
+  const [form, setForm] = useState(() => ({
+    name: order.customer || '',
+    phone: order.phone || '',
+    phoneAlt: order.phoneAlt || '',
+    email: order.email || '',
+    address: order.address || '',
+    city: order.city || '',
+    notes: order.notes || '',
+    couponCode: order.discountCode || '',
+    items: (Array.isArray(order.items) ? order.items : []).map((item) => ({
+      ...normalizeEditItem(item),
+      name: item.name || 'Product',
+      unitPrice: Number(item.unitPrice) || 0,
+    })),
+  }));
+  const [newItem, setNewItem] = useState({ productId: '', size: '', color: '', qty: 1 });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [errors, setErrors] = useState([]);
+
+  const setField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  const productList = Array.isArray(products) ? products : [];
+  const selectedProduct = productList.find(p => String(p.id) === String(newItem.productId));
+  const sizes = Array.isArray(selectedProduct?.sizes) ? selectedProduct.sizes : [];
+  const colors = Array.isArray(selectedProduct?.colors) ? selectedProduct.colors : [];
+  const newItemInvalid = !selectedProduct || hasInvalidVariantConfig(selectedProduct)
+    || !isSellableVariant(selectedProduct, newItem.size, newItem.color);
+
+  const chooseProduct = (id) => {
+    const product = productList.find(p => String(p.id) === String(id));
+    setNewItem({
+      productId: id,
+      size: Array.isArray(product?.sizes) && product.sizes.length ? product.sizes[0] : '',
+      color: Array.isArray(product?.colors) && product.colors.length ? product.colors[0] : '',
+      qty: 1,
+    });
+    setError('');
+  };
+
+  const addItem = () => {
+    if (newItemInvalid) {
+      setError('Choose a product, size and color that are currently sellable.');
+      return;
+    }
+    const qty = Math.max(1, Math.min(20, Number(newItem.qty) || 1));
+    setForm((current) => {
+      const idx = current.items.findIndex(item =>
+        Number(item.productId) === Number(selectedProduct.id)
+        && item.size === newItem.size
+        && item.color === newItem.color);
+      if (idx >= 0) {
+        const items = current.items.slice();
+        items[idx] = { ...items[idx], qty: Math.min(20, items[idx].qty + qty) };
+        return { ...current, items };
+      }
+      return {
+        ...current,
+        items: [
+          ...current.items,
+          {
+            productId: Number(selectedProduct.id),
+            qty,
+            size: newItem.size,
+            color: newItem.color,
+            name: selectedProduct.name || 'Product',
+            unitPrice: effectivePrice(selectedProduct) || 0,
+          },
+        ],
+      };
+    });
+    setNewItem({ productId: '', size: '', color: '', qty: 1 });
+    setError('');
+  };
+
+  const updateQty = (index, delta) => {
+    setForm((current) => {
+      const items = current.items.slice();
+      const next = Math.max(1, Math.min(20, (Number(items[index].qty) || 1) + delta));
+      items[index] = { ...items[index], qty: next };
+      return { ...current, items };
+    });
+  };
+
+  const removeItem = (index) => {
+    setForm((current) => ({ ...current, items: current.items.filter((_, i) => i !== index) }));
+  };
+
+  const handleSave = async () => {
+    setError('');
+    setErrors([]);
+
+    if (!itemsLocked && form.items.length === 0) {
+      setErrors(['The order must contain at least one item.']);
+      return;
+    }
+
+    const currentKey = editItemsKey(form.items);
+    if (itemsLocked && currentKey !== initialKey) {
+      setError('Items can only be edited while the order is Pending or Confirmed.');
+      return;
+    }
+
+    const changes = {
+      customer: {
+        name: form.name,
+        phone: form.phone,
+        phoneAlt: form.phoneAlt,
+        email: form.email,
+        address: form.address,
+        city: form.city,
+        notes: form.notes,
+      },
+    };
+    if (!itemsLocked && currentKey !== initialKey) {
+      changes.items = form.items.map(normalizeEditItem);
+    }
+    const nextCode = String(form.couponCode || '').trim().toUpperCase();
+    if (nextCode !== initialCode) changes.couponCode = nextCode;
+
+    setSaving(true);
+    const result = await editOrder(order.id, changes);
+    setSaving(false);
+
+    if (!result || result.success === false) {
+      setErrors(Array.isArray(result && result.errors) ? result.errors : []);
+      setError((result && result.error) || 'Could not update the order. Please try again.');
+      return;
+    }
+    toast.success('Order updated');
+    onClose();
+  };
+
+  const inputStyle = { width: '100%', fontSize: 12, padding: '8px 10px' };
+  const labelStyle = { fontSize: 10, color: 'var(--text3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, display: 'block' };
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={saving ? undefined : onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 2100, backdropFilter: 'blur(4px)' }} />
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 24 }}
+        style={{ position: 'fixed', top: '4vh', left: '50%', transform: 'translateX(-50%)', width: '94%', maxWidth: 620, maxHeight: '92vh', overflowY: 'auto', background: 'var(--bg2)', border: '1px solid var(--border-gold)', borderRadius: 12, padding: 20, zIndex: 2101, boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 16 }}>
+          <div>
+            <p style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>Edit order</p>
+            <h3 style={{ fontFamily: 'monospace', fontSize: 18, color: 'var(--gold)' }}>{order.id}</h3>
+            <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>Status: {order.status}</p>
+          </div>
+          <button onClick={onClose} disabled={saving}
+            style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', cursor: saving ? 'not-allowed' : 'pointer' }}>✕</button>
+        </div>
+
+        {(error || errors.length > 0) && (
+          <div style={{ background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.4)', borderRadius: 6, padding: 10, marginBottom: 14 }}>
+            {error && <p style={{ fontSize: 12, color: '#e74c3c' }}>{error}</p>}
+            {errors.map((message) => <p key={message} style={{ fontSize: 12, color: '#e74c3c', marginTop: 2 }}>• {message}</p>)}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={labelStyle}>Name</label>
+            <input value={form.name} onChange={e => setField('name', e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Phone</label>
+            <input value={form.phone} onChange={e => setField('phone', e.target.value)} style={inputStyle} inputMode="tel" />
+          </div>
+          <div>
+            <label style={labelStyle}>Alternate phone</label>
+            <input value={form.phoneAlt} onChange={e => setField('phoneAlt', e.target.value)} style={inputStyle} inputMode="tel" />
+          </div>
+          <div>
+            <label style={labelStyle}>Email</label>
+            <input value={form.email} onChange={e => setField('email', e.target.value)} style={inputStyle} inputMode="email" />
+          </div>
+          <div>
+            <label style={labelStyle}>Governorate</label>
+            <select value={form.city} onChange={e => setField('city', e.target.value)} style={inputStyle}>
+              <option value="">Select governorate</option>
+              {EGYPT_GOVERNORATES.map(city => <option key={city} value={city}>{city}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Discount code</label>
+            <input value={form.couponCode} onChange={e => setField('couponCode', e.target.value.toUpperCase())} style={inputStyle} placeholder="None" />
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={labelStyle}>Address</label>
+            <textarea value={form.address} onChange={e => setField('address', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={labelStyle}>Notes</label>
+            <textarea value={form.notes} onChange={e => setField('notes', e.target.value)} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+          </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <p style={{ fontSize: 11, color: 'var(--text3)', letterSpacing: 1, textTransform: 'uppercase' }}>Items</p>
+            <span style={{ fontSize: 10, color: 'var(--text3)' }}>Prices are recalculated by the server</span>
+          </div>
+
+          {itemsLocked && (
+            <p style={{ fontSize: 11, color: '#f39c12', background: 'rgba(243,156,18,0.08)', border: '1px solid rgba(243,156,18,0.3)', borderRadius: 6, padding: 8, marginBottom: 10 }}>
+              Items can only be edited while the order is Pending or Confirmed. Customer details can still be updated.
+            </p>
+          )}
+
+          {!itemsLocked && form.items.length === 0 && (
+            <p style={{ fontSize: 12, color: '#e74c3c', marginBottom: 10 }}>The order has no items. Add at least one.</p>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {form.items.map((item, index) => (
+              <div key={`${item.productId}-${item.size}-${item.color}-${index}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</p>
+                  <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>
+                    {item.size || '—'} / {item.color || '—'} · EGP {Number(item.unitPrice || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <button onClick={() => updateQty(index, -1)} disabled={itemsLocked || saving}
+                    style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text1)', cursor: itemsLocked ? 'not-allowed' : 'pointer', opacity: itemsLocked ? 0.4 : 1 }}>−</button>
+                  <span style={{ minWidth: 22, textAlign: 'center', fontSize: 12 }}>{item.qty}</span>
+                  <button onClick={() => updateQty(index, 1)} disabled={itemsLocked || saving}
+                    style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text1)', cursor: itemsLocked ? 'not-allowed' : 'pointer', opacity: itemsLocked ? 0.4 : 1 }}>+</button>
+                </div>
+                <button onClick={() => removeItem(index)} disabled={itemsLocked || saving}
+                  style={{ padding: '6px 8px', borderRadius: 4, background: 'rgba(231,76,60,0.12)', border: '1px solid rgba(231,76,60,0.35)', color: '#e74c3c', fontSize: 10, cursor: itemsLocked ? 'not-allowed' : 'pointer', opacity: itemsLocked ? 0.4 : 1 }}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {!itemsLocked && (
+            <div style={{ marginTop: 12, padding: 10, background: 'rgba(201,168,76,0.05)', border: '1px dashed var(--border)', borderRadius: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))', gap: 8 }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Add product</label>
+                  <select value={newItem.productId} onChange={e => chooseProduct(e.target.value)} style={inputStyle}>
+                    <option value="">Select product</option>
+                    {productList.map(product => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}{hasInvalidVariantConfig(product) ? ' — unavailable configuration' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Size</label>
+                  <select value={newItem.size} onChange={e => setNewItem(n => ({ ...n, size: e.target.value }))} disabled={!selectedProduct} style={inputStyle}>
+                    {sizes.length === 0 && <option value="">—</option>}
+                    {sizes.map(size => <option key={size} value={size}>{size}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Color</label>
+                  <select value={newItem.color} onChange={e => setNewItem(n => ({ ...n, color: e.target.value }))} disabled={!selectedProduct} style={inputStyle}>
+                    {colors.length === 0 && <option value="">—</option>}
+                    {colors.map(color => <option key={color} value={color}>{color}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Qty</label>
+                  <input type="number" min="1" max="20" value={newItem.qty}
+                    onChange={e => setNewItem(n => ({ ...n, qty: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button onClick={addItem} disabled={newItemInvalid || saving}
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: 4, background: newItemInvalid ? 'var(--bg4)' : 'var(--gold)', color: newItemInvalid ? 'var(--text3)' : 'var(--bg)', border: 'none', fontWeight: 700, fontSize: 11, cursor: newItemInvalid ? 'not-allowed' : 'pointer' }}>
+                    Add item
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+          <button onClick={onClose} disabled={saving}
+            style={{ padding: '9px 16px', borderRadius: 6, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 12, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            style={{ padding: '9px 18px', borderRadius: 6, background: saving ? 'var(--bg4)' : 'var(--gold)', border: 'none', color: saving ? 'var(--text3)' : 'var(--bg)', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
 // ─── ORDERS PANEL ─────────────────────────────────────────────────────────────
 function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
-  const { orders, updateOrderStatus } = useStore();
+  const { orders, updateOrderStatus, products } = useStore();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selected, setSelected] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [page, setPage] = useState(1);
   const PER_PAGE = 15;
 
@@ -697,6 +1025,9 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
     const updated = (orders || []).find(o => o.id === selected.id);
     if (updated) setSelected(updated);
   }, [orders, selected?.id]);
+
+  // Never keep the edit form open for a different order.
+  useEffect(() => { setShowEditModal(false); }, [selected?.id]);
 
   // 🎯 دوال فحص وتجميع طلبات العميل المتكرر بناءً على رقم التليفون
   const getCustomerOrderCount = useCallback((phone) => {
@@ -1088,6 +1419,10 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
 
                 {canEdit && (
                   <div style={{ marginTop:16 }}>
+                    <button onClick={() => setShowEditModal(true)}
+                      style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 14px', marginBottom:16, borderRadius:6, background:'rgba(201,168,76,0.1)', border:'1px solid var(--border-gold)', color:'var(--gold)', cursor:'pointer', fontSize:12, fontWeight:700 }}>
+                      <Edit size={13} /> Edit order details
+                    </button>
                     <p style={{ fontSize:11, color:'var(--text3)', marginBottom:8, letterSpacing:1, textTransform:'uppercase' }}>Update Status</p>
                     <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                       {STATUS_FLOW.concat(['Cancelled']).filter(s => s !== selected.status).map(s => (
@@ -1102,6 +1437,17 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showEditModal && selected && (
+          <OrderEditModal
+            key={selected.id}
+            order={selected}
+            products={products}
+            onClose={() => setShowEditModal(false)}
+          />
         )}
       </AnimatePresence>
     </div>

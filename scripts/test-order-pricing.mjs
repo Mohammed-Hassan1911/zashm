@@ -622,7 +622,7 @@ console.log('\n[10] idempotency race: same key + same cart + coupon');
   eq(state.ordersByKey.size, 1, 'only one order row exists for the key');
 }
 
-// ─── [11] DB failure: both channels get a manual-follow-up alert ────────────
+// ─── [11] DB failure: Telegram gets a manual-follow-up alert ───────────────
 const realFetch = global.fetch;
 const realError = console.error;
 let notifyCalls = [];
@@ -631,9 +631,6 @@ function captureNotifications() {
   notifyCalls = [];
   global.fetch = async (url, init) => {
     notifyCalls.push({ url: String(url), init });
-    if (String(url).includes('api.day.app')) {
-      return { ok: true, status: 200, json: async () => ({ code: 200, message: 'success' }) };
-    }
     return { ok: true, status: 200, json: async () => ({ ok: true }) };
   };
 }
@@ -641,14 +638,9 @@ function releaseNotifications() {
   global.fetch = realFetch;
   delete process.env.TELEGRAM_BOT_TOKEN;
   delete process.env.TELEGRAM_CHAT_ID;
-  delete process.env.BARK_DEVICE_KEY;
 }
 function notificationsTo(fragment) {
   return notifyCalls.filter((call) => call.url.includes(fragment));
-}
-function barkWire() {
-  const call = notificationsTo('api.day.app')[0];
-  return call ? JSON.parse(call.init.body) : null;
 }
 function telegramText() {
   const call = notificationsTo('api.telegram.org')[0];
@@ -660,10 +652,9 @@ function startAlerts() {
   console.error = () => {};
   process.env.TELEGRAM_BOT_TOKEN = '123456:TEST_TELEGRAM_TOKEN';
   process.env.TELEGRAM_CHAT_ID = '99887766';
-  process.env.BARK_DEVICE_KEY = 'bark_TEST_DEVICE_KEY_0123456789';
 }
 
-console.log('\n[11] database failure: Telegram + Bark fallback alert');
+console.log('\n[11] database failure: Telegram fallback alert');
 {
   seed();
   state.failProducts = true;
@@ -672,25 +663,19 @@ console.log('\n[11] database failure: Telegram + Bark fallback alert');
     const r = await place();
     eq(r.status, 500, 'product read failure returns 500');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram receives the fallback alert');
-    eq(notificationsTo('api.day.app').length, 1, 'Bark receives the fallback alert');
-
-    const bark = barkWire();
-    eq(bark.level, 'active', 'failure push is active');
-    eq(bark.sound, 'minuet', 'failure push rings');
-    ok(bark.id.startsWith('zashm-order-FAILED-'), 'failure uses its own notification id');
-    ok(bark.title.includes('طلب لم يُحفظ'), 'Bark title announces the failure');
-    ok(bark.body.includes('Test Shopper'), 'customer name is included');
-    ok(bark.body.includes('01012345678'), 'phone is included (manual follow-up)');
-    ok(bark.body.includes('تعذر قراءة بيانات المنتجات'), 'reason is the product read');
-    ok(bark.body.includes('منتج #1'), 'cart line survives without a product name');
-    ok(!bark.body.includes('رقم المحاولة'), 'no attempt id exists before the RPC');
-    ok(bark.body.includes('تواصل مع العميل يدويًا'), 'owner is told to follow up manually');
+    eq(notifyCalls.length, 1, 'Telegram is the only notification channel');
 
     const tg = telegramText();
     ok(tg.includes('FAILED-'), 'Telegram carries the reference');
-    ok(tg.includes('Test Shopper'), 'Telegram carries the customer');
-    ok(tg.includes('01012345678'), 'Telegram carries the phone');
-    ok(tg.includes('تعذر قراءة بيانات المنتجات'), 'Telegram carries the reason');
+    ok(tg.includes('الأوردر لم يُحفظ'), 'Telegram announces the failure');
+    ok(tg.includes('Test Shopper'), 'customer name is included');
+    ok(tg.includes('01012345678'), 'phone is included (manual follow-up)');
+    ok(tg.includes('تعذر قراءة بيانات المنتجات'), 'reason is the product read');
+    ok(tg.includes('منتج #1'), 'cart line survives without a product name');
+    ok(!tg.includes('رقم المحاولة'), 'no attempt id exists before the RPC');
+    ok(tg.includes('تواصل مع العميل يدويًا'), 'owner is told to follow up manually');
+    ok(!JSON.parse(notificationsTo('api.telegram.org')[0].init.body).parse_mode,
+      'failure alert is plain text (no Markdown/link injection)');
   } finally {
     releaseNotifications();
     console.error = realError;
@@ -698,7 +683,7 @@ console.log('\n[11] database failure: Telegram + Bark fallback alert');
 }
 
 // ─── [12] coupon read failure is a DB failure too ──────────────────────────
-console.log('\n[12] coupon read failure still alerts both channels');
+console.log('\n[12] coupon read failure still alerts');
 {
   seed({ coupon: couponRow() });
   state.failCoupons = true;
@@ -707,9 +692,9 @@ console.log('\n[12] coupon read failure still alerts both channels');
     const r = await place({ coupon: 'SAVE10' });
     eq(r.status, 500, 'coupon read failure returns 500');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
-    eq(notificationsTo('api.day.app').length, 1, 'Bark alert');
-    ok(barkWire().body.includes('تعذر التحقق من كود الخصم'), 'coupon reason is explicit');
-    ok(barkWire().body.includes('Test Piece'), 'known products are still listed');
+    const tg = telegramText();
+    ok(tg.includes('تعذر التحقق من كود الخصم'), 'coupon reason is explicit');
+    ok(tg.includes('Test Piece'), 'known products are still listed');
   } finally {
     releaseNotifications();
     console.error = realError;
@@ -725,13 +710,12 @@ console.log('\n[13] atomic_place_order failure keeps prices in the alert');
   try {
     const r = await place();
     eq(r.status, 500, 'RPC error returns 500');
-    eq(notificationsTo('api.day.app').length, 1, 'Bark alert');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
-    const bark = barkWire();
-    ok(bark.body.includes('Test Piece'), 'item name is included');
-    ok(bark.body.includes('الإجمالي: EGP 265'), 'server total is included');
-    ok(bark.body.includes('تعذر حفظ الأوردر'), 'save reason is explicit');
-    ok(bark.body.includes('رقم المحاولة: ZSH-'), 'attempt id is included for reconciliation');
+    const tg = telegramText();
+    ok(tg.includes('Test Piece'), 'item name is included');
+    ok(tg.includes('الإجمالي: EGP 265'), 'server total is included');
+    ok(tg.includes('تعذر حفظ الأوردر'), 'save reason is explicit');
+    ok(tg.includes('رقم المحاولة: ZSH-'), 'attempt id is included for reconciliation');
   } finally {
     releaseNotifications();
     console.error = realError;
@@ -747,9 +731,8 @@ console.log('\n[14] unexpected server error alerts before the commit');
   try {
     const r = await place();
     eq(r.status, 500, 'unexpected error returns 500');
-    eq(notificationsTo('api.day.app').length, 1, 'Bark alert');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
-    ok(barkWire().body.includes('خطأ غير متوقع'), 'unexpected reason is explicit');
+    ok(telegramText().includes('خطأ غير متوقع'), 'unexpected reason is explicit');
   } finally {
     releaseNotifications();
     console.error = realError;
@@ -774,13 +757,14 @@ console.log('\n[15] normal refusals stay silent, successful orders notify normal
   try {
     const r = await place();
     eq(r.status, 200, 'order succeeds');
-    eq(notifyCalls.length, 2, 'one Telegram + one Bark notification');
-    const bark = barkWire();
-    eq(bark.level, 'active', 'the first notification is active');
-    eq(bark.sound, 'minuet', 'the first notification rings');
-    ok(bark.title.includes('طلب جديد'), 'it is the new-order notification');
-    ok(!bark.body.includes('لم يُحفظ'), 'no failure wording on a stored order');
-    ok(telegramText().includes('Test Shopper'), 'Telegram still sends the normal order message');
+    eq(notifyCalls.length, 1, 'exactly one Telegram notification');
+    const body = JSON.parse(notificationsTo('api.telegram.org')[0].init.body);
+    eq(body.parse_mode, undefined, 'order message is sent as plain text');
+    ok(body.text.includes('Test Shopper'), 'Telegram sends the customer confirmation message');
+    ok(body.text.includes('رقم الطلب: ZSH-'), 'order id keeps its hyphens in the copyable text');
+    ok(!body.text.includes('لم يُحفظ'), 'no failure wording on a stored order');
+    ok(body.reply_markup && body.reply_markup.inline_keyboard, 'action buttons travel as an inline keyboard');
+    ok(!body.text.includes('/admin'), 'no admin URL leaks into the copyable message body');
   } finally {
     releaseNotifications();
   }

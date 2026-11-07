@@ -15,13 +15,11 @@ const {
   parseOrderRow,
   sendTelegramNotification,
   buildOrderTelegramMessage,
-  buildOrderBarkNotification,
-  sendBarkNotification,
+  buildOrderTelegramActions,
   sendOrderFailureAlert,
   newFailureReference,
   trackingUrlFor,
   verifyTrackToken,
-  buildOrderClipboardMessage,
   whatsAppDeepLink,
   EGYPT_PHONE_RE,
   cairoDateString,
@@ -522,34 +520,18 @@ async function placeOrder(req, res) {
     orderStored = true;
 
     // 6. Telegram notification (server secret; failure never blocks the order).
+    //    The text is the customer confirmation message (plain text, so emails
+    //    and the order id keep their underscores/hyphens) and the action buttons
+    //    are an inline keyboard, so the message body stays clean when copied.
     try {
-      const message = buildOrderTelegramMessage(
-        { ...orderRow, items: orderItems, shippingCost },
-        trackingUrl
-      );
-      await sendTelegramNotification(message);
+      const messageOrder = { ...orderRow, items: orderItems, shippingCost, tracking_url: trackingUrl };
+      const message = buildOrderTelegramMessage(messageOrder, trackingUrl);
+      await sendTelegramNotification(message, {
+        parseMode: null,
+        replyMarkup: buildOrderTelegramActions(messageOrder, trackingUrl),
+      });
     } catch (e) {
       console.error('Telegram notification failed:', e.message);
-    }
-
-    // Bark (iOS) push — fire-and-forget, independent of Telegram. The same
-    // notification id is reused for every lifecycle event so iOS replaces it
-    // instead of stacking, and every replacement carries the full order. This
-    // first one is the only audible alert; later status changes are passive.
-    try {
-      const payload = buildOrderBarkNotification({
-        ...orderRow,
-        items: orderItems,
-        shippingCost,
-        tracking_url: trackingUrl,
-        createdAt: timestamps.created,
-        date: orderRow.date,
-        status: 'Pending',
-        initial: true,
-      });
-      await sendBarkNotification(payload);
-    } catch (e) {
-      console.error('Bark notification failed:', e.message);
     }
 
     const order = parseOrderRow({ ...orderRow, items: orderItems, timestamps });
@@ -594,11 +576,11 @@ async function trackOrder(req, res) {
     const order = parseOrderRow(data);
     order.tracking_url = trackingUrlFor(trackId);
 
-    // ?wa=1 turns the link in the owner's notification into a WhatsApp deep
-    // link with the customer message pre-filled. The tracking token is the
-    // credential, exactly like the tracking page.
+    // ?wa=1 turns the notification button into a WhatsApp deep link with the
+    // customer message pre-filled. The tracking token is the credential,
+    // exactly like the tracking page.
     if (String((req.query && req.query.wa) || '') === '1') {
-      const message = buildOrderClipboardMessage(order, order.tracking_url);
+      const message = buildOrderTelegramMessage(order, order.tracking_url);
       const target = whatsAppDeepLink(order.phone, message);
       if (!target) return redirect(res, order.tracking_url);
       return redirect(res, target);

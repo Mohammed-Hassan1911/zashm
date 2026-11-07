@@ -110,15 +110,16 @@
 1. **Pre-flight** أعلاه (قراءة فقط).
 2. `supabase/atomic_place_order.sql` (REVISION 10 — رفض المقاس/اللون غير المعرّف، رفض الإعداد غير الصالح `invalid_product_config`، وإعادة حساب `stock` من التركيبات المعرفة فقط. وإن كان الإصدار السابق مطبَّقًا فيكفي التدرّج: `supabase/reject_undefined_variants.sql` ثم `supabase/declared_only_stock_recompute.sql` بالترتيب).
 3. `supabase/atomic_order_lifecycle.sql`
-4. `supabase/admin_protection.sql`
-5. `supabase/security_hardening.sql`
-6. **انشر كود الكوبونات الجديد** ثم `supabase/coupons_lockdown.sql` (SECTION 0 → 1 → 2).
-7. `supabase/session_revocation.sql` (آمن قبل/بعد النشر؛ الطرفان يبدآن بـ0).
-8. `supabase/storage_hardening.sql` — راجع الـ NOTICE.
-9. `supabase/products_public_view.sql` — **Phase 1 فقط** (ينشئ العرض، يمنح SELECT، يسجّل `products_public_phase1_applied`، ويتخطى Phase 3).
-10. **انشر الواجهة والـ API الجديد** (يشمل `GET /api/admin/products`). تأكد من Network أن المتجر يقرأ `products_public`.
-11. نفّذ فحوصات §5 (API + الإدارة + المتجر).
-12. أدخل علم النشر **فقط بعد نجاح §5**:
+4. `supabase/atomic_edit_order.sql` — بعد lifecycle لأنه يستخدم `atomic_adjust_stock` و`zshm_order_items()`/`zshm_order_lines()`/`zshm_adjust_coupon_usage()`. يضيف تعديل الطلب (بيانات العميل/المنتجات/الكوبون) داخل transaction واحد مع `timestamps.rev` وفرق مخزون صافٍ. **انشر الـAPI والواجهة الجديدة بعده** حتى يعمل زر تعديل الطلب.
+5. `supabase/admin_protection.sql`
+6. `supabase/security_hardening.sql`
+7. **انشر كود الكوبونات الجديد** ثم `supabase/coupons_lockdown.sql` (SECTION 0 → 1 → 2).
+8. `supabase/session_revocation.sql` (آمن قبل/بعد النشر؛ الطرفان يبدآن بـ0).
+9. `supabase/storage_hardening.sql` — راجع الـ NOTICE.
+10. `supabase/products_public_view.sql` — **Phase 1 فقط** (ينشئ العرض، يمنح SELECT، يسجّل `products_public_phase1_applied`، ويتخطى Phase 3).
+11. **انشر الواجهة والـ API الجديد** (يشمل `GET /api/admin/products` و`PATCH /api/admin/orders` بوضع `action: 'edit'`). تأكد من Network أن المتجر يقرأ `products_public`.
+12. نفّذ فحوصات §5 (API + الإدارة + المتجر).
+13. أدخل علم النشر **فقط بعد نجاح §5**:
 
 ```sql
 INSERT INTO public.zshm_deploy_flags (name, note)
@@ -126,11 +127,11 @@ VALUES ('products_public_frontend_live', 'new bundle deployed')
 ON CONFLICT (name) DO NOTHING;
 ```
 
-13. أعد تشغيل `supabase/products_public_view.sql` — **Phase 3**.
-14. أعد فحوصات §5 كاملة، ثم راجع Vercel logs وSupabase logs لمدة 24 ساعة.
-15. `supabase/stock_hardening_constraints.sql` — **الخطوة الأخيرة، اختيارية لكن موصى بها**: قيود `NOT NULL` و`CHECK` على الأعمدة الحقيقية `"reservedStock"` و`"variantStock"` (باقتباس صحيح) داخل transaction واحد مع `lock_timeout` وفشل مغلق إن وُجدت صفوف NULL/غير صالحة. لا يعدّل أي بيانات: يعرض التقرير في §0 ثم يوقف التنفيذ إن لزم. للتراجع نفّذ `supabase/stock_hardening_constraints_rollback.sql` كما هو. أعد الفحص الثاني (تشغيل الملف مرتين) آمن لأن كل قيد محمي بفحص كتالوج.
+14. أعد تشغيل `supabase/products_public_view.sql` — **Phase 3**.
+15. أعد فحوصات §5 كاملة، ثم راجع Vercel logs وSupabase logs لمدة 24 ساعة.
+16. `supabase/stock_hardening_constraints.sql` — **الخطوة الأخيرة، اختيارية لكن موصى بها**: قيود `NOT NULL` و`CHECK` على الأعمدة الحقيقية `"reservedStock"` و`"variantStock"` (باقتباس صحيح) داخل transaction واحد مع `lock_timeout` وفشل مغلق إن وُجدت صفوف NULL/غير صالحة. لا يعدّل أي بيانات: يعرض التقرير في §0 ثم يوقف التنفيذ إن لزم. للتراجع نفّذ `supabase/stock_hardening_constraints_rollback.sql` كما هو. أعد الفحص الثاني (تشغيل الملف مرتين) آمن لأن كل قيد محمي بفحص كتالوج.
 
-**ممنوع:** إنشاء العلم قبل خطوة 10، أو تشغيل Phase 3 قبل التحقق من الشبكة.
+**ممنوع:** إنشاء العلم قبل خطوة 11، أو تشغيل Phase 3 قبل التحقق من الشبكة.
 
 ### 4.3 إعدادات Vercel (لم تُنفَّذ)
 
@@ -201,6 +202,7 @@ ON CONFLICT (name) DO NOTHING;
 - `supabase/reject_undefined_variants.sql` — Migration 1 من 2 (لم يُطبَّق): يضيف `public.zshm_sellable_stock()` ويستبدل `atomic_place_order` برفض المقاس/اللون غير المعرّف (`undefined_variant`) ورفض variantStock بلا sizes/colors معرفة (`invalid_product_config`) وكتابة `stock` من التركيبات المعرفة فقط. نفس نص الدوال حرفيًا في الملف المرجعي، و`scripts/test-undefined-variant.mjs` يقارنهما، و`[9]` في `scripts/test-sql-concurrency.mjs` يطبّق الملف على PostgreSQL حقيقي مؤقت. الفحص 0c هو جرد المنتجات القديمة (كانت صفر وقت المراجعة) — إن رجعت أي صفوف فتوقف وراجع القائمة قبل التطبيق. لا يحذف ولا يصفّر أي مخزون ولا يمسّ الطلبات القائمة.
 - `supabase/declared_only_stock_recompute.sql` — Migration 2 من 2 (لم يُطبَّق، بعده مباشرة): يستبدل `atomic_adjust_stock` بنفس قاعدة إعادة الحساب حتى لا يتناقض الإلغاء/الاسترجاع مع الشراء. يفشل loudly إن لم يكن Migration 1 مطبَّقًا. لا يغيّر أي صف منتج عند التطبيق؛ الأرقام تتحرك فقط مع أول عملية دورة حياة حقيقية.
 - `supabase/atomic_order_lifecycle.sql`
+- `supabase/atomic_edit_order.sql` — تعديل الطلب من لوحة الإدارة (بيانات العميل/المنتجات/الكوبون) داخل transaction واحد: قفل الطلب أولًا، فحص `timestamps.rev`، فرق مخزون صافٍ (خصم صارم ثم استرجاع متسامح)، وإعادة التحقق من الكوبون ونقل عدّاد الاستخدام مرة واحدة. المنتجات قابلة للتعديل في `Pending`/`Confirmed` فقط، وبيانات العميل دائمًا. لا يغيّر حالة الطلب ولا يحذف شيئًا.
 - `supabase/admin_protection.sql`
 - `supabase/security_hardening.sql`
 - `supabase/coupons_lockdown.sql`

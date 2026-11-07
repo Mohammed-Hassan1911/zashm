@@ -19,12 +19,13 @@ They are idempotent where possible and none of them delete rows.
 |---|------|-----------------|
 | 1 | `supabase/atomic_place_order.sql` (Revision 8) | Replaces order placement RPC: aggregates demand (per variant for variant products, per product for products without variants), ignores unused `reservedStock`, keeps `stock = sum(variantStock)`, increments coupon usage only after a successful INSERT, rejects inactive products/changed coupons, safely parses JSON, and compares cart signatures for idempotent retries. |
 | 2 | `supabase/atomic_order_lifecycle.sql` | Adds `atomic_set_order_status` / `atomic_delete_order` (status changes + stock/coupon restore inside one transaction), legacy-safe item parsers, partial restore for missing products/variants, and the strict `zshm_adjust_coupon_usage` helper. Apply after #1 because it calls `atomic_adjust_stock`. |
-| 3 | `supabase/admin_protection.sql` | Trigger that refuses to demote/delete the last admin (transaction advisory lock; covered by a real two-connection test). |
-| 4 | `supabase/security_hardening.sql` | Function `search_path` pinning / privilege revokes; inspects every existing `auth.users` trigger and refuses to add a second provisioning trigger. It never drops/replaces an existing trigger and no longer defines a duplicate last-admin function. |
-| 5 | `supabase/storage_hardening.sql` | `products` bucket: 5 MB limit, image MIME allow-list, RLS, and a restrictive policy preventing browser roles from listing product filenames while retaining public image downloads. Drops only policies provably scoped to `products`; blanket/other-bucket policies are kept for manual review. If the SQL role does not own `storage.objects` (normal in Supabase), it never runs `ALTER TABLE`/`DROP POLICY`; it reports the exact products-only policies for removal in **Dashboard > Storage > Policies**. Every policy dropped by the script is backed up verbatim and restorable with `zshm_restore_storage_policies()`. |
-| 6 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide`; `reservedStock` is not in it, and `active/tags/rating/reviews` are not selected), grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
+| 3 | `supabase/atomic_edit_order.sql` | Adds `atomic_edit_order` (customer/items/coupon correction inside one transaction; lock order `orders` → `products` → `coupons`, optimistic revision in `timestamps.rev`, net stock reconciliation, coupon revalidation and usage move). Items are editable only in Pending/Confirmed; customer details stay editable in every status. Apply after #2 because it uses `atomic_adjust_stock` and the lifecycle helpers. |
+| 4 | `supabase/admin_protection.sql` | Trigger that refuses to demote/delete the last admin (transaction advisory lock; covered by a real two-connection test). |
+| 5 | `supabase/security_hardening.sql` | Function `search_path` pinning / privilege revokes; inspects every existing `auth.users` trigger and refuses to add a second provisioning trigger. It never drops/replaces an existing trigger and no longer defines a duplicate last-admin function. |
+| 6 | `supabase/storage_hardening.sql` | `products` bucket: 5 MB limit, image MIME allow-list, RLS, and a restrictive policy preventing browser roles from listing product filenames while retaining public image downloads. Drops only policies provably scoped to `products`; blanket/other-bucket policies are kept for manual review. If the SQL role does not own `storage.objects` (normal in Supabase), it never runs `ALTER TABLE`/`DROP POLICY`; it reports the exact products-only policies for removal in **Dashboard > Storage > Policies**. Every policy dropped by the script is backed up verbatim and restorable with `zshm_restore_storage_policies()`. |
+| 7 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide`; `reservedStock` is not in it, and `active/tags/rating/reviews` are not selected), grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
 
-Two further files are required but are **not** counted in the six above:
+Two further files are required but are **not** counted in the seven above:
 
 - `supabase/coupons_lockdown.sql` — run only after the server-only coupon code
   is deployed, following its own SECTION 0 → 1 → 2 procedure.
@@ -43,7 +44,7 @@ Deploy the updated frontend and `/api/orders` together: the API now requires
 the frontend's persistent idempotency key. Verify the atomic order-placement
 migration is applied before accepting production orders.
 
-After #6, verify with an **anon** key (not the service role):
+After #7, verify with an **anon** key (not the service role):
 
 - `GET /rest/v1/products_public` → rows, **no** `reservedStock` column.
 - `GET /rest/v1/products?select=reservedStock` → 401/403.
@@ -356,7 +357,7 @@ drop`.
 - No production data was modified or deleted.
 - No Vercel/Supabase settings or environment variables were changed.
 - `npm test` includes `scripts/test-sql-concurrency.mjs`. It starts a disposable
-  local PostgreSQL 15+ cluster in a temp directory, applies all six migrations and
+  local PostgreSQL 15+ cluster in a temp directory, applies the staged migrations and
   runs real concurrent transactions (idempotency races, last-admin demotions,
   legacy order rows, view phases, storage policies, `auth.users` triggers). When
   PostgreSQL's `initdb`/`pg_ctl`/`psql` are not installed it prints `SKIPPED` and

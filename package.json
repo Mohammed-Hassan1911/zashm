@@ -16,7 +16,7 @@
     "start": "vite",
     "dev": "vite",
     "build": "vite build",
-    "test": "node scripts/test-analytics.mjs && node scripts/test-coupons.mjs && node scripts/test-checkout-idempotency.mjs && node scripts/test-order-lifecycle.mjs && node scripts/test-order-pricing.mjs && node scripts/test-sessions-admin.mjs && node scripts/test-admin-products.mjs && node scripts/test-admin-navigation.mjs && node scripts/test-ux-fixes.mjs && node scripts/test-stock-edge-cases.mjs && node scripts/test-product-colors.mjs && node scripts/test-edge-transport.mjs && node scripts/test-routing.mjs && node scripts/test-final-hardening.mjs && node scripts/test-sitemap.mjs && node scripts/test-pricing.mjs && node scripts/test-undefined-variant.mjs && node scripts/test-bark-notify.mjs && node scripts/test-sql-concurrency.mjs"
+    "test": "node scripts/test-analytics.mjs && node scripts/test-coupons.mjs && node scripts/test-checkout-idempotency.mjs && node scripts/test-order-lifecycle.mjs && node scripts/test-order-edit.mjs && node scripts/test-order-pricing.mjs && node scripts/test-sessions-admin.mjs && node scripts/test-admin-products.mjs && node scripts/test-admin-navigation.mjs && node scripts/test-ux-fixes.mjs && node scripts/test-stock-edge-cases.mjs && node scripts/test-product-colors.mjs && node scripts/test-edge-transport.mjs && node scripts/test-routing.mjs && node scripts/test-final-hardening.mjs && node scripts/test-sitemap.mjs && node scripts/test-pricing.mjs && node scripts/test-undefined-variant.mjs && node scripts/test-notifications.mjs && node scripts/test-sql-concurrency.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.0",

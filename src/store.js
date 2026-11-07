@@ -755,6 +755,38 @@ export const useStore = create((set, get) => ({
     return { success: true };
   },
 
+  editOrder: async (id, changes) => {
+    const order = get().orders.find(o => String(o.id) === String(id));
+    if (!order) return { success: false, error: 'Order not found' };
+
+    // Optimistic revision: the server rejects the edit if another admin saved
+    // first, instead of silently overwriting their change.
+    const expectedRev = Number(order.timestamps && order.timestamps.rev) || 0;
+
+    try {
+      const payload = await api.patch('/admin/orders', {
+        id,
+        action: 'edit',
+        expectedRev,
+        ...changes,
+      });
+      await get().refreshProducts();
+      await get().refreshOrders();
+      return { success: true, order: payload.order, rev: payload.rev, warnings: payload.warnings || [] };
+    } catch (err) {
+      console.error('editOrder failed:', err.message);
+      // Always resync so the drawer shows the server's current revision.
+      await get().refreshOrders();
+      return {
+        success: false,
+        error: (err && err.message) || 'Could not update order',
+        code: err && err.payload && err.payload.code,
+        rev: err && err.payload && err.payload.rev,
+        errors: err && err.payload && Array.isArray(err.payload.errors) ? err.payload.errors : [],
+      };
+    }
+  },
+
   deleteOrder: async (id) => {
     set({ orders: get().orders.filter(o => String(o.id) !== String(id)) });
     try {

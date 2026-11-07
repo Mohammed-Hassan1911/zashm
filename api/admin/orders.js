@@ -13,14 +13,103 @@ const {
   ORDER_STATUSES,
   parseOrderRow,
   trackingUrlFor,
+  validateOrderEditPayload,
   getShippingCost,
-  sendBarkNotification,
-  buildOrderBarkNotification,
+  cairoDateString,
+  couponIsRedeemable,
+  computeCouponDiscount,
+  sendTelegramNotification,
+  buildOrderStatusMessage,
+  buildOrderTelegramActions,
 } = require('../_lib');
 
 function getId(req, body) {
   const q = (req.query && req.query.id) || (body && body.id) || '';
   return String(q).trim();
+}
+
+function isEditRequest(body) {
+  return !!body && (body.action === 'edit' || body.edit === true);
+}
+
+function orderRev(order) {
+  const raw = order && order.timestamps && order.timestamps.rev;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : 0;
+}
+
+/**
+ * Rebuild edited lines from authoritative database prices. This mirrors the
+ * sellable rules of api/orders.js (active, valid price, declared size/colour,
+ * existing variant key) but deliberately does NOT check availability: the
+ * order already holds its old units, and atomic_edit_order compares the NET
+ * difference under row locks. Stock is therefore checked exactly once, where it
+ * cannot race.
+ */
+function buildEditedOrderItems(products, items) {
+  const productMap = new Map((products || []).map((p) => [Number(p.id), p]));
+  const built = [];
+  const errors = [];
+
+  for (const item of items) {
+    const p = productMap.get(Number(item.productId));
+    if (!p || p.active !== true) {
+      errors.push('A selected product is no longer available.');
+      continue;
+    }
+
+    const priceNum = Number(p.price);
+    const saleNum = Number(p.salePrice);
+    const hasSale = p.salePrice !== null && p.salePrice !== undefined && p.salePrice !== ''
+      && Number.isFinite(saleNum) && saleNum > 0
+      && Number.isFinite(priceNum) && saleNum < priceNum;
+    const unitPrice = hasSale ? saleNum : priceNum;
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      errors.push(`The price of "${p.name || 'a product'}" is invalid.`);
+      continue;
+    }
+
+    const pv = p.variantStock;
+    const hasVariantStock = !!(pv && typeof pv === 'object' && !Array.isArray(pv) && Object.keys(pv).length > 0);
+    const declaredSizes = Array.isArray(p.sizes) ? p.sizes : [];
+    const declaredColors = Array.isArray(p.colors) ? p.colors : [];
+    const hasSizesOrColors = declaredSizes.length > 0 || declaredColors.length > 0;
+
+    if (hasSizesOrColors && !hasVariantStock) {
+      errors.push(`"${p.name || 'A product'}" is not available to order — its size and color options are not set up.`);
+      continue;
+    }
+    if (hasVariantStock && (declaredSizes.length === 0 || declaredColors.length === 0)) {
+      errors.push(`"${p.name || 'A product'}" is not available to order — its size and color options are not set up.`);
+      continue;
+    }
+    if (hasVariantStock) {
+      const variantKey = `${item.size}-${item.color}`;
+      if (!declaredSizes.includes(item.size) || !declaredColors.includes(item.color)) {
+        errors.push(`"${p.name || 'A product'}" is no longer available in the selected size or color.`);
+        continue;
+      }
+      if (!Object.prototype.hasOwnProperty.call(pv, variantKey)) {
+        errors.push(`"${p.name || 'A product'}" is no longer available in the selected size or color.`);
+        continue;
+      }
+    }
+
+    built.push({
+      productId: p.id,
+      name: p.name || 'Unknown Product',
+      category: (p.category || '').trim() || 'General',
+      size: item.size,
+      color: item.color,
+      qty: item.qty,
+      unitPrice,
+      price: unitPrice * item.qty,
+      image: (Array.isArray(p.images) && p.images[0]) || p.image || '',
+    });
+  }
+
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, items: built };
 }
 
 // Status changes and deletions are performed by ONE database function each
@@ -66,10 +155,14 @@ async function updateOrder(req, res) {
 
   let body;
   try {
-    body = await readBody(req, 16 * 1024);
+    body = await readBody(req, 32 * 1024);
   } catch (e) {
     return json(res, e.status || 400, { error: e.message });
   }
+
+  // The same endpoint handles a full edit. The explicit flag keeps the legacy
+  // status-only PATCH contract unchanged for every existing caller.
+  if (isEditRequest(body)) return applyOrderEdit(req, res, body);
 
   const id = getId(req, body);
   const newStatus = String((body && body.status) || '').trim();
@@ -140,25 +233,27 @@ async function updateOrder(req, res) {
       console.warn('Order status changed with reconciliation warnings:', JSON.stringify(warnings));
     }
 
-    // Bark (iOS) push — fire-and-forget, never blocks. Full order detail is
-    // carried by every replacement. `changed === false` means an idempotent
-    // retry for a transition that already happened, so no second notification
-    // is sent.
+    // Status change alert (Telegram). This is the SHORT internal line, never the
+    // customer confirmation text: a "تم الشحن" update must not be pasted into a
+    // customer chat as if it were the order confirmation. `changed === false`
+    // means an idempotent retry for a transition that already happened, so no
+    // second message is sent.
     if (r.changed !== false) {
       try {
         const full = parseOrderRow(order) || order;
-        const payload = buildOrderBarkNotification({
+        const statusOrder = {
           ...full,
           id: full.id || id,
-          status: newStatus,
-          shippingCost: full.shippingCost != null ? full.shippingCost : getShippingCost(full.city),
           tracking_url: full.tracking_url || trackingUrlFor(full.id || id),
-          createdAt: full.timestamps && full.timestamps.created,
-          date: full.date,
+        };
+        await sendTelegramNotification(buildOrderStatusMessage(statusOrder, newStatus), {
+          parseMode: null,
+          replyMarkup: buildOrderTelegramActions(statusOrder, statusOrder.tracking_url, {
+            includeWhatsApp: false,
+          }),
         });
-        await sendBarkNotification(payload);
       } catch (e) {
-        console.error('Bark (status) failed:', e.message);
+        console.error('Telegram (status) failed:', e.message);
       }
     }
 
@@ -170,6 +265,244 @@ async function updateOrder(req, res) {
     });
   } catch (err) {
     console.error('Order update error:', err && err.message);
+    return json(res, 500, { error: 'Could not update order' });
+  }
+}
+
+// ─── PATCH /api/admin/orders (action: edit) — customer + item correction ─────
+//
+// Money stays server-authoritative: the API reprices every edited line from the
+// database, re-validates the coupon against the NEW subtotal, and recomputes
+// shipping/total. The single atomic_edit_order RPC then locks the order,
+// re-checks the optimistic revision, reconciles stock by net difference and
+// writes everything in one transaction.
+async function applyOrderEdit(req, res, body) {
+  const id = getId(req, body);
+  if (!id) return json(res, 400, { error: 'Order id is required' });
+
+  const expectedRev = Number(body && body.expectedRev);
+  if (!Number.isInteger(expectedRev) || expectedRev < 0) {
+    return json(res, 400, {
+      error: 'A current order revision is required. Please refresh and try again.',
+    });
+  }
+
+  const validated = validateOrderEditPayload(body);
+  if (!validated.ok) {
+    return json(res, 422, { error: 'Invalid order data', errors: validated.errors });
+  }
+
+  try {
+    const sb = supabaseAdmin();
+    const { data: row, error } = await sb.from('orders').select('*').eq('id', id).maybeSingle();
+    if (error) {
+      console.error('Order edit read failed:', error.message);
+      return json(res, 500, { error: 'Could not load order' });
+    }
+    if (!row) return json(res, 404, { error: 'Order not found' });
+
+    const order = parseOrderRow(row);
+    if (orderRev(order) !== expectedRev) {
+      return json(res, 409, {
+        error: 'This order was changed by another operation. Please refresh and try again.',
+        rev: orderRev(order),
+        code: 'rev_conflict',
+      });
+    }
+
+    const status = String(order.status || 'Pending');
+    if (validated.items && !['Pending', 'Confirmed'].includes(status)) {
+      return json(res, 422, {
+        error: 'Items can only be edited while the order is Pending or Confirmed. Customer details can still be updated.',
+        code: 'items_locked',
+        status,
+      });
+    }
+
+    // Rebuild edited lines from DB prices (never from the request body).
+    let pricedItems = null;
+    if (validated.items) {
+      const ids = [...new Set(validated.items.map((i) => i.productId))];
+      const { data: products, error: prodErr } = await sb.from('products').select('*').in('id', ids);
+      if (prodErr) {
+        console.error('Order edit product lookup failed:', prodErr.message);
+        return json(res, 500, { error: 'Could not load products' });
+      }
+      const built = buildEditedOrderItems(products || [], validated.items);
+      if (!built.ok) {
+        return json(res, 422, {
+          error: 'Some items cannot be used in this order',
+          errors: built.errors,
+        });
+      }
+      pricedItems = built.items;
+    }
+
+    const subtotal = pricedItems
+      ? pricedItems.reduce((sum, item) => sum + item.price, 0)
+      : Number(order.subtotal || 0);
+
+    const currentCode = order.discountCode
+      ? String(order.discountCode).trim().toUpperCase()
+      : null;
+    const nextCode = validated.couponProvided
+      ? (validated.couponCode || null)
+      : currentCode;
+
+    let discount = Number(order.discount || 0);
+    const totalsAffected = Boolean(pricedItems) || validated.couponProvided;
+    if (totalsAffected) {
+      discount = 0;
+      if (nextCode) {
+        const { data: coupon, error: couponErr } = await sb
+          .from('coupons')
+          .select('code, type, value, discountValue, minOrderAmount, maxDiscount, active, startDate, endDate, usageLimit, usageCount')
+          .eq('code', nextCode)
+          .maybeSingle();
+        if (couponErr) {
+          console.error('Order edit coupon lookup failed:', couponErr.code || 'unknown');
+          return json(res, 500, { error: 'Could not validate the discount code. Please try again.' });
+        }
+
+        const sameCode = currentCode === nextCode;
+        if (!couponIsRedeemable(coupon, cairoDateString(), { allowExhausted: sameCode })) {
+          return json(res, 422, {
+            error: 'This discount code is no longer available for this order. Remove it or choose another one.',
+            code: 'coupon_unavailable',
+          });
+        }
+        const priced = computeCouponDiscount(coupon, subtotal);
+        if (!priced.ok) {
+          return json(res, 422, {
+            error: 'This discount code is not valid for the edited items. Remove it or choose another one.',
+            code: 'coupon_changed',
+            reason: priced.reason,
+          });
+        }
+        discount = priced.discount;
+      }
+    }
+
+    const shippingCost = getShippingCost(validated.customer.city);
+    const total = Math.max(0, subtotal + shippingCost - discount);
+
+    const patch = {
+      customer: validated.customer.name,
+      phone: validated.customer.phone,
+      phoneAlt: validated.customer.phoneAlt || '',
+      email: validated.customer.email || '',
+      address: validated.customer.address,
+      city: validated.customer.city,
+      notes: validated.customer.notes || '',
+      subtotal,
+      discount,
+      total,
+      discountCode: nextCode || '',
+      ...(pricedItems ? { items: pricedItems } : {}),
+    };
+
+    const { data, error: rpcErr } = await sb.rpc('atomic_edit_order', {
+      p_id: id,
+      p_expected_rev: expectedRev,
+      p_patch: patch,
+    });
+    if (rpcErr) {
+      console.error('Order edit RPC failed:', rpcErr.message);
+      return json(res, 500, { error: 'Could not update order' });
+    }
+    const r = Array.isArray(data) ? (data[0] || {}) : (data || {});
+
+    if (r.ok !== true) {
+      const reason = r.reason || '';
+      if (reason === 'not_found') return json(res, 404, { error: 'Order not found' });
+      if (reason === 'invalid_payload') return json(res, 400, { error: 'Invalid order data' });
+      if (reason === 'rev_conflict') {
+        return json(res, 409, {
+          error: 'This order was changed by another operation. Please refresh and try again.',
+          rev: Number(r.rev) || 0,
+          code: 'rev_conflict',
+        });
+      }
+      if (reason === 'items_locked') {
+        return json(res, 422, {
+          error: 'Items can only be edited while the order is Pending or Confirmed. Customer details can still be updated.',
+          code: 'items_locked',
+          status: r.status || null,
+        });
+      }
+      if (reason === 'coupon_unavailable') {
+        return json(res, 422, {
+          error: 'This discount code is no longer available for this order. Remove it or choose another one.',
+          code: 'coupon_unavailable',
+        });
+      }
+      if (reason === 'coupon_changed') {
+        return json(res, 422, {
+          error: 'The discount changed while saving. Please review the discount code and try again.',
+          code: 'coupon_changed',
+        });
+      }
+      if (reason === 'missing_product') {
+        return json(res, 409, { error: 'A selected product no longer exists. Please refresh the products list.' });
+      }
+      if (reason === 'missing_variant') {
+        return json(res, 409, { error: 'A selected product variation no longer exists. Please choose another size or color.' });
+      }
+      if (reason === 'unavailable') {
+        const available = Number(r.available || 0);
+        return json(res, 409, {
+          error: available > 0
+            ? `Only ${available} piece(s) remain in stock for one of the edited items.`
+            : 'One of the edited items is out of stock.',
+          available,
+          code: 'unavailable',
+        });
+      }
+      console.error('Order edit failed:', reason || 'unknown');
+      return json(res, 500, { error: 'Could not update order' });
+    }
+
+    const warnings = Array.isArray(r.warnings) ? r.warnings : [];
+    if (warnings.length) {
+      console.warn('Order edit completed with reconciliation warnings:', JSON.stringify(warnings));
+    }
+
+    const updated = {
+      ...order,
+      ...patch,
+      discountCode: nextCode,
+      items: pricedItems || order.items,
+      subtotal,
+      discount,
+      total,
+      timestamps: {
+        ...(order.timestamps && typeof order.timestamps === 'object' ? order.timestamps : {}),
+        edited: new Date().toISOString(),
+        rev: Number(r.rev) || expectedRev + 1,
+      },
+      tracking_url: order.tracking_url || trackingUrlFor(id),
+    };
+
+    // Internal edit alert, never the customer confirmation text.
+    try {
+      await sendTelegramNotification(buildOrderStatusMessage(updated, 'Edited'), {
+        parseMode: null,
+        replyMarkup: buildOrderTelegramActions(updated, updated.tracking_url, {
+          includeWhatsApp: false,
+        }),
+      });
+    } catch (e) {
+      console.error('Telegram (edit) failed:', e.message);
+    }
+
+    return json(res, 200, {
+      success: true,
+      order: updated,
+      rev: Number(r.rev) || expectedRev + 1,
+      warnings,
+    });
+  } catch (err) {
+    console.error('Order edit error:', err && err.message);
     return json(res, 500, { error: 'Could not update order' });
   }
 }
@@ -236,23 +569,23 @@ async function deleteOrder(req, res) {
       console.warn('Order deleted with restore warnings:', JSON.stringify(warnings));
     }
 
-    // Bark (iOS) push — fire-and-forget, never blocks. Same notification id as
-    // the order, so iOS replaces the existing notification with "Deleted" and
-    // keeps the full detail captured above.
+    // Deletion alert (Telegram). The row was read before the atomic delete, so
+    // the message can still show the order id and the customer.
     try {
       const full = existing || {};
-      const payload = buildOrderBarkNotification({
+      const deletedOrder = {
         ...full,
         id: full.id || id,
-        status: 'Deleted',
-        shippingCost: full.shippingCost != null ? full.shippingCost : getShippingCost(full.city),
         tracking_url: full.tracking_url || trackingUrlFor(full.id || id),
-        createdAt: full.timestamps && full.timestamps.created,
-        date: full.date,
+      };
+      await sendTelegramNotification(buildOrderStatusMessage(deletedOrder, 'Deleted'), {
+        parseMode: null,
+        replyMarkup: buildOrderTelegramActions(deletedOrder, deletedOrder.tracking_url, {
+          includeWhatsApp: false,
+        }),
       });
-      await sendBarkNotification(payload);
     } catch (e) {
-      console.error('Bark (delete) failed:', e.message);
+      console.error('Telegram (delete) failed:', e.message);
     }
 
     return json(res, 200, {
