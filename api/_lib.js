@@ -1653,6 +1653,167 @@ function buildOrderStatusMessage(order = {}, status) {
   return lines.join('\n');
 }
 
+/** One diff line for an edited item, e.g. "Silk Abaya (M / Black) × 2 — EGP 2,600". */
+function orderEditLineText(line) {
+  const variant = [line.size, line.color].filter(Boolean).join(' / ');
+  const amount = line.price === null ? '' : ` — ${moneyEGP(line.price)}`;
+  return `${line.name}${variant ? ` (${variant})` : ''} × ${line.qty}${amount}`;
+}
+
+/** Group order lines by product + size + colour, summing duplicates. */
+function orderEditLineMap(items) {
+  const map = new Map();
+  for (const item of (Array.isArray(items) ? items : [])) {
+    if (!item || typeof item !== 'object') continue;
+    const pid = Number(item.productId);
+    const productId = Number.isFinite(pid) ? pid : 0;
+    const size = safeLineText(item.size, 20);
+    const color = safeLineText(item.color, 20);
+    const key = `${productId}|${size}|${color}`;
+    const qty = Math.max(1, Math.min(999, Math.trunc(Number(item.qty) || 1)));
+    const rawPrice = Number(item.price);
+    const price = Number.isFinite(rawPrice) ? rawPrice : null;
+    const existing = map.get(key);
+    if (existing) {
+      existing.qty += qty;
+      existing.price = existing.price === null || price === null
+        ? null
+        : existing.price + price;
+      continue;
+    }
+    map.set(key, {
+      key,
+      name: safeLineText(item.name, 60) || `منتج #${productId}`,
+      size,
+      color,
+      qty,
+      price,
+    });
+  }
+  return map;
+}
+
+/**
+ * Internal edit alert. Unlike `buildOrderStatusMessage`, this says exactly what
+ * the owner changed: customer fields as `old → new`, added/removed items with
+ * size/colour/quantity/line price, quantity changes, coupon and shipping
+ * changes, and the total before/after. It is still the SHORT internal template
+ * (plain text, no customer greeting), never the customer confirmation text.
+ */
+function buildOrderEditMessage(before = {}, after = {}) {
+  const lines = ['✏️ ZASHM | تم تعديل الطلب'];
+  const orderId = safeLineText(after.id || before.id, 48);
+  if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
+  const customer = safeLineText(after.customer || before.customer, 60);
+  if (customer) lines.push(`• العميل: ${customer}`);
+
+  // ── customer / address fields ──────────────────────────────────────────────
+  const dataFields = [
+    ['الاسم', 'customer', 80],
+    ['الهاتف', 'phone', 24],
+    ['الهاتف البديل', 'phoneAlt', 24],
+    ['الإيميل', 'email', 120],
+    ['المحافظة', 'city', 40],
+    ['العنوان', 'address', 220],
+    ['الملاحظات', 'notes', 200],
+  ];
+  const dataChanges = [];
+  for (const [label, key, maxChars] of dataFields) {
+    const oldValue = safeLineText(before[key], maxChars) || '—';
+    const newValue = safeLineText(after[key], maxChars) || '—';
+    if (oldValue !== newValue) dataChanges.push(`• ${label}: ${oldValue} → ${newValue}`);
+  }
+  if (dataChanges.length) {
+    lines.push('', '📝 تعديلات البيانات:');
+    lines.push(...dataChanges.slice(0, 10));
+    if (dataChanges.length > 10) lines.push(`• +${dataChanges.length - 10} تعديل آخر`);
+  }
+
+  // ── item diff: added / removed / quantity changed ──────────────────────────
+  const beforeLines = orderEditLineMap(before.items);
+  const afterLines = orderEditLineMap(after.items);
+  const keys = new Set([...beforeLines.keys(), ...afterLines.keys()]);
+  const itemChanges = [];
+  for (const key of keys) {
+    const oldLine = beforeLines.get(key);
+    const newLine = afterLines.get(key);
+    if (!oldLine && newLine) {
+      itemChanges.push(`• إضافة: ${orderEditLineText(newLine)}`);
+      continue;
+    }
+    if (oldLine && !newLine) {
+      itemChanges.push(`• حذف: ${orderEditLineText(oldLine)}`);
+      continue;
+    }
+    if (oldLine && newLine && oldLine.qty !== newLine.qty) {
+      const variant = [newLine.size, newLine.color].filter(Boolean).join(' / ');
+      const name = newLine.name || oldLine.name;
+      const oldAmount = oldLine.price === null ? '' : ` — ${moneyEGP(oldLine.price)}`;
+      const newAmount = newLine.price === null ? '' : ` — ${moneyEGP(newLine.price)}`;
+      itemChanges.push(
+        `• الكمية: ${name}${variant ? ` (${variant})` : ''} × ${oldLine.qty}${oldAmount} → × ${newLine.qty}${newAmount}`
+      );
+      continue;
+    }
+    // Same quantity but a different line price (the product price changed
+    // between placement and the edit).
+    if (oldLine && newLine
+        && oldLine.price !== null && newLine.price !== null
+        && oldLine.price !== newLine.price) {
+      const variant = [newLine.size, newLine.color].filter(Boolean).join(' / ');
+      const name = newLine.name || oldLine.name;
+      itemChanges.push(
+        `• السعر: ${name}${variant ? ` (${variant})` : ''} — ${moneyEGP(oldLine.price)} → ${moneyEGP(newLine.price)}`
+      );
+    }
+  }
+  if (itemChanges.length) {
+    lines.push('', '🛒 تعديلات المنتجات:');
+    lines.push(...itemChanges.slice(0, 20));
+    if (itemChanges.length > 20) lines.push(`• +${itemChanges.length - 20} تعديل آخر`);
+  }
+
+  // ── coupon, shipping and totals ────────────────────────────────────────────
+  const moneyChanges = [];
+  const oldCode = safeLineText(before.discountCode, 30).toUpperCase();
+  const newCode = safeLineText(after.discountCode, 30).toUpperCase();
+  if (oldCode !== newCode) {
+    if (!oldCode) moneyChanges.push(`• الكوبون: تمت إضافة ${newCode}`);
+    else if (!newCode) moneyChanges.push(`• الكوبون: تم حذف ${oldCode}`);
+    else moneyChanges.push(`• الكوبون: ${oldCode} → ${newCode}`);
+  }
+
+  const oldDiscount = Number(before.discount);
+  const newDiscount = Number(after.discount);
+  if (Number.isFinite(oldDiscount) && Number.isFinite(newDiscount) && oldDiscount !== newDiscount) {
+    moneyChanges.push(`• الخصم: ${moneyEGP(oldDiscount)} → ${moneyEGP(newDiscount)}`);
+  }
+
+  const oldShipping = getShippingCost(before.city);
+  const newShipping = getShippingCost(after.city);
+  if (oldShipping !== newShipping) {
+    moneyChanges.push(`• الشحن: ${moneyEGP(oldShipping)} → ${moneyEGP(newShipping)}`);
+  }
+
+  const oldTotal = Number(before.total);
+  const newTotal = Number(after.total);
+  if (Number.isFinite(oldTotal) && Number.isFinite(newTotal) && oldTotal !== newTotal) {
+    moneyChanges.push(`• الإجمالي قبل: ${moneyEGP(oldTotal)}`);
+    moneyChanges.push(`• الإجمالي بعد: ${moneyEGP(newTotal)}`);
+    const diff = newTotal - oldTotal;
+    moneyChanges.push(`• الفرق: ${diff > 0 ? '+' : '−'}${moneyEGP(Math.abs(diff))}`);
+  }
+  if (moneyChanges.length) {
+    lines.push('', '💰 الحساب:');
+    lines.push(...moneyChanges.slice(0, 12));
+  }
+
+  if (!dataChanges.length && !itemChanges.length && !moneyChanges.length) {
+    lines.push('', 'لا توجد تغييرات في البيانات أو المنتجات.');
+  }
+  return lines.join('\n');
+}
+
 /** wa.me deep link, optionally pre-filling the message. Returns '' when the
  * phone number cannot be normalised, so callers never render a dead link. */
 function whatsAppDeepLink(phone, text) {
@@ -2070,6 +2231,7 @@ module.exports = {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildOrderStatusMessage,
+  buildOrderEditMessage,
   buildOrderTelegramActions,
   whatsAppDeepLink,
   whatsAppConfirmLink,

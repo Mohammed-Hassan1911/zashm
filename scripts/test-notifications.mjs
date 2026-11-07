@@ -48,6 +48,7 @@ const {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildOrderStatusMessage,
+  buildOrderEditMessage,
   buildOrderTelegramActions,
   buildOrderFailureMessage,
   sendOrderFailureAlert,
@@ -459,10 +460,59 @@ try {
     ok(orders.includes("alertFailure('unexpected')"), 'unexpected failure alerts');
 
     ok(admin.includes('buildOrderStatusMessage('), 'admin sends the short status line');
+    ok(admin.includes('buildOrderEditMessage(order, updated)'), 'admin diffs every edit');
     ok(admin.includes('buildOrderTelegramActions('), 'admin attaches action buttons');
     ok(admin.includes('includeWhatsApp: false'), 'admin never offers the customer text');
     ok(/if \(r\.changed !== false\) \{/.test(admin), 'idempotent retries do not re-notify');
     ok(admin.includes("buildOrderStatusMessage(deletedOrder, 'Deleted')"), 'deletion notifies too');
+  });
+
+  await section('[12] edit alerts describe exactly what changed', async () => {
+    const before = {
+      id: 'ZSH-EDIT-1', customer: 'Old Name', phone: '01000000000', phoneAlt: '',
+      email: '', address: 'Old address', city: 'Cairo', notes: '', status: 'Pending',
+      items: [{ productId: 1, name: 'Tee', size: 'M', color: 'Black', qty: 1, price: 100 }],
+      subtotal: 100, discount: 0, discountCode: '', total: 165,
+    };
+    const after = {
+      ...before,
+      customer: 'New Name',
+      phone: '01123456789',
+      address: 'New address 123',
+      items: [
+        { productId: 1, name: 'Tee', size: 'M', color: 'Black', qty: 2, price: 200 },
+        { productId: 2, name: 'Hat', size: '', color: '', qty: 1, price: 150 },
+      ],
+      subtotal: 350, discount: 20, discountCode: 'SAVE10', total: 395,
+    };
+    const text = buildOrderEditMessage(before, after);
+
+    ok(text.includes('الاسم: Old Name → New Name'), 'name change is explicit');
+    ok(text.includes('الهاتف: 01000000000 → 01123456789'), 'phone change is explicit');
+    ok(text.includes('العنوان: Old address → New address 123'), 'address change is explicit');
+    ok(text.includes('الكمية: Tee (M / Black) × 1 — EGP 100 → × 2 — EGP 200'),
+      'quantity change keeps the size/colour and both line prices');
+    ok(text.includes('إضافة: Hat × 1 — EGP 150'),
+      'added line keeps the quantity and line price');
+    ok(text.includes('الإجمالي قبل: EGP 165'), 'the old total is shown');
+    ok(text.includes('الإجمالي بعد: EGP 395'), 'the new total is shown');
+    ok(text.includes('الفرق: +EGP 230'), 'the difference is signed');
+    ok(text.includes('الكوبون: تمت إضافة SAVE10'), 'a newly added coupon is named');
+    ok(!text.includes('السلام عليكم'), 'the customer greeting is never reused');
+    ok(!text.includes('http'), 'no URL is placed in the copyable body');
+
+    const removed = buildOrderEditMessage(after, {
+      ...after,
+      items: [{ productId: 2, name: 'Hat', size: '', color: '', qty: 1, price: 150 }],
+      subtotal: 150, discount: 0, discountCode: '', total: 215,
+    });
+    ok(removed.includes('حذف: Tee (M / Black) × 2 — EGP 200'),
+      'a removed line names the product, size and old price');
+    ok(removed.includes('الكوبون: تم حذف SAVE10'), 'coupon removal is named');
+    ok(removed.includes('الفرق: −EGP 180'), 'a reduction is shown as a negative difference');
+
+    const noop = buildOrderEditMessage(before, { ...before });
+    ok(noop.includes('لا توجد تغييرات'), 'a no-op edit says so instead of printing an empty block');
   });
 } finally {
   restore();

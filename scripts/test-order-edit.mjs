@@ -410,8 +410,10 @@ console.log('\n[1] static checks: atomic edit, no direct writes');
     'the edit path is explicitly gated and validated');
   ok(!/\.from\('orders'\)\s*\.update\(/.test(api), 'the API never writes the order row directly');
   ok(/getShippingCost\(validated\.customer\.city\)/.test(api), 'shipping is recomputed server-side');
-  ok(/buildOrderStatusMessage\(updated, 'Edited'\)/.test(api),
-    'the edit notification uses the short internal template');
+  ok(/buildOrderEditMessage\(order, updated\)/.test(api),
+    'the edit notification diffs the before/after order');
+  ok(!/buildOrderStatusMessage\(updated, 'Edited'\)/.test(api),
+    'the edit notification no longer reuses the generic status line');
 
   const sql = readFileSync(new URL('../supabase/atomic_edit_order.sql', import.meta.url), 'utf8');
   ok(/CREATE OR REPLACE FUNCTION public\.atomic_edit_order/.test(sql), 'SQL defines atomic_edit_order');
@@ -640,12 +642,62 @@ console.log('\n[10] notification + legacy status PATCH');
   ok(sent && /api\.telegram\.org/.test(sent.url), 'a Telegram notification is sent');
   const body = JSON.parse(sent.init.body);
   ok(/تم تعديل الطلب/.test(body.text), 'the notification is the edit template');
-  ok(/تم تعديل البيانات/.test(body.text), 'the notification shows the edited status line');
+  ok(/• الاسم: Old Name → New Name/.test(body.text),
+    'the notification shows the name before → after');
+  ok(/• الهاتف: 01000000000 → 01123456789/.test(body.text),
+    'the notification shows the phone before → after');
+  ok(/• العنوان: Old address 1 → New address 123/.test(body.text),
+    'the notification shows the address before → after');
+  ok(!/• الإجمالي قبل:/.test(body.text),
+    'a customer-only edit does not print an unchanged total');
   ok(!/السلام عليكم/.test(body.text), 'the customer confirmation greeting is not reused');
   ok(!/بيانات العميل/.test(body.text), 'the customer PII block is not reused');
   eq(body.parse_mode, undefined, 'the edit notification is plain text');
   ok(body.reply_markup && typeof body.reply_markup === 'object', 'the notification keeps action buttons');
   ok(!JSON.stringify(body.reply_markup).includes('wa=1'), 'the edit alert has no WhatsApp confirmation button');
+}
+{
+  // Item diff: quantity increase + a new line, with the total before/after.
+  seed();
+  const r = await call('PATCH', editBody({
+    items: [
+      { productId: 1, qty: 3, size: 'M', color: 'Black' },
+      { productId: 2, qty: 1, size: '', color: '' },
+    ],
+  }));
+  eq(r.status, 200, 'the item edit succeeds before the diff assertion');
+  const sent = state.telegram[state.telegram.length - 1];
+  const body = JSON.parse(sent.init.body);
+
+  ok(/• إضافة: Hat × 1 — EGP 150/.test(body.text),
+    'an added line shows the product, quantity and line price');
+  ok(/• الكمية: Tee \(M \/ Black\) × 2 — EGP 200 → × 3 — EGP 300/.test(body.text),
+    'a quantity change shows the product, size/colour and both line prices');
+  ok(/• الخصم: EGP 20 → EGP 45/.test(body.text),
+    'the discount change is shown');
+  ok(/• الإجمالي قبل: EGP 245/.test(body.text), 'the total before the edit is shown');
+  ok(/• الإجمالي بعد: EGP 470/.test(body.text), 'the total after the edit is shown');
+  ok(/• الفرق: \+EGP 225/.test(body.text), 'the total difference is shown');
+  ok(!/• المحافظة:/.test(body.text), 'unchanged customer fields are omitted');
+}
+{
+  // Item removal + coupon removal.
+  seed();
+  const r = await call('PATCH', editBody({
+    couponCode: '',
+    items: [{ productId: 2, qty: 1, size: '', color: '' }],
+  }));
+  eq(r.status, 200, 'the removal edit succeeds');
+  const sent = state.telegram[state.telegram.length - 1];
+  const body = JSON.parse(sent.init.body);
+
+  ok(/• حذف: Tee \(M \/ Black\) × 2 — EGP 200/.test(body.text),
+    'a removed line shows the product, size/colour and old line price');
+  ok(/• إضافة: Hat × 1 — EGP 150/.test(body.text), 'the replacement line is shown');
+  ok(/• الكوبون: تم حذف SAVE10/.test(body.text), 'coupon removal is shown');
+  ok(/• الإجمالي قبل: EGP 245/.test(body.text), 'the old total is kept for comparison');
+  ok(/• الإجمالي بعد: EGP 215/.test(body.text), 'the new total is shown');
+  ok(/• الفرق: −EGP 30/.test(body.text), 'a negative difference is shown');
 }
 {
   seed();

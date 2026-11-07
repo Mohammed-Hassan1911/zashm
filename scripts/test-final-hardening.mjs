@@ -428,7 +428,9 @@ console.log('\n[8] production rollout decisions');
   ok(/reservedStock` is intentionally unused/.test(doc), 'reservedStock remains explicitly excluded from availability');
   ok(/Production status: not verified/.test(doc), 'reservedStock production migration status is not assumed');
   ok(/sign ?ups?/i.test(doc) && /disable/i.test(doc), 'signup shutdown is documented');
-  ok(/Nothing in this file has been applied/i.test(doc), 'the checklist states nothing was applied');
+  ok(/does not apply anything by itself/i.test(doc), 'the checklist states migrations stay manual actions');
+  ok(/must be re-verified, never assumed/i.test(doc), 'production state is never assumed');
+  ok(/Production state \(verified 2026-11-07\)/.test(doc), 'the recorded production state is dated');
 
   const sqlFiles = readdirSync(new URL('supabase/', root)).filter((f) => f.endsWith('.sql'));
   const writerSql = sqlFiles

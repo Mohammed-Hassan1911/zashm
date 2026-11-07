@@ -20,6 +20,7 @@ const {
   computeCouponDiscount,
   sendTelegramNotification,
   buildOrderStatusMessage,
+  buildOrderEditMessage,
   buildOrderTelegramActions,
 } = require('../_lib');
 
@@ -485,7 +486,7 @@ async function applyOrderEdit(req, res, body) {
 
     // Internal edit alert, never the customer confirmation text.
     try {
-      await sendTelegramNotification(buildOrderStatusMessage(updated, 'Edited'), {
+      await sendTelegramNotification(buildOrderEditMessage(order, updated), {
         parseMode: null,
         replyMarkup: buildOrderTelegramActions(updated, updated.tracking_url, {
           includeWhatsApp: false,
