@@ -1823,6 +1823,87 @@ function whatsAppDeepLink(phone, text) {
   return `https://wa.me/${number}${suffix}`;
 }
 
+/** Pre-filled WhatsApp message. Carries the customer confirmation in a form
+ * that fits Telegram's 2048-character button-URL limit, so the button opens
+ * the WhatsApp app directly with the message already typed — no browser
+ * redirect, no "Do you want to open…" prompt. The exact, full text still ships
+ * in the notification body and is also available via the "نسخ الرسالة كاملة"
+ * copy button. Optional fields are dropped (in priority order) when the
+ * message would otherwise exceed the budget. */
+function buildWhatsAppPrefillMessage(order = {}, trackingUrl) {
+  const nameText = safeLineText(order.customer, 60);
+  const phoneText = safeLineText(order.phone, 24);
+  const phoneAltText = safeLineText(order.phoneAlt, 24);
+  const emailText = safeLineText(order.email, 120);
+  const cityText = safeLineText(order.city, 40);
+  const addressText = safeLineText(order.address, 220);
+  const notesText = safeLineText(order.notes, 260);
+  const discountCodeText = safeLineText(order.discountCode, 30);
+  const total = Number(order.total);
+  const discount = Number(order.discount);
+  const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
+  const firstName = nameText.split(/\s+/)[0];
+  const itemLines = orderItemLines(order.items, ORDER_ITEM_MAX);
+  const money = (v) => (Number.isFinite(Number(v)) ? `EGP ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(v))}` : '');
+
+  const build = (opts) => {
+    const lines = [];
+    lines.push(`السلام عليكم أ/ ${firstName || 'عميلنا العزيز'} 👋`);
+    lines.push('مع حضرتك فريق ZASHM. حابين نأكد مع حضرتك تفاصيل الأوردر قبل الشحن.');
+    lines.push('');
+    lines.push('👤 بيانات العميل');
+    if (nameText) lines.push(`• الاسم: ${nameText}`);
+    if (phoneText) lines.push(`• الهاتف: ${phoneText}`);
+    if (opts.phoneAlt && phoneAltText) lines.push(`• هاتف بديل: ${phoneAltText}`);
+    if (opts.email && emailText) lines.push(`• الإيميل: ${emailText}`);
+    lines.push('');
+    lines.push('📍 عنوان الشحن');
+    if (cityText) lines.push(`• المدينة: ${cityText}`);
+    if (opts.address && addressText) lines.push(`• العنوان: ${addressText}`);
+    if (opts.notes && notesText) lines.push(`• ملاحظات: ${notesText}`);
+    lines.push('');
+    lines.push('🛍️ المنتجات');
+    lines.push(...(itemLines.length ? itemLines : ['لا توجد منتجات']));
+    lines.push('');
+    if (Number.isFinite(total)) {
+      let summary = `💰 الإجمالي: ${money(total)}`;
+      if (discountCodeText && discount > 0) summary += ` (خصم ${discountCodeText} ${money(discount)})`;
+      lines.push(summary);
+    }
+    lines.push('');
+    if (track) {
+      lines.push('🚚 تتبع الأوردر');
+      lines.push(track.slice(0, 300));
+    }
+    if (order.id) lines.push(`• رقم الطلب: ${safeLineText(order.id, 48)}`);
+    lines.push('');
+    lines.push('لو البيانات دي مظبوطة، ردّ علينا بـ ✅');
+    return lines.join('\n');
+  };
+
+  const num = waNumber(order && order.phone);
+  const budget = 1980;
+  const fits = (msg) => (`https://wa.me/${num}?text=${encodeURIComponent(msg)}`).length <= budget;
+  const variants = [
+    { phoneAlt: true, email: true, address: true, notes: true },
+    { phoneAlt: true, email: true, address: true, notes: false },
+    { phoneAlt: true, email: true, address: false, notes: false },
+    { phoneAlt: true, email: false, address: false, notes: false },
+    { phoneAlt: false, email: false, address: false, notes: false },
+  ];
+  for (const v of variants) {
+    const msg = build(v);
+    if (fits(msg)) return msg;
+  }
+  const full = build(variants[variants.length - 1]);
+  let out = '';
+  for (const ch of full) {
+    if ((`https://wa.me/${num}?text=${encodeURIComponent(out + ch)}`).length > budget) break;
+    out += ch;
+  }
+  return out;
+}
+
 /** Signed link that opens the owner's WhatsApp with the confirmation message
  * already typed. The full message is ~1.2 KB of Arabic; percent-encoding it
  * directly would blow past Telegram's button-URL limit, so the button points at
@@ -1848,11 +1929,26 @@ function buildOrderTelegramActions(order = {}, trackingUrl, { includeWhatsApp = 
   const rows = [];
   const primary = [];
   if (includeWhatsApp) {
-    const confirmLink = whatsAppConfirmLink(order.id);
-    if (confirmLink) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: confirmLink });
+    const number = waNumber(order && order.phone);
+    let whatsappUrl = '';
+    if (number) {
+      const prefill = buildWhatsAppPrefillMessage(order, trackingUrl);
+      const candidate = `https://wa.me/${number}?text=${encodeURIComponent(prefill)}`;
+      // Telegram caps a button URL at 2048 chars. If the pre-filled message is
+      // too long, fall back to the signed redirect that builds it on tap.
+      if (candidate.length <= 2000) whatsappUrl = candidate;
+      else whatsappUrl = whatsAppConfirmLink(order.id);
+    }
+    if (whatsappUrl) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: whatsappUrl });
   }
   const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
   if (track) primary.push({ text: '🔗 صفحة الأوردر', url: track });
+  if (includeWhatsApp) {
+    const orderId = safeLineText(order && order.id, 48);
+    // copy_text.text is capped at 256 chars by Telegram, so only the short
+    // order id can be offered here; the full message is copied from the body.
+    if (orderId) primary.push({ text: '📋 نسخ رقم الطلب', copy_text: { text: orderId } });
+  }
   if (primary.length) rows.push(primary);
   rows.push([{
     text: '🛠 لوحة الطلبات',
@@ -2230,10 +2326,12 @@ module.exports = {
   maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  buildWhatsAppPrefillMessage,
   buildOrderStatusMessage,
   buildOrderEditMessage,
   buildOrderTelegramActions,
   whatsAppDeepLink,
+  waNumber,
   whatsAppConfirmLink,
   buildOrderFailureMessage,
   sendOrderFailureAlert,

@@ -179,7 +179,7 @@ const FAILURE = {
 };
 
 const WA_BUTTON_RE =
-  /^https:\/\/za-shm\.vercel\.app\/api\/orders\?track=ZSH-MW30TEST-ABC123&tk=v1\.\d{1,16}\.[0-9a-f]{32}&wa=1$/;
+  /^https:\/\/wa\.me\/201012345678\?text=.+$/;
 
 try {
   console.log('Order notifications (Telegram only)');
@@ -309,11 +309,11 @@ try {
   await section('[6] action buttons keep URLs out of the copyable body', async () => {
     const actions = buildOrderTelegramActions(ORDER, TRACKING_URL);
     eq(actions.inline_keyboard.length, 2, 'two button rows');
-    eq(actions.inline_keyboard[0].length, 2, 'WhatsApp + tracking share the first row');
+    eq(actions.inline_keyboard[0].length, 3, 'WhatsApp + tracking + copy share the first row');
 
     const whatsapp = actions.inline_keyboard[0][0];
     ok(whatsapp.text.includes('واتساب'), 'WhatsApp button is labelled');
-    ok(WA_BUTTON_RE.test(whatsapp.url), 'button points at the signed wa=1 redirect');
+    ok(WA_BUTTON_RE.test(whatsapp.url), 'button opens WhatsApp directly with the pre-filled message');
     eq(actions.inline_keyboard[0][1].url, TRACKING_URL, 'tracking button opens the order page');
     ok(actions.inline_keyboard[1][0].url.endsWith('/admin?tab=orders'), 'admin button opens the orders view');
 
