@@ -2921,7 +2921,17 @@ function ReviewsPanel({ canEdit }) {
         })}
       </div>
 
-      {loading && <p style={{ fontSize: 12, color: 'var(--text3)' }}>Loading reviews…</p>}
+      {loading && reviews.length === 0 && (
+        <div style={{ display: 'grid', gap: 12 }} aria-busy="true" aria-label="Loading reviews">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="admin-skeleton" style={{ height: 96, borderRadius: 8 }} />
+          ))}
+        </div>
+      )}
+
+      {loading && reviews.length > 0 && (
+        <p style={{ fontSize: 11, color: 'var(--text3)', margin: '0 0 10px' }}>Refreshing…</p>
+      )}
 
       {!loading && error && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
@@ -2945,7 +2955,7 @@ function ReviewsPanel({ canEdit }) {
         </div>
       )}
 
-      {!loading && !error && reviews.length > 0 && (
+      {!error && reviews.length > 0 && (
         <div style={{ display: 'grid', gap: 12 }}>
           {reviews.map((review) => (
             <motion.div

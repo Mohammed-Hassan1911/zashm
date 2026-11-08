@@ -38,16 +38,41 @@ function normalizeEgyptPhone(value) {
 }
 
 /**
+ * Small in-memory cache so returning to a product (or remounting the section)
+ * paints the last known reviews immediately instead of a bare "Loading" line.
+ * Every read is revalidated in the background, so an approved review still
+ * appears without a manual reload.
+ */
+const reviewsCache = new Map(); // productId -> { summary, reviews, at }
+
+function readReviewsCache(productId) {
+  if (!productId) return null;
+  const hit = reviewsCache.get(String(productId));
+  if (!hit) return null;
+  return hit;
+}
+
+function writeReviewsCache(productId, summary, reviews) {
+  if (!productId) return;
+  reviewsCache.set(String(productId), { summary, reviews, at: Date.now() });
+}
+
+/**
  * Product reviews: summary stars, approved comments and a moderated submission
  * form. Nothing typed here appears publicly until an admin approves it.
  */
 export default function ProductReviews({ product }) {
   const productId = product && product.id;
+  const initialCache = readReviewsCache(productId);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialCache);
   const [loadError, setLoadError] = useState('');
-  const [summary, setSummary] = useState({ average: 0, count: 0 });
-  const [reviews, setReviews] = useState([]);
+  const [summary, setSummary] = useState(() => (
+    initialCache
+      ? initialCache.summary
+      : { average: Number(product && product.rating) || 0, count: Number(product && product.reviews) || 0 }
+  ));
+  const [reviews, setReviews] = useState(() => (initialCache ? initialCache.reviews : []));
 
   const [formOpen, setFormOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -58,24 +83,48 @@ export default function ProductReviews({ product }) {
 
   const load = useCallback(async (signal) => {
     if (!productId) return;
-    setLoading(true);
+    // Keep the previous list on screen while refreshing in the background.
+    if (!reviewsCache.has(String(productId))) setLoading(true);
     setLoadError('');
     try {
       const payload = await api.get(
         `/reviews?productId=${encodeURIComponent(productId)}`,
         signal ? { signal } : undefined
       );
-      setSummary({
+      const nextSummary = {
         average: Number(payload && payload.summary && payload.summary.average) || 0,
         count: Number(payload && payload.summary && payload.summary.count) || 0,
-      });
-      setReviews(Array.isArray(payload && payload.reviews) ? payload.reviews : []);
+      };
+      const nextReviews = Array.isArray(payload && payload.reviews) ? payload.reviews : [];
+      setSummary(nextSummary);
+      setReviews(nextReviews);
+      writeReviewsCache(productId, nextSummary, nextReviews);
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       setLoadError('Could not load reviews right now.');
     } finally {
       setLoading(false);
     }
+  }, [productId]);
+
+  // Switching to another product must not show the previous product's reviews.
+  useEffect(() => {
+    const cached = readReviewsCache(productId);
+    if (cached) {
+      setSummary(cached.summary);
+      setReviews(cached.reviews);
+      setLoading(false);
+    } else {
+      setSummary({
+        average: Number(product && product.rating) || 0,
+        count: Number(product && product.reviews) || 0,
+      });
+      setReviews([]);
+      setLoading(true);
+    }
+    setLoadError('');
+    // `product` is read only for its aggregate fallback; the id is the real key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
   useEffect(() => {

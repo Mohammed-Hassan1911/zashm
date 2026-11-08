@@ -137,24 +137,32 @@ async function listReviews(req, res) {
   try {
     const sb = supabaseAdmin();
 
-    const { data: product, error: productError } = await sb
-      .from('products')
-      .select('id, active, rating, reviews')
-      .eq('id', productId)
-      .maybeSingle();
-    if (productError) throw productError;
+    // Fetch the product row and the approved reviews together: the product row
+    // is only needed for the 404/aggregate check, so waiting for it before
+    // starting the review query doubled the latency on every first load.
+    const [productResult, reviewsResult] = await Promise.all([
+      sb
+        .from('products')
+        .select('id, active, rating, reviews')
+        .eq('id', productId)
+        .maybeSingle(),
+      sb
+        .from('product_reviews')
+        .select('id, name, rating, comment, "createdAt", "publishedAt"')
+        .eq('productId', productId)
+        .eq('status', 'approved')
+        .order('createdAt', { ascending: false })
+        .limit(limit),
+    ]);
+
+    const product = productResult.data;
+    if (productResult.error) throw productResult.error;
 
     if (!product || product.active !== true) {
       return json(res, 404, { error: 'Product not found.' });
     }
 
-    const { data, error } = await sb
-      .from('product_reviews')
-      .select('id, name, rating, comment, "createdAt", "publishedAt"')
-      .eq('productId', productId)
-      .eq('status', 'approved')
-      .order('createdAt', { ascending: false })
-      .limit(limit);
+    const { data, error } = reviewsResult;
     if (error) throw error;
 
     const reviews = (Array.isArray(data) ? data : []).map((row) => ({
@@ -168,7 +176,11 @@ async function listReviews(req, res) {
     const average = Number(product.rating);
     const count = Number(product.reviews);
 
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300');
+    // Short edge cache: a newly approved review is visible within ~20s while
+    // repeat loads stay fast (stale-while-revalidate refreshes in the
+    // background). The query still filters out pending reviews, so the cache
+    // can never publish something that was not approved.
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=20, stale-while-revalidate=120');
     return json(res, 200, {
       summary: {
         average: Number.isFinite(average) ? average : 0,

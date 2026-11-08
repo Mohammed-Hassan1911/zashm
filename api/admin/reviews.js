@@ -68,44 +68,51 @@ async function listReviews(req, res) {
   try {
     const sb = supabaseAdmin();
 
-    // One round-trip for all three counts instead of three sequential ones.
-    const { data: statusRows, error: statusError } = await sb
-      .from('product_reviews')
-      .select('status');
-    if (statusError) throw statusError;
-    const counts = { pending: 0, approved: 0, rejected: 0 };
-    for (const r of (statusRows || [])) {
-      const st = String(r && r.status || '').toLowerCase();
-      if (Object.prototype.hasOwnProperty.call(counts, st)) counts[st] += 1;
-    }
-    const pending = counts.pending;
-    const approved = counts.approved;
-    const rejected = counts.rejected;
-
     const selectWithPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone';
     const selectWithoutPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt"';
 
-    let query = sb
-      .from('product_reviews')
-      .select(selectWithPhone)
-      .order('createdAt', { ascending: false })
-      .limit(limit);
-    if (status !== 'all') query = query.eq('status', status);
-
-    let { data, error } = await query;
-    if (error && /phone/i.test(error.message || '') && /column/i.test(error.message || '')) {
-      // Migration adding `phone` has not been applied yet; fall back.
-      let fallbackQuery = sb
+    // The three counts are server-side COUNT queries (no rows transferred) and
+    // run in parallel with the page of reviews. The old shape fetched every
+    // status value and waited for it before starting the list, which made the
+    // panel noticeably slower as the table grew.
+    const countFor = async (value) => {
+      const { count, error } = await sb
         .from('product_reviews')
-        .select(selectWithoutPhone)
+        .select('id', { count: 'exact', head: true })
+        .eq('status', value);
+      if (error) throw error;
+      return Number(count) || 0;
+    };
+
+    const runList = async () => {
+      let query = sb
+        .from('product_reviews')
+        .select(selectWithPhone)
         .order('createdAt', { ascending: false })
         .limit(limit);
-      if (status !== 'all') fallbackQuery = fallbackQuery.eq('status', status);
-      ({ data, error } = await fallbackQuery);
-    }
-    if (error) throw error;
+      if (status !== 'all') query = query.eq('status', status);
 
-    const rows = Array.isArray(data) ? data : [];
+      let { data, error } = await query;
+      if (error && /phone/i.test(error.message || '') && /column/i.test(error.message || '')) {
+        // Migration adding `phone` has not been applied yet; fall back.
+        let fallbackQuery = sb
+          .from('product_reviews')
+          .select(selectWithoutPhone)
+          .order('createdAt', { ascending: false })
+          .limit(limit);
+        if (status !== 'all') fallbackQuery = fallbackQuery.eq('status', status);
+        ({ data, error } = await fallbackQuery);
+      }
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    };
+
+    const [pending, approved, rejected, rows] = await Promise.all([
+      countFor('pending'),
+      countFor('approved'),
+      countFor('rejected'),
+      runList(),
+    ]);
     const productIds = [...new Set(rows.map((r) => Number(r.productId)).filter(Number.isFinite))];
     let names = new Map();
     if (productIds.length > 0) {
