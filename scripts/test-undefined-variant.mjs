@@ -442,8 +442,8 @@ console.log('\n[1e] the checkout shows each marked line and offers Remove');
     'a line whose own strip marks it does not get a second notice');
   ok(/result\?\.blockedLocally/.test(cartSrc),
     'a locally blocked submission still gives feedback without a server round-trip');
-  ok(/<LiveStockBanner issues=\{lineIssues\} detailed=\{false\} \/>/.test(cartSrc),
-    'on the bag page the banner counts the pieces instead of echoing each line');
+  ok(!/<LiveStockBanner issues=\{lineIssues\} detailed=\{false\} \/>/.test(cartSrc),
+    'on the bag page the per-line strips carry the message; the top banner is omitted to avoid duplication');
   ok(/<LiveStockBanner issues=\{liveIssues\} \/>/.test(cartSrc),
     'on the checkout form, where the lines are not listed, the banner keeps the full messages');
 }

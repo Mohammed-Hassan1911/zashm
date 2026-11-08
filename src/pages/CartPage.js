@@ -129,24 +129,29 @@ function LiveStockBanner({ issues, detailed = true }) {
   return (
     <div style={{ marginBottom: 20 }}>
       {blocking.length > 0 && (
-        <div role="alert" aria-live="assertive"
-          style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '12px 16px', background: 'rgba(192,57,43,0.07)' }}>
-          <p style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
-            {blocking.length === 1 ? 'One piece in your bag' : `${blocking.length} pieces in your bag`} can’t be ordered right now.
-          </p>
-          {detailed && (
+        blocking.length === 1 ? (
+          <div role="alert" aria-live="assertive"
+            style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '12px 16px', background: 'rgba(192,57,43,0.07)' }}>
+            <p style={{ color: 'var(--red)', fontSize: 12, margin: 0, lineHeight: 1.6 }}>
+              {blocking[0].message} Remove it to continue — nothing was taken out of your bag automatically.
+            </p>
+          </div>
+        ) : (
+          <div role="alert" aria-live="assertive"
+            style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '12px 16px', background: 'rgba(192,57,43,0.07)' }}>
+            <p style={{ color: 'var(--red)', fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+              {blocking.length} pieces in your bag can’t be ordered right now.
+            </p>
             <ul style={{ margin: 0, paddingLeft: 16 }}>
               {blocking.map(i => (
                 <li key={i.key} style={{ color: 'var(--red)', fontSize: 11, lineHeight: 1.6 }}>{i.message}</li>
               ))}
             </ul>
-          )}
-          <p style={{ color: 'var(--text2)', fontSize: 12, margin: '8px 0 0' }}>
-            {detailed
-              ? 'Remove the marked piece(s) to continue — nothing was taken out of your bag automatically.'
-              : 'Each one is marked in your bag below with its own Remove button — nothing was taken out of your bag automatically.'}
-          </p>
-        </div>
+            <p style={{ color: 'var(--text2)', fontSize: 12, margin: '8px 0 0' }}>
+              Remove the marked piece(s) to continue — nothing was taken out of your bag automatically.
+            </p>
+          </div>
+        )
       )}
       {warnings.length > 0 && (
         <div role="status" aria-live="polite" style={{ marginTop: blocking.length ? 10 : 0,
@@ -258,8 +263,6 @@ export function CartPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(24px, 5vw, 40px) clamp(16px, 4vw, 24px)' }}>
         <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
           style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 7vw, 40px)', fontWeight: 400, letterSpacing: 'clamp(1px, 0.5vw, 2px)', marginBottom: 'clamp(20px, 5vw, 40px)' }}>Shopping Bag</motion.h1>
-
-        <LiveStockBanner issues={lineIssues} detailed={false} />
 
         {safeCart.length === 0 ? (
           <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
@@ -513,6 +516,15 @@ export function CheckoutPage() {
     if (isPlacingOrder.current || submitting) return;
     if (safeCart.length === 0) {
       setStockErrors(['Your bag is empty. Add a piece before placing an order.']);
+      return;
+    }
+
+    // Block submission when a line cannot be ordered (out of stock / bad variant).
+    // The server would reject it anyway; this avoids a wasted round-trip and
+    // keeps the shopper on the form with the existing banner.
+    const blockingNow = (typeof cartLineIssues === 'function' ? cartLineIssues() : []).filter(i => i.blocking);
+    if (blockingNow.length > 0) {
+      toast('Remove the marked piece(s) before placing the order.', 'warning');
       return;
     }
 
@@ -1415,9 +1427,9 @@ export function CheckoutPage() {
 
               <motion.button 
                 className="gold-btn" 
-                style={{ width: '100%', marginTop: 16, opacity: (submitting || isPlacingOrder.current) ? 0.7 : 1 }}
+                style={{ width: '100%', marginTop: 16, opacity: (submitting || isPlacingOrder.current || (liveIssues && liveIssues.some(i => i.blocking))) ? 0.5 : 1 }}
                 onClick={handleOrder} 
-                disabled={submitting || isPlacingOrder.current} 
+                disabled={submitting || isPlacingOrder.current || (liveIssues && liveIssues.some(i => i.blocking))} 
                 whileTap={{ scale: 0.98 }}
               >
                 {(submitting || isPlacingOrder.current) ? (
