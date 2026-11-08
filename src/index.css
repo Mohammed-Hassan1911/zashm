@@ -1783,6 +1783,20 @@ main, [role="main"] {
   }
 }
 
+/* Footer social links: always one row, icons adjacent. The 44px tap target is
+   kept for touch, but the visual gap stays tight so Instagram and Facebook read
+   as one group (as they did before the tap-target rule). */
+.footer-social {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+}
+.footer-social a {
+  flex: 0 0 auto;
+}
+
 /* ─── Footer column titles (Quick Links / Customer Care / Contact) ─────────── */
 .footer-col-title {
   font-size: 11px;
