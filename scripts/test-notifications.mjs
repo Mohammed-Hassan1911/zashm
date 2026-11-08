@@ -132,7 +132,6 @@ const EXPECTED_CUSTOMER_MESSAGE = [
   '👤 بيانات العميل',
   '• الاسم: Fatima Ahmed',
   '• الهاتف: 01012345678',
-  '• واتساب: https://wa.me/201012345678',
   '• هاتف بديل: 01177776666',
   '• الإيميل: fatima.secret@example.com',
   '',
@@ -157,7 +156,7 @@ const EXPECTED_CUSTOMER_MESSAGE = [
   '• رقم الطلب: ZSH-MW30TEST-ABC123',
   '',
   'لو البيانات دي مظبوطة، ردّ علينا بـ ✅ ونكمّل التجهيز والشحن.',
-  '✏️ ولو حابب تعدّل أي حاجة — الاسم، العنوان، المقاس، أو منتج — قولّنا قبل الشحن وإحنا هنظبّطها.',
+  '✏️ ولو حابب تعدل أي حاجة أو تضيف منتج زيادة قولنا قبل شحن الأوردر ونحن هنعدلها.',
 ].join('\n');
 
 const FAILURE = {
@@ -179,7 +178,7 @@ const FAILURE = {
 };
 
 const WA_BUTTON_RE =
-  /^https:\/\/wa\.me\/201012345678\?text=.+$/;
+  /^https:\/\/za-shm\.vercel\.app\/api\/orders\?track=ZSH-MW30TEST-ABC123&tk=v1\.\d{1,16}\.[0-9a-f]{32}&wa=1$/;
 
 try {
   console.log('Order notifications (Telegram only)');
@@ -197,7 +196,7 @@ try {
       'تتبع الأوردر',
       'رقم الطلب: ZSH-MW30TEST-ABC123',
       'لو البيانات دي مظبوطة',
-      'ولو حابب تعدّل أي حاجة',
+      'ولو حابب تعدل أي حاجة',
     ]) {
       ok(message.includes(fragment), `message contains ${fragment}`);
     }
@@ -313,7 +312,7 @@ try {
 
     const whatsapp = actions.inline_keyboard[0][0];
     ok(whatsapp.text.includes('واتساب'), 'WhatsApp button is labelled');
-    ok(WA_BUTTON_RE.test(whatsapp.url), 'button opens WhatsApp directly with the pre-filled message');
+    ok(WA_BUTTON_RE.test(whatsapp.url), 'button points at the signed wa=1 redirect');
     eq(actions.inline_keyboard[0][1].url, TRACKING_URL, 'tracking button opens the order page');
     ok(actions.inline_keyboard[1][0].url.endsWith('/admin?tab=orders'), 'admin button opens the orders view');
 
@@ -324,7 +323,7 @@ try {
     const message = buildOrderTelegramMessage(ORDER, TRACKING_URL);
     ok(!message.includes('/admin'), 'no admin URL in the body');
     ok(!message.includes('/api/orders?'), 'no hand-off URL in the body');
-    ok(message.includes('https://wa.me/201012345678'), 'the customer-facing wa.me line stays');
+    ok(!message.includes('https://wa.me/201012345678'), 'the inline customer wa.me line is removed');
 
     // Without SESSION_SECRET the redirect cannot be signed: no dead button.
     const secret = process.env.SESSION_SECRET;

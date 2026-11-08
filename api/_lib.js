@@ -1596,7 +1596,6 @@ function buildOrderTelegramMessage(order = {}, trackingUrl) {
   lines.push('👤 بيانات العميل');
   if (nameText) lines.push(`• الاسم: ${nameText}`);
   if (phoneText) lines.push(`• الهاتف: ${phoneText}`);
-  if (wa) lines.push(`• واتساب: https://wa.me/${wa}`);
   if (phoneAltText) lines.push(`• هاتف بديل: ${phoneAltText}`);
   if (emailText) lines.push(`• الإيميل: ${emailText}`);
   lines.push('');
@@ -1628,7 +1627,7 @@ function buildOrderTelegramMessage(order = {}, trackingUrl) {
   lines.push('');
 
   lines.push('لو البيانات دي مظبوطة، ردّ علينا بـ ✅ ونكمّل التجهيز والشحن.');
-  lines.push('✏️ ولو حابب تعدّل أي حاجة — الاسم، العنوان، المقاس، أو منتج — قولّنا قبل الشحن وإحنا هنظبّطها.');
+  lines.push('✏️ ولو حابب تعدل أي حاجة أو تضيف منتج زيادة قولنا قبل شحن الأوردر ونحن هنعدلها.');
 
   return lines.join('\n');
 }
@@ -1929,17 +1928,12 @@ function buildOrderTelegramActions(order = {}, trackingUrl, { includeWhatsApp = 
   const rows = [];
   const primary = [];
   if (includeWhatsApp) {
-    const number = waNumber(order && order.phone);
-    let whatsappUrl = '';
-    if (number) {
-      const prefill = buildWhatsAppPrefillMessage(order, trackingUrl);
-      const candidate = `https://wa.me/${number}?text=${encodeURIComponent(prefill)}`;
-      // Telegram caps a button URL at 2048 chars. If the pre-filled message is
-      // too long, fall back to the signed redirect that builds it on tap.
-      if (candidate.length <= 2000) whatsappUrl = candidate;
-      else whatsappUrl = whatsAppConfirmLink(order.id);
-    }
-    if (whatsappUrl) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: whatsappUrl });
+    // Use the signed redirect so the FULL customer message (identical to the
+    // one sent on Telegram, minus the WhatsApp field) is pre-filled. A direct
+    // wa.me link cannot carry the full message (Telegram caps a button URL at
+    // 2048 chars) and would have to be truncated.
+    const confirmLink = whatsAppConfirmLink(order.id);
+    if (confirmLink) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: confirmLink });
   }
   const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
   if (track) primary.push({ text: '🔗 صفحة الأوردر', url: track });
