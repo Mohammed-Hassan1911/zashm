@@ -1997,7 +1997,11 @@ main, [role="main"] {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
-body.mobile-keyboard-open .product-sticky-buy { display: none; }
+/* While the keyboard is open the mobile nav hides, so the buy bar drops flush
+   against the keyboard instead of leaving a 66px gap. It stays visible. */
+body.mobile-keyboard-open .product-sticky-buy {
+  bottom: calc(0px + env(safe-area-inset-bottom, 0px));
+}
 
 @media (max-width: 768px) {
   /* Keep the floating actions clear of the sticky bar while it is visible. */

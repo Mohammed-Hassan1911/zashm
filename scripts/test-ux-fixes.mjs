@@ -754,6 +754,10 @@ try {
       assert.ok(product.includes('className="product-sticky-buy"'), 'phones get a sticky buy bar');
       assert.ok(/body\.has-sticky-buy \.whatsapp-fab[\s\S]{0,160}bottom:/.test(css),
         'the sticky bar never covers the WhatsApp action');
+      assert.ok(!/mobile-keyboard-open[^{]*\.product-sticky-buy[^}]*display:\s*none/.test(css),
+        'the on-screen keyboard never hides the buy bar');
+      assert.ok(/body\.mobile-keyboard-open \.product-sticky-buy\s*\{\s*\n?\s*bottom:\s*calc\(0px/.test(css),
+        'the bar sits flush above the keyboard while the nav is hidden');
     });
   }
 
