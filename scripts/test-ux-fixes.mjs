@@ -820,11 +820,19 @@ try {
         'an empty description never renders an empty tab');
     });
 
-    await step('floating actions are never gated by focus or screen size', () => {
-      assert.ok(!/isEditingField|isSmallScreen/.test(app),
-        'no focus/screen-size state hides the floating actions');
-      assert.ok(/<MobileNav \/>\s*<BackToTop \/>\s*<WhatsAppButton \/>/.test(app),
-        'both floating actions mount unconditionally');
+    await step('floating actions hide only while typing on a small screen', () => {
+      assert.ok(/isEditingField/.test(app) && /isSmallScreen/.test(app),
+        'focus and breakpoint state exist');
+      assert.ok(/matchMedia\('\(max-width: 768px\)'\)/.test(app),
+        'the rule matches the 768px mobile breakpoint');
+      assert.ok(/tag === 'input' \|\| tag === 'textarea' \|\| tag === 'select'/.test(app),
+        'any text field triggers it');
+      assert.ok(/el\.isContentEditable/.test(app), 'contenteditable fields count too');
+      assert.ok(/focusin/.test(app) && /focusout/.test(app), 'focus is tracked both ways');
+      assert.ok(/!\(isEditingField && isSmallScreen\) && <WhatsAppButton \/>/.test(app),
+        'WhatsApp returns as soon as typing stops');
+      assert.ok(/!\(isEditingField && isSmallScreen\) && <BackToTop \/>/.test(app),
+        'scroll-to-top follows the same rule');
     });
   }
 } catch (error) {
