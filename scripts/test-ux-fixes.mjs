@@ -718,6 +718,39 @@ try {
 
     await act(async () => toastRoot.unmount());
   }
+
+  console.log('\n[8] mobile admin zoom, WhatsApp review phone and one-line add to bag');
+  {
+    const css = read('src/index.css');
+    const admin = read('src/pages/AdminApp.js');
+    const login = read('src/components/admin/AdminLogin.js');
+    const product = read('src/pages/ProductPage.js');
+
+    await step('the admin phone opens a WhatsApp chat in a new tab', () => {
+      assert.ok(admin.includes('https://wa.me/'), 'the review phone links to wa.me');
+      assert.ok(admin.includes(".replace(/^0/, '20')"), 'the local 0 is swapped for the 20 country code');
+      assert.ok(admin.includes('target="_blank"') && admin.includes('rel="noopener noreferrer"'),
+        'the chat opens safely in a new tab');
+      assert.ok(!admin.includes('href={`tel:'), 'no stale tel: link remains');
+    });
+
+    await step('admin login and dashboard fields render at 16px on phones', () => {
+      assert.ok(login.includes('className="admin-login"'), 'the login screen is targeted');
+      assert.ok(/\.admin-login input,[\s\S]{0,200}font-size:\s*16px\s*!important/.test(css),
+        'login inputs override inline sizes to 16px');
+      assert.ok(/\.admin-container input,[\s\S]{0,200}font-size:\s*16px\s*!important/.test(css),
+        'dashboard inputs override inline sizes to 16px');
+    });
+
+    await step('ADD TO BAG stays on one line on small screens', () => {
+      assert.ok(product.includes('className="gold-btn add-to-bag-btn"'), 'the button has a stable hook');
+      assert.ok(product.includes("whiteSpace: 'nowrap'"), 'the label cannot wrap');
+      assert.ok(/@media \(max-width: 768px\)[\s\S]{0,160}\.add-to-bag-btn\s*\{[\s\S]{0,200}padding:/.test(css),
+        'mobile padding is reduced for the button');
+      assert.ok(/@media \(max-width: 380px\)[\s\S]{0,160}\.add-to-bag-btn\s*\{[\s\S]{0,200}font-size:\s*10px/.test(css),
+        'very small screens shrink the label further');
+    });
+  }
 } catch (error) {
   console.error('Fatal test harness error:', error);
   failed += 1;

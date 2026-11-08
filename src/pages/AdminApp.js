@@ -2970,9 +2970,11 @@ function ReviewsPanel({ canEdit }) {
                     <strong style={{ fontSize: 13 }}>{review.name}</strong>
                     {review.phone && (
                       <a
-                        href={`tel:${review.phone.replace(/\s+/g, '')}`}
+                        href={`https://wa.me/${String(review.phone).replace(/\D/g, '').replace(/^0/, '20')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none', border: '1px solid var(--border-gold, rgba(201,168,76,0.4))', borderRadius: 4, padding: '2px 8px' }}
-                        title="Customer phone (admin only)"
+                        title="Open WhatsApp chat with this customer (admin only)"
                       >
                         {review.phone}
                       </a>

@@ -1359,6 +1359,25 @@ section, main {
   }
 }
 
+/* Product page - keep "ADD TO BAG" on one line on phones */
+@media (max-width: 768px) {
+  .add-to-bag-btn {
+    padding: 14px 14px !important;
+    letter-spacing: 1px !important;
+    font-size: 11px !important;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .add-to-bag-btn {
+    padding: 14px 10px !important;
+    letter-spacing: 0.5px !important;
+    font-size: 10px !important;
+    gap: 5px !important;
+  }
+}
+
 @media (max-width: 320px) {
   html, body { overflow-x: hidden; max-width: 100%; }
   img, video { max-width: 100%; height: auto; }
@@ -1813,8 +1832,11 @@ main, [role="main"] {
 @media (max-width: 768px) {
   .admin-container input,
   .admin-container textarea,
-  .admin-container select {
-    font-size: 16px; /* prevents iOS zoom on focus */
+  .admin-container select,
+  .admin-login input,
+  .admin-login textarea,
+  .admin-login select {
+    font-size: 16px !important; /* prevents iOS zoom on focus (overrides inline sizes) */
   }
   .admin-main {
     overflow-x: auto;

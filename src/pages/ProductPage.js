@@ -511,9 +511,10 @@ export default function ProductPage() {
               </div>
               
               <motion.button 
-                className="gold-btn" 
+                className="gold-btn add-to-bag-btn" 
                 style={{ 
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  whiteSpace: 'nowrap',
                   background: isOutOfStock ? '#333' : 'var(--gold)',
                   color: isOutOfStock ? '#888' : 'white',
                   borderColor: isOutOfStock ? '#444' : 'var(--gold)',

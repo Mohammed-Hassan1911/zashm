@@ -84,7 +84,7 @@ export default function AdminLogin({ onSuccess }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
+    <div className="admin-login" style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
       {/* Background */}
       <div data-decor="true" style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: 'radial-gradient(ellipse clamp(30%, 60vw, 80%) clamp(40%, 70vh, 90%) at 20% 50%, rgba(201,168,76,0.04) 0%, transparent 60%), radial-gradient(ellipse clamp(25%, 50vw, 70%) clamp(30%, 60vh, 80%) at 80% 20%, rgba(201,168,76,0.03) 0%, transparent 50%)' }} />
       {[...Array(4)].map((_, i) => (
