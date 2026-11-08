@@ -42,25 +42,51 @@ function warmCouponEndpoint() {
 
 function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate', describedBy }) {
   const [open, setOpen] = React.useState(false);
+  const [dropUp, setDropUp] = React.useState(false);
+  const wrapRef = React.useRef(null);
   const suggestions = React.useMemo(() => filterGovernorates(value), [value]);
 
+  const openList = React.useCallback(() => {
+    const el = wrapRef.current;
+    if (el && typeof window !== 'undefined') {
+      const rect = el.getBoundingClientRect();
+      // Open upward when the list would not fit below the fold, so the
+      // suggestions are reachable without the browser scrolling the page.
+      setDropUp(window.innerHeight - rect.bottom < 200 && rect.top > 200);
+    }
+    setOpen(true);
+  }, []);
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={wrapRef} style={{ position: 'relative' }}>
       <input
         id={id}
         value={value ?? ''}
-        onChange={e => { onChange(e.target.value); setOpen(true); }}
-        onFocus={(e) => { setOpen(true); if (e && e.target && typeof e.target.scrollIntoView === 'function') { /* keep viewport stable on large screens */ } }}
+        onChange={e => { onChange(e.target.value); openList(); }}
+        onFocus={openList}
+        onPointerDown={(e) => {
+          // Mouse: stop the browser's click-to-focus scroll and the native
+          // address-autofill popup, then focus without scrolling. Touch keeps
+          // the default behaviour so the on-screen keyboard still opens.
+          if (e.pointerType !== 'mouse') return;
+          e.preventDefault();
+          if (typeof e.currentTarget.focus === 'function') {
+            e.currentTarget.focus({ preventScroll: true });
+          }
+          openList();
+        }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={'Cairo'}
         style={{ width: '100%', borderColor: error ? 'var(--red)' : undefined }}
-        autoComplete="address-level1"
+        autoComplete="off"
+        aria-autocomplete="list"
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
       />
       {open && suggestions.length > 0 && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50,
+          position: 'absolute', [dropUp ? 'bottom' : 'top']: '100%', left: 0, right: 0,
+          marginTop: dropUp ? 0 : 4, marginBottom: dropUp ? 4 : 0, zIndex: 50,
           background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 4,
           maxHeight: 180, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
         }}>
@@ -399,11 +425,12 @@ export function CheckoutPage() {
   // Same warm-up as the bag: checkout is the likeliest place to paste a code.
   React.useEffect(() => { warmCouponEndpoint(); }, []);
   
-  // 🔝 السكرول المبدئي عند فتح الصفحة لأول مرة
+  // 🔝 السكرول المبدئي عند فتح الصفحة لأول مرة.
+  // فوري (auto) بدل الانسيابي حتى لا تبدو الشاشة وكأنها تتحرك أثناء تعبئة الفورم.
   React.useEffect(() => {
     window.scrollTo({
       top: 0,
-      behavior: 'smooth'
+      behavior: 'auto'
     });
   }, []);
 
@@ -1205,7 +1232,7 @@ export function CheckoutPage() {
                   error={errors.city}
                   describedBy={errors.city ? 'checkout-governorate-error' : undefined}
                 />
-                {errors.city && <p id="checkout-governorate-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.city}</p>}
+                <p id="checkout-governorate-error" role={errors.city ? 'alert' : undefined} style={{ color:'var(--red)', fontSize:10, marginTop:3, minHeight:13 }}>{errors.city || ''}</p>
               </div>
             </div>
 
