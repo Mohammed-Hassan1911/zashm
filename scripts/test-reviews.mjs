@@ -286,6 +286,7 @@ console.log('\n[7] static wiring');
   ok(publicApi.includes('rateLimitShared'), 'public submissions are rate limited');
 
   ok(adminApi.includes("requirePerm(req, res, 'reviews.read')"), 'listing requires reviews.read');
+  ok(typeof require('../api/admin/reviews.js') === 'function', 'the moderation handler parses and loads');
   ok(adminApi.includes("requirePerm(req, res, 'reviews.write')"), 'moderation requires reviews.write');
   ok(adminApi.includes("'pending', 'approved', 'rejected'"), 'the moderation statuses are allow-listed');
 

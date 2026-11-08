@@ -83,24 +83,6 @@ async function listReviews(req, res) {
       countFor('rejected'),
     ]);
 
-  try {
-    const sb = supabaseAdmin();
-
-    const countFor = async (value) => {
-      const { count, error } = await sb
-        .from('product_reviews')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', value);
-      if (error) throw error;
-      return Number(count) || 0;
-    };
-
-    const [pending, approved, rejected] = await Promise.all([
-      countFor('pending'),
-      countFor('approved'),
-      countFor('rejected'),
-    ]);
-
     const selectWithPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone';
     const selectWithoutPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt"';
 
