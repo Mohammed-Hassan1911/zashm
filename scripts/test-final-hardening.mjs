@@ -299,7 +299,7 @@ console.log('\n[4] secure order tracking');
   const prefill = decodeURIComponent(location.split('?text=')[1] || '');
   ok(prefill.startsWith('السلام عليكم'), 'prefilled text is the customer confirmation message');
   ok(prefill.includes(`• رقم الطلب: ${orderId}`), 'prefilled text carries the order id');
-  ok(!prefill.includes('• واتساب: https://wa.me/201012345678'), 'the inline customer wa.me line is removed');
+  ok(prefill.includes('• واتساب: https://wa.me/201012345678'), 'customer WhatsApp link is included');
   ok(prefill.includes('• الشحن: EGP 65'),
     'shipping is derived from the city when the row does not store it');
   ok(!prefill.includes('/admin'), 'no admin link inside the prefilled text');
