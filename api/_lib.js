@@ -1822,6 +1822,51 @@ function whatsAppDeepLink(phone, text) {
   return `https://wa.me/${number}${suffix}`;
 }
 
+/** Shorter, pre-fill-safe version of the customer message that fits inside
+ * Telegram's 2048-character button-URL limit. The full text still ships in the
+ * notification body; this one is only used to open the WhatsApp app directly
+ * from the inline button (no browser redirect, no "Do you want to open…"
+ * prompt). It keeps the essentials: greeting, customer, items, total, tracking. */
+function buildWhatsAppPrefillMessage(order = {}, trackingUrl) {
+  const nameText = safeLineText(order.customer, 60);
+  const phoneText = safeLineText(order.phone, 24);
+  const emailText = safeLineText(order.email, 120);
+  const cityText = safeLineText(order.city, 40);
+  const addressText = safeLineText(order.address, 220);
+  const phoneAltText = safeLineText(order.phoneAlt, 24);
+  const total = Number(order.total);
+  const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
+  const firstName = nameText.split(/\s+/)[0];
+  const itemLines = orderItemLines(order.items, ORDER_ITEM_MAX);
+  const lines = [];
+  lines.push(`السلام عليكم أ/ ${firstName || 'عميلنا العزيز'} 👋`);
+  lines.push('مع حضرتك فريق ZASHM. حابين نأكد مع حضرتك تفاصيل الأوردر قبل الشحن.');
+  lines.push('');
+  lines.push('👤 بيانات العميل');
+  if (nameText) lines.push(`• الاسم: ${nameText}`);
+  if (phoneText) lines.push(`• الهاتف: ${phoneText}`);
+  if (phoneAltText) lines.push(`• هاتف بديل: ${phoneAltText}`);
+  if (emailText) lines.push(`• الإيميل: ${emailText}`);
+  lines.push('');
+  lines.push('📍 عنوان الشحن');
+  if (cityText) lines.push(`• المدينة: ${cityText}`);
+  if (addressText) lines.push(`• العنوان: ${addressText}`);
+  lines.push('');
+  lines.push('🛍️ المنتجات');
+  lines.push(...(itemLines.length ? itemLines : ['لا توجد منتجات']));
+  lines.push('');
+  if (Number.isFinite(total)) lines.push(`💰 الإجمالي: ${moneyEGP(total)}`);
+  lines.push('');
+  if (track) {
+    lines.push('🚚 تتبع الأوردر');
+    lines.push(track.slice(0, 300));
+  }
+  if (order.id) lines.push(`• رقم الطلب: ${safeLineText(order.id, 48)}`);
+  lines.push('');
+  lines.push('لو البيانات دي مظبوطة، ردّ علينا بـ ✅');
+  return lines.join('\n');
+}
+
 /** Signed link that opens the owner's WhatsApp with the confirmation message
  * already typed. The full message is ~1.2 KB of Arabic; percent-encoding it
  * directly would blow past Telegram's button-URL limit, so the button points at
@@ -1847,11 +1892,24 @@ function buildOrderTelegramActions(order = {}, trackingUrl, { includeWhatsApp = 
   const rows = [];
   const primary = [];
   if (includeWhatsApp) {
-    const confirmLink = whatsAppConfirmLink(order.id);
-    if (confirmLink) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: confirmLink });
+    const number = waNumber(order && order.phone);
+    let whatsappUrl = '';
+    if (number) {
+      const prefill = buildWhatsAppPrefillMessage(order, trackingUrl);
+      const candidate = `https://wa.me/${number}?text=${encodeURIComponent(prefill)}`;
+      // Telegram caps a button URL at 2048 chars. If the pre-filled message is
+      // too long, fall back to the signed redirect that builds it on tap.
+      if (candidate.length <= 2000) whatsappUrl = candidate;
+      else whatsappUrl = whatsAppConfirmLink(order.id);
+    }
+    if (whatsappUrl) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: whatsappUrl });
   }
   const track = String(order.tracking_url || order.trackingUrl || trackingUrl || '').trim();
   if (track) primary.push({ text: '🔗 صفحة الأوردر', url: track });
+  if (includeWhatsApp) {
+    const orderId = safeLineText(order && order.id, 48);
+    if (orderId) primary.push({ text: '📋 نسخ رقم الطلب', copy_text: { text: orderId } });
+  }
   if (primary.length) rows.push(primary);
   rows.push([{
     text: '🛠 لوحة الطلبات',
@@ -2229,6 +2287,7 @@ module.exports = {
   maskOrderForLimitedAccess,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  buildWhatsAppPrefillMessage,
   buildOrderStatusMessage,
   buildOrderEditMessage,
   buildOrderTelegramActions,
