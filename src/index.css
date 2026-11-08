@@ -193,9 +193,37 @@ select option { background: var(--bg3); }
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  /* Sold Out is the only badge left on the photo; a small adaptive inset keeps
+     it off the image edge on any card width. */
+  padding: clamp(6px, 1.2vw, 10px);
+  box-sizing: border-box;
   max-width: calc(100% - 56px);
   min-width: 0;
   pointer-events: none;
+}
+
+/* Product label: a small row above the photo, left aligned, so the badge never
+   covers the image. The reserved height keeps every card's photo aligned in a
+   grid row, whether or not that product has a label. */
+.product-card-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 23px;
+  margin: 0 0 6px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.product-card-label-row .label-badge {
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  padding: 3px 6px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .product-card-labels .label-badge {
@@ -2044,6 +2072,19 @@ body.mobile-keyboard-open .product-sticky-buy {
   justify-content: center;
   width: 44px;
   height: 44px;
+}
+
+/* The footer social pair: on a mouse/trackpad the two icons sit close together
+   (the 44px box is only needed for a comfortable touch target, so it is kept
+   for coarse pointers below). */
+.site-footer .footer-social a[target='_blank'] {
+  width: 26px;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .site-footer .footer-social a[target='_blank'] {
+    width: 44px;
+  }
 }
 
 @media (max-width: 768px) {

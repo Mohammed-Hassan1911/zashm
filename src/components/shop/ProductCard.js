@@ -103,6 +103,17 @@ export default function ProductCard({ product, index = 0 }) {
       role="button"
       tabIndex={0}
     >
+      {/* PRODUCT LABEL — above the photo, never on top of it, so it cannot
+          cover the product at any image ratio or screen width. The row is
+          reserved on every card so images in a grid row stay aligned. */}
+      <div className="product-card-label-row" aria-label="Product label">
+        {product?.label && (
+          <span className={`label-badge ${LABEL_CLASS[product.label] || ''}`}>
+            {product.label}
+          </span>
+        )}
+      </div>
+
       {/* PRODUCT IMAGE */}
       <div
         className="product-card-image"
@@ -136,14 +147,9 @@ export default function ProductCard({ product, index = 0 }) {
           transition={{ duration: 0.35 }}
         />
 
-        {(product?.label || isSoldOut) && (
-          <div className="product-card-labels" aria-label="Product labels">
-            {product?.label && (
-              <span className={`label-badge ${LABEL_CLASS[product.label] || ''}`}>
-                {product.label}
-              </span>
-            )}
-            {isSoldOut && <span className="product-card-sold-out">Sold Out</span>}
+        {isSoldOut && (
+          <div className="product-card-labels" aria-label="Product status">
+            <span className="product-card-sold-out">Sold Out</span>
           </div>
         )}
 
