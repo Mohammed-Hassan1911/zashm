@@ -426,7 +426,7 @@ export default function ProductPage() {
               {discount !== null && (
                 <>
                   <span style={{ color: 'var(--text3)', fontSize: 18, textDecoration: 'line-through' }}>EGP {regularPrice(p).toLocaleString()}</span>
-                  <span style={{ background: 'var(--gold)', color: 'var(--bg)', fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 700, letterSpacing: 0.5 }}>-{discount}%</span>
+                  <span style={{ background: 'var(--red)', color: '#fff', fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 700, letterSpacing: 0.5 }}>-{discount}%</span>
                 </>
               )}
             </div>

@@ -322,9 +322,9 @@ export default function ProductCard({ product, index = 0 }) {
               style={{
                 padding: '3px 6px',
                 borderRadius: 2,
-                background: 'rgba(201,168,76,0.14)',
-                border: '1px solid var(--border-gold)',
-                color: 'var(--gold-light)',
+                background: 'rgba(192,57,43,0.14)',
+                border: '1px solid rgba(192,57,43,0.55)',
+                color: 'var(--red)',
                 fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: 0.5,
