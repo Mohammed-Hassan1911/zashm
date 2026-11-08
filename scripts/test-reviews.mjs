@@ -166,6 +166,19 @@ console.log('\n[2] payload validation');
   const honeypot = readReviewPayload({ website: 'http://spam.example', productId: 7, name: 'Mona', rating: 5, comment: 'Nice' });
   eq(honeypot.honeypot, true, 'a filled honeypot is flagged');
   eq(honeypot.ok, true, 'a honeypot is answered like a success');
+
+  const { normalizeEgyptPhone } = _test;
+  eq(normalizeEgyptPhone('01012345678'), '01012345678', 'a local mobile passes');
+  eq(normalizeEgyptPhone('011 2345 6789'), '01123456789', 'spaces are ignored');
+  eq(normalizeEgyptPhone('+201012345678'), '01012345678', '+20 is normalised to local');
+  eq(normalizeEgyptPhone('00201012345678'), '01012345678', '0020 is normalised to local');
+  eq(normalizeEgyptPhone('010123456789'), undefined, 'an extra digit is rejected');
+  eq(normalizeEgyptPhone('02012345678'), undefined, 'a wrong prefix is rejected');
+  eq(normalizeEgyptPhone('0101234567'), undefined, 'a short number is rejected');
+  eq(normalizeEgyptPhone(''), null, 'an empty phone is allowed');
+  eq(readReviewPayload({ productId: 7, name: 'Mona', rating: 5, comment: 'Nice', phone: '01012345678' }).value.phone, '01012345678', 'a valid phone is accepted and normalised');
+  eq(readReviewPayload({ productId: 7, name: 'Mona', rating: 5, comment: 'Nice', phone: '010123456789' }).ok, false, 'an invalid phone rejects the payload');
+  eq(readReviewPayload({ productId: 7, name: 'Mona', rating: 5, comment: 'Nice' }).value.phone, null, 'phone is optional');
 }
 
 // ─── [3] IP hashing ─────────────────────────────────────────────────────────
@@ -195,6 +208,7 @@ console.log('\n[4] GET /api/reviews');
   eq(list.body.reviews[0].comment, 'Great fit', 'the newest approved review is first');
   eq(list.body.summary, { average: 4.5, count: 2 }, 'the summary comes from the aggregate columns');
   ok(!('ipHash' in list.body.reviews[0]), 'the submitter hash is never exposed');
+  ok(list.body.reviews.every((r) => !('phone' in r)), 'the submitter phone is never exposed publicly');
   eq(list.headers['cache-control'].includes('s-maxage'), true, 'the list is cacheable for a short window');
 }
 
@@ -227,6 +241,14 @@ console.log('\n[5] POST /api/reviews');
   eq(state.inserts[0].comment, 'Great fit', 'the comment is sanitised');
   ok(state.inserts[0].ipHash && state.inserts[0].ipHash !== '203.0.113.9', 'the IP is stored only as a salted hash');
   ok(!('publishedAt' in state.inserts[0]), 'a pending review has no publish date');
+
+  const withPhone = await call('POST', { body: { productId: 7, name: 'Mona', rating: 5, comment: 'Nice', phone: '+201012345678' } });
+  eq(withPhone.status, 201, 'a review with a valid phone is accepted');
+  eq(state.inserts[1].phone, '01012345678', 'the phone is stored in local form');
+
+  const badPhone = await call('POST', { body: { productId: 7, name: 'Mona', rating: 5, comment: 'Nice', phone: '010123456789' } });
+  eq(badPhone.status, 400, 'an invalid phone is rejected before the database');
+  eq(state.inserts.length, 2, 'the invalid phone writes nothing');
 }
 
 // ─── [6] Rate limit + method guard ─────────────────────────────────────────

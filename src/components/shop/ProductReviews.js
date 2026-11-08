@@ -25,6 +25,19 @@ function formatDate(value) {
 }
 
 /**
+ * Normalise an Egyptian mobile number to the local 11-digit form, mirroring the
+ * server rule. Returns null for empty input and undefined when invalid.
+ */
+function normalizeEgyptPhone(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  let digits = value.replace(/[^\d+]/g, '');
+  if (digits.startsWith('+20')) digits = `0${digits.slice(3)}`;
+  else if (digits.startsWith('0020')) digits = `0${digits.slice(4)}`;
+  else if (digits.startsWith('20') && digits.length === 12) digits = `0${digits.slice(2)}`;
+  return /^01[0125][0-9]{8}$/.test(digits) ? digits : undefined;
+}
+
+/**
  * Product reviews: summary stars, approved comments and a moderated submission
  * form. Nothing typed here appears publicly until an admin approves it.
  */
@@ -85,6 +98,17 @@ export default function ProductReviews({ product }) {
     if (comment.length < 2) { setFormError('Please write a short review (at least 2 characters).'); return; }
     if (comment.length > 600) { setFormError('Please keep your review under 600 characters.'); return; }
 
+    const rawPhone = form.phone.trim();
+    let phone = '';
+    if (rawPhone) {
+      const normalized = normalizeEgyptPhone(rawPhone);
+      if (!normalized) {
+        setFormError('Please enter a valid Egyptian mobile number (e.g. 01012345678).');
+        return;
+      }
+      phone = normalized;
+    }
+
     setSending(true);
     try {
       await api.post('/reviews', {
@@ -93,11 +117,12 @@ export default function ProductReviews({ product }) {
         rating: form.rating,
         comment,
         website: form.website,
-        phone: form.phone.trim() || undefined,
+        phone: phone || undefined,
       });
       setSent(true);
       setForm({ name: '', rating: 0, comment: '', website: '', phone: '' });
-      setFormOpen(false);
+      // Keep the form mounted so the page does not jump when the response
+      // arrives; the success note appears in place above the fields.
     } catch (err) {
       setFormError((err && err.message) || 'Could not send your review. Please try again.');
     } finally {
@@ -167,12 +192,6 @@ export default function ProductReviews({ product }) {
         )}
       </div>
 
-      {sent && (
-        <p role="status" style={{ background: 'rgba(39,174,96,0.10)', border: '1px solid rgba(39,174,96,0.35)', color: '#8fe0b0', borderRadius: 4, padding: '10px 12px', fontSize: 12, marginBottom: 18 }}>
-          Thanks! Your review was received and will appear here once approved.
-        </p>
-      )}
-
       {/* Form */}
       {formOpen && (
         <form
@@ -185,12 +204,18 @@ export default function ProductReviews({ product }) {
             <button
               type="button"
               aria-label="Close review form"
-              onClick={() => { setFormOpen(false); setFormError(''); }}
+              onClick={() => { setFormOpen(false); setFormError(''); setSent(false); }}
               style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 4 }}
             >
               <X size={16} />
             </button>
           </div>
+
+          {sent && (
+            <p role="status" style={{ background: 'rgba(39,174,96,0.10)', border: '1px solid rgba(39,174,96,0.35)', color: '#8fe0b0', borderRadius: 4, padding: '10px 12px', fontSize: 12, marginBottom: 14 }}>
+              Thanks! Your review was received and will appear here once approved.
+            </p>
+          )}
 
           <div style={{ display: 'grid', gap: 12 }}>
             <div>

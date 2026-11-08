@@ -58,6 +58,21 @@ function readProductId(raw) {
   return value;
 }
 
+/**
+ * Normalise an Egyptian mobile number to the local 11-digit form.
+ * Accepts 01XXXXXXXXX, +201XXXXXXXXX, 00201XXXXXXXXX and spaced/dashed input.
+ * Returns null for empty input, undefined when the number is not a valid
+ * Egyptian mobile (must start 010/011/012/015 and have exactly 11 digits).
+ */
+function normalizeEgyptPhone(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  let digits = value.replace(/[^\d+]/g, '');
+  if (digits.startsWith('+20')) digits = `0${digits.slice(3)}`;
+  else if (digits.startsWith('0020')) digits = `0${digits.slice(4)}`;
+  else if (digits.startsWith('20') && digits.length === 12) digits = `0${digits.slice(2)}`;
+  return /^01[0125][0-9]{8}$/.test(digits) ? digits : undefined;
+}
+
 /** Validate the POST body. Returns { ok, value } or { ok: false, error }. */
 function readReviewPayload(body) {
   const source = body && typeof body === 'object' ? body : {};
@@ -84,19 +99,11 @@ function readReviewPayload(body) {
 
   let phone = null;
   if (typeof source.phone === 'string' && source.phone.trim()) {
-    const cleanedPhone = source.phone
-      .replace(/[\u0000-\u001f\u007f]/g, ' ')
-      .replace(/[<>]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, PHONE_MAX);
-    if (cleanedPhone.length < 5) {
-      return { ok: false, error: 'Please enter a valid phone number.' };
+    const normalized = normalizeEgyptPhone(source.phone);
+    if (normalized === undefined) {
+      return { ok: false, error: 'Please enter a valid Egyptian mobile number (e.g. 01012345678).' };
     }
-    if (!/^[0-9+\-\s().]+$/.test(cleanedPhone)) {
-      return { ok: false, error: 'Please enter a valid phone number.' };
-    }
-    phone = cleanedPhone;
+    phone = normalized;
   }
 
   return { ok: true, honeypot: false, value: { productId, name, rating, comment, phone } };
@@ -254,6 +261,7 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports._test = {
   cleanReviewText,
+  normalizeEgyptPhone,
   readReviewPayload,
   hashIp,
   RATE_MAX_ATTEMPTS,
