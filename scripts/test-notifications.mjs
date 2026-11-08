@@ -307,14 +307,14 @@ try {
 
   await section('[6] action buttons keep URLs out of the copyable body', async () => {
     const actions = buildOrderTelegramActions(ORDER, TRACKING_URL);
-    eq(actions.inline_keyboard.length, 2, 'two button rows');
+    eq(actions.inline_keyboard.length, 3, 'three button rows');
     eq(actions.inline_keyboard[0].length, 3, 'WhatsApp + tracking + copy share the first row');
 
     const whatsapp = actions.inline_keyboard[0][0];
     ok(whatsapp.text.includes('واتساب'), 'WhatsApp button is labelled');
     ok(WA_BUTTON_RE.test(whatsapp.url), 'button opens WhatsApp directly with the pre-filled message');
     eq(actions.inline_keyboard[0][1].url, TRACKING_URL, 'tracking button opens the order page');
-    ok(actions.inline_keyboard[1][0].url.endsWith('/admin?tab=orders'), 'admin button opens the orders view');
+    ok(actions.inline_keyboard[2][0].url.endsWith('/admin?tab=orders'), 'admin button opens the orders view');
 
     const noWhatsApp = buildOrderTelegramActions(ORDER, TRACKING_URL, { includeWhatsApp: false });
     eq(noWhatsApp.inline_keyboard[0].length, 1, 'status/delete drop the WhatsApp button');
