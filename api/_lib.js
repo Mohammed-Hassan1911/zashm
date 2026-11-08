@@ -1479,7 +1479,7 @@ function clampBytes(value, maxBytes) {
  */
 function safeLineText(value, maxChars) {
   const cleaned = String(value == null ? '' : value)
-    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\u2028\u2029\uFEFF]+/g, ' ')
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200C\u2028\u2029\uFEFF]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   let out = '';
@@ -1596,7 +1596,6 @@ function buildOrderTelegramMessage(order = {}, trackingUrl) {
   lines.push('👤 بيانات العميل');
   if (nameText) lines.push(`• الاسم: ${nameText}`);
   if (phoneText) lines.push(`• الهاتف: ${phoneText}`);
-  if (wa) lines.push(`• واتساب: https://wa.me/${wa}`);
   if (phoneAltText) lines.push(`• هاتف بديل: ${phoneAltText}`);
   if (emailText) lines.push(`• الإيميل: ${emailText}`);
   lines.push('');
@@ -2234,6 +2233,7 @@ module.exports = {
   buildOrderEditMessage,
   buildOrderTelegramActions,
   whatsAppDeepLink,
+  waNumber,
   whatsAppConfirmLink,
   buildOrderFailureMessage,
   sendOrderFailureAlert,

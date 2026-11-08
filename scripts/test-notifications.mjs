@@ -132,7 +132,6 @@ const EXPECTED_CUSTOMER_MESSAGE = [
   '👤 بيانات العميل',
   '• الاسم: Fatima Ahmed',
   '• الهاتف: 01012345678',
-  '• واتساب: https://wa.me/201012345678',
   '• هاتف بديل: 01177776666',
   '• الإيميل: fatima.secret@example.com',
   '',
@@ -324,7 +323,7 @@ try {
     const message = buildOrderTelegramMessage(ORDER, TRACKING_URL);
     ok(!message.includes('/admin'), 'no admin URL in the body');
     ok(!message.includes('/api/orders?'), 'no hand-off URL in the body');
-    ok(message.includes('https://wa.me/201012345678'), 'the customer-facing wa.me line stays');
+    ok(!message.includes('https://wa.me/201012345678'), 'the inline customer wa.me line is removed');
 
     // Without SESSION_SECRET the redirect cannot be signed: no dead button.
     const secret = process.env.SESSION_SECRET;

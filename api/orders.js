@@ -21,6 +21,7 @@ const {
   trackingUrlFor,
   verifyTrackToken,
   whatsAppDeepLink,
+  waNumber,
   EGYPT_PHONE_RE,
   cairoDateString,
   couponIsRedeemable,
@@ -581,7 +582,14 @@ async function trackOrder(req, res) {
     // exactly like the tracking page.
     if (String((req.query && req.query.wa) || '') === '1') {
       const message = buildOrderTelegramMessage(order, order.tracking_url);
-      const target = whatsAppDeepLink(order.phone, message);
+      const ua = String((req.headers && req.headers['user-agent']) || '');
+      const isMobile = /mobile|android|iphone|ipad|ipod|telegram|whatsapp/i.test(ua);
+      let target = '';
+      if (isMobile) {
+        const number = waNumber(order.phone);
+        if (number) target = `whatsapp://send?phone=${number}&text=${encodeURIComponent(message)}`;
+      }
+      if (!target) target = whatsAppDeepLink(order.phone, message);
       if (!target) return redirect(res, order.tracking_url);
       return redirect(res, target);
     }
