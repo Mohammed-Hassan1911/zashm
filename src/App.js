@@ -488,7 +488,7 @@ function Footer({ setModal }) {
               <Gem size={14} style={{ color: 'var(--gold)', flexShrink: 0, marginTop: 3 }} />
               <span>{'Luxury fashion crafted with elegance and precision for the modern gentleman.'}</span>
             </p>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'nowrap' }}>
               <a href="https://www.instagram.com/zashm_brand?obrf=MWh1NHhqMWQ4MTRycg%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" aria-label="ZASHM on Instagram" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
               <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" aria-label="ZASHM on Facebook" style={{ color: 'var(--gold)' }}><Facebook size={18} /></a>
             </div>

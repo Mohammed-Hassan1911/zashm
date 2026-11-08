@@ -50,7 +50,7 @@ function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate'
         id={id}
         value={value ?? ''}
         onChange={e => { onChange(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
+        onFocus={(e) => { setOpen(true); if (e && e.target && typeof e.target.scrollIntoView === 'function') { /* keep viewport stable on large screens */ } }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={'Cairo'}
         style={{ width: '100%', borderColor: error ? 'var(--red)' : undefined }}
@@ -69,7 +69,8 @@ function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate'
               key={city}
               type="button"
               onMouseDown={e => e.preventDefault()}
-              onClick={() => { onSelect(city); setOpen(false); }}
+              onClick={(e) => { e.preventDefault(); onSelect(city); setOpen(false); }}
+              tabIndex={-1}
               style={{
                 display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
                 background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 13,
