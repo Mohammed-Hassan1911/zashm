@@ -68,20 +68,19 @@ async function listReviews(req, res) {
   try {
     const sb = supabaseAdmin();
 
-    const countFor = async (value) => {
-      const { count, error } = await sb
-        .from('product_reviews')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', value);
-      if (error) throw error;
-      return Number(count) || 0;
-    };
-
-    const [pending, approved, rejected] = await Promise.all([
-      countFor('pending'),
-      countFor('approved'),
-      countFor('rejected'),
-    ]);
+    // One round-trip for all three counts instead of three sequential ones.
+    const { data: statusRows, error: statusError } = await sb
+      .from('product_reviews')
+      .select('status');
+    if (statusError) throw statusError;
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    for (const r of (statusRows || [])) {
+      const st = String(r && r.status || '').toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(counts, st)) counts[st] += 1;
+    }
+    const pending = counts.pending;
+    const approved = counts.approved;
+    const rejected = counts.rejected;
 
     const selectWithPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone';
     const selectWithoutPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt"';
