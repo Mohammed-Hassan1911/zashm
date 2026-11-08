@@ -742,13 +742,89 @@ try {
         'dashboard inputs override inline sizes to 16px');
     });
 
-    await step('ADD TO BAG stays on one line on small screens', () => {
+    await step('ADD TO BAG is a full-width, legible CTA on phones', () => {
       assert.ok(product.includes('className="gold-btn add-to-bag-btn"'), 'the button has a stable hook');
       assert.ok(product.includes("whiteSpace: 'nowrap'"), 'the label cannot wrap');
-      assert.ok(/@media \(max-width: 768px\)[\s\S]{0,160}\.add-to-bag-btn\s*\{[\s\S]{0,200}padding:/.test(css),
-        'mobile padding is reduced for the button');
-      assert.ok(/@media \(max-width: 380px\)[\s\S]{0,160}\.add-to-bag-btn\s*\{[\s\S]{0,200}font-size:\s*10px/.test(css),
-        'very small screens shrink the label further');
+      assert.ok(/@media \(max-width: 768px\)[\s\S]{0,600}\.product-buy-row\s*\{[\s\S]{0,200}display:\s*grid/.test(css),
+        'the buy row becomes a grid on phones');
+      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,300}grid-column:\s*1 \/ -1[\s\S]{0,300}min-height:\s*52px/.test(css),
+        'the CTA spans the full row with a 52px target');
+      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,400}font-size:\s*12\.5px/.test(css),
+        'the label stays readable instead of shrinking to 10px');
+      assert.ok(product.includes('className="product-sticky-buy"'), 'phones get a sticky buy bar');
+      assert.ok(/body\.has-sticky-buy \.whatsapp-fab[\s\S]{0,160}bottom:/.test(css),
+        'the sticky bar never covers the WhatsApp action');
+    });
+  }
+
+  console.log('\n[9] 44px tap targets across the storefront chrome');
+  {
+    const css = read('src/index.css');
+    const app = read('src/App.js');
+    const product = read('src/pages/ProductPage.js');
+    const cart = read('src/pages/CartPage.js');
+    const drawer = read('src/components/shop/CartDrawer.js');
+    const shop = read('src/pages/ShopPage.js');
+    const header = read('src/components/shop/Header.js');
+    const nav = read('src/components/shop/MobileNav.js');
+    const card = read('src/components/shop/ProductCard.js');
+
+    await step('header, footer and checkout chrome reach 44px', () => {
+      assert.ok(/\.zashm-header-search,\s*\n?\.zashm-header-utilities > button\s*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px/.test(css),
+        'header search and utility buttons are 44px');
+      assert.ok(/\.site-footer a\[target='_blank'\]\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css),
+        'footer social links are 44px squares');
+      assert.ok(/\.checkout-grid input,\s*\n?\s*\.checkout-grid select\s*\{\s*min-height:\s*44px/.test(css),
+        'checkout fields are 44px tall');
+      assert.ok(/\.gold-btn,\s*\n?\.outline-btn\s*\{\s*min-height:\s*44px/.test(css),
+        'every gold/outline button is at least 44px tall');
+    });
+
+    await step('cart, drawer and mobile nav controls reach 44px', () => {
+      assert.ok(!/width:\s*34,\s*height:\s*34/.test(cart), 'cart quantity buttons are no longer 34px');
+      assert.ok(/width:\s*44,\s*height:\s*44/.test(cart), 'cart quantity buttons are 44px');
+      assert.ok(/width:\s*44,\s*height:\s*44/.test(drawer), 'drawer close/qty buttons are 44px');
+      assert.ok(/minWidth:\s*44,\s*minHeight:\s*44/.test(nav), 'mobile nav items are at least 44px');
+      assert.ok(/fontSize:\s*10,\s*fontWeight:\s*600/.test(nav), 'mobile nav labels are 10px, not 9px');
+      assert.ok(/padding:\s*12,\s*\n?\s*minHeight:\s*44/.test(header),
+        'the header search field is 44px tall');
+    });
+
+    await step('shop filters, sort and price inputs are touch-safe', () => {
+      assert.ok(/minHeight:\s*44,\s*\n?\s*fontSize:\s*11/.test(shop), 'filter chips are 44px at 11px');
+      assert.ok(/minHeight:\s*44,\s*\n?\s*background:\s*'var\(--bg3\)'/.test(shop), 'the sort select is 44px');
+      assert.ok(/fontSize:\s*16,\s*\n?\s*outline:\s*'none'/.test(shop), 'price inputs are 16px (no iOS zoom)');
+    });
+
+    await step('product cards keep a 44px hit area and readable badges', () => {
+      assert.ok(/\.product-card-actions button\s*\{[^}]*width:\s*40px[^}]*height:\s*40px/.test(css),
+        'the visual circle stays compact on phones');
+      assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-2px/.test(css),
+        'a 2px bleed expands the hit area to 44px');
+      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*font-size:\s*9\.5px/.test(css),
+        'card labels are no longer 8px');
+      assert.ok(/fontSize:\s*10,[\s\S]{0,120}whiteSpace:\s*'nowrap'/.test(card), 'the discount badge is 10px');
+    });
+
+    await step('product page layout and tabs stay accessible', () => {
+      assert.ok(product.includes("aspectRatio: '4 / 5'"), 'the gallery matches the 4:5 catalogue images');
+      assert.ok(!/Back to Products/.test(product), 'the duplicate back button is gone');
+      assert.ok(/role="tablist"/.test(product) && /role="tab"/.test(product) && /role="tabpanel"/.test(product),
+        'tabs expose the full ARIA pattern');
+      assert.ok(/ArrowRight/.test(product) && /ArrowLeft/.test(product) && /Home/.test(product) && /End/.test(product),
+        'arrow/Home/End keys move between tabs');
+      assert.ok(/minWidth:\s*44,\s*minHeight:\s*44/.test(product), 'breadcrumb links are 44px');
+      assert.ok(/width:\s*44,\s*height:\s*44,\s*borderRadius:\s*'50%'/.test(product),
+        'gallery arrows and colour swatches are 44px');
+      assert.ok(/const availableTabs = descriptionText \? \['description', 'details', 'care'\] : \['details', 'care'\]/.test(product),
+        'an empty description never renders an empty tab');
+    });
+
+    await step('floating actions are never gated by focus or screen size', () => {
+      assert.ok(!/isEditingField|isSmallScreen/.test(app),
+        'no focus/screen-size state hides the floating actions');
+      assert.ok(/<MobileNav \/>\s*<BackToTop \/>\s*<WhatsAppButton \/>/.test(app),
+        'both floating actions mount unconditionally');
     });
   }
 } catch (error) {

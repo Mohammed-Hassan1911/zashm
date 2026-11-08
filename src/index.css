@@ -199,9 +199,10 @@ select option { background: var(--bg3); }
 }
 
 .product-card-labels .label-badge {
-  font-size: 8px;
-  letter-spacing: 0.7px;
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
   padding: 3px 6px;
+  white-space: nowrap;
 }
 
 .product-card-sold-out {
@@ -212,7 +213,8 @@ select option { background: var(--bg3); }
   border-radius: 2px;
   background: rgba(10, 10, 10, 0.9);
   color: #f0a09a;
-  font-size: 8px;
+  font-size: 9.5px;
+  white-space: nowrap;
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -682,7 +684,7 @@ select option { background: var(--bg3); }
     min-width: 200px;
     min-height: 46px;
     padding: 13px 22px !important;
-    font-size: 11px !important;
+    font-size: 12px !important;
     letter-spacing: 1.5px !important;
   }
 }
@@ -987,8 +989,10 @@ select option { background: var(--bg3); }
 }
 
 @media (max-width: 768px) {
-  .product-card-actions { opacity: 1 !important; background: transparent !important; top: 4px; right: 4px; bottom: auto; left: auto; flex-direction: column; gap: 4px; }
-  .product-card-actions button { width: 28px !important; height: 28px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+  .product-card-actions { opacity: 1 !important; background: transparent !important; top: 4px; right: 4px; bottom: auto; left: auto; flex-direction: column; gap: 6px; }
+  .product-card-actions button { width: 40px !important; height: 40px !important; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+  /* 40px visual circle + 2px bleed = a 44px touch target without crowding the card. */
+  .product-card-actions button::after { content: ''; position: absolute; inset: -2px; }
 }
 @media (min-width: 769px) {
   .product-card-img-wrapper:hover .product-card-actions { opacity: 1 !important; }
@@ -1937,4 +1941,116 @@ main, [role="main"] {
   .outage-notice-en {
     display: block;
   }
+}
+
+/* ─── MOBILE PRODUCT PAGE, STICKY BUY + 44px TAP TARGETS ───────────────────── */
+
+/* Phone buy row: quantity + wishlist on one line, full-width CTA underneath so
+   the primary action is a comfortable thumb target instead of a 96px sliver. */
+@media (max-width: 768px) {
+  .product-buy-row {
+    display: grid !important;
+    grid-template-columns: auto 1fr;
+    gap: 10px !important;
+    align-items: center;
+  }
+  .product-buy-row > div:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .product-buy-row > button:last-child {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .product-buy-row > .add-to-bag-btn {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-height: 52px;
+    padding: 14px 16px !important;
+    font-size: 12.5px !important;
+    letter-spacing: 1.6px !important;
+  }
+}
+
+/* Sticky buy bar — phone only, sits between the mobile nav and the content. */
+.product-sticky-buy {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px calc(14px + env(safe-area-inset-right, 0px)) 10px calc(14px + env(safe-area-inset-left, 0px));
+  background: rgba(12, 12, 12, 0.96);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--border-gold, rgba(201, 168, 76, 0.45));
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+  animation: zashm-sticky-buy-in 0.22s ease-out;
+}
+@keyframes zashm-sticky-buy-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+body.mobile-keyboard-open .product-sticky-buy { display: none; }
+
+@media (max-width: 768px) {
+  /* Keep the floating actions clear of the sticky bar while it is visible. */
+  body.has-sticky-buy .whatsapp-fab,
+  body.has-sticky-buy .back-to-top {
+    bottom: calc(66px + 72px + env(safe-area-inset-bottom, 0px));
+  }
+  body.has-sticky-buy .product-page { padding-bottom: 84px; }
+}
+
+@media (min-width: 769px) {
+  .product-sticky-buy { display: none; }
+}
+
+/* Global chrome: every control gets at least a 44px hit area. */
+.gold-btn,
+.outline-btn { min-height: 44px; }
+
+.zashm-header-logo { min-width: 44px; min-height: 44px; }
+.zashm-header-search,
+.zashm-header-utilities > button { min-width: 44px; min-height: 44px; }
+
+.site-footer a[target='_blank'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+
+@media (max-width: 768px) {
+  /* Footer links: tall enough to tap, without the extra desktop spacing. */
+  .site-footer button {
+    min-height: 44px;
+    margin-bottom: 0 !important;
+  }
+  .gold-btn { font-size: 12px !important; }
+}
+
+/* Checkout + admin: readable field labels and 44px controls on phones. */
+@media (max-width: 768px) {
+  .checkout-grid label { font-size: 11px !important; }
+  .admin-login input { min-height: 44px; }
+}
+
+@media (max-width: 768px) {
+  /* The sticky buy bar covers more of the footer while it is on screen. */
+  body.has-sticky-buy footer.site-footer {
+    padding-bottom: calc(12px + 72px + 72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .checkout-grid input,
+  .checkout-grid select { min-height: 44px; }
 }

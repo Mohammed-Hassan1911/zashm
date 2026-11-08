@@ -186,13 +186,14 @@ export default function ShopPage() {
     border: '1px solid var(--border)',
     borderRadius: 4,
     color: 'var(--text)',
-    fontSize: 13,
+    fontSize: 16,
     outline: 'none'
   };
 
   const filterButtonStyle = (selected) => ({
     padding: '10px 15px',
-    fontSize: 10,
+    minHeight: 44,
+    fontSize: 11,
     fontWeight: 600,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -318,10 +319,11 @@ export default function ShopPage() {
               justifyContent: 'center',
               gap: 8,
               padding: '11px 15px',
+              minHeight: 44,
               background: filterOpen ? 'var(--gold)' : 'var(--bg3)',
               border: '1px solid var(--border)',
               color: filterOpen ? 'var(--bg)' : 'var(--text2)',
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: 600,
               letterSpacing: 1,
               cursor: 'pointer',
@@ -340,10 +342,11 @@ export default function ShopPage() {
             onChange={(event) => setSort(event.target.value)}
             style={{
               padding: '11px 12px',
+              minHeight: 44,
               background: 'var(--bg3)',
               border: '1px solid var(--border)',
               color: 'var(--text2)',
-              fontSize: 10,
+              fontSize: 11,
               borderRadius: 3,
               cursor: 'pointer',
               maxWidth: '100%'
@@ -411,10 +414,11 @@ export default function ShopPage() {
                   alignItems: 'center',
                   gap: 7,
                   padding: '9px 0',
+                  minHeight: 44,
                   background: 'transparent',
                   border: 'none',
                   color: 'var(--gold)',
-                  fontSize: 10,
+                  fontSize: 11,
                   letterSpacing: 1,
                   textTransform: 'uppercase',
                   cursor: 'pointer'

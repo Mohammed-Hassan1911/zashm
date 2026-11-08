@@ -179,10 +179,10 @@ export default function ProductCard({ product, index = 0 }) {
             }}
             whileTap={{ scale: 0.92 }}
             style={{
-              width: 36,
-              height: 36,
-              minWidth: 36,
-              minHeight: 36,
+              width: 44,
+              height: 44,
+              minWidth: 44,
+              minHeight: 44,
               padding: 0,
               borderRadius: '50%',
               background: 'rgba(10,10,10,0.86)',
@@ -210,10 +210,10 @@ export default function ProductCard({ product, index = 0 }) {
             }}
             whileTap={{ scale: 0.92 }}
             style={{
-              width: 36,
-              height: 36,
-              minWidth: 36,
-              minHeight: 36,
+              width: 44,
+              height: 44,
+              minWidth: 44,
+              minHeight: 44,
               padding: 0,
               borderRadius: '50%',
               background: 'rgba(10,10,10,0.86)',
@@ -325,7 +325,7 @@ export default function ProductCard({ product, index = 0 }) {
                 background: 'rgba(201,168,76,0.14)',
                 border: '1px solid var(--border-gold)',
                 color: 'var(--gold-light)',
-                fontSize: 9,
+                fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: 0.5,
                 whiteSpace: 'nowrap',

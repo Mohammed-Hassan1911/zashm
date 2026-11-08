@@ -256,28 +256,28 @@ export function CartPage() {
                       <p style={{ color: 'var(--text3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>{item?.product?.category ?? 'General'}</p>
                       <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(15px, 4.3vw, 19px)', fontWeight: 500, marginBottom: 5 }}>{item?.product?.name ?? 'Unknown Product'}</p>
                       <p style={{ color: 'var(--text2)', fontSize: 'clamp(10px, 3vw, 11px)', marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2 }}>
                           <button onClick={() => (item?.qty ?? 0) > 1 ? changeQty(item, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
                             type="button"
                             aria-label={`Decrease quantity of ${item?.product?.name || 'item'}`}
-                            style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
+                            style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
                             <Minus size={12} aria-hidden="true" />
                           </button>
-                          <span style={{ padding: '0 10px', fontSize: 13, minWidth: 28, textAlign: 'center' }}>{item?.qty ?? 0}</span>
+                          <span style={{ padding: '0 8px', fontSize: 13, minWidth: 26, textAlign: 'center' }}>{item?.qty ?? 0}</span>
                           <button onClick={() => changeQty(item, (item?.qty ?? 0) + 1)}
                             type="button"
                             aria-label={`Increase quantity of ${item?.product?.name || 'item'}`}
-                            style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
+                            style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
                             <Plus size={12} aria-hidden="true" />
                           </button>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ color: '#b9a06c', fontSize: 15, fontWeight: 600 }}>EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}</span>
                           <button onClick={() => removeFromCart(item?.key)}
                             type="button"
                             aria-label={`Remove ${item?.product?.name || 'item'} from bag`}
-                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
+                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', width: 44, height: 44, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
                             onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}><Trash2 size={15} aria-hidden="true" /></button>
                         </div>
@@ -324,10 +324,10 @@ export function CartPage() {
                           onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
                           onFocus={warmCouponEndpoint}
                           disabled={couponApplying}
-                          placeholder="Discount code" style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
+                          placeholder="Discount code" style={{ width:'100%', paddingLeft:28, minHeight: 44, borderColor: couponError ? 'var(--red)' : undefined }} />
                       </div>
                       <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
+                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, minHeight: 44, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
                         {couponApplying ? 'Checking…' : 'Apply'}
                       </button>
                     </div>
@@ -341,7 +341,7 @@ export function CartPage() {
                 ) : (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                     <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                    <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                    <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, minHeight: 44, padding: '0 8px' }}>Remove</button>
                   </div>
                 )}
 
@@ -1251,10 +1251,10 @@ export function CheckoutPage() {
                         onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
                         onFocus={warmCouponEndpoint}
                         disabled={couponApplying}
-                        placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, borderColor: couponError ? 'var(--red)' : undefined }} />
+                        placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, minHeight: 44, borderColor: couponError ? 'var(--red)' : undefined }} />
                     </div>
                     <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
+                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, minHeight: 44, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
                       {couponApplying ? 'Checking…' : 'Apply'}
                     </button>
                   </div>
@@ -1268,7 +1268,7 @@ export function CheckoutPage() {
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
                   <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                  <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>{'Remove'}</button>
+                  <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, minHeight: 44, padding: '0 8px' }}>{'Remove'}</button>
                 </div>
               )}
 

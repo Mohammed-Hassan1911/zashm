@@ -27,8 +27,10 @@ const sizePillStyle = {
   whiteSpace: 'nowrap',
   display: 'inline-flex',
   alignItems: 'center',
+  justifyContent: 'center',
   gap: 6,
   padding: '7px 14px',
+  minHeight: 44,
   textTransform: 'uppercase',
   lineHeight: 1,
   transition: 'background 0.2s, border-color 0.2s',
@@ -57,6 +59,8 @@ export default function ProductPage() {
   const lastProductIdRef = useRef(null);
   const stockCloseRef = useRef(null);
   const sizeGuideCloseRef = useRef(null);
+  const buyRowRef = useRef(null);
+  const [showStickyBuy, setShowStickyBuy] = useState(false);
 
   // كل مودالات الصفحة: Escape يقفل، والتركيز يبدأ على زر الإغلاق.
   useEffect(() => {
@@ -77,6 +81,39 @@ export default function ProductPage() {
   useEffect(() => {
     if (sizeGuideOpen) sizeGuideCloseRef.current?.focus();
   }, [sizeGuideOpen]);
+
+  // Lock the page behind modals so the size chart can be read without the
+  // catalogue scrolling underneath it on a phone.
+  useEffect(() => {
+    if (!sizeGuideOpen && !stockModal.open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [sizeGuideOpen, stockModal.open]);
+
+  // Phone-only sticky buy bar: appears once the real Add to Bag row has
+  // scrolled above the viewport, so the first screen stays clean.
+  useEffect(() => {
+    const update = () => {
+      if (window.innerWidth > 768 || !buyRowRef.current) {
+        setShowStickyBuy(false);
+        return;
+      }
+      setShowStickyBuy(buyRowRef.current.getBoundingClientRect().bottom < 0);
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [p?.id]);
+
+  useEffect(() => {
+    document.body.classList.toggle('has-sticky-buy', showStickyBuy);
+    return () => document.body.classList.remove('has-sticky-buy');
+  }, [showStickyBuy]);
 
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
@@ -231,6 +268,19 @@ export default function ProductPage() {
   const related = (products || []).filter(pr => pr.active !== false && (pr.category ?? 'General') === (p.category ?? 'General') && pr.id !== p.id).slice(0, 4);
   const discount = discountPercent(p);
 
+  // Only offer a Description tab when the product actually has one, and build
+  // Details from the real catalogue row instead of invented copy.
+  const descriptionText = String(p.description || '').trim();
+  const availableTabs = descriptionText ? ['description', 'details', 'care'] : ['details', 'care'];
+  const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0];
+  const detailRows = [
+    ['Category', p.category || '—'],
+    ...((p.colors || []).length ? [['Colours', (p.colors || []).join(', ')]] : []),
+    ...((p.sizes || []).length ? [['Sizes', (p.sizes || []).join(', ')]] : []),
+    ...(p.sku ? [['SKU', p.sku]] : []),
+    ...(p.label ? [['Collection', p.label]] : []),
+  ];
+
   // المخزون القابل للبيع هو التوليفة المعرّفة فقط — src/lib/pricing.js هو المرجع
   // الواحد للواجهة والخادم: مفتاح متبقٍّ من لون محذوف لا يُباع، ووجود
   // variantStock بلا مقاسات/ألوان معرّفة إعداد غير صالح ولا يُشترى إطلاقًا.
@@ -262,44 +312,16 @@ export default function ProductPage() {
   return (
     <div className="product-page" style={{ paddingTop: 90, width: '100%', minWidth: 0 }}>
       <div className="product-page-container" style={{ maxWidth: 1300, margin: '0 auto', padding: 'clamp(16px, 4vw, 40px) clamp(12px, 4vw, 24px)', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-        <div style={{ marginBottom: 16 }}>
-          <motion.button
-            type="button"
-            onClick={() => setPage('shop')}
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            aria-label={'Back to Products'}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              background: 'none',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              color: 'var(--text2)',
-              cursor: 'pointer',
-              padding: '8px 16px',
-              fontSize: 12,
-              fontWeight: 500,
-              fontFamily: 'inherit',
-              WebkitTapHighlightColor: 'transparent',
-              touchAction: 'manipulation'
-            }}
-          >
-            <ChevronLeft size={15} /> Back to Products
-          </motion.button>
-        </div>
-        {/* Breadcrumb */}
-        <motion.div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}
+        {/* Breadcrumb — the single back affordance on this page. Each link keeps a
+            44px-tall hit area without adding the extra row the old Back button used. */}
+        <motion.nav aria-label="Breadcrumb" style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', minWidth: 0 }}
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-          <button onClick={() => setPage('home')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>Home</button>
-          <span style={{ color: 'var(--text3)' }}>/</span>
-          <button onClick={() => setPage('shop')} style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>Shop</button>
-          <span style={{ color: 'var(--text3)' }}>/</span>
-          <span style={{ color: 'var(--text2)', fontSize: 12 }}>{p.name}</span>
-        </motion.div>
+          <button type="button" onClick={() => setPage('home')} className="product-breadcrumb-link" style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 6px', minWidth: 44, minHeight: 44 }}>Home</button>
+          <span aria-hidden="true" style={{ color: 'var(--text3)' }}>/</span>
+          <button type="button" onClick={() => setPage('shop')} className="product-breadcrumb-link" style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 6px', minWidth: 44, minHeight: 44 }}>Shop</button>
+          <span aria-hidden="true" style={{ color: 'var(--text3)' }}>/</span>
+          <span aria-current="page" style={{ color: 'var(--text2)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{p.name}</span>
+        </motion.nav>
 
         <div
           className="product-grid"
@@ -319,7 +341,7 @@ export default function ProductPage() {
               onPointerDown={handleImagePointerDown}
               onPointerUp={handleImagePointerUp}
               onPointerCancel={() => { imageSwipeStartRef.current = null; }}
-              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '3 / 4', overflow: 'hidden', borderRadius: 2, cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 2, cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
@@ -354,25 +376,28 @@ export default function ProductPage() {
                   <button onClick={() => changeImage(-1)}
                     type="button"
                     aria-label="Previous image"
-                    style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, borderRadius: '50%', background: 'rgba(10,10,10,0.7)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <ChevronLeft size={16} aria-hidden="true" />
+                    style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(10,10,10,0.62)', border: '1px solid rgba(255,255,255,0.14)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}>
+                    <ChevronLeft size={18} aria-hidden="true" />
                   </button>
                   <button onClick={() => changeImage(1)}
                     type="button"
                     aria-label="Next image"
-                    style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, borderRadius: '50%', background: 'rgba(10,10,10,0.7)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <ChevronRight size={16} aria-hidden="true" />
+                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(10,10,10,0.62)', border: '1px solid rgba(255,255,255,0.14)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}>
+                    <ChevronRight size={18} aria-hidden="true" />
                   </button>
+                  <span aria-hidden="true" className="product-image-counter" style={{ position: 'absolute', right: 10, bottom: 10, padding: '4px 9px', borderRadius: 999, background: 'rgba(10,10,10,0.72)', border: '1px solid rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.92)', fontSize: 11, fontWeight: 600, letterSpacing: 0.5, lineHeight: 1.4 }}>
+                    {imgIdx + 1} / {productImages.length}
+                  </span>
                 </>
               )}
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <div className="product-thumbs" style={{ display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto', paddingBottom: 2 }}>
               {productImages.length > 1 && productImages.map((img, i) => (
                 <motion.button key={i} type="button" onClick={() => setImgIdx(i)}
                   aria-label={`View image ${i + 1} of ${productImages.length}`}
                   aria-current={imgIdx === i ? 'true' : undefined}
-                  style={{ width: 80, height: 100, padding: 0, background: 'none', cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
-                  whileHover={{ scale: 1.05 }}>
+                  style={{ width: 64, height: 80, flex: '0 0 auto', padding: 0, background: 'none', cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
+                  whileHover={{ scale: 1.04 }}>
                   <SafeImage src={img} alt="" fallback={FALLBACK_IMG} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </motion.button>
               ))}
@@ -401,7 +426,7 @@ export default function ProductPage() {
               {discount !== null && (
                 <>
                   <span style={{ color: 'var(--text3)', fontSize: 18, textDecoration: 'line-through' }}>EGP {regularPrice(p).toLocaleString()}</span>
-                  <span style={{ background: 'var(--red)', color: 'white', fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 700 }}>-{discount}%</span>
+                  <span style={{ background: 'var(--gold)', color: 'var(--bg)', fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 700, letterSpacing: 0.5 }}>-{discount}%</span>
                 </>
               )}
             </div>
@@ -420,8 +445,8 @@ export default function ProductPage() {
                       aria-pressed={isSelected}
                       aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
                       title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}
-                      style={{ width:40, height:40, borderRadius:'50%', display:'inline-flex', alignItems:'center', justifyContent:'center', border:`2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`, background:'transparent', cursor:'pointer', transition:'border-color 0.2s, opacity 0.2s', opacity:isColorOOS ? 0.45 : 1, boxShadow:isSelected ? '0 0 0 2px rgba(201,168,76,0.2)' : 'none' }}>
-                      <span aria-hidden="true" style={{ width:26, height:26, borderRadius:'50%', background:getColorSwatch(c), border:'1px solid rgba(255,255,255,0.35)', display:'block' }} />
+                      style={{ width:44, height:44, borderRadius:'50%', display:'inline-flex', alignItems:'center', justifyContent:'center', border:`2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`, background:'transparent', cursor:'pointer', transition:'border-color 0.2s, opacity 0.2s', opacity:isColorOOS ? 0.45 : 1, boxShadow:isSelected ? '0 0 0 2px rgba(201,168,76,0.2)' : 'none' }}>
+                      <span aria-hidden="true" style={{ width:28, height:28, borderRadius:'50%', background:getColorSwatch(c), border:'1px solid rgba(255,255,255,0.35)', display:'block' }} />
                     </button>
                   );
                 })}
@@ -472,10 +497,10 @@ export default function ProductPage() {
             width: 48, height: 48, borderRadius: 2, fontSize: 12, fontWeight: 600, 
             border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`, 
             background: isSelected ? 'rgba(201,168,76,0.1)' : 'transparent', 
-            color: isSelected ? 'var(--gold)' : 'var(--text2)', 
+            color: isSelected ? 'var(--gold)' : isSizeOOSWithSelectedColor ? 'var(--text3)' : 'var(--text2)', 
             cursor: 'pointer',
             textDecoration: isSizeOOSWithSelectedColor ? 'line-through' : 'none',
-            opacity: isSizeOOSWithSelectedColor ? 0.4 : 1 
+            textDecorationColor: 'rgba(160,153,138,0.65)'
           }}
           // ترك الأنميشن بالكامل لـ Framer Motion لمنع أي تعليق فلاشي
           animate={{ borderColor: isSelected ? 'var(--gold)' : 'var(--border)' }}
@@ -492,6 +517,8 @@ export default function ProductPage() {
 
             {/* Qty + Add */}
             <div
+              className="product-buy-row"
+              ref={buyRowRef}
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -515,8 +542,9 @@ export default function ProductPage() {
                 style={{ 
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   whiteSpace: 'nowrap',
-                  background: isOutOfStock ? '#333' : 'var(--gold)',
-                  color: isOutOfStock ? '#888' : 'white',
+                  minHeight: 52,
+                  background: isOutOfStock ? '#2a2a2a' : 'var(--gold)',
+                  color: isOutOfStock ? '#9a9488' : 'var(--bg)',
                   borderColor: isOutOfStock ? '#444' : 'var(--gold)',
                   cursor: isOutOfStock ? 'not-allowed' : 'pointer'
                 }}
@@ -540,14 +568,14 @@ export default function ProductPage() {
               </motion.button>
             </div>
 
-            <p role="status" aria-live="polite" style={{ color: isOutOfStock ? '#e74c3c' : currentVariantStock > 5 ? 'var(--green)' : '#f39c12', fontSize: 12, marginBottom: 24, fontWeight: 600 }}>
+            <p role="status" aria-live="polite" style={{ color: isOutOfStock ? '#e08a82' : currentVariantStock > 5 ? 'var(--green)' : '#d8a94a', fontSize: 12, marginBottom: 24, fontWeight: 600 }}>
               {variantConfigInvalid
-                ? '✕ This product is not available to order right now.'
+                ? 'This product is not available to order right now.'
                 : isOutOfStock
-                ? `✕ This variant (${selSize} - ${selColor}) is currently sold out!`
+                ? 'This size and colour is sold out.'
                 : currentVariantStock > 5 
-                  ? `✓ In stock (${currentVariantStock} available for this selection)` 
-                  : `⚠ Only ${currentVariantStock} left in stock for this selection!`}
+                  ? 'In stock — ready to ship' 
+                  : `Only ${currentVariantStock} left in this size and colour`}
             </p>
 
             {/* Features */}
@@ -580,6 +608,8 @@ export default function ProductPage() {
             {/* Tabs */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
               <div
+                role="tablist"
+                aria-label="Product information"
                 style={{
                   display: 'flex',
                   flexWrap: 'wrap',
@@ -588,21 +618,40 @@ export default function ProductPage() {
                   marginBottom: 16,
                 }}
               >
-                {['description', 'details', 'care'].map(t => (
+                {availableTabs.map(t => (
                   <button key={t} onClick={() => setTab(t)}
+                    type="button"
+                    role="tab"
+                    id={`product-tab-${t}`}
+                    aria-selected={activeTab === t}
+                    aria-controls={`product-panel-${t}`}
+                    tabIndex={activeTab === t ? 0 : -1}
+                    onKeyDown={(event) => {
+                      if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+                      event.preventDefault();
+                      const index = availableTabs.indexOf(t);
+                      const next = event.key === 'Home'
+                        ? availableTabs[0]
+                        : event.key === 'End'
+                          ? availableTabs[availableTabs.length - 1]
+                          : availableTabs[(index + (event.key === 'ArrowRight' ? 1 : availableTabs.length - 1)) % availableTabs.length];
+                      setTab(next);
+                      document.getElementById(`product-tab-${next}`)?.focus();
+                    }}
                     style={{
                       flex: '1 1 80px',
                       minWidth: 0,
+                      minHeight: 44,
                       padding: '10px 6px',
-                      fontSize: 'clamp(9px, 2.8vw, 11px)',
-                      letterSpacing: 0.5,
+                      fontSize: 'clamp(11px, 2.8vw, 12px)',
+                      letterSpacing: 1,
                       textTransform: 'uppercase',
                       background: 'none',
                       border: 'none',
-                      borderBottom: `2px solid ${tab === t ? 'var(--gold)' : 'transparent'}`,
-                      color: tab === t ? 'var(--gold)' : 'var(--text2)',
+                      borderBottom: `2px solid ${activeTab === t ? 'var(--gold)' : 'transparent'}`,
+                      color: activeTab === t ? 'var(--gold)' : 'var(--text2)',
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
+                      transition: 'color 0.2s, border-color 0.2s',
                       marginBottom: -1,
                       overflowWrap: 'anywhere',
                     }}>
@@ -611,11 +660,25 @@ export default function ProductPage() {
                 ))}
               </div>
               <AnimatePresence mode="wait">
-                <motion.div key={tab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                <motion.div
+                  key={activeTab}
+                  role="tabpanel"
+                  id={`product-panel-${activeTab}`}
+                  aria-labelledby={`product-tab-${activeTab}`}
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                   style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 1.8 }}>
-                  {tab === 'description' && <p>{p.description}</p>}
-                  {tab === 'details' && <ul style={{ paddingLeft: 16 }}>{['Premium quality fabric', 'Handcrafted finishing', 'Exclusive design', `Available in ${(p.colors || []).length} colors`, `Sizes: ${(p.sizes || []).join(', ')}`].map(d => <li key={d} style={{ marginBottom: 4 }}>{d}</li>)}</ul>}
-                  {tab === 'care' && <ul style={{ paddingLeft: 16 }}>{['Dry clean only', 'Do not bleach', 'Cool iron if needed', 'Store in garment bag'].map(d => <li key={d} style={{ marginBottom: 4 }}>{d}</li>)}</ul>}
+                  {activeTab === 'description' && <p style={{ margin: 0, whiteSpace: 'pre-line' }}>{descriptionText}</p>}
+                  {activeTab === 'details' && (
+                    <dl className="product-detail-list" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '8px 16px', margin: 0 }}>
+                      {detailRows.map(([label, value]) => (
+                        <React.Fragment key={label}>
+                          <dt style={{ color: 'var(--text3)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>{label}</dt>
+                          <dd style={{ margin: 0, color: 'var(--text)', overflowWrap: 'anywhere' }}>{value}</dd>
+                        </React.Fragment>
+                      ))}
+                    </dl>
+                  )}
+                  {activeTab === 'care' && <ul style={{ paddingLeft: 18, margin: 0 }}>{['Dry clean recommended', 'Do not bleach', 'Cool iron if needed', 'Store in a garment bag'].map(d => <li key={d} style={{ marginBottom: 4 }}>{d}</li>)}</ul>}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -634,6 +697,43 @@ export default function ProductPage() {
           </div>
         )}
       </div>
+
+      {/* Phone-only sticky buy bar — keeps the primary action reachable once the
+          real Add to Bag row scrolls out of view. */}
+      {showStickyBuy && !sizeGuideOpen && !stockModal.open && (
+        <div className="product-sticky-buy" role="region" aria-label="Quick purchase">
+          <div style={{ minWidth: 0, lineHeight: 1.25 }}>
+            <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
+              EGP {effectivePrice(p).toLocaleString()}
+              {discount !== null && (
+                <span style={{ marginLeft: 6, fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 400, color: 'var(--text3)', textDecoration: 'line-through' }}>
+                  {' '}EGP {regularPrice(p).toLocaleString()}
+                </span>
+              )}
+            </span>
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {selSize || '—'} · {selColor || '—'}
+            </span>
+          </div>
+          <motion.button
+            type="button"
+            className="gold-btn add-to-bag-btn"
+            onClick={handleAddToCart}
+            disabled={isOutOfStock}
+            whileTap={isOutOfStock ? {} : { scale: 0.98 }}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              whiteSpace: 'nowrap', minHeight: 48, padding: '0 18px', flexShrink: 0,
+              background: isOutOfStock ? '#2a2a2a' : 'var(--gold)',
+              color: isOutOfStock ? '#9a9488' : 'var(--bg)',
+              borderColor: isOutOfStock ? '#444' : 'var(--gold)',
+              cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <ShoppingBag size={16} aria-hidden="true" /> {isOutOfStock ? 'OUT OF STOCK' : 'ADD TO BAG'}
+          </motion.button>
+        </div>
+      )}
 
       {/* ─── 1. مودال التنبيه للمخزون ─── */}
       <AnimatePresence>

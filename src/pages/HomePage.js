@@ -108,7 +108,7 @@ export default function HomePage() {
             aria-label="Scroll to the collection"
             animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}
             onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
-            style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', background: 'none', border: 'none', padding: 8, pointerEvents: 'auto' }}
+            style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', background: 'none', border: 'none', padding: 8, minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto' }}
           ><ChevronDown size={24} aria-hidden="true" /></motion.button>
         </div>
       </section>

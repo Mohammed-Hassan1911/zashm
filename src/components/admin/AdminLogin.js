@@ -168,7 +168,7 @@ export default function AdminLogin({ onSuccess }) {
                   value={form.password}
                   onChange={e => update('password', e.target.value)}
                   placeholder="••••••••"
-                  style={{ width: '100%', paddingLeft: 40, paddingRight: 40, borderColor: errors.password ? 'var(--red)' : undefined }}
+                  style={{ width: '100%', paddingLeft: 40, paddingRight: 48, borderColor: errors.password ? 'var(--red)' : undefined }}
                   autoComplete="current-password"
                   aria-invalid={!!errors.password}
                   aria-describedby={errors.password ? 'admin-password-error' : undefined}
@@ -176,7 +176,7 @@ export default function AdminLogin({ onSuccess }) {
                 <button type="button" onClick={() => setShowPwd(!showPwd)}
                   aria-label={showPwd ? 'Hide password' : 'Show password'}
                   aria-pressed={showPwd}
-                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                  style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer' }}>
                   {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>

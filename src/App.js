@@ -86,17 +86,6 @@ function AppInner() {
   // document height; mounting the footer at that moment made it jump when the
   // real content replaced the loader (CLS 0.103 / 0.146 at 1440px).
   const [firstPageReady, setFirstPageReady] = useState(false);
-  // While an input/textarea/select/contenteditable field is focused (the user
-  // is typing) on a small screen, the floating WhatsApp and scroll-to-top
-  // actions hide so they never overlap the form or the on-screen keyboard.
-  // They reappear as soon as focus leaves an editable element. On larger
-  // screens the actions stay visible (no keyboard overlap there).
-  const [isEditingField, setIsEditingField] = useState(false);
-  const [isSmallScreen, setIsSmallScreen] = useState(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(max-width: 767px)').matches
-      : false
-  );
   const markPageReady = useCallback(() => setFirstPageReady(true), []);
   const trackedFirstView = useRef(false);
   const previousPage = useRef(currentPage);
@@ -109,44 +98,6 @@ function AppInner() {
       document.documentElement.lang = 'en';
       document.documentElement.dir = 'ltr';
     }
-  }, []);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const isEditable = (el) => {
-      if (!el) return false;
-      const tag = (el.tagName || '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-      if (el.isContentEditable) return true;
-      return false;
-    };
-    const onFocusIn = (e) => {
-      if (isEditable(e.target)) setIsEditingField(true);
-    };
-    const onFocusOut = () => {
-      // Defer so a move between two fields does not flicker the buttons.
-      window.setTimeout(() => {
-        if (!isEditable(document.activeElement)) setIsEditingField(false);
-      }, 0);
-    };
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-    return () => {
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mq = window.matchMedia('(max-width: 767px)');
-    const handler = (e) => setIsSmallScreen(e.matches);
-    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', handler);
-    else if (typeof mq.addListener === 'function') mq.addListener(handler);
-    return () => {
-      if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', handler);
-      else if (typeof mq.removeListener === 'function') mq.removeListener(handler);
-    };
   }, []);
 
   useEffect(() => {
@@ -288,8 +239,8 @@ function AppInner() {
 
           {firstPageReady && <Footer setModal={setActiveModal} />}
           <MobileNav />
-          {!(isEditingField && isSmallScreen) && <BackToTop />}
-          {!(isEditingField && isSmallScreen) && <WhatsAppButton />}
+          <BackToTop />
+          <WhatsAppButton />
 
           <InfoModal type={activeModal} onClose={() => setActiveModal(null)} />
         </>

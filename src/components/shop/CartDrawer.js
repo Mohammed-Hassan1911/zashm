@@ -103,7 +103,7 @@ export default function CartDrawer() {
                   {cart.reduce((s, i) => s + (i.qty ?? 0), 0)}
                 </span>
               </div>
-              <button onClick={() => setCartOpen(false)} aria-label="Close shopping bag" style={{ color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s' }}
+              <button onClick={() => setCartOpen(false)} aria-label="Close shopping bag" style={{ color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', width: 44, height: 44, margin: -10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 onMouseEnter={e => e.target.style.color = 'var(--gold)'}
                 onMouseLeave={e => e.target.style.color = 'var(--text2)'}><X size={20} aria-hidden="true" /></button>
             </div>
@@ -153,21 +153,21 @@ export default function CartDrawer() {
                           <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2, background: 'rgba(0,0,0,0.1)', flexShrink: 0 }}>
                             <button onClick={() => item.qty > 1 ? changeQty(item, item.qty - 1) : removeFromCart(item.key)}
                               type="button" aria-label={`Decrease quantity of ${item.product?.name || 'item'}`}
-                              style={{ width: 28, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Minus size={11} aria-hidden="true" />
+                              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                              <Minus size={12} aria-hidden="true" />
                             </button>
-                            <span style={{ fontSize: 12, minWidth: 20, textAlign: 'center', color: 'var(--text)' }}>{item.qty}</span>
+                            <span style={{ fontSize: 12, minWidth: 22, textAlign: 'center', color: 'var(--text)' }}>{item.qty}</span>
                             <button onClick={() => changeQty(item, item.qty + 1)}
                               type="button" aria-label={`Increase quantity of ${item.product?.name || 'item'}`}
-                              style={{ width: 28, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Plus size={11} aria-hidden="true" />
+                              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                              <Plus size={12} aria-hidden="true" />
                             </button>
                           </div>
 
                           {/* زر الحذف مستقل وفي أقصى اليمين */}
                           <button onClick={() => removeFromCart(item.key)}
                             type="button" aria-label={`Remove ${item.product?.name || 'item'} from bag`}
-                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', width: 44, height: 44, padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
                             onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}>
                             <Trash2 size={14} aria-hidden="true" />

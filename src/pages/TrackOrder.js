@@ -133,7 +133,7 @@ export default function TrackOrder() {
                 border: '1px solid var(--border)',
                 borderRadius: 8,
                 color: 'var(--text1)',
-                fontSize: 14,
+                fontSize: 16,
                 outline: 'none'
               }}
             />

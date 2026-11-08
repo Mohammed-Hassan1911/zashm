@@ -242,11 +242,12 @@ export default function Header() {
                   style={{
                     width: '100%',
                     padding: 12,
+                    minHeight: 44,
                     border: '1px solid var(--border)',
                     background: 'var(--bg3)',
                     color: 'var(--text)',
                     borderRadius: 4,
-                    fontSize: 14,
+                    fontSize: 16,
                   }}
                 />
               </div>

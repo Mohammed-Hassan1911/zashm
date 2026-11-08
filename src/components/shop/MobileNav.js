@@ -126,7 +126,7 @@ export default function MobileNav() {
               onClick={action || (() => setPage(page))}
               aria-label={badge > 0 ? `${label}, ${badge} item${badge === 1 ? '' : 's'}` : label}
               aria-current={active ? 'page' : undefined}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 16px', background: 'none', border: 'none', cursor: 'pointer', position: 'relative', color: active ? 'var(--gold)' : 'var(--text3)' }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: 44, minHeight: 44, padding: '6px 14px', background: 'none', border: 'none', cursor: 'pointer', position: 'relative', color: active ? 'var(--gold)' : 'var(--text3)' }}
               whileTap={{ scale: 0.9 }}
             >
               <div style={{ position: 'relative', display: 'flex', lineHeight: 0 }}>
@@ -137,14 +137,14 @@ export default function MobileNav() {
                     style={{
                       position: 'absolute', top: -7, right: -7, minWidth: 15, height: 15,
                       padding: '0 3px', borderRadius: '999px', background: 'var(--gold)',
-                      color: 'var(--bg)', fontSize: 8, fontWeight: 700, lineHeight: 1,
+                      color: 'var(--bg)', fontSize: 9, fontWeight: 700, lineHeight: 1,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       border: '1.5px solid #111',
                     }}
                   >{badge}</span>
                 )}
               </div>
-              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase' }}>{label}</span>
               {active && (
                 <motion.div layoutId="mobile-nav-indicator"
                   style={{ position: 'absolute', bottom: -8, width: 4, height: 4, borderRadius: '50%', background: 'var(--gold)' }} />

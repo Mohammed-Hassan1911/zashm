@@ -177,12 +177,13 @@ export default function ProductReviews({ product }) {
               alignItems: 'center',
               gap: 7,
               padding: '9px 16px',
+              minHeight: 44,
               background: 'transparent',
               color: 'var(--gold)',
               border: '1px solid var(--border-gold, rgba(201,168,76,0.5))',
               borderRadius: 4,
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               letterSpacing: 1,
               textTransform: 'uppercase',
             }}
@@ -205,7 +206,7 @@ export default function ProductReviews({ product }) {
               type="button"
               aria-label="Close review form"
               onClick={() => { setFormOpen(false); setFormError(''); setSent(false); }}
-              style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 4 }}
+              style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 0, width: 44, height: 44, margin: -10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <X size={16} />
             </button>
@@ -258,7 +259,7 @@ export default function ProductReviews({ product }) {
                       aria-label={`${star} star${star === 1 ? '' : 's'}`}
                       onClick={() => update('rating', star)}
                       onMouseEnter={() => setHoverStar(star)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, lineHeight: 0 }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 0 }}
                     >
                       <Star
                         size={24}
@@ -314,12 +315,13 @@ export default function ProductReviews({ product }) {
                   alignItems: 'center',
                   gap: 8,
                   padding: '10px 18px',
+                  minHeight: 44,
                   background: sending ? '#8a7430' : 'var(--gold)',
-                  color: 'white',
+                  color: 'var(--bg)',
                   border: '1px solid var(--gold)',
                   borderRadius: 4,
                   cursor: sending ? 'wait' : 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   letterSpacing: 1,
                   textTransform: 'uppercase',
                 }}
