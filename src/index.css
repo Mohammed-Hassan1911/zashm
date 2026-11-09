@@ -186,19 +186,21 @@ select option { background: var(--bg3); }
 
 .product-card-labels {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 4px;
-  /* The badge hugs the top-left corner of the actual image box and scales with
-     the card width, so it adapts to any image shape/size instead of sitting at
-     a fixed offset. */
+  /* Centred on the top band of the image: the product usually sits in the
+     middle of the frame, so the top band stays clear and the badge never
+     covers it. Adapts to any image size because it is anchored to the box. */
   padding: 0;
   box-sizing: border-box;
-  max-width: calc(100% - 56px);
+  max-width: 80%;
   min-width: 0;
   pointer-events: none;
 }
@@ -228,9 +230,9 @@ select option { background: var(--bg3); }
 }
 
 .product-card-labels .label-badge {
-  font-size: 7.5px;
+  font-size: 8.5px;
   letter-spacing: 0.5px;
-  padding: 2px 4px;
+  padding: 3px 7px;
   white-space: nowrap;
 }
 
@@ -1093,7 +1095,7 @@ select option { background: var(--bg3); }
   .product-card-info { padding: 9px 2px 0 !important; }
   .product-card-rating { margin-top: 4px !important; gap: 4px !important; }
   .product-card-price { margin-top: 5px !important; gap: 5px !important; }
-  .product-card-labels .label-badge { font-size: 6.5px; padding: 1.5px 3px; letter-spacing: 0.4px; }
+  .product-card-labels { top: 4px; } .product-card-labels .label-badge { font-size: 7.5px; padding: 2px 5px; letter-spacing: 0.4px; }
   .product-card-sold-out { font-size: 6.5px; padding: 1.5px 3px; }
 }
 
