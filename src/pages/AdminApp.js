@@ -1936,10 +1936,13 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:12 }}>
         {paginated.items.map(p => (
           <motion.div key={p.id} initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }}
+            className={`admin-product-card${selected.has(p.id) ? ' is-selected' : ''}`}
+            onClick={() => toggleSelect(p.id)}
             style={{ background:'var(--surface)', border:`2px solid ${selected.has(p.id) ? 'var(--gold)' : 'var(--border)'}`, borderRadius:6, overflow:'hidden', transition:'border-color 0.15s', position:'relative' }}>
-            <div style={{ position:'absolute', top:8, left:8, zIndex:1 }}>
+            <div style={{ position:'absolute', top:8, left:8, zIndex:3 }} onClick={(e) => e.stopPropagation()}>
               <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)}
-                style={{ accentColor:'var(--gold)', width:16, height:16 }} />
+                aria-label={`Select ${p.name}`}
+                style={{ accentColor:'var(--gold)', width:16, height:16, cursor:'pointer' }} />
             </div>
 
             <div style={{ position:'relative', aspectRatio:'3/4', overflow:'hidden' }} className="product-card-img-wrapper">
@@ -1955,21 +1958,21 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                 </div>
               )}
 
-              <div className="product-card-actions" style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                {canEdit && (
-                  <>
-                    <button onClick={() => openEdit(p)} style={{ width:32, height:32, borderRadius:'50%', background:'var(--gold)', border:'none', color:'#000000', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Edit size={12} /></button>
-                    <button
-                      onClick={() => setProductToDelete(p)}
-                      style={{ width:32, height:32, borderRadius:'50%', background:'#111111', border:'1px solid #333333', color:'#ffffff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'all 0.2s' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.2)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = '#f07171'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = '#111111'; e.currentTarget.style.borderColor = '#333333'; e.currentTarget.style.color = '#ffffff'; }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </>
-                )}
-              </div>
+              {canEdit && (
+                <div className="admin-product-actions">
+                  <button type="button" aria-label={`Edit ${p.name}`} onClick={(e) => { e.stopPropagation(); openEdit(p); }} style={{ width:32, height:32, borderRadius:'50%', background:'var(--gold)', border:'none', color:'#000000', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><Edit size={12} /></button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${p.name}`}
+                    onClick={(e) => { e.stopPropagation(); setProductToDelete(p); }}
+                    style={{ width:32, height:32, borderRadius:'50%', background:'#111111', border:'1px solid #333333', color:'#ffffff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'all 0.2s' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.2)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = '#f07171'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#111111'; e.currentTarget.style.borderColor = '#333333'; e.currentTarget.style.color = '#ffffff'; }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )}
             </div>
             <div style={{ padding:'10px' }}>
               <p style={{ fontSize:10, color:'var(--text3)', marginBottom:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.category}</p>

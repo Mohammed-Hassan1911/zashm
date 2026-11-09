@@ -279,5 +279,31 @@ console.log('\n[5] admin page navigation and add-product wiring');
     'opening the form does not depend on a mount-timing effect');
 }
 
+console.log('\n[6] admin product grid: selectable cards, hover-only actions');
+{
+  const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  ok(!/className="product-card-actions"/.test(src),
+    'the admin grid no longer reuses the always-visible storefront action overlay');
+  ok(/className=\{`admin-product-card\$\{selected\.has\(p\.id\) \? ' is-selected' : ''\}`\}/.test(src),
+    'each admin product card tracks its selected state');
+  ok(/onClick=\{\(\) => toggleSelect\(p\.id\)\}/.test(src),
+    'clicking a product card selects it');
+  ok(/onClick=\{\(e\) => e\.stopPropagation\(\)\}/.test(src),
+    'the checkbox does not double-toggle the card selection');
+  ok(/className="admin-product-actions"/.test(src),
+    'edit/delete live in a dedicated admin overlay');
+  ok(/aria-label=\{`Edit \$\{p\.name\}`\}/.test(src) && /aria-label=\{`Delete \$\{p\.name\}`\}/.test(src),
+    'edit and delete are labelled for screen readers');
+  ok(/\.admin-product-card \.admin-product-actions\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none/.test(css),
+    'the admin action overlay is hidden by default');
+  ok(/\.admin-product-card:hover \.admin-product-actions,[\s\S]{0,180}\.admin-product-card\.is-selected \.admin-product-actions\s*\{[^}]*opacity:\s*1/.test(css),
+    'the overlay appears on hover, focus or selection');
+  ok(/\.admin-product-card \.admin-product-actions button\s*\{[^}]*pointer-events:\s*none/.test(css)
+    && /\.admin-product-card\.is-selected \.admin-product-actions button\s*\{[^}]*pointer-events:\s*auto/.test(css),
+    'invisible action buttons never capture clicks');
+}
+
 console.log(`\nadmin-products: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

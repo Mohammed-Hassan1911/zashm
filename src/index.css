@@ -1351,6 +1351,42 @@ select option { background: var(--bg3); }
   .admin-dash-split { grid-template-columns: 1fr !important; }
 }
 
+/* Admin product grid: the edit/delete overlay is hidden until the card is
+   hovered, focused or selected. It uses its own class (not the storefront's
+   `.product-card-actions`, which is always visible) so the photo stays clear
+   and a click anywhere on the card toggles selection. */
+.admin-product-card { cursor: pointer; }
+
+.admin-product-card .admin-product-actions {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.admin-product-card:hover .admin-product-actions,
+.admin-product-card:focus-within .admin-product-actions,
+.admin-product-card.is-selected .admin-product-actions {
+  opacity: 1;
+}
+
+.admin-product-card .admin-product-actions button {
+  pointer-events: none;
+}
+
+.admin-product-card:hover .admin-product-actions button,
+.admin-product-card:focus-within .admin-product-actions button,
+.admin-product-card.is-selected .admin-product-actions button {
+  pointer-events: auto;
+}
+
 /* ─── GLOBAL DEVICE BASELINE (phones / tablets of every size) ───────────────── */
 html {
   -webkit-text-size-adjust: 100%;
