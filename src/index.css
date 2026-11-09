@@ -193,9 +193,10 @@ select option { background: var(--bg3); }
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  /* Sold Out is the only badge left on the photo; a small adaptive inset keeps
-     it off the image edge on any card width. */
-  padding: clamp(6px, 1.2vw, 10px);
+  /* The badge hugs the top-left corner of the actual image box and scales with
+     the card width, so it adapts to any image shape/size instead of sitting at
+     a fixed offset. */
+  padding: clamp(4px, 3%, 10px);
   box-sizing: border-box;
   max-width: calc(100% - 56px);
   min-width: 0;

@@ -295,11 +295,6 @@ export default function ProductPage() {
         >
           {/* Images */}
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
-            {p.label && (
-              <div className="product-card-label-row" aria-label="Product label">
-                <span className="label-badge">{p.label}</span>
-              </div>
-            )}
             <div
               className="product-card-image"
               onPointerDown={handleImagePointerDown}
@@ -307,6 +302,11 @@ export default function ProductPage() {
               onPointerCancel={() => { imageSwipeStartRef.current = null; }}
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 2, cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
+              {p.label && (
+                <div className="product-card-labels" aria-label="Product label" style={{ padding: 'clamp(6px, 3%, 12px)' }}>
+                  <span className="label-badge">{p.label}</span>
+                </div>
+              )}
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
                   src={mainImage.src}
