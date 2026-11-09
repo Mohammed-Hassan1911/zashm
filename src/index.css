@@ -184,23 +184,29 @@ select option { background: var(--bg3); }
 .label-featured,
 .label-limited { background: rgba(10,10,10,0.9); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.65); }
 
+/* The label sizes itself from the actual image box (not the viewport), so the
+   same markup stays proportionate on a 131px phone card and a 594px product
+   photo. */
+.product-card-image {
+  container-type: inline-size;
+}
+
 .product-card-labels {
   position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Flush with the top-left corner of the photo itself: the label reads as
+     part of the image, not as a separate row, at every image ratio. */
+  top: 0;
+  left: 0;
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
+  justify-content: flex-start;
+  align-items: flex-start;
   gap: 4px;
-  /* Centred on the top band of the image: the product usually sits in the
-     middle of the frame, so the top band stays clear and the badge never
-     covers it. Adapts to any image size because it is anchored to the box. */
   padding: 0;
   box-sizing: border-box;
-  max-width: 80%;
+  /* Keeps a long label clear of the wishlist heart on wide cards. */
+  max-width: calc(100% - 56px);
   min-width: 0;
   pointer-events: none;
 }
@@ -229,27 +235,86 @@ select option { background: var(--bg3); }
   text-overflow: ellipsis;
 }
 
+/* The product label: a small jewellery-like box in the top-left corner of the
+   photo. Gold hairline, dark glass, soft glow, and a quiet breathing light.
+   Font, padding and tracking scale with the image width via container units,
+   so it stays compact on phones and refined on desktop. */
 .product-card-labels .label-badge {
-  font-size: 8.5px;
+  font-size: 7px;
+  font-size: clamp(6.5px, 2.6cqw, 8.5px);
   font-weight: 700;
-  letter-spacing: 0.6px;
-  padding: 4px 9px;
+  letter-spacing: 0.3px;
+  letter-spacing: clamp(0.3px, 0.15cqw, 0.8px);
+  padding: 2px 4px;
+  padding: clamp(2px, 1.1cqw, 5px) clamp(4px, 2.6cqw, 9px);
   white-space: nowrap;
-  border-radius: 3px;
-  box-shadow: 0 2px 10px rgba(201, 168, 76, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  animation: zashm-label-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  text-align: center;
+  /* Square on the left so the box is visibly welded to the image edge; the
+     right corners stay soft. */
+  border-radius: 0 4px 4px 0;
+  border: 1px solid rgba(201, 168, 76, 0.72);
+  transform-origin: left center;
+  background:
+    linear-gradient(180deg, rgba(30, 26, 17, 0.94) 0%, rgba(10, 10, 10, 0.94) 100%);
+  color: var(--gold-light);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  box-shadow:
+    0 3px 14px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(201, 168, 76, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation:
+    zashm-label-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both,
+    zashm-label-glow 3.6s ease-in-out 0.55s infinite;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .product-card:hover .product-card-labels .label-badge,
 .product-card:focus-within .product-card-labels .label-badge {
-  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  transform: translateY(-1px);
+  transform: translateY(-1px) scale(1.03);
+  box-shadow:
+    0 5px 20px rgba(201, 168, 76, 0.42),
+    0 0 0 1px rgba(201, 168, 76, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 @keyframes zashm-label-in {
-  from { opacity: 0; transform: scale(0.75) translateY(-6px); }
+  from { opacity: 0; transform: scale(0.72) translateY(-7px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes zashm-label-glow {
+  0%, 100% {
+    box-shadow:
+      0 3px 14px rgba(0, 0, 0, 0.45),
+      0 0 0 1px rgba(201, 168, 76, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  }
+  50% {
+    box-shadow:
+      0 3px 18px rgba(201, 168, 76, 0.30),
+      0 0 0 1px rgba(201, 168, 76, 0.30),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* The product page photo is much larger than a card, so the box scales up a
+   little there while staying a small accent. It stays welded to the same
+   top-left image edge as every card. */
+@media (min-width: 769px) {
+  .product-page-label .label-badge {
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card-labels .label-badge {
+    animation: none;
+    transition: none;
+  }
 }
 
 .product-card-sold-out {
@@ -1111,7 +1176,7 @@ select option { background: var(--bg3); }
   .product-card-info { padding: 9px 2px 0 !important; }
   .product-card-rating { margin-top: 4px !important; gap: 4px !important; }
   .product-card-price { margin-top: 5px !important; gap: 5px !important; }
-  .product-card-labels { top: 4px; } .product-card-labels .label-badge { font-size: 7.5px; padding: 3px 6px; letter-spacing: 0.4px; }
+  .product-card-labels { top: 0; }
   .product-card-sold-out { font-size: 6.5px; padding: 1.5px 3px; }
 }
 

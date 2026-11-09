@@ -136,8 +136,8 @@ export default function ProductCard({ product, index = 0 }) {
           transition={{ duration: 0.35 }}
         />
 
-        {/* Labels sit on the photo (top-left) so they never reserve vertical
-            space above the image and stay aligned with it at every size. */}
+        {/* Labels sit on the photo (top-centre) so they never reserve vertical
+            space above the image and stay centred at every size. */}
         {(product?.label || isSoldOut) && (
           <div className="product-card-labels" aria-label="Product label and status">
             {product?.label && (

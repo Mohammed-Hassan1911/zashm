@@ -808,8 +808,25 @@ try {
         'the visual circle stays compact on phones');
       assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-3px/.test(css),
         'a 3px bleed expands the hit area to 44px');
-      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*font-size:\s*7\.5px/.test(css),
-        'card labels are no longer 8px');
+      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*font-size:\s*clamp\(6\.5px,\s*2\.6cqw,\s*8\.5px\)/.test(css)
+        && /\.product-card-image\s*\{[^}]*container-type:\s*inline-size/.test(css),
+        'card labels scale with the image width, staying small on phones');
+      assert.ok(/\.product-card-labels\s*\{[^}]*top:\s*0;[^}]*left:\s*0;/.test(css),
+        'the card label is flush with the top-left corner of the image');
+      assert.ok(!/\.product-page-label\s*\{[^}]*left:\s*50%/.test(css),
+        'the product page label stays on the top-left image edge too');
+      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*text-align:\s*center/.test(css),
+        'the label text is centred inside its box');
+      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*animation:[\s\S]{0,160}zashm-label-in/.test(css)
+        && /@keyframes zashm-label-in/.test(css)
+        && /@keyframes zashm-label-glow/.test(css),
+        'the label box animates in and keeps a soft glow');
+      assert.ok(/@media \(prefers-reduced-motion: reduce\)[\s\S]{0,220}\.product-card-labels \.label-badge\s*\{[^}]*animation:\s*none/.test(css),
+        'the label animation is disabled for reduced-motion users');
+      assert.ok(/className="product-card-image"[\s\S]{0,1200}className="product-card-labels"/.test(card),
+        'every card cover carries the label box on the image');
+      assert.ok(/className="product-card-image"[\s\S]{0,1600}className="product-card-labels product-page-label"/.test(product),
+        'the product page image carries the label box on the image');
       assert.ok(/fontSize:\s*10,[\s\S]{0,120}whiteSpace:\s*'nowrap'/.test(card), 'the discount badge is 10px');
       assert.ok(/\.product-card-actions\s*\{\s*opacity:\s*1;/.test(css),
         'the wishlist heart is always visible, not hover-only');
