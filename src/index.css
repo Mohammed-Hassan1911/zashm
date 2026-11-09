@@ -1089,7 +1089,6 @@ select option { background: var(--bg3); }
 
 @media (max-width: 768px) {
   .product-collection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
-  .product-card-label-row { min-height: 20px; margin-bottom: 4px; }
   .product-card-info { padding: 9px 2px 0 !important; }
   .product-card-rating { margin-top: 4px !important; gap: 4px !important; }
   .product-card-price { margin-top: 5px !important; gap: 5px !important; }
@@ -2175,6 +2174,19 @@ body.mobile-keyboard-open .product-sticky-buy {
     margin-bottom: 0 !important;
   }
   .gold-btn { font-size: 12px !important; }
+
+  /* On phones the 44px social boxes put the two icons too far apart; shrink
+     the visual box to 32px while a 6px bleed keeps the 44px touch target. */
+  .site-footer .footer-social a[target='_blank'] {
+    width: 32px;
+    height: 32px;
+    position: relative;
+  }
+  .site-footer .footer-social a[target='_blank']::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
 }
 
 /* Checkout + admin: readable field labels and 44px controls on phones. */

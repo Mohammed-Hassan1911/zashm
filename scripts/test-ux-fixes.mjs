@@ -779,6 +779,8 @@ try {
         'header search and utility buttons are 44px');
       assert.ok(/\.site-footer a\[target='_blank'\]\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css),
         'footer social links are 44px squares');
+      assert.ok(/@media \(max-width: 768px\) \{[\s\S]{0,400}\.site-footer \.footer-social a\[target='_blank'\] \{[^}]*width:\s*32px;[^}]*height:\s*32px/.test(css),
+        'footer social icons sit closer together on phones while keeping 44px targets');
       assert.ok(/\.checkout-grid input,\s*\n?\s*\.checkout-grid select\s*\{\s*min-height:\s*44px/.test(css),
         'checkout fields are 44px tall');
       assert.ok(/\.gold-btn,\s*\n?\.outline-btn\s*\{\s*min-height:\s*44px/.test(css),
