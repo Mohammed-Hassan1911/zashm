@@ -303,7 +303,7 @@ export default function ProductPage() {
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 2, cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               {p.label && (
-                <div className="product-card-labels" aria-label="Product label" style={{ padding: 'clamp(6px, 3%, 12px)' }}>
+                <div className="product-card-labels" aria-label="Product label" style={{ padding: 0 }}>
                   <span className="label-badge">{p.label}</span>
                 </div>
               )}

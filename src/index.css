@@ -196,7 +196,7 @@ select option { background: var(--bg3); }
   /* The badge hugs the top-left corner of the actual image box and scales with
      the card width, so it adapts to any image shape/size instead of sitting at
      a fixed offset. */
-  padding: clamp(4px, 3%, 10px);
+  padding: 0;
   box-sizing: border-box;
   max-width: calc(100% - 56px);
   min-width: 0;
