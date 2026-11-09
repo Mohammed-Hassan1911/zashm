@@ -157,6 +157,13 @@ const EXPECTED_CUSTOMER_MESSAGE = [
   '',
   'لو البيانات دي مظبوطة، ردّ علينا بـ ✅ ونكمّل التجهيز والشحن.',
   '✏️ ولو حابب تعدل أي حاجة أو تضيف منتج زيادة قولنا قبل شحن الأوردر وإحنا هنعدلها.',
+  '',
+  '💳 يجب دفع رسوم الشحن (قبل الشحن)',
+  '• المطلوب: EGP 65',
+  '• المتبقي عند الاستلام: EGP 1,550',
+  '• الدفع عن طريق فودافون كاش على الرقم: 01013380313',
+  '• بعد التحويل ابعتلنا صورة التحويل.',
+  '• بنحجز القطعة باسمك، وبنشحن بعد ما الدفع يتأكد.',
 ].join('\n');
 
 const FAILURE = {
@@ -226,6 +233,32 @@ try {
     ok(minimal.includes('• المدينة: غير محدد'), 'missing city is explicit');
     ok(minimal.includes('لا توجد منتجات'), 'empty cart is explicit');
     ok(minimal.includes('• الإجمالي: EGP 0'), 'zero total still renders');
+    ok(!minimal.includes('رسوم الشحن'), 'no shipping payment request when shipping is not charged');
+  });
+
+  await section('[2b] the message asks for the shipping fee on Vodafone Cash', async () => {
+    const cairo = buildOrderTelegramMessage({ ...ORDER, city: 'Cairo', shippingCost: undefined });
+    ok(cairo.includes('• المطلوب: EGP 65'), 'Cairo is charged the standard 65');
+    ok(cairo.includes('• المتبقي عند الاستلام: EGP 1,550'),
+      'the amount left for the courier excludes the prepaid shipping');
+    ok(cairo.includes('• الدفع عن طريق فودافون كاش على الرقم: 01013380313'),
+      'the Vodafone Cash number is printed');
+    ok(cairo.includes('بنشحن بعد ما الدفع يتأكد'), 'the order ships only after payment is confirmed');
+    ok(cairo.indexOf('• الإجمالي:') < cairo.indexOf('💳'),
+      'the payment request comes after the account summary');
+
+    const aswan = buildOrderTelegramMessage({ ...ORDER, city: 'Aswan', shippingCost: undefined });
+    ok(aswan.includes('• المطلوب: EGP 100'), 'remote governorates are charged 100');
+
+    // A stored shippingCost wins over the city, exactly like the summary line.
+    const stored = buildOrderTelegramMessage({ ...ORDER, city: 'Cairo', shippingCost: 120 });
+    ok(stored.includes('• المطلوب: EGP 120'), 'the stored shipping cost is used when present');
+    ok(stored.includes('• الشحن: EGP 120'), 'summary and payment request agree');
+    ok(stored.includes('• المتبقي عند الاستلام: EGP 1,495'),
+      'the remaining amount follows the stored shipping cost');
+
+    const noCity = buildOrderTelegramMessage({ ...ORDER, city: '', shippingCost: undefined });
+    ok(!noCity.includes('💳'), 'no payment block when shipping cannot be derived');
   });
 
   await section('[3] Telegram receives plain text plus an inline keyboard', async () => {

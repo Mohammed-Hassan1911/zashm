@@ -11,7 +11,6 @@ import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
 import { paginate, sanitizeInput, validateProductForm, setPageMeta } from '../lib/security';
 import { getColorSwatch } from '../lib/productColors.mjs';
-import { customerWhatsAppUrl, buildOrderConfirmationMessage } from '../lib/customerWhatsApp.mjs';
 import { EGYPT_GOVERNORATES } from '../lib/egyptCities';
 import { effectivePrice, hasInvalidVariantConfig, orphanedVariantStock, declaredVariantStockTotal, uniqueDeclaredOptions, isSellableVariant } from '../lib/pricing';
 import {
@@ -1057,15 +1056,6 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // One-click confirmation before shipping: opens WhatsApp with the order,
-  // size/colour and address repeated back to the customer. The status is not
-  // changed automatically; the admin confirms it after the customer replies.
-  const confirmationUrl = useMemo(
-    () => (selected ? customerWhatsAppUrl(selected.phone, buildOrderConfirmationMessage(selected)) : ''),
-    [selected]
-  );
-  const canConfirmOnWhatsApp = Boolean(selected) && ['Pending', 'Confirmed'].includes(selected.status);
-
   const filtered = useMemo(() => {
     let list = [...(orders || [])];
     if (statusFilter !== 'All') list = list.filter(o => o.status === statusFilter);
@@ -1356,23 +1346,6 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     </button>
                   </div>
                 </div>
-
-                {canConfirmOnWhatsApp && confirmationUrl && (
-                  <div style={{ marginBottom: 16 }}>
-                    <a
-                      href={confirmationUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Open WhatsApp with a pre-filled order confirmation message"
-                      style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 14px', borderRadius:6, background:'#25D366', color:'#fff', textDecoration:'none', fontSize:12, fontWeight:700 }}
-                    >
-                      <MessageSquare size={14} /> Confirm on WhatsApp
-                    </a>
-                    <p style={{ fontSize:10, color:'var(--text3)', marginTop:6, textAlign:'center' }}>
-                      Sends the order, size, colour and address. The status stays {selected.status} until the customer replies.
-                    </p>
-                  </div>
-                )}
 
                 <div style={{ marginBottom:20, overflowX: 'auto', paddingBottom: 8 }}>
                   <p style={{ fontSize:11, color:'var(--text3)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Status Timeline</p>
