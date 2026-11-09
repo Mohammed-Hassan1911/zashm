@@ -57,7 +57,11 @@ function clampClientDate(value) {
 
 async function placeOrder(req, res) {
   const ip = clientIp(req);
-  const check = await rateLimitShared(`placeorder:${ip}`, 10, 60 * 60 * 1000);
+  // 30/hour/IP: Egypt's mobile carriers use CGNAT, so many real customers can
+  // share one public IP during a campaign. The previous 10/hour limit could
+  // block genuine buyers; the per-order idempotency key still prevents
+  // accidental duplicates, and stock/money remain server-authoritative.
+  const check = await rateLimitShared(`placeorder:${ip}`, 30, 60 * 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;

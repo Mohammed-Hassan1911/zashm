@@ -78,6 +78,52 @@ export function setPageMeta({ title, description, image, url, robots } = {}) {
   }
 }
 
+// Inject the site-wide Organization + WebSite graph once. Search engines use it
+// to understand the brand and the site itself (sitelinks search box, logo).
+// This node is separate from the per-product JSON-LD so clearing a product page
+// never removes the site identity.
+export function setSiteJsonLd() {
+  if (typeof document === 'undefined') return;
+  const id = 'zashm-site-jsonld';
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('script');
+    el.type = 'application/ld+json';
+    el.id = id;
+    document.head.appendChild(el);
+  }
+  const origin = typeof window !== 'undefined'
+    ? window.location.origin
+    : 'https://za-shm.vercel.app';
+  const base = origin.replace(/\/+$/, '');
+  const data = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${base}/#organization`,
+        name: BRAND,
+        url: `${base}/`,
+        logo: `${base}/zashm-z-monogram.png`,
+        image: `${base}/og-image.jpg`,
+        sameAs: [
+          'https://www.instagram.com/zashm_brand',
+          'https://facebook.com/zashm',
+        ],
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${base}/#website`,
+        name: BRAND,
+        url: `${base}/`,
+        inLanguage: 'en',
+        publisher: { '@id': `${base}/#organization` },
+      },
+    ],
+  };
+  el.textContent = JSON.stringify(data);
+}
+
 // Inject/refresh Product structured data for rich search results.
 export function setProductJsonLd(product) {
   if (typeof document === 'undefined' || !product) return;

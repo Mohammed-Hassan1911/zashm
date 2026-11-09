@@ -56,9 +56,11 @@ export default function HomePage() {
 
         {/* Editorial content */}
         <motion.div style={{ position: 'relative', textAlign: 'center', zIndex: 10, opacity, padding: '0 24px' }} className="hero-content">
-          <motion.h1
+          {/* The wordmark below is decorative art; this is the real page heading. */}
+          <h1 className="sr-only">ZASHM — Luxury Menswear</h1>
+          <motion.div
             className="hero-brand"
-            aria-label="ZASHM"
+            aria-hidden="true"
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, calc(7vw + 22px), 140px)', fontWeight: 400, letterSpacing: 'clamp(4px, 1.6vw, 24px)', lineHeight: 0.95, marginBottom: 'clamp(12px, 2.8vw, 22px)' }}
           >
@@ -81,7 +83,7 @@ export default function HomePage() {
               <span className="hero-brand-sparkle hero-brand-sparkle--two" aria-hidden="true" />
               <span className="hero-brand-sparkle hero-brand-sparkle--three" aria-hidden="true" />
             </span>
-          </motion.h1>
+          </motion.div>
 
           <motion.p
             className="hero-tagline"

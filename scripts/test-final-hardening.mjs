@@ -691,15 +691,38 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
     'the admin panel keeps its own noindex robots meta');
 
   const app = read('src/App.js');
-  ok(/<main>\s*<AnimatePresence>/.test(app) && /<\/AnimatePresence>\s*<\/main>/.test(app),
-    'storefront page content renders inside a main landmark');
-  ok((app.match(/<main>/g) || []).length === 1,
+  ok(/<main id="main-content" tabIndex=\{-1\}>\s*<AnimatePresence>/.test(app) && /<\/AnimatePresence>\s*<\/main>/.test(app),
+    'storefront page content renders inside the skippable main landmark');
+  ok((app.match(/<main\b/g) || []).length === 1,
     'the storefront declares exactly one main landmark');
+  ok(/<a href="#main-content" className="skip-link">Skip to content<\/a>/.test(app),
+    'keyboard users get a skip-to-content link before the header');
+  ok(/setSiteJsonLd\(\)/.test(app),
+    'the site identity JSON-LD is mounted from the app shell');
+  ok(/aria-label="ZASHM on Instagram"/.test(app) && /aria-label="ZASHM on Facebook"/.test(app),
+    'footer social icon links expose an accessible name');
   ok(!/<h4 style=\{titleStyle\}>/.test(app) &&
      (app.match(/<h2 className="footer-col-title">/g) || []).length === 3,
     'footer section titles use h2 so the heading order never skips a level');
-  ok(/aria-label="ZASHM on Instagram"/.test(app) && /aria-label="ZASHM on Facebook"/.test(app),
-    'footer social icon links expose an accessible name');
+
+  ok(/export function setSiteJsonLd\(\)/.test(seo) &&
+     /'@type': 'Organization'/.test(seo) && /'@type': 'WebSite'/.test(seo),
+    'Organization and WebSite structured data are defined');
+  ok(/getElementById\(id\)/.test(seo) && /el\.textContent = JSON\.stringify\(data\)/.test(seo) &&
+     /export function clearProductJsonLd\(\)[\s\S]*?zashm-product-jsonld/.test(seo),
+    'site JSON-LD is one stable node and product cleanup only removes the product node');
+
+  const home = read('src/pages/HomePage.js');
+  ok(/<h1 className="sr-only">ZASHM — Luxury Menswear<\/h1>/.test(home),
+    'the home page exposes a meaningful h1 to assistive tech');
+  ok(/<motion\.div\s+className="hero-brand"/.test(home) && !/<motion\.h1/.test(home),
+    'the decorative wordmark is no longer the page heading');
+  ok(/\.skip-link\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?\.skip-link:focus/.test(read('src/index.css')),
+    'the skip link stays off-screen until it receives focus');
+
+  const ordersApi = read('api/orders.js');
+  ok(/rateLimitShared\(`placeorder:\$\{ip\}`, 30, 60 \* 60 \* 1000\)/.test(ordersApi),
+    'order placement allows 30 attempts per IP per hour for CGNAT customers');
 
   const notFound = read('src/pages/NotFoundPage.js');
   ok(!/<main/.test(notFound),

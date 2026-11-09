@@ -27,7 +27,7 @@ import { ShopPageSkeleton, ProductPageSkeleton } from './components/ui/PageSkele
 import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
 import WhatsAppButton from './components/ui/WhatsAppButton';
 import OutageNotice from './components/ui/OutageNotice';
-import { setPageMeta } from './lib/seo';
+import { setPageMeta, setSiteJsonLd } from './lib/seo';
 import { trackPageView } from './lib/ga';
 import { resolveRoute } from './lib/routes';
 import { lazyWithRetry } from './lib/chunkRecovery';
@@ -109,6 +109,8 @@ function AppInner() {
       document.documentElement.lang = 'en';
       document.documentElement.dir = 'ltr';
     }
+    // Site identity is global; mount it once and leave it in place across routes.
+    setSiteJsonLd();
   }, []);
 
   useEffect(() => {
@@ -259,11 +261,12 @@ function AppInner() {
         </React.Suspense>
       ) : (
         <>
+          <a href="#main-content" className="skip-link">Skip to content</a>
           <Header />
           <OutageNotice />
           <CartDrawer />
 
-          <main>
+          <main id="main-content" tabIndex={-1}>
             <AnimatePresence>
               <motion.div
                 key={currentPage}
