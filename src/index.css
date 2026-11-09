@@ -228,21 +228,21 @@ select option { background: var(--bg3); }
 }
 
 .product-card-labels .label-badge {
-  font-size: 9.5px;
-  letter-spacing: 0.6px;
-  padding: 3px 6px;
+  font-size: 7.5px;
+  letter-spacing: 0.5px;
+  padding: 2px 4px;
   white-space: nowrap;
 }
 
 .product-card-sold-out {
   display: inline-block;
   max-width: 100%;
-  padding: 3px 6px;
+  padding: 2px 4px;
   border: 1px solid rgba(231, 76, 60, 0.7);
   border-radius: 2px;
   background: rgba(10, 10, 10, 0.9);
   color: #f0a09a;
-  font-size: 9.5px;
+  font-size: 7.5px;
   white-space: nowrap;
   font-weight: 700;
   letter-spacing: 1px;
@@ -1093,6 +1093,8 @@ select option { background: var(--bg3); }
   .product-card-info { padding: 9px 2px 0 !important; }
   .product-card-rating { margin-top: 4px !important; gap: 4px !important; }
   .product-card-price { margin-top: 5px !important; gap: 5px !important; }
+  .product-card-labels .label-badge { font-size: 6.5px; padding: 1.5px 3px; letter-spacing: 0.4px; }
+  .product-card-sold-out { font-size: 6.5px; padding: 1.5px 3px; }
 }
 
 @media (max-width: 360px) {

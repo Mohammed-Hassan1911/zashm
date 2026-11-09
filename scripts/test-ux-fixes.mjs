@@ -808,7 +808,7 @@ try {
         'the visual circle stays compact on phones');
       assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-3px/.test(css),
         'a 3px bleed expands the hit area to 44px');
-      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*font-size:\s*9\.5px/.test(css),
+      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*font-size:\s*7\.5px/.test(css),
         'card labels are no longer 8px');
       assert.ok(/fontSize:\s*10,[\s\S]{0,120}whiteSpace:\s*'nowrap'/.test(card), 'the discount badge is 10px');
       assert.ok(/\.product-card-actions\s*\{\s*opacity:\s*1;/.test(css),
