@@ -882,6 +882,61 @@ try {
         'scroll-to-top follows the same rule');
     });
   }
+
+  console.log('\n[10] admin WhatsApp order confirmation');
+  {
+    const admin = read('src/pages/AdminApp.js');
+    const {
+      normalizeEgyptPhoneForWhatsApp,
+      customerWhatsAppUrl,
+      buildOrderConfirmationMessage,
+    } = await server.ssrLoadModule('/src/lib/customerWhatsApp.mjs');
+
+    await step('customer numbers normalise to wa.me international form', () => {
+      assert.equal(normalizeEgyptPhoneForWhatsApp('01012345678'), '201012345678');
+      assert.equal(normalizeEgyptPhoneForWhatsApp('+20 101 234 5678'), '201012345678');
+      assert.equal(normalizeEgyptPhoneForWhatsApp('00201012345678'), '201012345678');
+      assert.equal(normalizeEgyptPhoneForWhatsApp('1012345678'), '201012345678');
+      assert.equal(normalizeEgyptPhoneForWhatsApp('0223456789'), '');
+      assert.equal(normalizeEgyptPhoneForWhatsApp(''), '');
+    });
+
+    await step('confirmation message repeats the order back to the customer', () => {
+      const message = buildOrderConfirmationMessage({
+        id: 'ZSH-TEST-1',
+        customer: 'Ahmed',
+        total: 1265,
+        city: 'Cairo',
+        address: '12 Nile Street',
+        items: [{ name: 'Linen Shirt', size: 'L', color: 'White', qty: 2 }],
+      });
+      assert.ok(message.includes('ZSH-TEST-1'), 'order id is included');
+      assert.ok(message.includes('Linen Shirt (L / White) × 2'), 'item, size, colour and quantity are included');
+      assert.ok(message.includes('EGP 1,265'), 'the COD total is included');
+      assert.ok(message.includes('12 Nile Street, Cairo'), 'the delivery address is included');
+      assert.ok(message.includes('تأكيد') && message.includes('CONFIRM'),
+        'the customer is asked to confirm in Arabic and English');
+    });
+
+    await step('WhatsApp URL is encoded and never built from a bad number', () => {
+      const url = customerWhatsAppUrl('01012345678', 'hello & bye');
+      assert.ok(url.startsWith('https://wa.me/201012345678?text='), 'uses the international number');
+      assert.ok(url.includes(encodeURIComponent('hello & bye')), 'the message is URL-encoded');
+      assert.equal(customerWhatsAppUrl('0223456789', 'x'), '', 'invalid numbers produce no link');
+    });
+
+    await step('the admin order panel exposes the confirmation action', () => {
+      assert.ok(/import \{ customerWhatsAppUrl, buildOrderConfirmationMessage \} from '\.\.\/lib\/customerWhatsApp\.mjs'/.test(admin),
+        'the panel imports the shared helper');
+      assert.ok(/customerWhatsAppUrl\(selected\.phone, buildOrderConfirmationMessage\(selected\)\)/.test(admin),
+        'the link is built from the selected order');
+      assert.ok(/Confirm on WhatsApp/.test(admin), 'the action is visible');
+      assert.ok(/\['Pending', 'Confirmed'\]\.includes\(selected\.status\)/.test(admin),
+        'it is offered only before the order is processed');
+      assert.ok(/The status stays \{selected\.status\} until the customer replies/.test(admin),
+        'the admin is told the status does not change automatically');
+    });
+  }
 } catch (error) {
   console.error('Fatal test harness error:', error);
   failed += 1;
