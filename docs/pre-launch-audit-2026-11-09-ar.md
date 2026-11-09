@@ -1,5 +1,11 @@
 # تقرير فحص ما قبل الإطلاق (Pre-Launch Audit) — ZASHM
 
+> **ملاحظة تاريخية:** هذا تقرير أقدم (HEAD `59c4f2d`). أحدث فحص إنتاجي وحالة
+> البنود الحالية موجودة في `docs/production-readiness-live-2026-11-09.md`.
+> البنود P2 المتعلقة بـJSON-LD / skip link / Home `<h1>` / حد الطلبات تم
+> إصلاحها في `3e91f00`، وليبل المنتج أصبح ملحومًا بأعلى يسار الصورة وليس صفًا
+> محجوزًا فوقها. أي بند هنا يخالف التقرير الأحدث يُعتبر قديمًا.
+
 **التاريخ:** 2026-11-09
 **الفرع / الكوميت:** `main` @ `59c4f2d` (checkout button + de-dup messages) — **منشور ومُتحقق على الإنتاج**
 **Live bundle:** `/assets/index-CDpVNmqs.js`
@@ -79,8 +85,8 @@
 
 ### 4.2 ملاحظات
 - **P1 — سلة اختبار قديمة على الإنتاج:** `Jacket Boxy L/Burgundy ×1` (غير متاح) لا يزال في سلة المتجر. أُصلِح UX (تعطيل زر الطلب) لكن **يجب على المالك إزالة هذا السطر** من localStorage/cookie (أو مسح سلة المتصفح) قبل الإطلاق، وإلا سيرى العملاء رسالة «can’t be ordered right now».
-- **P2 — Home `<h1>` هو شعار ZASHM** («Z\nAS\nHM») بدلاً من عنوان hero. مقبول (brand) لكن SEO/a11y ي préfère h1 واحد معنوي.
-- **P2 — لا skip link** («Skip to content»). مقبول (WCAG AA optional) لكن يُحسّن تجربة لوحة المفاتيح.
+- ~~**P2 — Home `<h1>` هو شعار ZASHM**~~ — أُصلح في `3e91f00`: الشعار عنصر زخرفي و`h1` معنوي مخفي بصريًا.
+- ~~**P2 — لا skip link**~~ — أُصلح في `3e91f00`: «Skip to content» ينقل التركيز إلى `main`.
 - **P3 — Product label spacing:** 6px gap + reserved row (توصيتي: الإبقاء كما هو).
 
 ---
@@ -133,14 +139,14 @@
 | فحص | النتيجة |
 |---|---|
 | landmarks (main/header/footer/nav) | ✓ على 5 صفحات |
-| h1 count | 1 per page ✓ (Home: logo as h1 — P2) |
+| h1 count | 1 per page ✓ (Home: meaningful sr-only h1 since `3e91f00`) |
 | img alt | 0 missing ✓ |
 | buttons without accessible name | 0 ✓ |
 | `:focus-visible` styling | ✓ |
 | floating actions z-index 30000 | ✓ |
 | safe-area insets | ✓ |
 | 44px touch targets | ✓ (verified) |
-| skip link | ✗ (P2) |
+| skip link | ✓ since `3e91f00` |
 | reduced motion | honored (BackToTop) ✓ |
 
 ---
@@ -170,7 +176,7 @@
 ### P2 (تحسينات)
 7. WebP/srcset للصور (160KB → ~40KB).
 8. Pagination / lazy load للكتالوج.
-9. Skip link + Home h1 معنوي.
+9. ~~Skip link + Home h1 معنوي.~~ ✅ `3e91f00`
 10. Lighthouse (يحتاج Chrome) — قياس CWV فعلي.
 
 ---
