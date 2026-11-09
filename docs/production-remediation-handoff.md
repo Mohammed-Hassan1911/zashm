@@ -167,7 +167,7 @@ ON CONFLICT (name) DO NOTHING;
 |---|---|
 | 1. الملكية/النوع | `products_public` من نوع `v` (view)، مالكه `postgres` (أو دور موثوق ثابت)، `products` جدول. |
 | 2. التعريف | يحتوي `WHERE (active IS TRUE)`؛ لا فلاتر إضافية مفقودة. |
-| 3. الأعمدة | بالضبط: `id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide` — **بدون** `reservedStock` أو `tags` أو `rating` أو `reviews` أو `active`. |
+| 3. الأعمدة | بالضبط: `id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide, rating, reviews` — **بدون** `reservedStock` أو `tags` أو `active`. (`rating`/`reviews` مجاميع المراجعات المعتمدة فقط، تعرضها كروت المنتجات.) |
 | 4–6. الصلاحيات | بعد Phase 3: `anon/authenticated/PUBLIC` لا يقرأون `products` (جدولًا أو عمودًا)، و`anon` يقرأ `products_public`، و`service_role` يقرأ `products`. قبل Phase 3: `anon` قد يقرأ `products` (بالحزمة القديمة) — لا تعتبره فشلًا. |
 | 7. RLS | `orders/users/coupons/zshm_deploy_flags/zshm_storage_policy_backup` = RLS مفعّل و0 policies (deny-all مقصود). لا تضف policies. |
 | 8. العدّ | `active_products > 0`، و`total = active + inactive + null_active`، و`count(products_public) = active_products`. |

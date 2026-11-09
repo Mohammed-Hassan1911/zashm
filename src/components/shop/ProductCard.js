@@ -167,6 +167,7 @@ export default function ProductCard({ product, index = 0 }) {
         >
           <motion.button
             type="button"
+            className="product-card-action-heart"
             aria-label={
               isWished ? 'Remove from wishlist' : 'Add to wishlist'
             }
@@ -209,6 +210,7 @@ export default function ProductCard({ product, index = 0 }) {
 
           <motion.button
             type="button"
+            className="product-card-action-view"
             aria-label="View product details"
             onClick={(event) => {
               event.stopPropagation();

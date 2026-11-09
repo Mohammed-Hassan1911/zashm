@@ -645,8 +645,8 @@ export default function ProductPage() {
         {/* Related */}
         {related.length > 0 && (
           <div style={{ marginTop: 80 }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 400, marginBottom: 32, textAlign: 'center', letterSpacing: 2 }}>{'You May Also Like'}</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 24 }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 6vw, 32px)', fontWeight: 400, marginBottom: 32, textAlign: 'center', letterSpacing: 2 }}>{'You May Also Like'}</h2>
+            <div className="product-collection-grid">
               {related.map((rp, i) => <ProductCard key={rp.id} product={rp} index={i} />)}
             </div>
           </div>

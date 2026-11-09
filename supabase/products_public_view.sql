@@ -14,8 +14,12 @@
 --     added to `products` are NOT exposed automatically; they are reported.
 --     (`reservedStock` is not just "excluded", it is absent from the allow-list.)
 --   * Only genuinely public display/availability columns are exposed. `active`
---     is used as a filter and not selected; `tags`, `rating` and `reviews` are
---     not read by the storefront and are no longer exposed.
+--     is used as a filter and not selected; `tags` is not read by the storefront
+--     and is not exposed. `rating` and `reviews` ARE exposed: the product cards
+--     render the star rating and the approved-review count, and both columns
+--     only ever hold aggregates of approved public reviews (kept in sync by
+--     supabase/product_reviews.sql). Listing them here means re-running Phase 1
+--     no longer strips them from the view.
 --   * Privileges are revoked from PUBLIC as well as anon/authenticated, and the
 --     post-apply check proves all three cannot SELECT the base table, including
 --     through column-level grants.
@@ -103,16 +107,20 @@ DROP VIEW IF EXISTS public.products_public;
 --     availability class as `stock`). They never include `reservedStock`, cost,
 --     or any internal reservation data. The server remains the final authority
 --     at checkout.
+--   * `rating` and `reviews` — aggregates of APPROVED reviews, rendered by the
+--     product cards. They are public display data (never the reviewer's phone,
+--     hash, or pending rows), and supabase/product_reviews.sql keeps them in
+--     sync. Exposed here so a Phase 1 re-run cannot silently remove the stars.
 --   * `active` is NOT selected: the view already filters active rows, so
 --     exposing a constant `true` would be redundant.
---   * `tags`, `rating`, `reviews` are not read by the storefront and are not
---     exposed.
+--   * `tags` is not read by the storefront and is not exposed.
 DO $$
 DECLARE
   v_allow   text[] := ARRAY[
     'id', 'name', 'category', 'price', 'salePrice', 'description',
     'stock', 'variantStock', 'sku', 'label',
-    'colors', 'sizes', 'images', 'image', 'sizeGuide'
+    'colors', 'sizes', 'images', 'image', 'sizeGuide',
+    'rating', 'reviews'
   ];
   v_cols    text;
   v_hidden  text;
@@ -175,7 +183,8 @@ DECLARE
   v_allow text[] := ARRAY[
     'id', 'name', 'category', 'price', 'salePrice', 'description',
     'stock', 'variantStock', 'sku', 'label',
-    'colors', 'sizes', 'images', 'image', 'sizeGuide'
+    'colors', 'sizes', 'images', 'image', 'sizeGuide',
+    'rating', 'reviews'
   ];
   v_bad text;
 BEGIN

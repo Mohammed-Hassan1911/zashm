@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import './index.css';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import { useStore } from './store';
 import { AuthProvider, useAuth } from './lib/auth'; 
 import {
@@ -246,6 +246,7 @@ function AppInner() {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Toaster />
       <OrderNotification />
@@ -295,6 +296,7 @@ function AppInner() {
         </>
       )}
     </div>
+    </MotionConfig>
   );
 }
 

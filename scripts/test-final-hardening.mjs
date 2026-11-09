@@ -387,6 +387,8 @@ console.log('\n[7] products_public view');
   ok(/v_allow\s+text\[\] := ARRAY\[/.test(sql), 'view is built from an explicit allow-list');
   ok(!/lower\(column_name\) <> 'reservedstock'/.test(sql), 'reservedStock is not merely excluded dynamically');
   ok(/'reservedStock' = ANY \(v_allow\)/.test(sql), 'reservedStock is rejected if ever added to the allow-list');
+  ok(/'rating',\s*'reviews'/.test(sql),
+    'the allow-list keeps rating/reviews so a Phase 1 re-run cannot strip the product-card stars');
   ok(/security_invoker = false/.test(sql), 'view runs with owner privileges (required after the revoke)');
   ok(/NOTIFY pgrst, 'reload schema'/.test(sql), 'PostgREST schema cache is reloaded');
   ok(/products_public/.test(sql) && /DROP VIEW IF EXISTS public\.products_public/.test(sql), 'view is recreated safely');

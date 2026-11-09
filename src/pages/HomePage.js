@@ -20,9 +20,16 @@ export default function HomePage() {
   const newArrivals = activeProducts
     .filter(p => p.label === 'New Arrival' && !featuredIds.has(p.id))
     .slice(0, 4);
-  // لو مفيش منتجات مُصنّفة، اعرض أحدث المنتجات بدل صفحة فاضية تماماً.
+  // The curated sections can leave pieces out (a "Limited Edition" piece, for
+  // example). Show the rest in a final "The Collection" row so a small
+  // catalogue never hides a product from the home page; with no curated rows at
+  // all, the same row becomes the fallback collection.
   const hasCuratedSections = featured.length > 0 || newArrivals.length > 0;
-  const fallbackProducts = !hasCuratedSections ? activeProducts.slice(0, 4) : [];
+  const curatedIds = new Set([...featured, ...newArrivals].map(product => product.id));
+  const fallbackProducts = (hasCuratedSections
+    ? activeProducts.filter(product => !curatedIds.has(product.id))
+    : activeProducts
+  ).slice(0, 4);
 
   return (
     <div style={{ paddingTop: 0 }}>
@@ -162,9 +169,9 @@ export default function HomePage() {
 
       {/* ───── FEATURED ───── */}
       {featured.length > 0 && (
-        <section style={{ padding: '60px 24px 100px', maxWidth: 1400, margin: '0 auto' }}>
+        <section style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
           <SectionHeader title="Featured Pieces" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24, marginTop: 56 }}>
+          <div className="product-collection-grid" style={{ marginTop: 'clamp(28px, 5vw, 56px)' }}>
             {featured.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 48 }}>
@@ -175,19 +182,19 @@ export default function HomePage() {
 
       {/* ───── NEW ARRIVALS ───── */}
       {newArrivals.length > 0 && (
-        <section style={{ padding: '60px 24px 100px', maxWidth: 1400, margin: '0 auto' }}>
+        <section style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
           <SectionHeader title="New Arrivals" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24, marginTop: 56 }}>
+          <div className="product-collection-grid" style={{ marginTop: 'clamp(28px, 5vw, 56px)' }}>
             {newArrivals.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
         </section>
       )}
 
-      {/* ───── FALLBACK COLLECTION (no Featured/New Arrival labels) ───── */}
+      {/* ───── THE COLLECTION (remaining pieces, or the fallback) ───── */}
       {fallbackProducts.length > 0 && (
-        <section style={{ padding: '60px 24px 100px', maxWidth: 1400, margin: '0 auto' }}>
+        <section style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
           <SectionHeader title="The Collection" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24, marginTop: 56 }}>
+          <div className="product-collection-grid" style={{ marginTop: 'clamp(28px, 5vw, 56px)' }}>
             {fallbackProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 48 }}>

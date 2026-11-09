@@ -27,8 +27,9 @@
 --     in the trigger, when a review is approved.
 --   * No data is deleted. The rollback section is commented out on purpose.
 --   * Apply this file AFTER supabase/products_public_view.sql (both phases).
---     If Phase 1 is ever re-run later, it removes rating/reviews from the view;
---     re-apply this file afterwards to restore them.
+--     The base view now lists rating/reviews in its allow-list, so re-running
+--     Phase 1 keeps them; this file stays idempotent and can be re-applied
+--     safely (it recreates the same view).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 BEGIN;

@@ -772,6 +772,7 @@ try {
     const header = read('src/components/shop/Header.js');
     const nav = read('src/components/shop/MobileNav.js');
     const card = read('src/components/shop/ProductCard.js');
+    const home = read('src/pages/HomePage.js');
 
     await step('header, footer and checkout chrome reach 44px', () => {
       assert.ok(/\.zashm-header-search,\s*\n?\.zashm-header-utilities > button\s*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px/.test(css),
@@ -801,13 +802,36 @@ try {
     });
 
     await step('product cards keep a 44px hit area and readable badges', () => {
-      assert.ok(/\.product-card-actions button\s*\{[^}]*width:\s*40px[^}]*height:\s*40px/.test(css),
+      assert.ok(/\.product-card-actions button\s*\{[^}]*width:\s*38px[^}]*height:\s*38px/.test(css),
         'the visual circle stays compact on phones');
-      assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-2px/.test(css),
-        'a 2px bleed expands the hit area to 44px');
+      assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-3px/.test(css),
+        'a 3px bleed expands the hit area to 44px');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*font-size:\s*9\.5px/.test(css),
         'card labels are no longer 8px');
       assert.ok(/fontSize:\s*10,[\s\S]{0,120}whiteSpace:\s*'nowrap'/.test(card), 'the discount badge is 10px');
+      assert.ok(/\.product-card-actions\s*\{\s*opacity:\s*1;/.test(css),
+        'the wishlist heart is always visible, not hover-only');
+      assert.ok(/\.product-card-image:hover \.product-card-action-view/.test(css),
+        'the quick-view eye still appears on hover/focus on pointer devices');
+      assert.ok(!/\.zashm-header-utilities\s*\{\s*display:\s*none/.test(css),
+        'the header wishlist/bag are no longer hidden on phones');
+      assert.ok(/\.product-collection-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/.test(css)
+        && /@media \(max-width: 768px\)\s*\{\s*\.product-collection-grid\s*\{[^}]*repeat\(2, minmax\(0, 1fr\)\)/.test(css),
+        'collections are four-up on desktop and two-up on phones');
+      assert.ok(/\.product-card \.product-card-image::after\s*\{[^}]*linear-gradient/.test(css)
+        && /\.product-card:hover \.product-card-image::after/.test(css),
+        'a pointer-only sheen animates the photo without touching the product page gallery');
+      assert.ok(/h1:not\(\.hero-brand\)[\s\S]{0,240}font-size:\s*clamp\(28px, 5\.6vw, 36px\)/.test(css),
+        'phone titles keep a 28px floor and grow back on a 768px tablet');
+      assert.ok(/<MotionConfig reducedMotion="user">/.test(app),
+        'framer-motion animations honour prefers-reduced-motion');
+    });
+
+    await step('the home page shows every product once, whatever its label', () => {
+      assert.ok(/curatedIds\.has\(product\.id\)/.test(home),
+        'pieces outside Featured/New Arrival fall into The Collection row');
+      assert.ok(/hasCuratedSections[\s\S]{0,160}activeProducts[\s\S]{0,40}\.slice\(0, 4\)/.test(home),
+        'an unlabelled catalogue still renders a fallback collection');
     });
 
     await step('product page layout and tabs stay accessible', () => {

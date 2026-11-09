@@ -44,7 +44,7 @@ They are idempotent where possible and none of them delete rows.
 | 4 | `supabase/admin_protection.sql` | Trigger that refuses to demote/delete the last admin (transaction advisory lock; covered by a real two-connection test). |
 | 5 | `supabase/security_hardening.sql` | Function `search_path` pinning / privilege revokes; inspects every existing `auth.users` trigger and refuses to add a second provisioning trigger. It never drops/replaces an existing trigger and no longer defines a duplicate last-admin function. |
 | 6 | `supabase/storage_hardening.sql` | `products` bucket: 5 MB limit, image MIME allow-list, RLS, and a restrictive policy preventing browser roles from listing product filenames while retaining public image downloads. Drops only policies provably scoped to `products`; blanket/other-bucket policies are kept for manual review. If the SQL role does not own `storage.objects` (normal in Supabase), it never runs `ALTER TABLE`/`DROP POLICY`; it reports the exact products-only policies for removal in **Dashboard > Storage > Policies**. Every policy dropped by the script is backed up verbatim and restorable with `zshm_restore_storage_policies()`. |
-| 7 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide`; `reservedStock` is not in it, and `active/tags` are not selected). `rating`/`reviews` are added later by `supabase/product_reviews.sql` (see below); if Phase 1 is ever re-run it removes them and that file must be re-applied. Grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
+| 7 | `supabase/products_public_view.sql` | Creates `products_public` with `WHERE active IS TRUE` (inactive/NULL products never reach the public API) from an explicit public-column allow-list (`id, name, category, price, salePrice, description, stock, variantStock, sku, label, colors, sizes, images, image, sizeGuide, rating, reviews`; `reservedStock` is not in it, and `active/tags` are not selected). `rating`/`reviews` hold aggregates of approved reviews and are rendered by the product cards, so a Phase 1 re-run keeps them. Grants SELECT on the view, and after the staged rollout flag revokes the base table (table-level and column-level) from `PUBLIC`/`anon`/`authenticated`. |
 
 Two further files are required but are **not** counted in the seven above:
 
@@ -383,9 +383,10 @@ The accepted mitigations are:
 1. The view is built from an explicit column allow-list; `reservedStock` is not
    in it, and the migration aborts if it is ever added to the allow-list. The
    final list is `id, name, category, price, salePrice, description, stock,
-   variantStock, sku, label, colors, sizes, images, image, sizeGuide`.
-   `active` is only a filter (not selected), and `tags`, `rating` and `reviews`
-   are not read by the storefront, so they are no longer exposed.
+   variantStock, sku, label, colors, sizes, images, image, sizeGuide, rating,
+   reviews`. `active` is only a filter (not selected) and `tags` is not read by
+   the storefront, so neither is exposed. `rating`/`reviews` are exposed because
+   the product cards render them; they hold aggregates of approved reviews only.
 2. The view applies the public visibility predicate itself
    (`WHERE active IS TRUE`), because an owner-rights view does not inherit RLS
    row filters. Inactive and `NULL`-active products never reach the public API,

@@ -721,8 +721,12 @@ async function main() {
     'products_public exposes the allow-listed columns');
   ok(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
                      WHERE table_schema='public' AND table_name='products_public'
-                       AND column_name IN ('tags','rating','reviews','active')`) === 0,
-    'products_public does not expose columns the storefront does not use');
+                       AND column_name IN ('rating','reviews')`) === 2,
+    'products_public exposes the review aggregates the cards render');
+  ok(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                     WHERE table_schema='public' AND table_name='products_public'
+                       AND column_name IN ('tags','active')`) === 0,
+    'products_public does not expose tags or the active filter column');
   eq(scalarNum(DB, `SELECT count(*) FROM public.products_public`), 1,
     'the view itself returns only active = true rows');
   eq(scalarNum(DB, `SELECT count(*) FROM public.products_public WHERE id IN (78,79)`), 0,

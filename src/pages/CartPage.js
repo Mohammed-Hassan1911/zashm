@@ -1466,10 +1466,10 @@ export function WishlistPage() {
 
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: 'clamp(28px, 6vw, 40px) clamp(16px, 4vw, 24px)' }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <p style={{ fontSize: 10, letterSpacing: 4, color: 'var(--gold)', textTransform: 'uppercase', marginBottom: 8 }}>{'Saved'}</p>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 400 }}>{'Wishlist'}</h1>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 7vw, 48px)', fontWeight: 400 }}>{'Wishlist'}</h1>
           <p style={{ color: 'var(--text3)', marginTop: 8 }}>{wished.length} {wished.length === 1 ? 'item' : 'items'} saved</p>
         </div>
         {wished.length === 0 ? (
@@ -1480,7 +1480,7 @@ export function WishlistPage() {
             <button className="gold-btn" onClick={() => setPage('shop')}>{'Explore Collection'}</button>
           </motion.div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 24 }}>
+          <div className="product-collection-grid">
             {wished.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
         )}

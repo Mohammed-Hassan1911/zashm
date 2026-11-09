@@ -672,15 +672,7 @@ export default function ShopPage() {
               </button>
             </div>
           ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns:
-                  'repeat(auto-fill, minmax(min(100%, 240px), 1fr))',
-                gap: 24,
-                paddingTop: 32
-              }}
-            >
+            <div className="product-collection-grid">
               {filtered.map((product, index) => (
                 <ProductCard
                   key={product.id}
