@@ -159,6 +159,9 @@
 
 ### 8.4 snapshot المنتجات
 
-- `public/catalog-snapshot.json` أصبح **1 منتج** (كان فارغًا).
-- `public/media/products/` فيه **5 صور** (908 KB) — fallback للصور عند تعطّل Supabase.
-- ⚠️ النسخة الحية لسه القديمة (فارغة) لحد النشر التالي.
+- المنتج الحالي (Jacket `1794232720755261`) **مستبعد** من الـsnapshot لأنه منتج تجريبي، وهو لسه **حي** في المتجر (`products_public` = 1).
+- `scripts/resilience-exclude.json` بقى فيه الـid ده بدل الـid القديم غير الموجود.
+- النتيجة: `public/catalog-snapshot.json` فاضي (`count: 0`) و`public/media/` فاضي (اتمسحت 5 صور / 0.88 MB بـ`--prune`).
+- الاستبعاد **مش** مسح من الداتابيز: المنتج بيتعرض عادي، بس مش داخل النسخة الاحتياطية.
+- لما تضيف منتج حقيقي: شيل الـid من `scripts/resilience-exclude.json` ثم `npm run resilience:sync -- --prune`.
+

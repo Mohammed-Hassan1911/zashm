@@ -1,6 +1,6 @@
 {
   "note": "Product ids listed here are skipped when public/catalog-snapshot.json and public/media are built. They stay untouched in Supabase. Add an id here when a live product must not appear in the offline backup, then run: npm run resilience:sync -- --prune",
   "excludedIds": [
-    "1793846979234526"
+    "1794232720755261"
   ]
 }
