@@ -2136,55 +2136,9 @@ main, [role="main"] {
   .admin-container td, .admin-container th { padding: 8px 10px !important; }
 }
 
-/* ─── Outage / backup catalogue notice ─────────────────────────────────────── */
-/* Shown only when the live catalogue fetch failed. It is an inline bar (never
- * fixed), so it can never cover the header, drawers, or the floating actions. */
-.outage-notice {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  padding: 10px 18px;
-  background: linear-gradient(135deg, #17150f 0%, #1f1c14 100%);
-  border-bottom: 1px solid rgba(201, 176, 108, 0.32);
-  color: var(--text2, #c9c4b8);
-  font-size: 12px;
-  line-height: 1.5;
-  text-align: center;
-}
-
-.outage-notice-text strong {
-  color: var(--gold, #c9a84c);
-  font-weight: 600;
-}
-
-.outage-notice-en {
-  color: var(--text3, #8a8a8a);
-}
-
-.outage-notice-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 7px 14px;
-  border-radius: 50px;
-  border: 1px solid rgba(201, 176, 108, 0.5);
-  color: var(--gold, #c9a84c);
-  background: rgba(201, 176, 108, 0.08);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.outage-notice-action:hover,
-.outage-notice-action:focus-visible {
-  background: rgba(201, 176, 108, 0.18);
-  border-color: rgba(201, 176, 108, 0.8);
-}
+/* ─── Checkout fallback CTA ────────────────────────────────────────────────── */
+/* Shown only when the request never reached the server (offline/timeout), so
+ * nothing was recorded anywhere and WhatsApp is the only way to keep the sale. */
 
 .outage-order-cta {
   margin: 0 0 20px;
@@ -2210,12 +2164,8 @@ main, [role="main"] {
 }
 
 @media (max-width: 480px) {
-  .outage-notice {
-    padding: 9px 14px;
-    font-size: 11px;
-  }
-  .outage-notice-en {
-    display: block;
+  .outage-order-cta {
+    padding: 14px 14px;
   }
 }
 

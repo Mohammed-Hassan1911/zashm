@@ -803,6 +803,14 @@ export function CheckoutPage() {
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 4.2vw, 30px)', fontWeight: 500, lineHeight: 1.2, margin: '0 0 6px', color: '#f5f0e8' }}>
             Thank you for your order
           </h1>
+          {success.pending && (
+            <p style={{ color: '#aaa398', fontSize: 11, lineHeight: 1.6, margin: '8px auto 0', maxWidth: 420 }}>
+              هنكلمك على رقمك لتأكيد تفاصيل الأوردر قبل الشحن.
+              <span style={{ display: 'block', color: '#8f897e', fontSize: 10 }}>
+                We&apos;ll contact you to confirm your order before shipping.
+              </span>
+            </p>
+          )}
         </div>
 
         {/* Order reference */}
@@ -996,26 +1004,28 @@ export function CheckoutPage() {
             direction: 'ltr',
           }}
         >
-          <button
-            type="button"
-            className="order-confirmation-primary"
-            onClick={() => {
-              const url = success.tracking_url || '/track';
+          {!success.pending && (
+            <button
+              type="button"
+              className="order-confirmation-primary"
+              onClick={() => {
+                const url = success.tracking_url || '/track';
 
-              clearOrderConfirmation();
-              window.location.assign(url);
-            }}
-            style={orderActionStyle}
-            {...orderActionHover}
-          >
-            <PackageSearch
-              size={15}
-              strokeWidth={1.8}
-              aria-hidden="true"
-              style={orderActionIcon}
-            />
-            <span>TRACK YOUR ORDER</span>
-          </button>
+                clearOrderConfirmation();
+                window.location.assign(url);
+              }}
+              style={orderActionStyle}
+              {...orderActionHover}
+            >
+              <PackageSearch
+                size={15}
+                strokeWidth={1.8}
+                aria-hidden="true"
+                style={orderActionIcon}
+              />
+              <span>TRACK YOUR ORDER</span>
+            </button>
+          )}
 
           <a
             className="order-confirmation-secondary"

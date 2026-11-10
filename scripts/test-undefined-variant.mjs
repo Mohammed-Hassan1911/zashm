@@ -71,18 +71,22 @@ const fakeSb = {
     if (table === 'products') {
       return {
         select: () => ({
-          in: async (_col, ids) => ({
-            data: productRows.filter((p) => ids.includes(Number(p.id))),
-            error: null,
-          }),
+          in: (_col, ids) => {
+            const result = { data: productRows.filter((p) => ids.includes(Number(p.id))), error: null };
+            const builder = {
+              abortSignal() { return builder; },
+              then(resolve, reject) { return Promise.resolve(result).then(resolve, reject); },
+            };
+            return builder;
+          },
         }),
       };
     }
     if (table === 'coupons') {
-      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+      return { select: () => ({ eq: () => ({ abortSignal() { return this; }, maybeSingle: async () => ({ data: null, error: null }) }) }) };
     }
     if (table === 'orders') {
-      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+      return { select: () => ({ eq: () => ({ abortSignal() { return this; }, maybeSingle: async () => ({ data: null, error: null }) }) }) };
     }
     throw new Error(`unexpected table in test harness: ${table}`);
   },

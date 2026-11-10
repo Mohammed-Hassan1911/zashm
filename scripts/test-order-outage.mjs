@@ -1,10 +1,14 @@
 /**
  * Checkout during a database outage.
  *
- * The owner's requirement: even if Supabase is down, the Telegram message must
- * still arrive with everything needed to finish the sale by phone. This suite
- * runs the REAL `/api/orders` handler with the Supabase host unreachable and
- * captures what the Telegram API would receive.
+ * Owner decision (2026-11-10): when the database is unreachable the shopper must
+ * see NOTHING broken — the checkout confirms the order exactly like a stored one.
+ * The only trace is a Telegram alert to the owner that carries the same order
+ * body a normal notification would, plus a banner saying the order was not
+ * stored and the customer was already told it was.
+ *
+ * This suite runs the REAL `/api/orders` handler with the Supabase host
+ * unreachable and captures what the Telegram API would receive.
  *
  *   node scripts/test-order-outage.mjs
  */
@@ -36,7 +40,14 @@ process.env.SESSION_SECRET = 'test-session-secret-for-outage-suite';
 process.env.ALLOWED_ORIGINS = 'https://za-shm.vercel.app';
 
 const ORDER = {
-  items: [{ productId: 1794232720755261, qty: 1, size: 'M', color: 'Black', name: 'Jacket' }],
+  items: [{
+    productId: 1794232720755261,
+    qty: 1,
+    size: 'M',
+    color: 'Black',
+    name: 'Jacket',
+    unitPrice: 2500,
+  }],
   idempotencyKey: 'outage-test-key-0001',
   couponCode: '',
   customer: {
@@ -48,7 +59,7 @@ const ORDER = {
     city: 'Dakahlia',
     notes: 'اتصل قبل التسليم',
   },
-  client: { shippingCost: 65, total: 2565 },
+  client: { subtotal: 2500, discount: 0, shippingCost: 65, total: 2565 },
 };
 
 function makeReq(payload, { ip = '203.0.113.7' } = {}) {
@@ -69,9 +80,13 @@ function makeRes() {
   return {
     statusCode: 0,
     body: null,
+    writes: 0,
     setHeader(key, value) { headers.set(String(key).toLowerCase(), value); },
     getHeader(key) { return headers.get(String(key).toLowerCase()); },
-    end(chunk) { if (chunk !== undefined && chunk !== null) this.body = String(chunk); },
+    end(chunk) {
+      this.writes += 1;
+      if (chunk !== undefined && chunk !== null) this.body = String(chunk);
+    },
   };
 }
 
@@ -85,17 +100,18 @@ const supabasePath = require.resolve('@supabase/supabase-js');
 const offline = () => Promise.resolve({ data: null, error: { message: 'fetch failed', code: 'SUPABASE_DOWN' } });
 const offlineQuery = {
   select: () => offlineQuery,
-  in: offline,
+  in: () => offlineQuery,
   eq: () => offlineQuery,
   order: () => offlineQuery,
   limit: () => offlineQuery,
   single: offline,
   maybeSingle: offline,
+  abortSignal: () => offlineQuery,
   then: (resolve, reject) => offline().then(resolve, reject),
 };
 const offlineClient = {
   from: () => offlineQuery,
-  rpc: offline,
+  rpc: () => offlineQuery,
   storage: { from: () => ({ list: offline, remove: offline }) },
   auth: { getUser: offline },
 };
@@ -144,39 +160,80 @@ async function place(payload = ORDER, options = {}) {
   return { status: res.statusCode, body: res.body ? JSON.parse(res.body) : null, res };
 }
 
-console.log('\n[1] Supabase unreachable: the order fails cleanly, not silently');
+// Strings a shopper must never see on the confirmation screen.
+const BROKEN_MARKERS = [
+  'outage', 'Outage', 'database', 'Database', 'Supabase',
+  'WhatsApp', 'واتساب', 'خطأ', 'تعذر', 'معطّل', 'بيز',
+  'Could not', 'try again', 'not saved', 'لم يُحفظ',
+];
+function customerSafe(body) {
+  const text = JSON.stringify(body);
+  return BROKEN_MARKERS.filter((marker) => text.includes(marker));
+}
+
+console.log('\n[1] database unreachable: the customer gets a normal confirmation');
 let firstAlert = '';
+let pendingOrder = null;
 {
   alerts.length = 0;
   telegramMode = 'ok';
-  const { status, body } = await place();
-  eq(status, 500, 'the API answers 500 instead of pretending the order exists');
-  eq(body.success, false, 'success is false');
-  eq(body.error, 'Could not load products', 'the customer gets a plain retry message');
+  const { status, body, res } = await place();
+  eq(status, 200, 'the API answers 200, never a 5xx');
+  eq(body.success, true, 'success is true');
+  eq(body.pending, true, 'the response is flagged pending for the client only');
+  eq(res.writes, 1, 'exactly one HTTP response is written');
+  ok(/^ZSH-[A-Z0-9]+-[A-F0-9]{8}$/.test(body.order && body.order.id), 'the order has a real ZSH reference');
+  eq(body.order.customer, 'Ahmed Hassan', 'the confirmation carries the customer');
+  eq(body.order.total, 2565, 'the confirmation carries the total the shopper saw');
+  eq(body.order.items[0].name, 'Jacket', 'the confirmation carries the product name');
+  eq(body.order.tracking_url, '', 'no tracking link for an order that does not exist');
+  eq(customerSafe(body), [], 'no broken/outage string reaches the shopper');
+  pendingOrder = body.order;
   eq(alerts.length, 1, 'exactly one Telegram alert is sent');
   firstAlert = String((alerts[0] && alerts[0].text) || '');
-  ok(firstAlert.startsWith('⚠️ ZASHM | تنبيه: الأوردر لم يُحفظ'), 'the alert says the order was NOT saved');
-  ok(firstAlert.includes('تعذر قراءة بيانات المنتجات'), 'the reason names the database read');
-  ok(!firstAlert.includes('تم استلام'), 'the alert never claims the order was received');
 }
 
-console.log('\n[2] the alert carries everything needed to finish the sale by phone');
+console.log('\n[2] the owner alert says the database is down and the order was not stored');
+{
+  ok(firstAlert.startsWith('⚠️ ZASHM | تنبيه: الداتابيز معطّلة والأوردر لم يُسجَّل'), 'banner names the outage');
+  ok(firstAlert.includes(`🔖 المرجع: ${pendingOrder.id}`), 'the reference is the same order id the customer saw');
+  ok(firstAlert.includes('تعذر قراءة بيانات المنتجات'), 'the reason names the database read');
+  ok(firstAlert.includes('❗ العميل شاف رسالة «تم تنفيذ طلبك»'), 'the owner is told the customer was already reassured');
+  ok(firstAlert.includes('الأسعار اللي تحت جاية من شاشة العميل'), 'client-sourced amounts are explained');
+}
+
+console.log('\n[3] the alert carries the same order body a normal notification would');
 {
   const text = firstAlert;
+  ok(text.includes('السلام عليكم أ/ Ahmed'), 'customer greeting');
   ok(text.includes('• الاسم: Ahmed Hassan'), 'customer name');
   ok(text.includes('• الهاتف: 01012345678'), 'customer phone');
-  ok(text.includes('https://wa.me/201012345678'), 'one-tap WhatsApp link');
   ok(text.includes('• المدينة: Dakahlia'), 'governorate');
   ok(text.includes('12 Nile Street, Mansoura'), 'street address');
   ok(text.includes('اتصل قبل التسليم'), 'customer notes');
-  ok(text.includes('• Jacket (M / Black) × 1'), 'product name, size, colour and quantity');
-  ok(text.includes('• الإجمالي (حسب العميل، غير مؤكد): EGP 2,565'), 'customer-reported total, labelled unverified');
-  ok(text.includes('الأوردر لم يصل إلى قاعدة البيانات'), 'the footer tells the owner what to do');
+  ok(text.includes('• Jacket (M / Black) × 1 — EGP 2,500'), 'product, size, colour, quantity and line total');
+  ok(text.includes('• المجموع الفرعي: EGP 2,500 (حسب العميل، غير مؤكد)'), 'subtotal, labelled unverified');
+  ok(text.includes('• الشحن: EGP 65'), 'shipping is the real server figure, unlabelled');
+  ok(text.includes('• الإجمالي: EGP 2,565 (حسب العميل، غير مؤكد)'), 'total, labelled unverified');
+  ok(text.includes(`• رقم الطلب: ${pendingOrder.id}`), 'order id');
   ok(!text.includes('test-service-role-key-not-real'), 'the service key never reaches the message');
   ok(!text.includes('123456:TEST_TOKEN'), 'the bot token never reaches the message');
 }
 
-console.log('\n[3] an invalid cart never pages the owner');
+console.log('\n[4] the alert buttons work without a stored order');
+{
+  const markup = alerts[0] && alerts[0].reply_markup;
+  ok(markup && Array.isArray(markup.inline_keyboard), 'an inline keyboard is attached');
+  const buttons = (markup.inline_keyboard || []).flat();
+  const labels = buttons.map((b) => b.text);
+  ok(labels.some((t) => t.includes('واتساب للعميل')), 'a WhatsApp button for the customer is present');
+  const chat = buttons.find((b) => b.text.includes('واتساب للعميل'));
+  ok(chat && String(chat.url).startsWith('https://wa.me/201012345678'), 'it opens the customer number directly');
+  ok(labels.some((t) => t.includes('نسخ رقم الطلب')), 'a copy-reference button is present');
+  ok(!buttons.some((b) => /\/track\?/.test(String(b.url))), 'no dead tracking link');
+}
+
+console.log('\n[5] an invalid cart never pages the owner');
 {
   alerts.length = 0;
   const { status, body } = await place({
@@ -189,32 +246,34 @@ console.log('\n[3] an invalid cart never pages the owner');
   eq(alerts.length, 0, 'no Telegram spam for a customer typo');
 }
 
-console.log('\n[4] Telegram being down cannot change the customer response');
+console.log('\n[6] Telegram being down cannot change the customer response');
 {
   alerts.length = 0;
   telegramAttempts = 0;
   telegramMode = 'down';
   const { status, body } = await place({ ...ORDER, idempotencyKey: 'outage-test-key-0003' }, { ip: '203.0.113.9' });
-  eq(status, 500, 'the response is unchanged');
-  eq(body.error, 'Could not load products', 'same message, no internal detail');
+  eq(status, 200, 'the confirmation is still a 200');
+  eq(body.success, true, 'success is still true');
+  eq(body.pending, true, 'still pending');
   eq(telegramAttempts, 2, 'a failed alert is retried exactly once');
   telegramMode = 'ok';
 }
 
-console.log('\n[5] a stalled Telegram connection is retried and the alert still arrives');
+console.log('\n[7] a stalled Telegram connection is retried and the alert still arrives');
 {
   alerts.length = 0;
   telegramAttempts = 0;
   telegramMode = 'fail-once';
-  const { status } = await place({ ...ORDER, idempotencyKey: 'outage-test-key-0004' }, { ip: '203.0.113.10' });
-  eq(status, 500, 'the order still fails cleanly');
+  const { status, body } = await place({ ...ORDER, idempotencyKey: 'outage-test-key-0004' }, { ip: '203.0.113.10' });
+  eq(status, 200, 'the order still confirms');
+  eq(body.pending, true, 'still pending');
   eq(telegramAttempts, 2, 'two attempts were made');
   eq(alerts.length, 1, 'the second attempt delivered the alert');
   ok(String(alerts[0].text).includes('• Jacket (M / Black) × 1'), 'the retried alert keeps the full order');
   telegramMode = 'ok';
 }
 
-console.log('\n[6] the alert text is safe and bounded');
+console.log('\n[8] the alert text is safe and bounded');
 {
   const text = firstAlert;
   ok(Buffer.byteLength(text, 'utf8') <= 4096, 'stays inside the Telegram byte budget');

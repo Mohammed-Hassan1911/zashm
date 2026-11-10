@@ -131,7 +131,7 @@ export default function Header() {
               }}
               whileHover={{ scale: 1.02 }}
             >
-              <img src="/zashm-z-monogram.png?v=3" alt="" />
+              <img src="/zashm-z-monogram.webp" alt="" />
             </motion.button>
 
             {!isMobile && (

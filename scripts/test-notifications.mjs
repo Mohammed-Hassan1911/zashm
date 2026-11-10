@@ -8,7 +8,8 @@
 //   * a status change or deletion sends the SHORT internal line instead;
 //   * customer-controlled values cannot forge an extra line or price;
 //   * a message is clamped to Telegram's byte budget;
-//   * a failed database write still alerts the owner on Telegram;
+//   * a failed database write still alerts the owner on Telegram, with the same
+//     order body a normal notification would carry plus an outage banner;
 //   * Bark is gone from the code, tests, config and package scripts.
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -50,9 +51,9 @@ const {
   buildOrderStatusMessage,
   buildOrderEditMessage,
   buildOrderTelegramActions,
-  buildOrderFailureMessage,
-  sendOrderFailureAlert,
-  newFailureReference,
+  buildPendingOrderMessage,
+  buildPendingOrderActions,
+  sendPendingOrderAlert,
 } = lib;
 
 const TELEGRAM_TOKEN = '123456:TEST_TELEGRAM_TOKEN';
@@ -166,22 +167,26 @@ const EXPECTED_CUSTOMER_MESSAGE = [
   '• بنحجز القطعة باسمك، وبنشحن بعد ما الدفع يتأكد.',
 ].join('\n');
 
-const FAILURE = {
-  reference: 'FAILED-20261106-153000-AB12',
-  reason: 'save_failed',
-  customer: {
-    name: 'Fatima Ahmed',
-    phone: '01012345678',
-    address: '12 Nile Street, Zamalek, Apt 4',
-    city: 'Cairo',
-    notes: 'Deliver after 8pm',
-  },
-  items: [{ name: 'Silk Abaya', size: 'M', color: 'Black', qty: 1, price: 1300 }],
+// An order the database never received, in the shape /api/orders builds it.
+const PENDING_ORDER = {
+  id: 'ZSH-MW9ME7DE-6BAD9BCF',
   subtotal: 1800,
-  shippingCost: 65,
   discount: 0,
   total: 1865,
-  createdAt: '2026-11-05T12:15:00.000Z',
+  discountCode: null,
+  status: 'Pending',
+  date: '2026-11-06',
+  customer: 'Fatima Ahmed',
+  phone: '01012345678',
+  phoneAlt: '',
+  email: '',
+  address: '12 Nile Street, Zamalek, Apt 4',
+  city: 'Cairo',
+  notes: 'Deliver after 8pm',
+  items: [{ name: 'Silk Abaya', size: 'M', color: 'Black', qty: 1, unitPrice: 1300, price: 1300 }],
+  timestamps: { created: '2026-11-06T15:30:00.000Z' },
+  tracking_url: '',
+  shippingCost: 65,
 };
 
 const WA_BUTTON_RE =
@@ -397,55 +402,58 @@ try {
     ok(!/[\uD800-\uDBFF]$/.test(body.text), 'no dangling surrogate pair');
   });
 
-  await section('[8] a failed order alerts Telegram with whatever data exists', async () => {
+  await section('[8] an unsaved order alerts Telegram with the full order body', async () => {
     capture();
     process.env.TELEGRAM_BOT_TOKEN = TELEGRAM_TOKEN;
     process.env.TELEGRAM_CHAT_ID = TELEGRAM_CHAT;
     stubFetch(async () => telegramResponse(200));
 
-    const result = await sendOrderFailureAlert(FAILURE);
-    eq(result.reference, FAILURE.reference, 'the reference is preserved');
+    const result = await sendPendingOrderAlert({
+      order: PENDING_ORDER,
+      reason: 'save_failed',
+      amountsFromClient: false,
+    });
     eq(result.telegram, true, 'Telegram accepted the alert');
     eq(calls.length, 1, 'Telegram is the only channel');
 
     const body = telegramBody();
-    eq(body.parse_mode, undefined, 'failure alert is plain text');
-    ok(body.text.includes('الأوردر لم يُحفظ'), 'says the order was not saved');
-    ok(body.text.includes('FAILED-20261106-153000-AB12'), 'carries the reference');
+    eq(body.parse_mode, undefined, 'pending alert is plain text');
+    ok(body.text.startsWith('⚠️ ZASHM | تنبيه: الداتابيز معطّلة والأوردر لم يُسجَّل'), 'banner names the outage');
+    ok(body.text.includes('🔖 المرجع: ZSH-MW9ME7DE-6BAD9BCF'), 'carries the same order reference');
+    ok(body.text.includes('تعذر حفظ الأوردر في قاعدة البيانات'), 'carries the mapped reason');
+    ok(body.text.includes('❗ العميل شاف رسالة «تم تنفيذ طلبك»'), 'tells the owner the customer was reassured');
     ok(body.text.includes('الاسم: Fatima Ahmed'), 'carries the customer name');
     ok(body.text.includes('الهاتف: 01012345678'), 'carries the phone');
     ok(body.text.includes('العنوان: 12 Nile Street'), 'carries the address');
-    ok(body.text.includes('Silk Abaya'), 'carries the known items');
-    ok(body.text.includes('الإجمالي: EGP 1,865'), 'carries the server total');
-    ok(body.text.includes('تواصل مع العميل يدويًا'), 'tells the owner what to do');
+    ok(body.text.includes('• Silk Abaya (M / Black) × 1 — EGP 1,300'), 'carries the known items');
+    ok(body.text.includes('• الإجمالي: EGP 1,865'), 'carries the server total');
+    ok(!body.text.includes('حسب العميل'), 'server-priced amounts are not labelled unverified');
     ok(!body.text.includes('fetch failed'), 'no raw error leaks into Telegram');
-    ok(calls[0].init.signal, 'the failure path is time-bounded');
+    ok(calls[0].init.signal, 'the alert path is time-bounded');
 
-    const degraded = buildOrderFailureMessage({
-      reference: newFailureReference(),
-      reason: 'product_lookup',
-      customer: { name: 'Omar', phone: '01111111111', city: 'Giza', address: '6 Pyramids Road' },
-      items: [{ productId: 7, size: 'L', color: 'Red', qty: 2 }],
-    });
+    const buttons = (body.reply_markup && body.reply_markup.inline_keyboard || []).flat();
+    ok(buttons.some((b) => b.text.includes('واتساب للعميل')), 'WhatsApp button for the customer');
+    ok(buttons.some((b) => b.text.includes('نسخ رقم الطلب')), 'copy-reference button');
+    ok(!buttons.some((b) => /\/track\?/.test(String(b.url))), 'no dead tracking link');
+
+    const degraded = buildPendingOrderMessage(
+      {
+        ...PENDING_ORDER,
+        id: 'ZSH-CLIENTAMT-ABC12345',
+        subtotal: 2565,
+        total: 2565,
+        items: [{ productId: 7, name: 'Jacket', size: 'M', color: 'Black', qty: 1, unitPrice: 2565, price: 2565 }],
+      },
+      { reason: 'product_lookup', amountsFromClient: true }
+    );
     ok(degraded.includes('تعذر قراءة بيانات المنتجات'), 'reason is mapped to Arabic');
-    ok(degraded.includes('منتج #7'), 'unknown product still has a readable placeholder');
-    ok(!degraded.includes('الإجمالي:'), 'no invented total without server prices');
-    ok(!degraded.includes('EGP 0'), 'a missing amount is omitted, never printed as EGP 0');
-    ok(/^FAILED-\d{14}-[A-F0-9]{4}$/.test(newFailureReference()), 'reference shape');
+    ok(degraded.includes('• Jacket (M / Black) × 1'), 'client-reported name is used for the alert');
+    ok(degraded.includes('• المجموع الفرعي: EGP 2,565 (حسب العميل، غير مؤكد)'), 'client subtotal is labelled unverified');
+    ok(degraded.includes('• الإجمالي: EGP 2,565 (حسب العميل، غير مؤكد)'), 'client total is labelled unverified');
+    ok(!degraded.includes('EGP 0'), 'no zero placeholders in an outage alert');
 
-    // Database down: the client's own total is shown, clearly marked unverified,
-    // and the name the cart sent is used so the owner can read the order.
-    const outage = buildOrderFailureMessage({
-      reference: 'FAILED-20261110-120000-AB12',
-      reason: 'product_lookup',
-      customer: { name: 'Ahmed Hassan', phone: '01012345678', city: 'Dakahlia', address: '12 Nile Street' },
-      items: [{ productId: 7, name: 'Jacket', size: 'M', color: 'Black', qty: 1 }],
-      reportedTotal: 2565,
-    });
-    ok(outage.includes('• Jacket (M / Black) × 1'), 'client-reported name is used for the alert');
-    ok(outage.includes('• الإجمالي (حسب العميل، غير مؤكد): EGP 2,565'), 'client total is labelled unverified');
-    ok(!outage.includes('EGP 0'), 'no zero placeholders in an outage alert');
-    ok(outage.includes('الأوردر لم يصل إلى قاعدة البيانات'), 'footer explains the order was not saved');
+    const actions = buildPendingOrderActions(PENDING_ORDER);
+    ok(Array.isArray(actions.inline_keyboard), 'actions build an inline keyboard');
   });
 
   await section('[9] Telegram failures never throw or leak customer data', async () => {
@@ -456,7 +464,7 @@ try {
       throw new TypeError('fetch failed');
     };
 
-    const result = await sendOrderFailureAlert(FAILURE);
+    const result = await sendPendingOrderAlert({ order: PENDING_ORDER, reason: 'save_failed' });
     eq(result.telegram, false, 'a transport failure is reported, not thrown');
     const log = logs.join('\n');
     ok(log.includes('TypeError'), 'error type is logged');
@@ -500,11 +508,18 @@ try {
     ok(orders.includes('sendTelegramNotification(message'), 'placement sends it');
     ok(orders.includes('parseMode: null'), 'placement opts into plain text');
     ok(orders.includes('buildOrderTelegramActions('), 'placement attaches action buttons');
-    ok(orders.includes('if (!orderStored) await alertFailure'), 'no false alert after a commit');
-    ok(orders.includes("alertFailure('product_lookup')"), 'product read failure alerts');
-    ok(orders.includes("alertFailure('coupon_lookup')"), 'coupon read failure alerts');
-    ok(orders.includes("alertFailure('save_failed')"), 'RPC failure alerts');
-    ok(orders.includes("alertFailure('unexpected')"), 'unexpected failure alerts');
+    ok(orders.includes('sendPendingOrderAlert('), 'the outage path sends the pending alert');
+    ok(orders.includes("acceptPending('product_lookup')"), 'product read failure accepts pending');
+    ok(orders.includes("acceptPending('coupon_lookup')"), 'coupon read failure accepts pending');
+    ok(orders.includes("acceptPending('save_failed')"), 'RPC failure accepts pending');
+    ok(orders.includes("acceptPending('unexpected')"), 'unexpected failure accepts pending');
+    ok(orders.includes('if (!orderStored && !responded)'), 'no false alert after a commit');
+    ok(orders.includes('{ success: true, pending: true, order }'), 'the customer gets a normal success shape');
+    ok(
+      orders.indexOf('json(res, 200, { success: true, pending: true, order });') <
+        orders.indexOf('await sendPendingOrderAlert('),
+      'the customer is answered before Telegram is contacted'
+    );
 
     ok(admin.includes('buildOrderStatusMessage('), 'admin sends the short status line');
     ok(admin.includes('buildOrderEditMessage(order, updated)'), 'admin diffs every edit');

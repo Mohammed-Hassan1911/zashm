@@ -607,3 +607,79 @@ checklist.
   and `data-size-value`; `/catalog-snapshot.json` returns the empty backup with
   `excludedIds: ["1793846979234526"]`. Full `npm test` (SQL 475/475) and
   `npm run build` passed with no secrets.
+
+### 13.9 Optimistic confirmation during a database outage (2026-11-10, uncommitted)
+
+**Owner decision (2026-11-10):** when the database is unreachable the shopper
+must see NOTHING broken. They press PLACE ORDER and get the normal
+"order placed / تم تنفيذ طلبك" confirmation. The Telegram alert still arrives
+with the same order body plus a banner stating the order was NOT stored.
+
+- **Server (`api/orders.js` + `api/_lib.js`):** `generateOrderId()`/`orderDate`/`createdAt`
+  run before any DB call, so every path shares one `ZSH-…` reference. Client display
+  data (`items[].unitPrice`, `client.{subtotal,discount,shippingCost,total}`) is
+  kept for the alert only; money stays server-authoritative when the DB is healthy.
+  `acceptPending(reason)` answers `200 { success: true, pending: true, order }`
+  FIRST, then sends the alert (a hung Telegram cannot delay or break the response).
+  A `responded` guard prevents a second write. Business refusals (stock, invalid
+  coupon, missing/inactive product, idempotency conflict) still return real 4xx;
+  only infra failures become "pending". Shipping stays server-derived via
+  `getShippingCost(city)` (no DB needed). supabase-js retries network failures
+  with 1s/2s/4s backoff (~7s); every checkout DB step now runs under a 3.5s
+  `AbortSignal.timeout` deadline (3.7s measured end-to-end).
+- **Pending alert (`buildPendingOrderMessage`/`buildPendingOrderActions`):** banner
+  `⚠️ ZASHM | تنبيه: الداتابيز معطّلة والأوردر لم يُسجَّل` + reference + time +
+  reason + `❗ العميل شاف رسالة «تم تنفيذ طلبك»` + amounts labelled
+  `(حسب العميل، غير مؤكد)` only when `amountsFromClient`. Then the EXACT same
+  `buildOrderTelegramMessage` body. Buttons: `💬 واتساب للعميل` (direct
+  `wa.me/<customer>?text=<prefill>`), `📋 نسخ رقم الطلب`, `🛠 لوحة الطلبات`.
+  No tracking link (no row). `ORDER_ALERT_TIMEOUT_MS=4000`, 2 attempts, 400ms
+  retry.
+- **Client (`src/store.js`, `src/lib/orderConfirmation.mjs`, `src/pages/CartPage.js`):**
+  sends the client display fields; retries once on status 0/408 after 600ms;
+  handles `payload.pending`; persists `pending`; on a pending order shows a
+  reassuring line ("هنكلمك على رقمك لتأكيد تفاصيل الأوردر قبل الشحن.") and HIDES
+  TRACK YOUR ORDER. `OutageNotice` banner + `.outage-notice` CSS were REMOVED
+  (they were the "something is broken" signal the owner forbids); `.outage-order-cta`
+  remains for the genuine client-side network failure, where the WhatsApp fallback
+  is still shown because nothing would be recorded anywhere.
+- **Browser proof (2026-11-10):** live build served on 127.0.0.1:4399 with
+  Supabase = `outage-proof.invalid` and real Telegram creds. Customer saw
+  "ORDER CONFIRMED" + reassurance, 0 console/page errors, no WhatsApp fallback,
+  no TRACK button; HTTP 200 `pending:true`; Telegram `message_id 179` delivered
+  with the new banner + same body + labelled amounts. Latency 3.68s.
+- **Tests:** `scripts/test-order-outage.mjs` (49 passed), `scripts/test-notifications.mjs`
+  (13 passed, [8]/[9]/[11] rewritten), `scripts/test-order-pricing.mjs` (125 passed,
+  [11]-[14] + client fields), `scripts/test-resilience.mjs` (104 passed, [7] asserts
+  the notice is gone). Full `npm test`: 25 suites · 2164 passed · 0 failed (SQL suite
+  actually ran: 476 passed).
+
+### 13.10 Product-page speed, logo, and prerender (2026-11-10, uncommitted)
+
+- **Logo:** `public/zashm-z-monogram.webp` (4.1KB, 116px, q90) used in
+  `src/components/shop/Header.js` + both `src/App.js` img tags (header + splash).
+  `public/zashm-z-monogram.png` downscaled to 232×223 / 35KB, still used by
+  `src/lib/seo.js` for the JSON-LD logo. Original backed up at
+  `/private/var/folders/jt/xbz49b0n6_z32ssk5d3lsqww0000gn/T/opencode/zashm-z-monogram-original.png`.
+- **Vite:** `vite.config.js` injects `<link rel="preconnect" href="<supabase-origin>"
+  crossorigin/>` via `supabasePreconnect()` (confirmed in `build/index.html`).
+- **ProductPage:** LCP image gets `fetchPriority="high"` / `loading="eager"` /
+  `decoding="async"`; thumbnails `loading="lazy" decoding="async"`. `ProductCard`
+  already had eager/lazy + async decode.
+- **Prerender:** `scripts/prerender-products.mjs` writes `build/product/<id>/index.html`
+  (directory index, NO `cleanUrls`, no `vercel.json` routing change). Injects
+  title/description/canonical/OG/Twitter, preload after `<meta charset>`, Product
+  JSON-LD (`id="zashm-product-jsonld"`, `<` escaped as `\u003c`), and a `<noscript>`
+  fallback. Refuses non-numeric ids, `active === false`, shells without
+  `<div id="root"></div>`. Best-effort `main()` (missing env/network/bad payload/
+  missing build → log + exit 0). Deliberately does NOT apply
+  `scripts/resilience-exclude.json` (live products still deserve metadata).
+  `package.json` `build` = `vite build && node scripts/prerender-products.mjs`;
+  `npm test` includes `scripts/test-prerender.mjs` (66 passed). Measured:
+  `prerender: wrote 1 product page(s)`; raw page verified
+  (`Jacket — ZASHM`, canonical/OG on `https://zashm-mo.vercel.app`,
+  Supabase image preload, `EGP 2,500` noscript).
+- **Caveat:** production serving of the prerendered file cannot be verified
+  locally (Vercel CLI logged out). The directory-index approach relies on Vercel's
+  default filesystem serving; if rewrites ever win over the filesystem the site
+  still works (only no benefit). Middleware (`middleware.ts`) is unchanged.

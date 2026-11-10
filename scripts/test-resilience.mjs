@@ -235,12 +235,9 @@ console.log('\n[7] wiring: fallback is used by the storefront');
   ok(store.includes("productsSource: 'live'"), 'store records the live source');
 
   const app = readFileSync(new URL('../src/App.js', import.meta.url), 'utf8');
-  ok(app.includes('<OutageNotice />'), 'App renders the outage notice');
-
-  const notice = readFileSync(new URL('../src/components/ui/OutageNotice.js', import.meta.url), 'utf8');
-  ok(notice.includes('نسخة احتياطية'), 'the notice has the backup copy');
-  ok(notice.includes('المتجر متوقف مؤقتًا'), 'the notice has an honest copy for an empty backup');
-  ok(notice.includes('cartWhatsAppMessage'), 'the notice links to the WhatsApp hand-off');
+  ok(!app.includes('OutageNotice'), 'no outage banner is shown while the database is down');
+  ok(!existsSync(new URL('../src/components/ui/OutageNotice.js', import.meta.url)),
+    'the outage notice component is gone');
 
   const card = readFileSync(new URL('../src/components/shop/ProductCard.js', import.meta.url), 'utf8');
   ok(card.includes('useImageFallback'), 'product cards use the mirror fallback');

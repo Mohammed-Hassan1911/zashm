@@ -26,6 +26,9 @@ function normalizeConfirmation(order) {
     shippingCost: toAmount(order.shippingCost),
     city: typeof order.city === 'string' ? order.city : '',
     tracking_url: typeof order.tracking_url === 'string' ? order.tracking_url : '',
+    // A pending order (database unreachable) has no stored row and no tracking
+    // link; the confirmation screen must keep saying so after a refresh.
+    pending: order.pending === true,
     items: order.items.map((item) => ({
       productId: item?.productId ?? '',
       name: typeof item?.name === 'string' ? item.name : '',

@@ -1395,8 +1395,8 @@ async function sendTelegramNotification(messageText, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   };
-  // A failed order is answered while its alert is in flight, so that path passes
-  // a timeout: a hung Telegram API must not hold the customer's error response.
+  // The pending-order alert is sent AFTER the customer has been answered, so a
+  // hung Telegram API can never hold or change that response.
   const timeoutMs = Number(options.timeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     init.signal = AbortSignal.timeout(timeoutMs);
@@ -1420,13 +1420,14 @@ async function sendTelegramNotification(messageText, options = {}) {
 // extra order line or price.
 
 const TELEGRAM_MESSAGE_MAX_BYTES = 3900; // hard API limit is 4096 characters
-// A failed order is answered with an error while the alert is in flight, so
-// this path uses a tighter bound than the normal (post-commit) notification.
-const FAILURE_ALERT_TIMEOUT_MS = 5000;
+// The pending-order alert runs AFTER the customer has already been answered
+// (owner decision 2026-11-10), so it may take a little longer than a normal
+// post-commit notification without making anybody wait.
+const ORDER_ALERT_TIMEOUT_MS = 4000;
 // A transient stall must not lose the only record of an unsaved order: one
 // retry, after a short pause, inside the same invocation.
-const FAILURE_ALERT_ATTEMPTS = 2;
-const FAILURE_ALERT_RETRY_DELAY_MS = 400;
+const ORDER_ALERT_ATTEMPTS = 2;
+const ORDER_ALERT_RETRY_DELAY_MS = 400;
 // The common order is far below this; the byte clamp at send time trims
 // pathological carts instead of losing the whole notification.
 const ORDER_ITEM_MAX = 50;
@@ -1577,7 +1578,11 @@ function orderItemLines(items, limit = ORDER_ITEM_MAX) {
  * explicit `trackingUrl` argument. `shippingCost` is not stored on the order
  * row (it is derived from the city), so it is derived again when absent.
  */
-function buildOrderTelegramMessage(order = {}, trackingUrl) {
+function buildOrderTelegramMessage(order = {}, trackingUrl, options = {}) {
+  const amountsFromClient = options.amountsFromClient === true;
+  // Only the figures that the database normally recomputes are marked. Shipping
+  // is always server-derived from the city, so it stays unmarked.
+  const clientLabel = amountsFromClient ? ' (حسب العميل، غير مؤكد)' : '';
   const orderId = safeLineText(order.id, 48);
   const nameText = safeLineText(order.customer, 60);
   const phoneText = safeLineText(order.phone, 24);
@@ -1621,11 +1626,11 @@ function buildOrderTelegramMessage(order = {}, trackingUrl) {
   lines.push('');
 
   lines.push('💰 ملخص الحساب');
-  lines.push(`• المجموع الفرعي: ${moneyEGP(subtotal)}`);
+  lines.push(`• المجموع الفرعي: ${moneyEGP(subtotal)}${clientLabel}`);
   if (Number.isFinite(shipping) && shipping > 0) lines.push(`• الشحن: ${moneyEGP(shipping)}`);
   if (discountCodeText) lines.push(`• كود الخصم: ${discountCodeText}`);
-  if (discount > 0) lines.push(`• قيمة الخصم: ${moneyEGP(discount)}`);
-  lines.push(`• الإجمالي: ${moneyEGP(total)}`);
+  if (discount > 0) lines.push(`• قيمة الخصم: ${moneyEGP(discount)}${clientLabel}`);
+  lines.push(`• الإجمالي: ${moneyEGP(total)}${clientLabel}`);
   lines.push('');
 
   if (track) {
@@ -1980,156 +1985,98 @@ function buildOrderTelegramActions(order = {}, trackingUrl, { includeWhatsApp = 
   return { inline_keyboard: rows };
 }
 
-/** Human-readable reference for a failed order attempt. It deliberately never
- * contains the customer's phone/name, only a timestamp and random suffix so two
- * attempts in the same second cannot collide. */
-function newFailureReference() {
-  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
-  return `FAILED-${stamp}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
-}
-
-/** Plain-text failure alert sent to Telegram when an order could not be stored.
- * It carries whatever data is already available: after a product or coupon read
- * failure the item names/prices are unknown, but the customer's contact details
- * (already validated) are always present so the owner can call them and take
- * the order manually. */
-function buildOrderFailureMessage({
-  reference,
-  reason,
-  orderId,
-  customer,
-  items,
-  subtotal,
-  shippingCost,
-  discount,
-  discountCode,
-  total,
-  reportedTotal,
-  createdAt,
-} = {}) {
-  const ref = safeLineText(reference, 48) || 'FAILED';
-  const attemptId = safeLineText(orderId, 48);
-  const reasonText = ORDER_FAILURE_REASONS[String(reason || '')] || ORDER_FAILURE_REASONS.unexpected;
-  const nameText = safeLineText(customer && customer.name, 60);
-  const phoneText = safeLineText(customer && customer.phone, 24);
-  const phoneAltText = safeLineText(customer && customer.phoneAlt, 24);
-  const emailText = safeLineText(customer && customer.email, 120);
-  const cityText = safeLineText(customer && customer.city, 40);
-  const addressText = safeLineText(customer && customer.address, 220);
-  const notesText = safeLineText(customer && customer.notes, 260);
-  const discountCodeText = safeLineText(discountCode, 30);
-  const whenText = orderDateText(createdAt);
-  // `Number(null)` is 0, which would print a fake "EGP 0" for a value that was
-  // never known. Missing means missing: null/undefined/'' stay null.
-  const amount = (value) => {
-    if (value === null || value === undefined || value === '') return null;
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  };
-  const shipping = amount(shippingCost);
-  const discountAmount = amount(discount);
-  const subtotalAmount = amount(subtotal);
-  const totalAmount = amount(total);
-  const reportedAmount = amount(reportedTotal);
-  const money = (value) => (value === null ? '' : moneyEGP(value));
+/**
+ * Owner alert for an order the database never received.
+ *
+ * Owner decision (2026-11-10): while the database is down the storefront still
+ * confirms the order to the customer, so this message is the ONLY record of the
+ * sale. It therefore carries the same body the owner normally forwards —
+ * buildOrderTelegramMessage() — with a banner on top saying the order was not
+ * stored and the customer was already told it was.
+ *
+ * When the database could not be read, the amounts are what the customer saw on
+ * the checkout page. They are labelled as such and never used for charging: a
+ * stored order is always priced from the database.
+ */
+function buildPendingOrderMessage(order = {}, options = {}) {
+  const reasonText = ORDER_FAILURE_REASONS[String(options.reason || '')] || ORDER_FAILURE_REASONS.unexpected;
+  const orderId = safeLineText(order.id, 48);
+  const whenText = orderDateText(order.timestamps && order.timestamps.created);
+  const amountsFromClient = options.amountsFromClient === true;
 
   const lines = [];
-  lines.push('⚠️ ZASHM | تنبيه: الأوردر لم يُحفظ');
-  lines.push(`🔖 المرجع: ${ref}`);
-  if (attemptId) lines.push(`• رقم المحاولة: ${attemptId}`);
+  lines.push('⚠️ ZASHM | تنبيه: الداتابيز معطّلة والأوردر لم يُسجَّل');
+  if (orderId) lines.push(`🔖 المرجع: ${orderId}`);
   if (whenText) lines.push(`🕒 الوقت: ${whenText}`);
   lines.push(`📌 السبب: ${reasonText}`);
+  lines.push('❗ العميل شاف رسالة «تم تنفيذ طلبك». اتصل بيه وأكّد الأوردر يدويًا.');
+  if (amountsFromClient) {
+    lines.push('💡 الأسعار اللي تحت جاية من شاشة العميل (الداتابيز مش متاحة) — راجعها معاه قبل الشحن.');
+  }
   lines.push('');
-
-  const customerLines = [];
-  if (nameText) customerLines.push(`• الاسم: ${nameText}`);
-  if (phoneText) {
-    const wa = waNumber(phoneText);
-    customerLines.push(`• الهاتف: ${phoneText}${wa ? ` — واتساب: https://wa.me/${wa}` : ''}`);
-  }
-  if (phoneAltText) customerLines.push(`• هاتف بديل: ${phoneAltText}`);
-  if (emailText) customerLines.push(`• الإيميل: ${emailText}`);
-  if (customerLines.length) {
-    lines.push('👤 بيانات العميل');
-    lines.push(...customerLines);
-    lines.push('');
-  }
-
-  const addressLines = [];
-  if (cityText) addressLines.push(`• المدينة: ${cityText}`);
-  if (addressText) addressLines.push(`• العنوان: ${addressText}`);
-  if (notesText) addressLines.push(`• ملاحظات: ${notesText}`);
-  if (addressLines.length) {
-    lines.push('📍 عنوان الشحن');
-    lines.push(...addressLines);
-    lines.push('');
-  }
-
-  const failureItemLines = orderItemLines(items, ORDER_ITEM_MAX);
-  if (failureItemLines.length) {
-    lines.push('🛍️ المنتجات');
-    lines.push(...failureItemLines);
-    lines.push('');
-  }
-
-  const summaryLines = [];
-  const subtotalText = money(subtotalAmount);
-  const shippingText = money(shipping);
-  const discountText = money(discountAmount);
-  const totalText = money(totalAmount);
-  if (subtotalText) summaryLines.push(`• المجموع الفرعي: ${subtotalText}`);
-  if (shippingText && shipping > 0) summaryLines.push(`• الشحن: ${shippingText}`);
-  if (discountCodeText) summaryLines.push(`• كود الخصم: ${discountCodeText}`);
-  if (discountText && discountAmount > 0) summaryLines.push(`• قيمة الخصم: ${discountText}`);
-  if (totalText) summaryLines.push(`• الإجمالي: ${totalText}`);
-  else if (Number.isFinite(reportedAmount) && reportedAmount > 0) {
-    // The database was never read, so the server total does not exist. Show what
-    // the customer saw, clearly marked, so the owner can quote it on the phone.
-    summaryLines.push(`• الإجمالي (حسب العميل، غير مؤكد): ${moneyEGP(reportedAmount)}`);
-  }
-  if (summaryLines.length) {
-    lines.push('💰 ملخص الحساب');
-    lines.push(...summaryLines);
-    lines.push('');
-  }
-
-  lines.push('⚠️ الأوردر لم يصل إلى قاعدة البيانات. تواصل مع العميل يدويًا لتأكيد الطلب.');
-
+  lines.push('━━━━━━━━━━━━━━━━');
+  lines.push('');
+  lines.push(buildOrderTelegramMessage(order, '', { amountsFromClient }));
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** Send the failure alert to Telegram. Never throws: this path runs while the
- * customer is waiting for an error response.
+/** Inline keyboard for the pending-order alert. There is no database row, so
+ * the signed tracking link and the "copy order id" hand-off used by a normal
+ * notification would be dead: the WhatsApp button opens the customer's chat
+ * directly with the confirmation text already typed. */
+function buildPendingOrderActions(order = {}) {
+  const rows = [];
+  const primary = [];
+  const prefill = buildWhatsAppPrefillMessage(order, '');
+  const customerChat = whatsAppDeepLink(order.phone, prefill);
+  if (customerChat) primary.push({ text: '💬 واتساب للعميل', url: customerChat });
+  const orderId = safeLineText(order && order.id, 48);
+  if (orderId) primary.push({ text: '📋 نسخ رقم الطلب', copy_text: { text: orderId } });
+  if (primary.length) rows.push(primary);
+  rows.push([{
+    text: '🛠 لوحة الطلبات',
+    url: `${PUBLIC_BASE_URL().replace(/\/+$/, '')}/admin?tab=orders`,
+  }]);
+  return { inline_keyboard: rows };
+}
+
+/** Send the pending-order alert to Telegram. Never throws: the customer has
+ * already been answered when this runs.
  *
  * One retry on a transport failure or a non-2xx answer. A single stalled
  * connection (observed in the wild: the request hangs until the abort) would
  * otherwise lose the only record of a sale that the database never received —
  * the owner's highest priority. Total worst case is two bounded attempts. */
-async function sendOrderFailureAlert(context = {}) {
-  const reference = context.reference || newFailureReference();
-  const message = buildOrderFailureMessage({ ...context, reference });
+async function sendPendingOrderAlert(context = {}) {
+  const order = context.order || {};
+  const message = buildPendingOrderMessage(order, {
+    reason: context.reason,
+    amountsFromClient: context.amountsFromClient,
+  });
+  const replyMarkup = buildPendingOrderActions(order);
   let telegram = false;
-  for (let attempt = 1; attempt <= FAILURE_ALERT_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= ORDER_ALERT_ATTEMPTS; attempt += 1) {
     try {
       telegram = (await sendTelegramNotification(message, {
-        timeoutMs: FAILURE_ALERT_TIMEOUT_MS,
+        timeoutMs: ORDER_ALERT_TIMEOUT_MS,
         parseMode: null,
+        replyMarkup,
       })) === true;
     } catch (e) {
       console.error(
-        `Order failure alert failed (attempt ${attempt}/${FAILURE_ALERT_ATTEMPTS}):`,
+        `Order pending alert failed (attempt ${attempt}/${ORDER_ALERT_ATTEMPTS}):`,
         e && e.name ? e.name : 'Error'
       );
     }
     if (telegram) break;
-    if (attempt < FAILURE_ALERT_ATTEMPTS) {
-      await new Promise((resolve) => setTimeout(resolve, FAILURE_ALERT_RETRY_DELAY_MS));
+    if (attempt < ORDER_ALERT_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, ORDER_ALERT_RETRY_DELAY_MS));
     }
   }
   if (!telegram) {
-    console.error('Order failure alert could not be delivered after retries');
+    console.error('Order pending alert could not be delivered after retries');
   }
-  return { reference, telegram };
+  return { telegram, message };
 }
 
 // ─── STORAGE HELPERS ────────────────────────────────────────────────────────
@@ -2387,9 +2334,9 @@ module.exports = {
   whatsAppDeepLink,
   waNumber,
   whatsAppConfirmLink,
-  buildOrderFailureMessage,
-  sendOrderFailureAlert,
-  newFailureReference,
+  buildPendingOrderMessage,
+  buildPendingOrderActions,
+  sendPendingOrderAlert,
   detectImageType,
   sanitizeStoragePath,
   filePathFromPublicUrl,

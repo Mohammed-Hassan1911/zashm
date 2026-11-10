@@ -16,8 +16,7 @@ const {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildOrderTelegramActions,
-  sendOrderFailureAlert,
-  newFailureReference,
+  sendPendingOrderAlert,
   trackingUrlFor,
   verifyTrackToken,
   whatsAppDeepLink,
@@ -29,6 +28,23 @@ const {
 
 const ORDER_ID_RE = /^ZSH-[A-Za-z0-9]{1,20}-[A-Za-z0-9]{1,8}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// supabase-js retries a failed request with a 1s/2s/4s backoff, so an
+// unreachable database keeps the shopper on "Placing order…" for ~7 seconds
+// before the outage path can answer. Every checkout database step therefore
+// runs under one short deadline: a query that cannot answer in time is treated
+// exactly like an unreachable database (optimistic confirmation + owner alert),
+// never as a failure the customer sees.
+const ORDER_DB_TIMEOUT_MS = 3500;
+
+function orderDbSignal() {
+  // Node 18+ has AbortSignal.timeout; the guard keeps an older runtime on the
+  // previous behaviour instead of throwing on an undefined helper.
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ORDER_DB_TIMEOUT_MS);
+  }
+  return undefined;
+}
 
 /** 302 used by the WhatsApp hand-off. Never cached: the target is signed and
  * the order status can change between taps. */
@@ -84,16 +100,19 @@ async function placeOrder(req, res) {
 
   const { items, customer } = validated;
 
-  // Everything needed to alert the owner if the order cannot be stored. It is
-  // filled in as the request progresses (server-computed prices replace the
-  // cart-only view as soon as they are known). `orderStored` prevents a false
-  // "not saved" alert if a later step throws after the database commit.
-  let orderStored = false;
-  let sb;
-  // The alert must still be useful when the database cannot be read: the
-  // product name never arrives from the server in that case, so the name the
-  // customer's own cart sent is kept (sanitised, display-only, never priced).
-  const reportedNames = new Map();
+  // The order id is minted BEFORE any database call so that every path — stored
+  // or not — has the same real `ZSH-…` reference. The owner alert and the
+  // customer's confirmation therefore always point at one id.
+  const orderId = generateOrderId();
+  const orderDate = clampClientDate(body.customer && body.customer.date);
+  const createdAt = new Date().toISOString();
+
+  // ─── Client display data (outage only) ─────────────────────────────────────
+  // When the database cannot be read the owner still needs a useful alert, so
+  // the values the shopper saw are kept here. They are display-only: a stored
+  // order is always priced from the database, and `pricingAuthoritative` tracks
+  // whether the figures below were replaced by server values.
+  const clientItemByKey = new Map();
   for (const raw of (body && Array.isArray(body.items) ? body.items : [])) {
     const id = Number(raw && raw.productId);
     if (!Number.isFinite(id)) continue;
@@ -102,39 +121,110 @@ async function placeOrder(req, res) {
       .replace(/[\u0000-\u001f\u007f]+/g, ' ')
       .trim()
       .slice(0, 70);
-    if (name) reportedNames.set(key, name);
+    const unit = Number(raw && raw.unitPrice);
+    clientItemByKey.set(key, {
+      name,
+      unitPrice: Number.isFinite(unit) && unit >= 0 ? unit : null,
+    });
   }
-  const reportedTotal = Number(body && body.client && body.client.total);
-  const failureSnapshot = {
-    customer,
-    items: items.map((item) => ({
-      productId: item.productId,
-      name: reportedNames.get(`${item.productId}::${item.size || ''}::${item.color || ''}`) || '',
-      size: item.size,
-      color: item.color,
-      qty: item.qty,
-    })),
-    subtotal: null,
-    shippingCost: null,
-    discount: 0,
-    discountCode: '',
-    total: null,
-    // What the customer saw on the checkout page. Explicitly labelled as
-    // unverified in the message; it never feeds pricing or stock.
-    reportedTotal: Number.isFinite(reportedTotal) && reportedTotal > 0 ? reportedTotal : null,
-    orderId: '',
-    createdAt: new Date().toISOString(),
+  const clientAmount = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : null;
   };
-  const alertFailure = async (reason) => {
+  const clientSource = (body && body.client) || {};
+  const clientTotals = {
+    subtotal: clientAmount(clientSource.subtotal),
+    discount: clientAmount(clientSource.discount),
+    total: clientAmount(clientSource.total),
+  };
+  const clientCouponCode = body.couponCode ? String(body.couponCode).trim().toUpperCase() : '';
+
+  // Upgraded as the request progresses: server line prices after the product
+  // read, server totals after the coupon/shipping step. Until then the outage
+  // alert labels the amounts as coming from the customer's screen.
+  let pricingAuthoritative = false;
+  let serverLineByKey = new Map();
+  let serverPricing = { subtotal: 0, discount: 0, total: 0, couponCode: '' };
+
+  let orderStored = false;
+  // True once the customer has an HTTP response. Prevents a second write if a
+  // later step throws after the confirmation was already sent.
+  let responded = false;
+  let sb;
+
+  /** Build the order as the customer saw it, for the pending alert. */
+  const pendingOrder = () => {
+    const displayItems = items.map((item) => {
+      const key = `${item.productId}::${item.size || ''}::${item.color || ''}`;
+      const fromClient = clientItemByKey.get(key) || {};
+      const fromServer = serverLineByKey.get(key);
+      const unitPrice = fromServer
+        ? fromServer.unitPrice
+        : (fromClient.unitPrice ?? 0);
+      return {
+        productId: item.productId,
+        name: (fromServer && fromServer.name) || fromClient.name || `منتج #${item.productId}`,
+        category: (fromServer && fromServer.category) || '',
+        size: item.size,
+        color: item.color,
+        qty: item.qty,
+        unitPrice,
+        price: unitPrice * item.qty,
+      };
+    });
+    const clientSubtotal = clientTotals.subtotal
+      ?? displayItems.reduce((sum, line) => sum + line.price, 0);
+    const subtotal = pricingAuthoritative ? serverPricing.subtotal : clientSubtotal;
+    const discount = pricingAuthoritative
+      ? serverPricing.discount
+      : (clientTotals.discount ?? 0);
+    // Shipping needs no database read, so it is always the real server figure.
+    const shippingCost = getShippingCost(customer.city);
+    const total = pricingAuthoritative
+      ? serverPricing.total
+      : (clientTotals.total ?? Math.max(0, subtotal + shippingCost - discount));
+    return {
+      id: orderId,
+      subtotal,
+      discount,
+      total,
+      discountCode: pricingAuthoritative ? serverPricing.couponCode : (clientCouponCode || null),
+      status: 'Pending',
+      date: orderDate,
+      customer: customer.name,
+      phone: customer.phone,
+      phoneAlt: customer.phoneAlt || '',
+      email: customer.email || '',
+      address: customer.address,
+      city: customer.city,
+      notes: customer.notes || '',
+      items: displayItems,
+      timestamps: { created: createdAt },
+      tracking_url: '',
+      shippingCost,
+    };
+  };
+
+  /** Database/infrastructure failure: confirm the order to the customer exactly
+   * like a stored order, then alert the owner. Owner decision 2026-11-10 — a
+   * shopper must never see a broken storefront because the database is down.
+   * Business refusals (stock, coupon, inactive product) never reach here. */
+  const acceptPending = async (reason) => {
+    if (responded) return;
+    const order = pendingOrder();
+    // Answer first. Nothing after this line can change what the customer sees.
+    responded = true;
+    json(res, 200, { success: true, pending: true, order });
     try {
-      await sendOrderFailureAlert({
-        reference: newFailureReference(),
+      await sendPendingOrderAlert({
+        order,
         reason,
-        ...failureSnapshot,
+        amountsFromClient: !pricingAuthoritative,
       });
     } catch (e) {
-      // Notification failures must never change the response the customer gets.
-      console.error('Order failure alert failed:', e && e.message);
+      // The customer already has their confirmation; never let the alert throw.
+      console.error('Order pending alert failed:', e && e.message);
     }
   };
 
@@ -142,11 +232,15 @@ async function placeOrder(req, res) {
     sb = supabaseAdmin();
     // 1. Load authoritative product data (prices, stock) from the database.
     const ids = [...new Set(items.map((i) => i.productId))];
-    const { data: products, error: prodErr } = await sb.from('products').select('*').in('id', ids);
+    const { data: products, error: prodErr } = await sb
+      .from('products')
+      .select('*')
+      .in('id', ids)
+      .abortSignal(orderDbSignal());
     if (prodErr) {
       console.error('Order product lookup failed:', prodErr.message);
-      await alertFailure('product_lookup');
-      return json(res, 500, { success: false, error: 'Could not load products' });
+      await acceptPending('product_lookup');
+      return;
     }
     const productMap = new Map((products || []).map((p) => [Number(p.id), p]));
 
@@ -318,23 +412,26 @@ async function placeOrder(req, res) {
 
     // 3. Server-side totals: DB prices + quantities + coupon + shipping.
     const subtotal = orderItems.reduce((s, i) => s + i.price, 0);
-    failureSnapshot.items = orderItems;
-    failureSnapshot.subtotal = subtotal;
+    serverLineByKey = new Map(orderItems.map((line) => [
+      `${line.productId}::${line.size || ''}::${line.color || ''}`,
+      line,
+    ]));
 
     let couponRow = null;
     let discount = 0;
-    const couponCode = body.couponCode ? String(body.couponCode).trim().toUpperCase() : '';
+    const couponCode = clientCouponCode;
     if (couponCode) {
       const today = cairoDateString();
       const { data: c, error: couponErr } = await sb
         .from('coupons')
         .select('code, type, value, discountValue, minOrderAmount, maxDiscount, active, startDate, endDate, usageLimit, usageCount')
         .eq('code', couponCode)
+        .abortSignal(orderDbSignal())
         .maybeSingle();
       if (couponErr) {
         console.error('Order coupon lookup failed:', couponErr.code || 'unknown');
-        await alertFailure('coupon_lookup');
-        return json(res, 500, { success: false, error: 'Could not validate the discount code. Please try again.' });
+        await acceptPending('coupon_lookup');
+        return;
       }
       // The customer asked for a discount, so never silently charge full price.
       // If the code stopped being usable between validation and checkout, the
@@ -354,17 +451,14 @@ async function placeOrder(req, res) {
 
     const shippingCost = getShippingCost(customer.city);
     const total = Math.max(0, subtotal + shippingCost - discount);
-    failureSnapshot.shippingCost = shippingCost;
-    failureSnapshot.discount = discount;
-    failureSnapshot.discountCode = couponCode;
-    failureSnapshot.total = total;
+    // From here on every figure is server-authoritative, so an outage alert can
+    // drop the "from the customer's screen" caveat.
+    serverPricing = { subtotal, discount, total, couponCode };
+    pricingAuthoritative = true;
 
     // 4. Create the order row (items/timestamps as jsonb for the atomic RPC).
-    const orderId = generateOrderId();
-    failureSnapshot.orderId = orderId;
     const trackingUrl = trackingUrlFor(orderId);
-    const orderDate = clampClientDate(body.customer && body.customer.date);
-    const timestamps = { created: new Date().toISOString() };
+    const timestamps = { created: createdAt };
 
     const orderRow = {
       id: orderId,
@@ -396,8 +490,8 @@ async function placeOrder(req, res) {
     });
     if (rpcErr) {
       console.error('atomic_place_order failed:', rpcErr.message);
-      await alertFailure('save_failed');
-      return json(res, 500, { success: false, error: 'Could not save the order. Please try again.' });
+      await acceptPending('save_failed');
+      return;
     }
     const r = Array.isArray(rpcData) ? (rpcData[0] || {}) : (rpcData || {});
 
@@ -514,8 +608,8 @@ async function placeOrder(req, res) {
       // An unknown reason is a server/database fault, not a business refusal:
       // alert the owner and let the client retry instead of blaming the bag.
       console.error('atomic_place_order returned an unknown reason');
-      await alertFailure('save_failed');
-      return json(res, 500, { success: false, error: 'Could not save the order. Please try again.' });
+      await acceptPending('save_failed');
+      return;
     }
 
     // 4c. Idempotent retry: this checkout already committed. Return the stored
@@ -563,7 +657,11 @@ async function placeOrder(req, res) {
     return json(res, 200, { success: true, order });
   } catch (err) {
     console.error('Place order error:', err && err.message);
-    if (!orderStored) await alertFailure('unexpected');
+    if (!orderStored && !responded) {
+      await acceptPending('unexpected');
+      return;
+    }
+    if (responded) return;
     return json(res, 500, { success: false, error: 'Order failed. Please try again.' });
   }
 }

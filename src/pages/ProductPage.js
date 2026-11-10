@@ -313,6 +313,12 @@ export default function ProductPage() {
                   alt={p.name}
                   draggable={false}
                   onError={mainImage.onError}
+                  // The first image is the LCP element on this route: load it at
+                  // high priority instead of letting the browser queue it behind
+                  // the bundle. Later gallery images stay lazy.
+                  fetchPriority={imgIdx === 0 ? 'high' : 'auto'}
+                  loading={imgIdx === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
                   initial={{ opacity: 0, scale: 1.05 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -353,7 +359,7 @@ export default function ProductPage() {
                   aria-current={imgIdx === i ? 'true' : undefined}
                   style={{ width: 64, height: 80, flex: '0 0 auto', padding: 0, background: 'none', cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
                   whileHover={{ scale: 1.04 }}>
-                  <SafeImage src={img} alt="" fallback={FALLBACK_IMG} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <SafeImage src={img} alt="" fallback={FALLBACK_IMG} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </motion.button>
               ))}
             </div>

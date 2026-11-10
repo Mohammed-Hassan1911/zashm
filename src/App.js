@@ -26,7 +26,6 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 import { ShopPageSkeleton, ProductPageSkeleton } from './components/ui/PageSkeletons';
 import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
 import WhatsAppButton from './components/ui/WhatsAppButton';
-import OutageNotice from './components/ui/OutageNotice';
 import { setPageMeta, setSiteJsonLd } from './lib/seo';
 import { trackPageView } from './lib/ga';
 import { resolveRoute } from './lib/routes';
@@ -263,7 +262,6 @@ function AppInner() {
         <>
           <a href="#main-content" className="skip-link">Skip to content</a>
           <Header />
-          <OutageNotice />
           <CartDrawer />
 
           <main id="main-content" tabIndex={-1}>
@@ -320,7 +318,7 @@ function PageLoading({ page }) {
     return (
       <div className="home-hero home-hero-skeleton" role="status" aria-label="Preparing ZASHM">
         <span className="app-startup-indicator" aria-hidden="true">
-          <img src="/zashm-z-monogram.png?v=3" alt="" />
+          <img src="/zashm-z-monogram.webp" alt="" />
         </span>
       </div>
     );
@@ -348,7 +346,7 @@ function AppStartupScreen({ compact = false }) {
   return (
     <div className={`app-startup-screen${compact ? ' app-page-loading' : ''}`} role="status" aria-label="Preparing ZASHM">
       <span className="app-startup-indicator" aria-hidden="true">
-        <img src="/zashm-z-monogram.png?v=3" alt="" />
+        <img src="/zashm-z-monogram.webp" alt="" />
       </span>
       {stalled && (
         <div className="app-startup-stall">

@@ -1,11 +1,31 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// Warm the TLS connection to Supabase before the first catalogue/image request.
+// The product image is the LCP element on /product/:id and the products query is
+// the first data request on every page, so a cold DNS+TLS handshake there costs
+// hundreds of milliseconds on Slow 4G. The origin is read from the same env var
+// the browser bundle uses, so no URL is hard-coded in the HTML.
+function supabasePreconnect(url) {
+  return {
+    name: 'zashm-supabase-preconnect',
+    transformIndexHtml(html) {
+      if (!url) return html;
+      let origin = '';
+      try { origin = new URL(url).origin; } catch (e) { return html; }
+      if (!origin) return html;
+      const tag = `<link rel="preconnect" href="${origin}" crossorigin/>`;
+      return html.replace('</head>', `  ${tag}\n</head>`);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const supabaseUrl = env.VITE_SUPABASE_URL || env.REACT_APP_SUPABASE_URL || '';
 
   return {
-    plugins: [react()],
+    plugins: [react(), supabasePreconnect(supabaseUrl)],
     esbuild: {
       loader: 'jsx',
       include: /src\/.*\.js$/,

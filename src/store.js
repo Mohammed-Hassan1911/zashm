@@ -731,30 +731,59 @@ export const useStore = create((set, get) => ({
       // Display-only: used by the owner alert when the database cannot be read.
       // The server never prices an order from it.
       name: i.product?.name ?? '',
+      unitPrice: Number(effectivePrice(i.product) || 0),
     }));
 
+    // Client-side figures are display-only too. The server recomputes every
+    // amount for a stored order; these values exist so an outage alert can show
+    // the owner what the shopper actually saw.
+    const clientSubtotal = Number(get().cartSubtotal() || 0);
+    const clientDiscount = Number(get().cartDiscountAmount() || 0);
+    const clientShipping = Number(orderData?.shippingCost || 0);
+    const clientTotal = Number(orderData?.total || 0);
+
+    const requestBody = {
+      items,
+      idempotencyKey,
+      couponCode: appliedDiscount?.code || '',
+      customer: {
+        name: orderData?.customer || '',
+        phone: orderData?.phone || '',
+        phoneAlt: orderData?.phoneAlt || '',
+        email: orderData?.email || '',
+        address: orderData?.address || '',
+        city: orderData?.city || '',
+        notes: orderData?.notes || '',
+        date: getLocalTodayDate(),
+      },
+      client: {
+        subtotal: clientSubtotal,
+        discount: clientDiscount,
+        shippingCost: clientShipping,
+        total: clientTotal,
+      },
+    };
+
+    // A request that never reached the server (offline, DNS, timeout) is retried
+    // once: the idempotency key makes the retry safe, and the customer must not
+    // be told "failed" for a checkout the server may never have seen.
     let payload;
-    try {
-      payload = await api.post('/orders', {
-        items,
-        idempotencyKey,
-        couponCode: appliedDiscount?.code || '',
-        customer: {
-          name: orderData?.customer || '',
-          phone: orderData?.phone || '',
-          phoneAlt: orderData?.phoneAlt || '',
-          email: orderData?.email || '',
-          address: orderData?.address || '',
-          city: orderData?.city || '',
-          notes: orderData?.notes || '',
-          date: getLocalTodayDate(),
-        },
-        client: {
-          shippingCost: Number(orderData?.shippingCost || 0),
-          total: Number(orderData?.total || 0),
-        },
-      });
-    } catch (err) {
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        payload = await api.post('/orders', requestBody);
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        const status = err && typeof err.status === 'number' ? err.status : 0;
+        const retryable = status === 0 || status === 408;
+        if (!retryable || attempt === 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    }
+    if (lastErr) {
+      const err = lastErr;
       const errors = (err && Array.isArray(err.payload?.errors) && err.payload.errors.length)
         ? err.payload.errors
         : [err && err.message ? err.message : 'Order failed. Please try again.'];
@@ -771,21 +800,34 @@ export const useStore = create((set, get) => ({
     }
 
     const order = payload.order;
+    const pending = payload.pending === true;
+    const safeOrder = sanitizeOrder(order, products);
+    // Persisted with the confirmation so a refresh keeps the pending caveat and
+    // never shows a tracking link for an order that does not exist.
+    safeOrder.pending = pending;
 
     clearCart();
     if (appliedDiscount) {
       saveAppliedDiscount(null);
       set({ appliedDiscount: null });
     }
-    // The order is already committed by the server; refresh inventory without
-    // making the customer wait before seeing the confirmation screen.
+    // A stored order is already committed; refresh inventory without making the
+    // customer wait before seeing the confirmation screen. During an outage the
+    // refresh simply fails quietly and the backup catalogue keeps serving.
     void get().refreshProducts();
 
-    set({
-      newOrderNotification: { order: sanitizeOrder(order, products), timestamp: Date.now() },
-    });
+    if (!pending) {
+      set({
+        newOrderNotification: { order: safeOrder, timestamp: Date.now() },
+      });
+    }
 
-    return { success: true, order: sanitizeOrder(order, products), duplicate: payload.duplicate === true };
+    return {
+      success: true,
+      order: safeOrder,
+      duplicate: payload.duplicate === true,
+      pending,
+    };
   },
 
   updateOrderStatus: async (id, newStatus) => {
