@@ -240,13 +240,13 @@ select option { background: var(--bg3); }
    Font, padding and tracking scale with the image width via container units,
    so it stays compact on phones and refined on desktop. */
 .product-card-labels .label-badge {
-  font-size: 7px;
-  font-size: clamp(6.5px, 2.6cqw, 8.5px);
+  font-size: 10px;
+  font-size: clamp(10px, 2.6cqw, 12px);
   font-weight: 700;
-  letter-spacing: 0.3px;
-  letter-spacing: clamp(0.3px, 0.15cqw, 0.8px);
-  padding: 2px 4px;
-  padding: clamp(2px, 1.1cqw, 5px) clamp(4px, 2.6cqw, 9px);
+  letter-spacing: 0.5px;
+  letter-spacing: clamp(0.5px, 0.15cqw, 1px);
+  padding: 3px 6px;
+  padding: clamp(3px, 1.1cqw, 6px) clamp(6px, 2.6cqw, 12px);
   white-space: nowrap;
   text-align: center;
   /* Square on the left so the box is visibly welded to the image edge; the
@@ -2279,17 +2279,18 @@ body.mobile-keyboard-open .product-sticky-buy {
   }
   .gold-btn { font-size: 12px !important; }
 
-  /* On phones the 44px social boxes put the two icons too far apart; shrink
-     the visual box to 32px while a 6px bleed keeps the 44px touch target. */
+  /* On phones the social anchors get a full 44px tap target. The icon itself
+     stays at its compact 18px size, so the visual footprint barely changes
+     while the interactive area meets the 44px minimum. */
   .site-footer .footer-social a[target='_blank'] {
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     position: relative;
-  }
-  .site-footer .footer-social a[target='_blank']::after {
-    content: '';
-    position: absolute;
-    inset: -6px;
   }
 }
 
