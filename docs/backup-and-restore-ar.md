@@ -113,11 +113,30 @@ console.log(JSON.stringify(rows.find(r => r.id === 'ZSH-...'), null, 2));
 
 ## 6. ملاحظة عن snapshot المنتجات (مش باك اب)
 
-`public/catalog-snapshot.json` مش باك اب داتابيز — ده **نسخة عرض** للمنتجات بس، عشان المتجر ميبانش فاضي لو Supabase وقع. بيتحدّث بـ:
+`public/catalog-snapshot.json` مش باك اب داتابيز — ده **نسخة عرض** للمنتجات بس، عشان المتجر ميبانش فاضي لو Supabase وقع.
+
+**التحديث بقى تلقائي مع كل نشر.** `vercel.json` بيشغّل قبل البناء:
+
+```
+node scripts/resilience-sync.mjs --best-effort --stamp && npm run build
+```
+
+يعني كل deploy بيقرأ `products_public` ويكتب snapshot جديد + بينزّل الصور في `public/media` جوه ناتج البناء:
+
+- **منتج جديد** → يظهر في الـsnapshot تلقائيًا مع أول نشر بعده.
+- **منتج متمسح** → يختفي تلقائيًا.
+- **منتج في `scripts/resilience-exclude.json`** → مستبعد دايمًا.
+- **لو Supabase واقع وقت البناء** → `--best-effort` يخلّي البناء يكمل بالنسخة المحفوظة في git بدل ما يفشل النشر.
+- `--stamp` بيخلي `generatedAt` يتكتب دايمًا وقت البناء، فتقدر تتحقق من النسخة المنشورة إنها اتحدّثت فعلاً.
+
+التشغيل اليدوي لسه موجود لو عايز تشوف النتيجة قبل النشر:
 
 ```bash
-npm run resilience:sync -- --skip-images
+npm run resilience:sync            # snapshot + صور
+npm run resilience:sync -- --prune # + مسح صور المنتجات المحذوفة
 ```
+
+> ملاحظة: `npm run build` المحلي **مش** بيعمل sync — التحديث مربوط بأمر البناء على Vercel فقط.
 
 | العنصر | الرقم |
 |---|---|

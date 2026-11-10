@@ -161,7 +161,7 @@
 
 - المنتج الحالي (Jacket `1794232720755261`) **مستبعد** من الـsnapshot لأنه منتج تجريبي، وهو لسه **حي** في المتجر (`products_public` = 1).
 - `scripts/resilience-exclude.json` بقى فيه الـid ده بدل الـid القديم غير الموجود.
-- النتيجة: `public/catalog-snapshot.json` فاضي (`count: 0`) و`public/media/` فاضي (اتمسحت 5 صور / 0.88 MB بـ`--prune`).
+- النتيجة: `public/catalog-snapshot.json` فاضي (`count: 0`) و`public/media/` فاضي.
 - الاستبعاد **مش** مسح من الداتابيز: المنتج بيتعرض عادي، بس مش داخل النسخة الاحتياطية.
-- لما تضيف منتج حقيقي: شيل الـid من `scripts/resilience-exclude.json` ثم `npm run resilience:sync -- --prune`.
-
+- **التحديث بقى تلقائي مع النشر:** `vercel.json` → `node scripts/resilience-sync.mjs --best-effort --stamp && npm run build`. أي منتج حقيقي جديد هيدخل الـsnapshot من أول نشر بعده، ومن غير أي خطوة يدوية. و`--stamp` بيحدّث `generatedAt` كل نشر، فالتاريخ في الملف المنشور هو إثبات إن الخطوة اشتغلت.
+- اتأكد محليًا: بنفس أمر البناء، مع إزالة الاستبعاد مؤقتًا، الـsnapshot طلع **1 منتج** و**5 صور** في `build/media` — ثم رجع الاستبعاد كما هو.

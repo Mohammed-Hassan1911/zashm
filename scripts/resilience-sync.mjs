@@ -10,6 +10,7 @@
 //   node scripts/resilience-sync.mjs --prune         # also delete unreferenced images
 //   node scripts/resilience-sync.mjs --force-prune   # allow a prune when the live view is empty
 //   node scripts/resilience-sync.mjs --best-effort   # never fail (build-safe)
+//   node scripts/resilience-sync.mjs --stamp         # always rewrite generatedAt (deploy build)
 //
 // Products that must stay out of the backup (temporary/test rows, or a product
 // kept live but not wanted offline) are listed in scripts/resilience-exclude.json
@@ -76,6 +77,7 @@ const dryRun = args.has('--dry-run');
 const skipImages = args.has('--skip-images');
 const skipCatalog = args.has('--skip-catalog');
 const bestEffort = args.has('--best-effort');
+const stamp = args.has('--stamp');
 const prune = args.has('--prune');
 const forcePrune = args.has('--force-prune');
 
@@ -285,7 +287,9 @@ async function writeSnapshot(products, excludedIds = []) {
     && JSON.stringify(existing.products) === JSON.stringify(products);
   const sameExclusions = existing
     && JSON.stringify(existing.excludedIds || []) === JSON.stringify(excludedIds);
-  if (sameProducts && sameExclusions) {
+  // `--stamp` is used by the deploy build: it always rewrites generatedAt so the
+  // deployed snapshot proves when the backup was actually refreshed.
+  if (sameProducts && sameExclusions && !stamp) {
     console.log(`snapshot unchanged: ${SNAPSHOT_FILE}`);
     return;
   }

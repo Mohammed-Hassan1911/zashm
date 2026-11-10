@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "node scripts/resilience-sync.mjs --best-effort --stamp && npm run build",
   "outputDirectory": "build",
   "devCommand": "npm run start",
   "framework": null,
