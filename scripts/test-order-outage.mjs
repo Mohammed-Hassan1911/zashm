@@ -76,6 +76,38 @@ function makeRes() {
 }
 
 // ─── the outage: every Supabase call fails like an unreachable project ──────
+// The client is stubbed at module level instead of relying on the network:
+// on Node < 22 supabase-js refuses to construct without native WebSocket, so a
+// real client would fail at creation and take the generic catch-all path. The
+// stub keeps the test on the same code path the production outage takes
+// (product lookup returns an error) on every Node version.
+const supabasePath = require.resolve('@supabase/supabase-js');
+const offline = () => Promise.resolve({ data: null, error: { message: 'fetch failed', code: 'SUPABASE_DOWN' } });
+const offlineQuery = {
+  select: () => offlineQuery,
+  in: offline,
+  eq: () => offlineQuery,
+  order: () => offlineQuery,
+  limit: () => offlineQuery,
+  single: offline,
+  maybeSingle: offline,
+  then: (resolve, reject) => offline().then(resolve, reject),
+};
+const offlineClient = {
+  from: () => offlineQuery,
+  rpc: offline,
+  storage: { from: () => ({ list: offline, remove: offline }) },
+  auth: { getUser: offline },
+};
+require.cache[supabasePath] = {
+  id: supabasePath,
+  filename: supabasePath,
+  loaded: true,
+  children: [],
+  paths: [],
+  exports: { createClient: () => offlineClient },
+};
+
 const alerts = [];
 let telegramMode = 'ok';
 let telegramAttempts = 0;
