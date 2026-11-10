@@ -1,8 +1,45 @@
 {
-  "generatedAt": "2026-11-07T06:35:42.326Z",
-  "count": 0,
+  "generatedAt": "2026-11-10T00:07:58.914Z",
+  "count": 1,
   "excludedIds": [
     "1793846979234526"
   ],
-  "products": []
+  "products": [
+    {
+      "id": 1794232720755261,
+      "name": "Jacket",
+      "price": 5000,
+      "salePrice": 2500,
+      "category": "Jackets",
+      "stock": 9,
+      "image": "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/98bbfc720133522768c34f08.jpg",
+      "description": "Hight Quality",
+      "label": "Featured",
+      "sku": "",
+      "images": [
+        "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/98bbfc720133522768c34f08.jpg",
+        "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/07051371f94ef0a3b9d7b171.jpg",
+        "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/b40abc10e412e05478b7d75a.jpg",
+        "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/7be382c3122d2f28b8d3d318.jpg"
+      ],
+      "colors": [
+        "Black",
+        "Burgundy"
+      ],
+      "sizes": [
+        "M",
+        "L",
+        "XL"
+      ],
+      "variantStock": {
+        "L-Black": 1,
+        "M-Black": 2,
+        "XL-Black": 4,
+        "L-Burgundy": 2
+      },
+      "sizeGuide": "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/5683f5894773004cbed8a96b.jpg",
+      "rating": 0,
+      "reviews": 0
+    }
+  ]
 }
