@@ -18,7 +18,7 @@ function englishText(value) {
 // Stock feedback for checkout. It is rendered on the form AND on the
 // "empty bag" screen: when every line was removed automatically after a
 // server-side stock rejection, the shopper must still see why the bag emptied.
-export default function StockFeedback({ notice = [], errors = [] }) {
+export default function StockFeedback({ notice = [], errors = [], title = 'Stock availability issue:' }) {
   const notices = Array.isArray(notice) ? notice : [];
   const problems = Array.isArray(errors) ? errors : [];
   if (notices.length === 0 && problems.length === 0) return null;
@@ -46,7 +46,7 @@ export default function StockFeedback({ notice = [], errors = [] }) {
             role="alert" aria-live="assertive"
             style={{ background:'rgba(192,57,43,0.08)', border:'1px solid rgba(192,57,43,0.3)', borderRadius:6, padding:'14px 18px', marginBottom:24 }}>
             <p style={{ color:'var(--red)', fontWeight:600, marginBottom:8, fontSize:13 }}>
-              Stock availability issue:
+              {title}
             </p>
             {problems.map((entry, index) => (
               <div key={index} style={{ color:'var(--red)', fontSize:12, marginBottom:4, lineHeight:1.6 }}>

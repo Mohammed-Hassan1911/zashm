@@ -728,6 +728,9 @@ export const useStore = create((set, get) => ({
       qty: i.qty ?? 1,
       size: i.size ?? '',
       color: i.color ?? '',
+      // Display-only: used by the owner alert when the database cannot be read.
+      // The server never prices an order from it.
+      name: i.product?.name ?? '',
     }));
 
     let payload;

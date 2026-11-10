@@ -90,11 +90,26 @@ async function placeOrder(req, res) {
   // "not saved" alert if a later step throws after the database commit.
   let orderStored = false;
   let sb;
+  // The alert must still be useful when the database cannot be read: the
+  // product name never arrives from the server in that case, so the name the
+  // customer's own cart sent is kept (sanitised, display-only, never priced).
+  const reportedNames = new Map();
+  for (const raw of (body && Array.isArray(body.items) ? body.items : [])) {
+    const id = Number(raw && raw.productId);
+    if (!Number.isFinite(id)) continue;
+    const key = `${id}::${String((raw && raw.size) || '')}::${String((raw && raw.color) || '')}`;
+    const name = String((raw && raw.name) || '')
+      .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+      .trim()
+      .slice(0, 70);
+    if (name) reportedNames.set(key, name);
+  }
+  const reportedTotal = Number(body && body.client && body.client.total);
   const failureSnapshot = {
     customer,
     items: items.map((item) => ({
       productId: item.productId,
-      name: '',
+      name: reportedNames.get(`${item.productId}::${item.size || ''}::${item.color || ''}`) || '',
       size: item.size,
       color: item.color,
       qty: item.qty,
@@ -104,6 +119,9 @@ async function placeOrder(req, res) {
     discount: 0,
     discountCode: '',
     total: null,
+    // What the customer saw on the checkout page. Explicitly labelled as
+    // unverified in the message; it never feeds pricing or stock.
+    reportedTotal: Number.isFinite(reportedTotal) && reportedTotal > 0 ? reportedTotal : null,
     orderId: '',
     createdAt: new Date().toISOString(),
   };

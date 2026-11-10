@@ -430,7 +430,22 @@ try {
     ok(degraded.includes('تعذر قراءة بيانات المنتجات'), 'reason is mapped to Arabic');
     ok(degraded.includes('منتج #7'), 'unknown product still has a readable placeholder');
     ok(!degraded.includes('الإجمالي:'), 'no invented total without server prices');
+    ok(!degraded.includes('EGP 0'), 'a missing amount is omitted, never printed as EGP 0');
     ok(/^FAILED-\d{14}-[A-F0-9]{4}$/.test(newFailureReference()), 'reference shape');
+
+    // Database down: the client's own total is shown, clearly marked unverified,
+    // and the name the cart sent is used so the owner can read the order.
+    const outage = buildOrderFailureMessage({
+      reference: 'FAILED-20261110-120000-AB12',
+      reason: 'product_lookup',
+      customer: { name: 'Ahmed Hassan', phone: '01012345678', city: 'Dakahlia', address: '12 Nile Street' },
+      items: [{ productId: 7, name: 'Jacket', size: 'M', color: 'Black', qty: 1 }],
+      reportedTotal: 2565,
+    });
+    ok(outage.includes('• Jacket (M / Black) × 1'), 'client-reported name is used for the alert');
+    ok(outage.includes('• الإجمالي (حسب العميل، غير مؤكد): EGP 2,565'), 'client total is labelled unverified');
+    ok(!outage.includes('EGP 0'), 'no zero placeholders in an outage alert');
+    ok(outage.includes('الأوردر لم يصل إلى قاعدة البيانات'), 'footer explains the order was not saved');
   });
 
   await section('[9] Telegram failures never throw or leak customer data', async () => {

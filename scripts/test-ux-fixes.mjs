@@ -559,6 +559,22 @@ try {
       assert.ok(status.textContent.includes('out of stock'), 'removal reason');
       assert.ok(alert.textContent.includes('no longer available'), 'rejection reason');
     });
+
+    await step('a server outage is not mislabelled as a stock problem', () => {
+      assert.ok(/<StockFeedback[^>]*title=\{orderOutage \?/.test(cartPage),
+        'CartPage passes an outage-specific heading');
+    });
+    await act(async () => stockRoot.render(React.createElement(StockFeedback, {
+      errors: ['Could not load products'],
+      title: 'Couldn’t place the order:',
+    })));
+    await step('the outage heading replaces the stock heading', () => {
+      const alert = document.querySelector('#stock-root [role="alert"]');
+      assert.ok(alert, 'error alert renders');
+      assert.ok(alert.textContent.includes('Couldn’t place the order:'), 'outage heading is shown');
+      assert.ok(!alert.textContent.includes('Stock availability issue'), 'stock heading is not shown');
+    });
+    await act(async () => stockRoot.unmount());
   }
   console.log('\n[6] QA fixes: declared-stock inputs, COD disclosure and CLS skeletons');
   {

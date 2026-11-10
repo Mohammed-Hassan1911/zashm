@@ -1070,7 +1070,7 @@ export function CheckoutPage() {
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
           {/* The bag only empties when the shopper removes a line themselves.
               A server-side rejection still needs its reason visible here. */}
-          <StockFeedback notice={stockNotice} errors={stockErrors} />
+          <StockFeedback notice={stockNotice} errors={stockErrors} title={orderOutage ? 'Couldn’t place the order:' : undefined} />
           <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px', display: 'block' }} />
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</h1>
           <p style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 24 }}>
@@ -1088,7 +1088,7 @@ export function CheckoutPage() {
         <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
           style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>{'Checkout'}</motion.h1>
 
-        <StockFeedback notice={stockNotice} errors={stockErrors} />
+        <StockFeedback notice={stockNotice} errors={stockErrors} title={orderOutage ? 'Couldn’t place the order:' : undefined} />
         {orderOutage && (
           <div className="outage-order-cta" role="status">
             <p>

@@ -1423,6 +1423,10 @@ const TELEGRAM_MESSAGE_MAX_BYTES = 3900; // hard API limit is 4096 characters
 // A failed order is answered with an error while the alert is in flight, so
 // this path uses a tighter bound than the normal (post-commit) notification.
 const FAILURE_ALERT_TIMEOUT_MS = 5000;
+// A transient stall must not lose the only record of an unsaved order: one
+// retry, after a short pause, inside the same invocation.
+const FAILURE_ALERT_ATTEMPTS = 2;
+const FAILURE_ALERT_RETRY_DELAY_MS = 400;
 // The common order is far below this; the byte clamp at send time trims
 // pathological carts instead of losing the whole notification.
 const ORDER_ITEM_MAX = 50;
@@ -2000,6 +2004,7 @@ function buildOrderFailureMessage({
   discount,
   discountCode,
   total,
+  reportedTotal,
   createdAt,
 } = {}) {
   const ref = safeLineText(reference, 48) || 'FAILED';
@@ -2014,11 +2019,19 @@ function buildOrderFailureMessage({
   const notesText = safeLineText(customer && customer.notes, 260);
   const discountCodeText = safeLineText(discountCode, 30);
   const whenText = orderDateText(createdAt);
-  const shipping = Number(shippingCost);
-  const discountAmount = Number(discount);
-  const subtotalAmount = Number(subtotal);
-  const totalAmount = Number(total);
-  const money = (value) => (Number.isFinite(value) ? moneyEGP(value) : '');
+  // `Number(null)` is 0, which would print a fake "EGP 0" for a value that was
+  // never known. Missing means missing: null/undefined/'' stay null.
+  const amount = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  const shipping = amount(shippingCost);
+  const discountAmount = amount(discount);
+  const subtotalAmount = amount(subtotal);
+  const totalAmount = amount(total);
+  const reportedAmount = amount(reportedTotal);
+  const money = (value) => (value === null ? '' : moneyEGP(value));
 
   const lines = [];
   lines.push('⚠️ ZASHM | تنبيه: الأوردر لم يُحفظ');
@@ -2069,6 +2082,11 @@ function buildOrderFailureMessage({
   if (discountCodeText) summaryLines.push(`• كود الخصم: ${discountCodeText}`);
   if (discountText && discountAmount > 0) summaryLines.push(`• قيمة الخصم: ${discountText}`);
   if (totalText) summaryLines.push(`• الإجمالي: ${totalText}`);
+  else if (Number.isFinite(reportedAmount) && reportedAmount > 0) {
+    // The database was never read, so the server total does not exist. Show what
+    // the customer saw, clearly marked, so the owner can quote it on the phone.
+    summaryLines.push(`• الإجمالي (حسب العميل، غير مؤكد): ${moneyEGP(reportedAmount)}`);
+  }
   if (summaryLines.length) {
     lines.push('💰 ملخص الحساب');
     lines.push(...summaryLines);
@@ -2081,18 +2099,35 @@ function buildOrderFailureMessage({
 }
 
 /** Send the failure alert to Telegram. Never throws: this path runs while the
- * customer is waiting for an error response. */
+ * customer is waiting for an error response.
+ *
+ * One retry on a transport failure or a non-2xx answer. A single stalled
+ * connection (observed in the wild: the request hangs until the abort) would
+ * otherwise lose the only record of a sale that the database never received —
+ * the owner's highest priority. Total worst case is two bounded attempts. */
 async function sendOrderFailureAlert(context = {}) {
   const reference = context.reference || newFailureReference();
   const message = buildOrderFailureMessage({ ...context, reference });
   let telegram = false;
-  try {
-    telegram = (await sendTelegramNotification(message, {
-      timeoutMs: FAILURE_ALERT_TIMEOUT_MS,
-      parseMode: null,
-    })) === true;
-  } catch (e) {
-    console.error('Order failure alert failed:', e && e.name ? e.name : 'Error');
+  for (let attempt = 1; attempt <= FAILURE_ALERT_ATTEMPTS; attempt += 1) {
+    try {
+      telegram = (await sendTelegramNotification(message, {
+        timeoutMs: FAILURE_ALERT_TIMEOUT_MS,
+        parseMode: null,
+      })) === true;
+    } catch (e) {
+      console.error(
+        `Order failure alert failed (attempt ${attempt}/${FAILURE_ALERT_ATTEMPTS}):`,
+        e && e.name ? e.name : 'Error'
+      );
+    }
+    if (telegram) break;
+    if (attempt < FAILURE_ALERT_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, FAILURE_ALERT_RETRY_DELAY_MS));
+    }
+  }
+  if (!telegram) {
+    console.error('Order failure alert could not be delivered after retries');
   }
   return { reference, telegram };
 }
