@@ -561,5 +561,54 @@ console.log('\n[10] legacy order data');
     'response explains the missing product');
 }
 
+// ─── [11] Telegram is alerted only for Cancelled / Delivered ───────────────
+console.log('\n[11] Telegram gating for status changes');
+{
+  process.env.TELEGRAM_BOT_TOKEN = '123456:TEST_TOKEN';
+  process.env.TELEGRAM_CHAT_ID = '99887766';
+  const realFetch = global.fetch;
+  let telegramCalls = 0;
+  global.fetch = async () => { telegramCalls += 1; return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+
+  // Shipped is routine: no alert.
+  seed({ stock: 10, couponUsage: 3 });
+  telegramCalls = 0;
+  let r = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Shipped' });
+  eq(r.status, 200, 'Shipped transition succeeds');
+  eq(telegramCalls, 0, 'a routine transition sends no Telegram alert');
+
+  // Delivered is terminal: one alert.
+  seed({ stock: 10, couponUsage: 3 });
+  telegramCalls = 0;
+  r = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Delivered' });
+  eq(r.status, 200, 'Delivered transition succeeds');
+  eq(telegramCalls, 1, 'Delivered sends exactly one Telegram alert');
+
+  // Cancelled is terminal: one alert.
+  seed({ stock: 10, couponUsage: 3 });
+  telegramCalls = 0;
+  r = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Cancelled' });
+  eq(r.status, 200, 'Cancelled transition succeeds');
+  eq(telegramCalls, 1, 'Cancelled sends exactly one Telegram alert');
+
+  // Idempotent retry: no second alert.
+  telegramCalls = 0;
+  r = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Cancelled' });
+  eq(r.status, 200, 'idempotent Cancelled retry succeeds');
+  eq(r.body.changed, false, 'retry reports changed=false');
+  eq(telegramCalls, 0, 'an idempotent retry sends no second alert');
+
+  // Pending stays silent.
+  seed({ stock: 10, couponUsage: 3 });
+  telegramCalls = 0;
+  r = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Pending' });
+  eq(r.status, 200, 'Pending transition succeeds');
+  eq(telegramCalls, 0, 'Pending sends no Telegram alert');
+
+  global.fetch = realFetch;
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  delete process.env.TELEGRAM_CHAT_ID;
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

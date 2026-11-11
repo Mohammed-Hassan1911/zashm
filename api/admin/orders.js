@@ -20,6 +20,7 @@ const {
   computeCouponDiscount,
   sendTelegramNotification,
   buildOrderStatusMessage,
+  shouldNotifyStatusChange,
   buildOrderEditMessage,
   buildOrderTelegramActions,
 } = require('../_lib');
@@ -236,10 +237,13 @@ async function updateOrder(req, res) {
 
     // Status change alert (Telegram). This is the SHORT internal line, never the
     // customer confirmation text: a "تم الشحن" update must not be pasted into a
-    // customer chat as if it were the order confirmation. `changed === false`
+    // customer chat as if it were the order confirmation. Only Cancelled and
+    // Delivered are announced — routine transitions stay silent so the owner is
+    // pinged once per order outcome, not once per click. `changed === false`
     // means an idempotent retry for a transition that already happened, so no
     // second message is sent.
-    if (r.changed !== false) {
+    const effectiveStatus = r.status || newStatus;
+    if (r.changed !== false && shouldNotifyStatusChange(effectiveStatus)) {
       try {
         const full = parseOrderRow(order) || order;
         const statusOrder = {
@@ -247,7 +251,7 @@ async function updateOrder(req, res) {
           id: full.id || id,
           tracking_url: full.tracking_url || trackingUrlFor(full.id || id),
         };
-        await sendTelegramNotification(buildOrderStatusMessage(statusOrder, newStatus), {
+        await sendTelegramNotification(buildOrderStatusMessage(statusOrder, effectiveStatus), {
           parseMode: null,
           replyMarkup: buildOrderTelegramActions(statusOrder, statusOrder.tracking_url, {
             includeWhatsApp: false,

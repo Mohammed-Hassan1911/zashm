@@ -5,7 +5,8 @@
 //     owner forwards on WhatsApp — as PLAIN TEXT, so `_` in an email and `-`
 //     in an order id survive the copy untouched;
 //   * action URLs live in an inline keyboard, never in the copyable body;
-//   * a status change or deletion sends the SHORT internal line instead;
+//   * a status change to Cancelled or Delivered sends the SHORT internal line
+//     instead; other transitions and edits do not ping Telegram for the status;
 //   * customer-controlled values cannot forge an extra line or price;
 //   * a message is clamped to Telegram's byte budget;
 //   * a failed database write still alerts the owner on Telegram, with the same
@@ -49,6 +50,7 @@ const {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildOrderStatusMessage,
+  shouldNotifyStatusChange,
   buildOrderEditMessage,
   buildOrderTelegramActions,
   buildPendingOrderMessage,
@@ -509,7 +511,10 @@ try {
     ok(admin.includes('buildOrderEditMessage(order, updated)'), 'admin diffs every edit');
     ok(admin.includes('buildOrderTelegramActions('), 'admin attaches action buttons');
     ok(admin.includes('includeWhatsApp: false'), 'admin never offers the customer text');
-    ok(/if \(r\.changed !== false\) \{/.test(admin), 'idempotent retries do not re-notify');
+    ok(/if \(r\.changed !== false && shouldNotifyStatusChange\(effectiveStatus\)\) \{/.test(admin),
+      'only Delivered and Cancelled status changes alert Telegram');
+    ok(/const effectiveStatus = r\.status \|\| newStatus;/.test(admin),
+      'the stored status decides, not the request body');
     ok(admin.includes("buildOrderStatusMessage(deletedOrder, 'Deleted')"), 'deletion notifies too');
   });
 
@@ -559,6 +564,15 @@ try {
 
     const noop = buildOrderEditMessage(before, { ...before });
     ok(noop.includes('لا توجد تغييرات'), 'a no-op edit says so instead of printing an empty block');
+  });
+
+  await section('[13] only Delivered and Cancelled alert Telegram', async () => {
+    ok(shouldNotifyStatusChange('Delivered'), 'Delivered alerts the owner');
+    ok(shouldNotifyStatusChange('Cancelled'), 'Cancelled alerts the owner');
+    ok(shouldNotifyStatusChange(' Delivered '), 'surrounding whitespace is tolerated');
+    for (const status of ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Deleted', 'Edited', '', null, undefined, 'cancelled', 'delivered']) {
+      ok(!shouldNotifyStatusChange(status), `${JSON.stringify(status)} stays silent`);
+    }
   });
 } finally {
   restore();

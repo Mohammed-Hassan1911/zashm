@@ -1641,6 +1641,16 @@ function buildOrderTelegramMessage(order = {}, trackingUrl, options = {}) {
   return lines.join('\n');
 }
 
+// Only the two terminal outcomes are worth a Telegram alert. Intermediate
+// transitions (Confirmed → Processing → Shipped) are routine admin work and
+// would otherwise ping the owner several times for the same order. Deletion and
+// edits keep their own alerts because they change more than the status.
+const STATUS_CHANGE_ALERT_STATUSES = ['Cancelled', 'Delivered'];
+
+function shouldNotifyStatusChange(status) {
+  return STATUS_CHANGE_ALERT_STATUSES.includes(String(status == null ? '' : status).trim());
+}
+
 /** Short internal update for a status change or a deletion. Deliberately not
  * the customer text: the owner does not forward it, and a "تم الشحن" line must
  * never be pasted into a customer chat as if it were the confirmation. */
@@ -2304,6 +2314,7 @@ module.exports = {
   buildOrderTelegramMessage,
   buildWhatsAppPrefillMessage,
   buildOrderStatusMessage,
+  shouldNotifyStatusChange,
   buildOrderEditMessage,
   buildOrderTelegramActions,
   whatsAppDeepLink,
