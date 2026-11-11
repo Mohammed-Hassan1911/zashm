@@ -104,7 +104,7 @@ const SIDEBAR = [
   { id:'orders', label:'Orders', icon:ShoppingCart, perm:'orders.read', badge:'pending' },
   { id:'products', label:'Products', icon:Package, perm:'products.read' },
   { id:'discounts', label:'Discounts', icon:Tag, perm:'discounts.read' },
-  { id:'reviews', label:'Reviews', icon:MessageSquare, perm:'reviews.read' },
+  { id:'reviews', label:'Reviews', icon:MessageSquare, perm:'reviews.read', badge:'reviews' },
   { id:'analytics', label:'Analytics', icon:BarChart2, perm:'analytics.read' },
   { id:'users', label:'Users', icon:Users, perm:'users.read' },
 ];
@@ -117,6 +117,12 @@ export default function AdminApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [orderToOpen, setOrderToOpen] = useState(null);
   const [productFormOpen, setProductFormOpen] = useState(false);
+  // Reviews waiting for moderation. The number comes straight from the database
+  // (`product_reviews.status = 'pending'`), so a brand-new review raises it and
+  // approving/rejecting lowers it. It is the owner's "something new arrived"
+  // signal in the sidebar and the top bar.
+  const [pendingReviews, setPendingReviews] = useState(0);
+  const canReadReviews = Boolean(session && canAccess('reviews'));
   const navigateAdminPage = useCallback((page) => {
     if (page !== 'products') setProductFormOpen(false);
     setAdminPage(page);
@@ -173,6 +179,24 @@ export default function AdminApp() {
     return () => { clearInterval(ordersId); clearInterval(discountsId); };
   }, [session, refreshOrders, refreshDiscounts]);
 
+  // Pending reviews badge: refreshed on entry, after moderation (adminPage
+  // change) and every minute, so the count is current without a manual reload.
+  useEffect(() => {
+    if (!canReadReviews) { setPendingReviews(0); return undefined; }
+    let cancelled = false;
+    const loadPendingReviews = async () => {
+      try {
+        const payload = await api.get('/admin/reviews?status=pending&limit=1');
+        if (!cancelled) setPendingReviews(Number(payload && payload.counts && payload.counts.pending) || 0);
+      } catch (err) {
+        // The badge is best-effort; the Reviews page reports its own errors.
+      }
+    };
+    loadPendingReviews();
+    const timer = setInterval(loadPendingReviews, 60000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [canReadReviews, adminPage]);
+
   if (authLoading) return (
     <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--bg)' }}>
       <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}
@@ -226,7 +250,7 @@ export default function AdminApp() {
       <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto' }}>
         {accessiblePages.map(({ id, label, icon:Icon, badge }) => {
           const active = adminPage === id;
-          const badgeCount = badge === 'pending' ? pendingCount : 0;
+          const badgeCount = badge === 'pending' ? pendingCount : badge === 'reviews' ? pendingReviews : 0;
           const showText = !collapsed || isMobile;
           return (
             <motion.button key={id} onClick={() => { navigateAdminPage(id); if(isMobile) setMobileMenuOpen(false); }}
@@ -306,6 +330,19 @@ export default function AdminApp() {
               )}
             </AnimatePresence>
 
+            {pendingReviews > 0 && (
+              <button
+                type="button"
+                onClick={() => navigateAdminPage('reviews')}
+                title={`${pendingReviews} new review${pendingReviews === 1 ? '' : 's'} waiting for approval`}
+                aria-label={`${pendingReviews} new review${pendingReviews === 1 ? '' : 's'} waiting for approval`}
+                style={{ background:'rgba(201,168,76,0.1)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'6px 10px', display:'flex', alignItems:'center', gap:6, cursor:'pointer', color:'var(--gold)' }}
+              >
+                <MessageSquare size={14} />
+                <span style={{ fontSize:12, fontWeight:700 }}>{pendingReviews}</span>
+              </button>
+            )}
+
             <div style={{ position:'relative' }}>
               <motion.button onClick={() => { setNotifOpen(!notifOpen); markNotificationsRead(); }}
                 style={{ width:38, height:38, borderRadius:8, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', position:'relative' }}
@@ -359,7 +396,7 @@ export default function AdminApp() {
             {adminPage === 'orders' && canAccess('orders') && <OrdersPanel canEdit={canAccess('orders.write')} preOpenOrderId={orderToOpen} onOrderOpened={() => setOrderToOpen(null)} />}
             {adminPage === 'products' && canAccess('products') && <ProductsPanel canEdit={canAccess('products.write')} showForm={productFormOpen} setShowForm={setProductFormOpen} />}
             {adminPage === 'discounts' && canAccess('discounts') && <DiscountsPanel canEdit={canAccess('discounts.write')} />}
-            {adminPage === 'reviews' && canAccess('reviews') && <ReviewsPanel canEdit={canAccess('reviews.write')} />}
+            {adminPage === 'reviews' && canAccess('reviews') && <ReviewsPanel canEdit={canAccess('reviews.write')} onCountsChange={setPendingReviews} />}
             {adminPage === 'analytics' && canAccess('analytics') && <AnalyticsPanel />}
 
             {adminPage === 'users' && canAccess('users') && <UsersPanel />}
@@ -1294,7 +1331,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
       }
 
       return cleaned;
-    })()}?text=${encodeURIComponent('Thank you for your trust in ZASHM. As you have ordered from us more than once, we would like to give you a personal discount code to use on any upcoming order. It is valid for two months.')}`}
+    })()}?text=${encodeURIComponent('شكرًا لثقتك في ZASHM 🤍\nبما إنك طلبت مننا أكتر من مرة، حابين نديك كود خصم شخصي تستخدمه على أي أوردر جاي.\nالكود صالح لمدة شهرين.')}`}
     target="_blank"
     rel="noreferrer"
     style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
@@ -2815,7 +2852,7 @@ function AnalyticsPanel() {
 }
 // ─── ReviewsPanel — moderate customer reviews ───────────────────────────────
 
-function ReviewsPanel({ canEdit }) {
+function ReviewsPanel({ canEdit, onCountsChange }) {
   const [status, setStatus] = useState('pending');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -2830,14 +2867,16 @@ function ReviewsPanel({ canEdit }) {
     try {
       const payload = await api.get(`/admin/reviews?status=${encodeURIComponent(nextStatus)}`);
       setReviews(Array.isArray(payload && payload.reviews) ? payload.reviews : []);
-      setCounts((payload && payload.counts) || { pending: 0, approved: 0, rejected: 0, total: 0 });
+      const nextCounts = (payload && payload.counts) || { pending: 0, approved: 0, rejected: 0, total: 0 };
+      setCounts(nextCounts);
+      if (onCountsChange) onCountsChange(Number(nextCounts.pending) || 0);
     } catch (err) {
       setError((err && err.message) || 'Could not load reviews.');
       setReviews([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onCountsChange]);
 
   useEffect(() => { load(status); }, [status, load]);
 

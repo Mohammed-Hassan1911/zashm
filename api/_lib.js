@@ -1432,11 +1432,6 @@ const ORDER_ALERT_RETRY_DELAY_MS = 400;
 // pathological carts instead of losing the whole notification.
 const ORDER_ITEM_MAX = 50;
 
-// Shipping is collected before dispatch. The customer sends it on Vodafone Cash
-// to the store's support line (the same number as WHATSAPP_NUMBER in
-// src/lib/resilience.js, written in local form because the customer sees it).
-const SHIPPING_PAYMENT_NUMBER = '01013380313';
-
 /** Status → Arabic label for the short internal update. Unknown statuses fall
  * back to a neutral package icon so a future status never breaks a message. */
 const ORDER_STATUS_TEXT = {
@@ -1642,26 +1637,6 @@ function buildOrderTelegramMessage(order = {}, trackingUrl, options = {}) {
 
   lines.push('لو البيانات دي مظبوطة، ردّ علينا بـ ✅ ونكمّل التجهيز والشحن.');
   lines.push('✏️ ولو حابب تعدل أي حاجة أو تضيف منتج زيادة قولنا قبل شحن الأوردر وإحنا هنعدلها.');
-
-  // Shipping is paid before dispatch. Rendered only when the server actually
-  // charges shipping (an unknown city derives 0), so a customer is never asked
-  // to pay an amount the order does not carry. The amount is the same
-  // server-derived figure printed in the summary above.
-  if (Number.isFinite(shipping) && shipping > 0) {
-    lines.push('');
-    lines.push('💳 يجب دفع رسوم الشحن (قبل الشحن)');
-    lines.push(`• المطلوب: ${moneyEGP(shipping)}`);
-    // The order total already contains the shipping fee, so name what is left
-    // for the courier. Without this the customer reads "total 1,365" and
-    // "pay 65" as two separate charges.
-    const dueOnDelivery = total - shipping;
-    if (Number.isFinite(dueOnDelivery) && dueOnDelivery > 0) {
-      lines.push(`• المتبقي عند الاستلام: ${moneyEGP(dueOnDelivery)}`);
-    }
-    lines.push(`• الدفع عن طريق فودافون كاش على الرقم: ${SHIPPING_PAYMENT_NUMBER}`);
-    lines.push('• بعد التحويل ابعتلنا صورة التحويل.');
-    lines.push('• بنحجز القطعة باسمك، وبنشحن بعد ما الدفع يتأكد.');
-  }
 
   return lines.join('\n');
 }

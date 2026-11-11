@@ -56,8 +56,6 @@ export default function ProductPage() {
   const lastProductIdRef = useRef(null);
   const stockCloseRef = useRef(null);
   const sizeGuideCloseRef = useRef(null);
-  const buyRowRef = useRef(null);
-  const [showStickyBuy, setShowStickyBuy] = useState(false);
 
   // كل مودالات الصفحة: Escape يقفل، والتركيز يبدأ على زر الإغلاق.
   useEffect(() => {
@@ -87,30 +85,6 @@ export default function ProductPage() {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = previousOverflow; };
   }, [sizeGuideOpen, stockModal.open]);
-
-  // Phone-only sticky buy bar: appears once the real Add to Bag row has
-  // scrolled above the viewport, so the first screen stays clean.
-  useEffect(() => {
-    const update = () => {
-      if (window.innerWidth > 768 || !buyRowRef.current) {
-        setShowStickyBuy(false);
-        return;
-      }
-      setShowStickyBuy(buyRowRef.current.getBoundingClientRect().bottom < 0);
-    };
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
-    };
-  }, [p?.id]);
-
-  useEffect(() => {
-    document.body.classList.toggle('has-sticky-buy', showStickyBuy);
-    return () => document.body.classList.remove('has-sticky-buy');
-  }, [showStickyBuy]);
 
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
@@ -316,7 +290,7 @@ export default function ProductPage() {
                   // The first image is the LCP element on this route: load it at
                   // high priority instead of letting the browser queue it behind
                   // the bundle. Later gallery images stay lazy.
-                  fetchPriority={imgIdx === 0 ? 'high' : 'auto'}
+                  fetchpriority={imgIdx === 0 ? 'high' : 'auto'}
                   loading={imgIdx === 0 ? 'eager' : 'lazy'}
                   decoding="async"
                   initial={{ opacity: 0, scale: 1.05 }}
@@ -460,7 +434,7 @@ export default function ProductPage() {
             background: isSelected ? 'rgba(201,168,76,0.1)' : 'transparent', 
             color: isSelected ? 'var(--gold)' : isSizeOOSWithSelectedColor ? 'var(--text3)' : 'var(--text2)', 
             cursor: 'pointer',
-            textDecoration: isSizeOOSWithSelectedColor ? 'line-through' : 'none',
+            textDecorationLine: isSizeOOSWithSelectedColor ? 'line-through' : 'none',
             textDecorationColor: 'rgba(160,153,138,0.65)'
           }}
           // ترك الأنميشن بالكامل لـ Framer Motion لمنع أي تعليق فلاشي
@@ -479,7 +453,6 @@ export default function ProductPage() {
             {/* Qty + Add */}
             <div
               className="product-buy-row"
-              ref={buyRowRef}
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -658,43 +631,6 @@ export default function ProductPage() {
           </div>
         )}
       </div>
-
-      {/* Phone-only sticky buy bar — keeps the primary action reachable once the
-          real Add to Bag row scrolls out of view. */}
-      {showStickyBuy && !sizeGuideOpen && !stockModal.open && (
-        <div className="product-sticky-buy" role="region" aria-label="Quick purchase">
-          <div style={{ minWidth: 0, lineHeight: 1.25 }}>
-            <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: 'var(--gold)', whiteSpace: 'nowrap' }}>
-              EGP {effectivePrice(p).toLocaleString()}
-              {discount !== null && (
-                <span style={{ marginLeft: 6, fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 400, color: 'var(--text3)', textDecoration: 'line-through' }}>
-                  {' '}EGP {regularPrice(p).toLocaleString()}
-                </span>
-              )}
-            </span>
-            <span style={{ display: 'block', fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {selSize || '—'} · {selColor || '—'}
-            </span>
-          </div>
-          <motion.button
-            type="button"
-            className="gold-btn add-to-bag-btn"
-            onClick={handleAddToCart}
-            disabled={isOutOfStock}
-            whileTap={isOutOfStock ? {} : { scale: 0.98 }}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              whiteSpace: 'nowrap', minHeight: 48, padding: '0 18px', flexShrink: 0,
-              background: isOutOfStock ? '#2a2a2a' : 'var(--gold)',
-              color: isOutOfStock ? '#9a9488' : 'var(--bg)',
-              borderColor: isOutOfStock ? '#444' : 'var(--gold)',
-              cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-            }}
-          >
-            <ShoppingBag size={16} aria-hidden="true" /> {isOutOfStock ? 'OUT OF STOCK' : 'ADD TO BAG'}
-          </motion.button>
-        </div>
-      )}
 
       {/* ─── 1. مودال التنبيه للمخزون ─── */}
       <AnimatePresence>

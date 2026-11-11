@@ -750,6 +750,20 @@ try {
       assert.ok(!admin.includes('href={`tel:'), 'no stale tel: link remains');
     });
 
+    await step('the repeat-order discount message is Arabic', () => {
+      assert.ok(admin.includes('شكرًا لثقتك في ZASHM'), 'the WhatsApp prefill is Arabic');
+      assert.ok(admin.includes('كود خصم شخصي'), 'the personal discount code is offered');
+      assert.ok(!admin.includes('Thank you for your trust in ZASHM'), 'the old English copy is gone');
+    });
+
+    await step('new reviews raise a numeric badge in the admin', () => {
+      assert.ok(/id:'reviews'[^\n]*badge:'reviews'/.test(admin), 'the sidebar entry carries a badge');
+      assert.ok(admin.includes('/admin/reviews?status=pending&limit=1'),
+        'the number is the pending count from the database');
+      assert.ok(admin.includes('onCountsChange={setPendingReviews}'),
+        'approving or rejecting a review refreshes the number');
+    });
+
     await step('admin login and dashboard fields render at 16px on phones', () => {
       assert.ok(login.includes('className="admin-login"'), 'the login screen is targeted');
       assert.ok(/\.admin-login input,[\s\S]{0,200}font-size:\s*16px\s*!important/.test(css),
@@ -767,13 +781,9 @@ try {
         'the CTA spans the full row with a 52px target');
       assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,400}font-size:\s*12\.5px/.test(css),
         'the label stays readable instead of shrinking to 10px');
-      assert.ok(product.includes('className="product-sticky-buy"'), 'phones get a sticky buy bar');
-      assert.ok(/body\.has-sticky-buy \.whatsapp-fab[\s\S]{0,160}bottom:/.test(css),
-        'the sticky bar never covers the WhatsApp action');
-      assert.ok(!/mobile-keyboard-open[^{]*\.product-sticky-buy[^}]*display:\s*none/.test(css),
-        'the on-screen keyboard never hides the buy bar');
-      assert.ok(/body\.mobile-keyboard-open \.product-sticky-buy\s*\{\s*\n?\s*bottom:\s*calc\(0px/.test(css),
-        'the bar sits flush above the keyboard while the nav is hidden');
+      assert.ok(!product.includes('product-sticky-buy'), 'no sticky buy bar duplicates the CTA on scroll');
+      assert.ok(!css.includes('.product-sticky-buy'), 'no sticky buy styles remain');
+      assert.ok(!css.includes('has-sticky-buy'), 'no body flag remains for a removed bar');
     });
   }
 
@@ -795,8 +805,8 @@ try {
         'header search and utility buttons are 44px');
       assert.ok(/\.site-footer a\[target='_blank'\]\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css),
         'footer social links are 44px squares');
-      assert.ok(/@media \(max-width: 768px\) \{[\s\S]{0,400}\.site-footer \.footer-social a\[target='_blank'\] \{[^}]*width:\s*32px;[^}]*height:\s*32px/.test(css),
-        'footer social icons sit closer together on phones while keeping 44px targets');
+      assert.ok(/@media \(max-width: 768px\) \{[\s\S]{0,900}\.site-footer \.footer-social a\[target='_blank'\] \{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css),
+        'footer social icons keep a full 44px tap target on phones');
       assert.ok(/\.checkout-grid input,\s*\n?\s*\.checkout-grid select\s*\{\s*min-height:\s*44px/.test(css),
         'checkout fields are 44px tall');
       assert.ok(/\.gold-btn,\s*\n?\.outline-btn\s*\{\s*min-height:\s*44px/.test(css),
@@ -824,9 +834,9 @@ try {
         'the visual circle stays compact on phones');
       assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-3px/.test(css),
         'a 3px bleed expands the hit area to 44px');
-      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*font-size:\s*clamp\(6\.5px,\s*2\.6cqw,\s*8\.5px\)/.test(css)
+      assert.ok(/@media \(max-width: 768px\) \{\s*\.product-card-labels \.label-badge \{\s*font-size:\s*clamp\(8px, 2\.2cqw, 9\.5px\)/.test(css)
         && /\.product-card-image\s*\{[^}]*container-type:\s*inline-size/.test(css),
-        'card labels scale with the image width, staying small on phones');
+        'card labels shrink on phones and small screens while staying readable');
       assert.ok(/\.product-card-labels\s*\{[^}]*top:\s*0;[^}]*left:\s*0;/.test(css),
         'the card label is flush with the top-left corner of the image');
       assert.ok(!/\.product-page-label\s*\{[^}]*left:\s*50%/.test(css),

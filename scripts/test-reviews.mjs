@@ -308,6 +308,11 @@ console.log('\n[7] static wiring');
     'review fields use 16px on small screens (no iOS zoom on focus)');
   ok(adminUi.includes("adminPage === 'reviews'"), 'the admin console has a reviews route');
   ok(adminUi.includes("id:'reviews'"), 'the admin sidebar links to reviews');
+  ok(/id:'reviews'[^\n]*badge:'reviews'/.test(adminUi), 'the reviews item carries a pending badge');
+  ok(adminUi.includes('/admin/reviews?status=pending&limit=1'),
+    'the badge number is the pending count read from the database');
+  ok(adminUi.includes('onCountsChange={setPendingReviews}'),
+    'moderating a review refreshes the badge immediately');
 
   ok(/CREATE TABLE IF NOT EXISTS public\.product_reviews/.test(sql), 'the migration creates the table');
   ok(/ENABLE ROW LEVEL SECURITY/.test(sql), 'RLS is enabled');

@@ -317,6 +317,22 @@ select option { background: var(--bg3); }
   }
 }
 
+/* Phones and small screens: the label is a quiet accent, not a headline, so the
+   badge keeps a smaller type size and tighter padding than desktop. The large
+   product-page photo keeps its slightly larger badge. */
+@media (max-width: 768px) {
+  .product-card-labels .label-badge {
+    font-size: clamp(8px, 2.2cqw, 9.5px);
+    letter-spacing: clamp(0.3px, 0.1cqw, 0.6px);
+    padding: clamp(2px, 0.8cqw, 4px) clamp(4px, 2cqw, 8px);
+  }
+  .product-page-label .label-badge {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+  }
+}
+
 .product-card-sold-out {
   display: inline-block;
   max-width: 100%;
@@ -2200,48 +2216,6 @@ main, [role="main"] {
   }
 }
 
-/* Sticky buy bar — phone only, sits between the mobile nav and the content. */
-.product-sticky-buy {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(66px + env(safe-area-inset-bottom, 0px));
-  z-index: 950;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px calc(14px + env(safe-area-inset-right, 0px)) 10px calc(14px + env(safe-area-inset-left, 0px));
-  background: rgba(12, 12, 12, 0.96);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-top: 1px solid var(--border-gold, rgba(201, 168, 76, 0.45));
-  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
-  animation: zashm-sticky-buy-in 0.22s ease-out;
-}
-@keyframes zashm-sticky-buy-in {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-/* While the keyboard is open the mobile nav hides, so the buy bar drops flush
-   against the keyboard instead of leaving a 66px gap. It stays visible. */
-body.mobile-keyboard-open .product-sticky-buy {
-  bottom: calc(0px + env(safe-area-inset-bottom, 0px));
-}
-
-@media (max-width: 768px) {
-  /* Keep the floating actions clear of the sticky bar while it is visible. */
-  body.has-sticky-buy .whatsapp-fab,
-  body.has-sticky-buy .back-to-top {
-    bottom: calc(66px + 72px + env(safe-area-inset-bottom, 0px));
-  }
-  body.has-sticky-buy .product-page { padding-bottom: 84px; }
-}
-
-@media (min-width: 769px) {
-  .product-sticky-buy { display: none; }
-}
-
 /* Global chrome: every control gets at least a 44px hit area. */
 .gold-btn,
 .outline-btn { min-height: 44px; }
@@ -2298,13 +2272,6 @@ body.mobile-keyboard-open .product-sticky-buy {
 @media (max-width: 768px) {
   .checkout-grid label { font-size: 11px !important; }
   .admin-login input { min-height: 44px; }
-}
-
-@media (max-width: 768px) {
-  /* The sticky buy bar covers more of the footer while it is on screen. */
-  body.has-sticky-buy footer.site-footer {
-    padding-bottom: calc(12px + 72px + 72px + env(safe-area-inset-bottom, 0px)) !important;
-  }
 }
 
 @media (max-width: 768px) {
