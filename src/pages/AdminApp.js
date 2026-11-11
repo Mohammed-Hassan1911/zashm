@@ -1049,6 +1049,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const [copied, setCopied] = useState(false); // حالة لإشعار النسخ
   const [statusConfirm, setStatusConfirm] = useState(null); // { order, status } for final statuses
   const [statusSaving, setStatusSaving] = useState(false);
+  const statusDialogRef = useRef(null);
 
   const applyStatusChange = async (id, status) => {
     const res = await updateOrderStatus(id, status);
@@ -1085,7 +1086,26 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
 
   useEffect(() => {
     if (!statusConfirm) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape' && !statusSaving) setStatusConfirm(null); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        if (!statusSaving) setStatusConfirm(null);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const root = statusDialogRef.current;
+      if (!root) return;
+      const focusable = root.querySelectorAll('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [statusConfirm, statusSaving]);
@@ -1388,7 +1408,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
           <>
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => { if (!statusSaving) setStatusConfirm(null); }}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2600, backdropFilter:'blur(4px)' }} />
-            <motion.div role="dialog" aria-modal="true" aria-labelledby="order-status-confirm-title"
+            <motion.div ref={statusDialogRef} role="dialog" aria-modal="true" aria-labelledby="order-status-confirm-title"
               initial={{ opacity:0, scale:0.95, y:'-50%', x:'-50%' }} animate={{ opacity:1, scale:1, y:'-50%', x:'-50%' }} exit={{ opacity:0, scale:0.95, y:'-50%', x:'-50%' }}
               style={{ position:'fixed', top:'50%', left:'50%', width:'92%', maxWidth:420, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:24, zIndex:2601, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
               <h3 id="order-status-confirm-title" style={{ fontFamily:'var(--font-display)', fontSize:18, marginBottom:10 }}>

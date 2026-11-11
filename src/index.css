@@ -1163,9 +1163,9 @@ select option { background: var(--bg3); }
 }
 @media (max-width: 768px) {
   .product-card-actions { top: 4px; right: 4px; gap: 6px; }
-  .product-card-actions button { width: 38px !important; height: 38px !important; min-width: 38px !important; min-height: 38px !important; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.45); }
-  /* 38px visual circle + 3px bleed = a 44px touch target without crowding a
-     138px-wide card. */
+  .product-card-actions button { width: 40px !important; height: 40px !important; min-width: 40px !important; min-height: 40px !important; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.45); }
+  /* 40px visual circle clears the 40px WCAG AAA target and, with the 3px
+     bleed below, still fits a 138px-wide card without crowding it. */
   .product-card-actions button::after { content: ''; position: absolute; inset: -3px; }
   /* The button's inline style sets display:flex, so the phone rule must win. */
   .product-card-action-view { display: none !important; }

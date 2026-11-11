@@ -316,10 +316,14 @@ console.log('\n[7] order status safety (final statuses need confirmation)');
     'the table status dropdown resets itself and asks for confirmation');
   ok(/onClick=\{\(\) => requestStatusChange\(selected, s\)\}/.test(src),
     'the order drawer status buttons use the same confirmation path');
-  ok(/role="dialog" aria-modal="true" aria-labelledby="order-status-confirm-title"/.test(src),
+  ok(/ref=\{statusDialogRef\} role="dialog" aria-modal="true" aria-labelledby="order-status-confirm-title"/.test(src),
     'the confirmation is an accessible modal dialog');
-  ok(/if \(e\.key === 'Escape' && !statusSaving\) setStatusConfirm\(null\)/.test(src),
+  ok(/if \(e\.key === 'Escape'\) \{\s*if \(!statusSaving\) setStatusConfirm\(null\);\s*return;\s*\}/.test(src),
     'Escape dismisses the confirmation but never while a save is in flight');
+  ok(/const focusable = root\.querySelectorAll\('button:not\(\[disabled\]\), \[href\], input, select, textarea, \[tabindex\]:not\(\[tabindex="-1"\]\)'\)/.test(src)
+    && /if \(e\.shiftKey && document\.activeElement === first\)[\s\S]*?last\.focus\(\)/.test(src)
+    && /else if \(!e\.shiftKey && document\.activeElement === last\)[\s\S]*?first\.focus\(\)/.test(src),
+    'Tab and Shift+Tab stay inside the confirmation dialog');
   ok(/Order not updated\. \$\{res\.error \|\| 'Please try again\.'\}/.test(src),
     'a failed status change says the order was not updated');
   ok(/toast\.success\(`Order moved to \$\{status\}\.`\)/.test(src),

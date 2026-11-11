@@ -831,10 +831,10 @@ try {
     });
 
     await step('product cards keep a 44px hit area and readable badges', () => {
-      assert.ok(/\.product-card-actions button\s*\{[^}]*width:\s*38px[^}]*height:\s*38px/.test(css),
-        'the visual circle stays compact on phones');
+      assert.ok(/\.product-card-actions button\s*\{[^}]*width:\s*40px[^}]*height:\s*40px/.test(css),
+        'the phone heart clears the 40px WCAG AAA target');
       assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-3px/.test(css),
-        'a 3px bleed expands the hit area to 44px');
+        'a 3px bleed expands the hit area to 46px');
       assert.ok(/@media \(max-width: 768px\) \{\s*\.product-card-labels \.label-badge \{\s*font-size:\s*clamp\(8px, 2\.2cqw, 9\.5px\)/.test(css)
         && /\.product-card-image\s*\{[^}]*container-type:\s*inline-size/.test(css),
         'card labels shrink on phones and small screens while staying readable');
