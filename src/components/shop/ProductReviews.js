@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, Send, Star, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import StarRating from './StarRating';
@@ -77,7 +77,15 @@ export default function ProductReviews({ product }) {
   const [formOpen, setFormOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState('');
+  const [errorField, setErrorField] = useState(null);
   const [sent, setSent] = useState(false);
+
+  const formRef = useRef(null);
+  const nameRef = useRef(null);
+  const phoneRef = useRef(null);
+  const ratingRef = useRef(null);
+  const commentRef = useRef(null);
+  const successRef = useRef(null);
   const [form, setForm] = useState({ name: '', rating: 0, comment: '', website: '', phone: '' });
   const [hoverStar, setHoverStar] = useState(0);
 
@@ -133,30 +141,61 @@ export default function ProductReviews({ product }) {
     return () => { if (controller) controller.abort(); };
   }, [load]);
 
-  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  // Auto-scroll to the field that failed validation so the visitor sees the
+  // problem instead of a message buried below the fold.
+  useEffect(() => {
+    if (!formError || !errorField) return;
+    const ref = errorField === 'name' ? nameRef
+      : errorField === 'phone' ? phoneRef
+      : errorField === 'rating' ? ratingRef
+      : errorField === 'comment' ? commentRef
+      : null;
+    const node = ref && ref.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (typeof node.focus === 'function') {
+      try { node.focus(); } catch (e) { /* ignore */ }
+    }
+  }, [formError, errorField]);
+
+  // Auto-scroll to the success note once a review is accepted.
+  useEffect(() => {
+    if (!sent) return;
+    const node = successRef.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [sent]);
+
+  const update = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setErrorField((current) => (current === key ? null : current));
+  };
 
   const submit = async (event) => {
     event.preventDefault();
     setFormError('');
+    setErrorField(null);
     setSent(false);
 
     const name = form.name.trim();
     const comment = form.comment.trim();
-    if (name.length < 2) { setFormError('Please enter your name (at least 2 characters).'); return; }
-    if (!form.rating) { setFormError('Please choose a rating from 1 to 5 stars.'); return; }
-    if (comment.length < 2) { setFormError('Please write a short review (at least 2 characters).'); return; }
-    if (comment.length > 600) { setFormError('Please keep your review under 600 characters.'); return; }
+    if (name.length < 2) { setErrorField('name'); setFormError('Please enter your name (at least 2 characters).'); return; }
+    if (!form.rating) { setErrorField('rating'); setFormError('Please choose a rating from 1 to 5 stars.'); return; }
+    if (comment.length < 2) { setErrorField('comment'); setFormError('Please write a short review (at least 2 characters).'); return; }
+    if (comment.length > 600) { setErrorField('comment'); setFormError('Please keep your review under 600 characters.'); return; }
 
     const rawPhone = form.phone.trim();
     let phone = '';
     if (rawPhone) {
       const normalized = normalizeEgyptPhone(rawPhone);
       if (!normalized) {
-        setFormError('Please enter a valid Egyptian mobile number (e.g. 01012345678).');
+        setErrorField('phone'); setFormError('Please enter a valid Egyptian mobile number (e.g. 01012345678).');
         return;
       }
       phone = normalized;
     }
+
+    setErrorField(null);
 
     setSending(true);
     try {
@@ -169,6 +208,7 @@ export default function ProductReviews({ product }) {
         phone: phone || undefined,
       });
       setSent(true);
+      setErrorField(null);
       setForm({ name: '', rating: 0, comment: '', website: '', phone: '' });
       // Keep the form mounted so the page does not jump when the response
       // arrives; the success note appears in place above the fields.
@@ -219,7 +259,7 @@ export default function ProductReviews({ product }) {
         {!formOpen && (
           <button
             type="button"
-            onClick={() => { setFormOpen(true); setSent(false); setFormError(''); }}
+            onClick={() => { setFormOpen(true); setSent(false); setFormError(''); setErrorField(null); }}
             style={{
               marginLeft: 'auto',
               display: 'inline-flex',
@@ -246,6 +286,7 @@ export default function ProductReviews({ product }) {
       {formOpen && (
         <form
           onSubmit={submit}
+          noValidate
           className="review-form"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 18, marginBottom: 24 }}
         >
@@ -254,7 +295,7 @@ export default function ProductReviews({ product }) {
             <button
               type="button"
               aria-label="Close review form"
-              onClick={() => { setFormOpen(false); setFormError(''); setSent(false); }}
+              onClick={() => { setFormOpen(false); setFormError(''); setErrorField(null); setSent(false); }}
               style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 0, width: 44, height: 44, margin: -10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <X size={16} />
@@ -262,7 +303,7 @@ export default function ProductReviews({ product }) {
           </div>
 
           {sent && (
-            <p role="status" style={{ background: 'rgba(39,174,96,0.10)', border: '1px solid rgba(39,174,96,0.35)', color: '#8fe0b0', borderRadius: 4, padding: '10px 12px', fontSize: 12, marginBottom: 14 }}>
+            <p ref={successRef} role="status" style={{ background: 'rgba(39,174,96,0.10)', border: '1px solid rgba(39,174,96,0.35)', color: '#8fe0b0', borderRadius: 4, padding: '10px 12px', fontSize: 12, marginBottom: 14 }}>
               Thanks! Your review was received and will appear here once approved.
             </p>
           )}
@@ -272,12 +313,13 @@ export default function ProductReviews({ product }) {
               <label htmlFor="review-name" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your name</label>
               <input
                 id="review-name"
+                ref={nameRef}
                 type="text"
                 value={form.name}
                 onChange={(e) => update('name', e.target.value)}
                 maxLength={40}
                 autoComplete="name"
-                style={inputStyle}
+                style={{ ...inputStyle, borderColor: errorField === 'name' ? '#e74c3c' : 'var(--border)' }}
               />
             </div>
 
@@ -285,16 +327,17 @@ export default function ProductReviews({ product }) {
               <label htmlFor="review-phone" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Phone (optional)</label>
               <input
                 id="review-phone"
+                ref={phoneRef}
                 type="tel"
                 value={form.phone}
                 onChange={(e) => update('phone', e.target.value)}
                 maxLength={30}
                 autoComplete="tel"
                 placeholder="For follow-up only — not shown publicly"
-                style={inputStyle}
+                style={{ ...inputStyle, borderColor: errorField === 'phone' ? '#e74c3c' : 'var(--border)' }}
               />
             </div>
-            <div role="radiogroup" aria-label="Your rating">
+            <div ref={ratingRef} role="radiogroup" aria-label="Your rating" style={{ borderColor: errorField === 'rating' ? '#e74c3c' : undefined, borderRadius: 4, padding: errorField === 'rating' ? 4 : 0, border: errorField === 'rating' ? '1px solid #e74c3c' : 'none' }}>
               <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your rating</span>
               <div style={{ display: 'flex', gap: 4 }} onMouseLeave={() => setHoverStar(0)}>
                 {[1, 2, 3, 4, 5].map((star) => {
@@ -326,12 +369,13 @@ export default function ProductReviews({ product }) {
               <label htmlFor="review-comment" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your review</label>
               <textarea
                 id="review-comment"
+                ref={commentRef}
                 value={form.comment}
                 onChange={(e) => update('comment', e.target.value)}
                 maxLength={600}
                 rows={4}
                 placeholder="How is the fabric, the fit and the finishing?"
-                style={{ ...inputStyle, resize: 'vertical', minHeight: 90, fontFamily: 'inherit' }}
+                style={{ ...inputStyle, resize: 'vertical', minHeight: 90, fontFamily: 'inherit', borderColor: errorField === 'comment' ? '#e74c3c' : 'var(--border)' }}
               />
               <span style={{ display: 'block', textAlign: 'right', fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
                 {form.comment.length}/600

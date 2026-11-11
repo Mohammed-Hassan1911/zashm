@@ -2125,11 +2125,26 @@ main, [role="main"] {
 .review-form textarea {
   font-size: 13px;
 }
+
 @media (max-width: 768px) {
   .review-form input,
   .review-form textarea {
     font-size: 16px; /* prevents iOS zoom on focus */
   }
+}
+
+/* Keep the browser's autofill tint from turning the name field green/yellow
+   after a successful submit. */
+.review-form input:-webkit-autofill,
+.review-form input:-webkit-autofill:hover,
+.review-form input:-webkit-autofill:focus,
+.review-form textarea:-webkit-autofill,
+.review-form textarea:-webkit-autofill:hover,
+.review-form textarea:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--bg2) inset;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  transition: background-color 9999s ease-out 0s;
 }
 
 /* ─── Admin dashboard: phone / small-screen tuning ─────────────────────────── */
