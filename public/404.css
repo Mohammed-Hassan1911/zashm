@@ -69,3 +69,29 @@ h1 {
   background: rgba(245, 240, 232, 0.1);
   color: #f5f0e8;
 }
+
+/* Support escape hatch: the store's floating WhatsApp action does not exist on
+   this standalone static page, so keep the same contact route here. */
+.support {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 26px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  color: rgba(245, 240, 232, 0.72);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.support svg { flex-shrink: 0; }
+.support:hover,
+.support:focus-visible { color: #c9a84c; }
+.support:focus-visible {
+  outline: 2px solid #c9a84c;
+  outline-offset: 3px;
+}

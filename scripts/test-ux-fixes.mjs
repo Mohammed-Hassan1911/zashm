@@ -752,7 +752,8 @@ try {
 
     await step('the repeat-order discount message is Arabic', () => {
       assert.ok(admin.includes('شكرًا لثقتك في ZASHM'), 'the WhatsApp prefill is Arabic');
-      assert.ok(admin.includes('كود خصم شخصي'), 'the personal discount code is offered');
+      assert.ok(admin.includes('كود خصم خاص بيك'), 'the personal discount code is offered');
+      assert.ok(admin.includes('ZASHM 🎁'), 'a clearly visible emoji follows the brand name');
       assert.ok(!admin.includes('Thank you for your trust in ZASHM'), 'the old English copy is gone');
     });
 

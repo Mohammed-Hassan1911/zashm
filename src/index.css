@@ -2084,6 +2084,14 @@ main, [role="main"] {
   margin-bottom: 20px;
   font-weight: 600;
 }
+/* Large screens only: give the three footer headings more presence. */
+@media (min-width: 1024px) {
+  .footer-col-title {
+    font-size: 14px;
+    letter-spacing: 3.2px;
+    margin-bottom: 22px;
+  }
+}
 @media (max-width: 768px) {
   .footer-col-title {
     font-size: 17px !important;

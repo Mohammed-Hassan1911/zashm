@@ -305,5 +305,28 @@ console.log('\n[6] admin product grid: selectable cards, hover-only actions');
     'invisible action buttons never capture clicks');
 }
 
+console.log('\n[7] order status safety (final statuses need confirmation)');
+{
+  const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
+  ok(/const FINAL_ORDER_STATUSES = \['Delivered', 'Cancelled'\]/.test(src),
+    'Delivered and Cancelled are declared as final statuses');
+  ok(/const requestStatusChange = \(order, status\) => \{[\s\S]*?FINAL_ORDER_STATUSES\.includes\(status\)[\s\S]*?setStatusConfirm\(\{ order, status \}\)/.test(src),
+    'final statuses open a confirmation instead of applying immediately');
+  ok(/onChange=\{e => \{ const next = e\.target\.value; e\.target\.value = order\.status; requestStatusChange\(order, next\); \}\}/.test(src),
+    'the table status dropdown resets itself and asks for confirmation');
+  ok(/onClick=\{\(\) => requestStatusChange\(selected, s\)\}/.test(src),
+    'the order drawer status buttons use the same confirmation path');
+  ok(/role="dialog" aria-modal="true" aria-labelledby="order-status-confirm-title"/.test(src),
+    'the confirmation is an accessible modal dialog');
+  ok(/if \(e\.key === 'Escape' && !statusSaving\) setStatusConfirm\(null\)/.test(src),
+    'Escape dismisses the confirmation but never while a save is in flight');
+  ok(/Order not updated\. \$\{res\.error \|\| 'Please try again\.'\}/.test(src),
+    'a failed status change says the order was not updated');
+  ok(/toast\.success\(`Order moved to \$\{status\}\.`\)/.test(src),
+    'a successful status change is confirmed to the admin');
+  ok(!/handleStatusChange/.test(src),
+    'no code path can change a status without going through the confirmation helper');
+}
+
 console.log(`\nadmin-products: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

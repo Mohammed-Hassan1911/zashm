@@ -735,5 +735,31 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
     'product cards stay keyboard reachable after dropping the aria-label override');
 }
 
+// ─── [15] footer headings + repeat-customer WhatsApp copy ───────────────────
+console.log('\n[15] footer headings scale on large screens and the VIP message reads correctly');
+{
+  const css = read('src/index.css');
+  const baseTitle = css.slice(css.indexOf('.footer-col-title {'), css.indexOf('@media (max-width: 768px)', css.indexOf('.footer-col-title {')));
+  ok(/font-size:\s*11px/.test(baseTitle), 'footer headings keep their 11px desktop base');
+
+  const largeIdx = css.indexOf('@media (min-width: 1024px)');
+  const largeBlock = largeIdx === -1 ? '' : css.slice(largeIdx, largeIdx + 260);
+  ok(largeIdx !== -1 && /\.footer-col-title\s*\{[^}]*font-size:\s*14px/.test(largeBlock),
+    'footer headings grow to 14px on large screens only');
+  ok(/@media \(max-width: 768px\)[\s\S]*?\.footer-col-title\s*\{[\s\S]*?font-size:\s*17px/.test(css),
+    'the mobile heading size is unchanged');
+  ok(/@media \(max-width: 420px\)[\s\S]*?\.footer-col-title\s*\{[\s\S]*?font-size:\s*15px/.test(css),
+    'the very-small heading size is unchanged');
+
+  const admin = read('src/pages/AdminApp.js');
+  const vipMessage = (admin.match(/encodeURIComponent\('(شكرًا[^']*)'\)/) || [])[1] || '';
+  ok(vipMessage.includes('ZASHM 🎁'), 'the repeat-customer message shows a visible gift emoji after the brand');
+  ok(vipMessage.includes('كود خصم خاص بيك'), 'the message offers a personal discount code');
+  ok(!vipMessage.includes('شخصي') && !vipMessage.includes('🤍'),
+    'the old wording and the poorly rendered heart emoji are gone');
+  ok(vipMessage.split('\\n').length === 3,
+    'the WhatsApp message keeps its three-line structure');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

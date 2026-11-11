@@ -33,6 +33,8 @@ import StarRating from '../components/shop/StarRating';
 
 const STATUS_COLORS = { Pending:'#f39c12', Confirmed:'#3498db', Processing:'#9b59b6', Shipped:'#c9a84c', Delivered:'#27ae60', Cancelled:'#e74c3c' };
 const STATUS_FLOW = ['Pending','Confirmed','Processing','Shipped','Delivered'];
+// Statuses that settle stock/coupon usage and must never apply on a stray click.
+const FINAL_ORDER_STATUSES = ['Delivered', 'Cancelled'];
 
 function cleanupPathSummary(paths) {
   const unique = [...new Set(paths.filter(Boolean))];
@@ -1045,13 +1047,48 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [copied, setCopied] = useState(false); // حالة لإشعار النسخ
+  const [statusConfirm, setStatusConfirm] = useState(null); // { order, status } for final statuses
+  const [statusSaving, setStatusSaving] = useState(false);
 
-  const handleStatusChange = async (id, status) => {
+  const applyStatusChange = async (id, status) => {
     const res = await updateOrderStatus(id, status);
     if (res && res.success === false) {
-      toast.error(res.error || 'Could not update the order status. Please try again.');
+      toast.error(`Order not updated. ${res.error || 'Please try again.'}`);
+      return res;
+    }
+    toast.success(`Order moved to ${status}.`);
+    return res;
+  };
+
+  // Delivered/Cancelled are terminal (they settle stock and coupon usage), so a
+  // single stray click on the status dropdown must never apply them silently.
+  const requestStatusChange = (order, status) => {
+    if (!canEdit || !order || !status || status === order.status) return;
+    if (FINAL_ORDER_STATUSES.includes(status)) {
+      setStatusConfirm({ order, status });
+      return;
+    }
+    applyStatusChange(order.id, status);
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusConfirm || statusSaving) return;
+    const { order, status } = statusConfirm;
+    setStatusSaving(true);
+    try {
+      await applyStatusChange(order.id, status);
+    } finally {
+      setStatusSaving(false);
+      setStatusConfirm(null);
     }
   };
+
+  useEffect(() => {
+    if (!statusConfirm) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape' && !statusSaving) setStatusConfirm(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [statusConfirm, statusSaving]);
 
   useEffect(() => {
     if (!preOpenOrderId) return;
@@ -1229,7 +1266,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     </td>
                     <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
                       {canEdit ? (
-                        <select value={order.status} onChange={e => handleStatusChange(order.id, e.target.value)}
+                        <select value={order.status} onChange={e => { const next = e.target.value; e.target.value = order.status; requestStatusChange(order, next); }}
                           style={{ padding:'4px 8px', fontSize:11, background:'var(--bg3)', border:`1px solid ${STATUS_COLORS[order.status]}`, color:STATUS_COLORS[order.status], borderRadius:4, cursor:'pointer' }}>
                           {STATUS_FLOW.concat(['Cancelled']).map(s => <option key={s}>{s}</option>)}
                         </select>
@@ -1331,7 +1368,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
       }
 
       return cleaned;
-    })()}?text=${encodeURIComponent('شكرًا لثقتك في ZASHM 🤍\nبما إنك طلبت مننا أكتر من مرة، حابين نديك كود خصم شخصي تستخدمه على أي أوردر جاي.\nالكود صالح لمدة شهرين.')}`}
+    })()}?text=${encodeURIComponent('شكرًا لثقتك في ZASHM 🎁\nبما إنك طلبت مننا أكتر من مرة، حابين نديك كود خصم خاص بيك تستخدمه على أي أوردر جاي.\nالكود صالح لمدة شهرين.')}`}
     target="_blank"
     rel="noreferrer"
     style={{ flex: 1, background: '#25D366', color: '#fff', textAlign: 'center', padding: '10px', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
@@ -1340,6 +1377,40 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   </a>
   <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize: 13 }}>Close</button>
 </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Final-status confirmation — Delivered/Cancelled never apply on one click */}
+      <AnimatePresence>
+        {statusConfirm && (
+          <>
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => { if (!statusSaving) setStatusConfirm(null); }}
+              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2600, backdropFilter:'blur(4px)' }} />
+            <motion.div role="dialog" aria-modal="true" aria-labelledby="order-status-confirm-title"
+              initial={{ opacity:0, scale:0.95, y:'-50%', x:'-50%' }} animate={{ opacity:1, scale:1, y:'-50%', x:'-50%' }} exit={{ opacity:0, scale:0.95, y:'-50%', x:'-50%' }}
+              style={{ position:'fixed', top:'50%', left:'50%', width:'92%', maxWidth:420, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:24, zIndex:2601, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
+              <h3 id="order-status-confirm-title" style={{ fontFamily:'var(--font-display)', fontSize:18, marginBottom:10 }}>
+                Confirm status change
+              </h3>
+              <p style={{ fontSize:12, color:'var(--text2)', lineHeight:1.7, marginBottom:18 }}>
+                Move <strong style={{ color:'var(--gold)', fontFamily:'monospace' }}>{statusConfirm.order.id}</strong> to{' '}
+                <strong style={{ color: STATUS_COLORS[statusConfirm.status] }}>{statusConfirm.status}</strong>?
+                {statusConfirm.status === 'Cancelled'
+                  ? ' Stock and any coupon usage will be restored.'
+                  : ' This is the final fulfilment status.'}
+              </p>
+              <div style={{ display:'flex', gap:10 }}>
+                <button type="button" autoFocus onClick={confirmStatusChange} disabled={statusSaving}
+                  style={{ flex:1, padding:'10px 14px', borderRadius:6, border:'none', background: STATUS_COLORS[statusConfirm.status], color:'#ffffff', fontSize:12, fontWeight:700, cursor: statusSaving ? 'not-allowed' : 'pointer', opacity: statusSaving ? 0.7 : 1 }}>
+                  {statusSaving ? 'Saving…' : `Yes, mark ${statusConfirm.status}`}
+                </button>
+                <button type="button" onClick={() => setStatusConfirm(null)} disabled={statusSaving}
+                  style={{ flex:1, padding:'10px 14px', borderRadius:6, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:12, cursor: statusSaving ? 'not-allowed' : 'pointer' }}>
+                  Keep as is
+                </button>
+              </div>
             </motion.div>
           </>
         )}
@@ -1466,7 +1537,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     <p style={{ fontSize:11, color:'var(--text3)', marginBottom:8, letterSpacing:1, textTransform:'uppercase' }}>Update Status</p>
                     <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                       {STATUS_FLOW.concat(['Cancelled']).filter(s => s !== selected.status).map(s => (
-                        <button key={s} onClick={() => { handleStatusChange(selected.id, s); }}
+                        <button key={s} onClick={() => requestStatusChange(selected, s)}
                           style={{ padding:'6px 10px', borderRadius:4, background:`${STATUS_COLORS[s]}1a`, border:`1px solid ${STATUS_COLORS[s]}`, color:STATUS_COLORS[s], cursor:'pointer', fontSize:11, fontWeight:600 }}>
                           → {s}
                         </button>

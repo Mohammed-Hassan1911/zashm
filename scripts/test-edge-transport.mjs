@@ -212,6 +212,11 @@ console.log('\n[1] transport headers + rewrites');
     'the static 404 page has English text');
   ok(/href="\/"/.test(notFoundPage) && /href="\/shop"/.test(notFoundPage),
     'the static 404 page links back to the store');
+  ok(/https:\/\/wa\.me\/201013380313/.test(notFoundPage) && /target="_blank"/.test(notFoundPage),
+    'the static 404 page offers the WhatsApp support route');
+  const notFoundCss = read('public/404.css');
+  ok(/\.support\s*\{[^}]*min-height:\s*44px/.test(notFoundCss),
+    'the static 404 support link keeps a 44px touch target');
 }
 
 // ─── [2] storage migration ──────────────────────────────────────────────────
