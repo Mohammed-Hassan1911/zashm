@@ -1662,11 +1662,16 @@ function buildOrderStatusMessage(order = {}, status) {
   const orderId = safeLineText(order.id, 48);
   const nameText = safeLineText(order.customer, 60);
   const total = Number(order.total);
+  const itemLines = orderItemLines(order.items, ORDER_ITEM_MAX);
 
   const lines = [`${style.emoji} ZASHM | ${style.label}`];
   if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
   if (nameText) lines.push(`• العميل: ${nameText}`);
   lines.push(`• الحالة: ${style.line}`);
+  if (itemLines.length) {
+    lines.push('🛍️ المنتجات');
+    lines.push(...itemLines);
+  }
   if (Number.isFinite(total)) lines.push(`• الإجمالي: ${moneyEGP(total)}`);
   return lines.join('\n');
 }

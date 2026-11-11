@@ -299,6 +299,9 @@ try {
         '• رقم الطلب: ZSH-MW30TEST-ABC123',
         '• العميل: Fatima Ahmed',
         '• الحالة: تم الشحن',
+        '🛍️ المنتجات',
+        '• Silk Abaya (M / Black) × 1 — EGP 1,300',
+        '• Leather Belt (85 / Tan) × 2 — EGP 500',
         '• الإجمالي: EGP 1,615',
       ].join('\n'),
       'exact Shipped line'
@@ -320,7 +323,6 @@ try {
     ok(!shipped.includes('السلام عليكم'), 'no customer greeting');
     ok(!shipped.includes('✅ لو البيانات'), 'no confirmation request');
     ok(!shipped.includes('• الهاتف'), 'no phone number in the internal line');
-    ok(!shipped.includes('المنتجات'), 'no item list in the internal line');
 
     const unknown = buildOrderStatusMessage(ORDER, 'Returned');
     ok(unknown.startsWith('📦 ZASHM | تحديث الطلب'), 'unknown status has a neutral headline');
