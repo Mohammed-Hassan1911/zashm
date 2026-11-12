@@ -152,10 +152,13 @@ export default function ProductReviews({ product }) {
       : null;
     const node = ref && ref.current;
     if (!node) return;
-    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (typeof node.focus === 'function') {
-      try { node.focus(); } catch (e) { /* ignore */ }
-    }
+    const timer = setTimeout(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (typeof node.focus === 'function') {
+        try { node.focus(); } catch (e) { /* ignore */ }
+      }
+    }, 50);
+    return () => clearTimeout(timer);
   }, [formError, errorField]);
 
   // Auto-scroll to the success note once a review is accepted.
@@ -163,7 +166,10 @@ export default function ProductReviews({ product }) {
     if (!sent) return;
     const node = successRef.current;
     if (!node) return;
-    node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const timer = setTimeout(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+    return () => clearTimeout(timer);
   }, [sent]);
 
   const update = (key, value) => {
@@ -321,6 +327,9 @@ export default function ProductReviews({ product }) {
                 autoComplete="name"
                 style={{ ...inputStyle, borderColor: errorField === 'name' ? '#e74c3c' : 'var(--border)' }}
               />
+              {errorField === 'name' && formError && (
+                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
+              )}
             </div>
 
             <div>
@@ -336,6 +345,9 @@ export default function ProductReviews({ product }) {
                 placeholder="For follow-up only — not shown publicly"
                 style={{ ...inputStyle, borderColor: errorField === 'phone' ? '#e74c3c' : 'var(--border)' }}
               />
+              {errorField === 'phone' && formError && (
+                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
+              )}
             </div>
             <div ref={ratingRef} role="radiogroup" aria-label="Your rating" style={{ borderColor: errorField === 'rating' ? '#e74c3c' : undefined, borderRadius: 4, padding: errorField === 'rating' ? 4 : 0, border: errorField === 'rating' ? '1px solid #e74c3c' : 'none' }}>
               <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your rating</span>
@@ -363,6 +375,9 @@ export default function ProductReviews({ product }) {
                   );
                 })}
               </div>
+              {errorField === 'rating' && formError && (
+                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
+              )}
             </div>
 
             <div>
@@ -377,6 +392,9 @@ export default function ProductReviews({ product }) {
                 placeholder="How is the fabric, the fit and the finishing?"
                 style={{ ...inputStyle, resize: 'vertical', minHeight: 90, fontFamily: 'inherit', borderColor: errorField === 'comment' ? '#e74c3c' : 'var(--border)' }}
               />
+              {errorField === 'comment' && formError && (
+                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
+              )}
               <span style={{ display: 'block', textAlign: 'right', fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
                 {form.comment.length}/600
               </span>
@@ -395,7 +413,7 @@ export default function ProductReviews({ product }) {
               />
             </div>
 
-            {formError && (
+            {formError && !errorField && (
               <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: 0 }}>{formError}</p>
             )}
 
