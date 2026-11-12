@@ -319,11 +319,9 @@ console.log('\n[7] static wiring');
   ok(/REVOKE ALL ON public\.product_reviews FROM PUBLIC, anon, authenticated/.test(sql), 'the browser roles are denied');
   ok(/zshm_product_review_sync/.test(sql), 'the aggregate trigger is installed');
   ok(/CREATE VIEW public\.products_public/.test(sql), 'the public view is refreshed');
-  ok(/rating,\s*\n\s*reviews\s*\nFROM public\.products/.test(sql), 'the view exposes rating and reviews');
-  const viewBlock = sql
-    .split('CREATE VIEW public.products_public')[1]
-    .split('REVOKE ALL ON public.products_public')[0];
-  ok(!/reservedStock/i.test(viewBlock), 'the recreated view still hides reservedStock');
+  ok(/'rating',\s*'reviews'/.test(sql), 'the view allow-list exposes rating and reviews');
+  ok(/'reservedStock' = ANY \(v_allow\)/.test(sql),
+    'the recreated view fails closed if reservedStock enters the allow-list');
 }
 
 // ─── Summary ────────────────────────────────────────────────────────────────

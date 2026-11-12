@@ -84,6 +84,25 @@ view only, and never deletes or rewrites an existing review. No review exists
 in production until one is submitted after deployment, and submissions start
 `pending` until an admin approves them.
 
+### Product size windows (pending)
+
+`supabase/product_size_ranges.sql` adds
+`public.products."sizeRanges" jsonb NOT NULL DEFAULT '{}'` and re-creates
+`products_public` with `sizeRanges` added to the allow-list. The storefront
+"Find my size" tool uses these owner-defined per-size height/weight windows;
+without the column the tool falls back to the published chest chart and the
+admin save reports `warnings.sizeRanges = 'column-missing'` instead of
+pretending the windows were stored.
+
+Apply it **after** `products_public_view.sql` and `product_reviews.sql`. Both
+of those files now build the view from the intersection of their allow-list and
+the columns that actually exist, so re-running either one after this migration
+keeps `sizeRanges`; re-running it before simply omits the column until it is
+added. The migration is idempotent (quoted constraint name, `IF NOT EXISTS`)
+and fails closed if `reservedStock` ever enters the allow-list. Its rollback
+block drops the column and therefore **permanently deletes every owner-entered
+window** — take a backup first.
+
 Deploy the updated frontend and `/api/orders` together: the API now requires
 the frontend's persistent idempotency key. Verify the atomic order-placement
 migration is applied before accepting production orders.

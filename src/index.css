@@ -2147,6 +2147,23 @@ main, [role="main"] {
   transition: background-color 9999s ease-out 0s;
 }
 
+/* ─── Product page: "Find my size" ─────────────────────────────────────────── */
+.size-finder-input {
+  font-size: 13px;
+}
+@media (max-width: 768px) {
+  .size-finder-input {
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+}
+.size-finder-chip {
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.size-finder-chip:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
 /* ─── Admin dashboard: phone / small-screen tuning ─────────────────────────── */
 @media (max-width: 768px) {
   .admin-container input,

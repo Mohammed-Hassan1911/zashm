@@ -13,6 +13,7 @@ import { paginate, sanitizeInput, validateProductForm, setPageMeta } from '../li
 import { getColorSwatch } from '../lib/productColors.mjs';
 import { EGYPT_GOVERNORATES } from '../lib/egyptCities';
 import { effectivePrice, hasInvalidVariantConfig, orphanedVariantStock, declaredVariantStockTotal, uniqueDeclaredOptions, isSellableVariant } from '../lib/pricing';
+import { sanitizeSizeRanges, sizeRangeProblems } from '../lib/fit';
 import {
   computeSalesOverview,
   RANGE_OPTIONS,
@@ -1596,8 +1597,17 @@ const PRODUCT_CATEGORIES = [
 ];
 const EMPTY_PRODUCT_FORM = {
   name:'', category:'', price:'', salePrice:'', stock:'', sizes:'S,M,L,XL', colors:'Black,White',
-  label:'', tags:'', description:'', sku:'', images:[], active:true, variantStock:{}
+  label:'', tags:'', description:'', sku:'', images:[], active:true, variantStock:{}, sizeRanges:{}
 };
+
+// The four body windows the owner can publish per size. Order matters: it is
+// the visual order of the inputs in the product form.
+const SIZE_RANGE_FIELDS = [
+  { key: 'minWeight', label: 'Min weight (kg)', min: 30, max: 250, placeholder: '60' },
+  { key: 'maxWeight', label: 'Max weight (kg)', min: 30, max: 250, placeholder: '75' },
+  { key: 'minHeight', label: 'Min height (cm)', min: 120, max: 230, placeholder: '165' },
+  { key: 'maxHeight', label: 'Max height (cm)', min: 120, max: 230, placeholder: '180' },
+];
 
 // Parse the comma-separated size/colour inputs (or an already-parsed array).
 function parseOptionList(value) {
@@ -1835,7 +1845,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       stock: declaredTotal === null ? p.stock : declaredTotal,
 
       label: p.label || '',
-      tags: p.tags || ''
+      tags: p.tags || '',
+      sizeRanges: sanitizeSizeRanges(p.sizeRanges, editSizeList)
     });
     setFormErrors({});
     tempUploadsRef.current = new Set();
@@ -1900,11 +1911,26 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       return;
     }
 
+    // Size finder windows: an inverted pair is almost always a typo, so it is
+    // blocked with a precise message instead of being silently swapped.
+    const rangeProblems = sizeRangeProblems(form.sizeRanges);
+    if (rangeProblems.length > 0) {
+      toast.error(`⚠️ ${rangeProblems[0]}. Check the size finder windows.`);
+      return;
+    }
+
     // products.stock is the declared size × colour total. The API recomputes it
     // again, so this is only for an immediate, consistent payload.
     const declaredStock = cleanSizes.length > 0 && cleanColors.length > 0
       ? declaredVariantStockTotal(form.variantStock || {}, cleanSizes, cleanColors)
       : null;
+
+    // Only windows for sizes that still exist are stored; a removed size must
+    // not leave a stale range behind.
+    const cleanRanges = sanitizeSizeRanges(form.sizeRanges, cleanSizes);
+    const sizeRanges = Object.fromEntries(
+      Object.entries(cleanRanges).filter(([size]) => cleanSizes.includes(size))
+    );
 
     const productData = {
       name: form.name,
@@ -1921,6 +1947,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       images: form.images,
       image: form.images[0] || '',
       sizeGuide: form.sizeGuide || null,
+      sizeRanges,
       label: form.label || '',
       tags: form.tags || '',
       active: form.active !== undefined ? form.active : true
@@ -1962,7 +1989,11 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       const savedImageCleanup = saveResult?.cleanup || {};
       const failedImagePaths = [...(savedImageCleanup.failed || []), ...tempCleanupFailedPaths];
       const sharedImagePaths = [...(savedImageCleanup.shared || []), ...tempCleanupSharedPaths];
-      if (failedImagePaths.length) {
+      if (saveResult?.warnings?.sizeRanges) {
+        // Honest failure: the product saved, but the size windows did not,
+        // because the database column is not migrated yet.
+        toast.error('Product saved, but the size finder windows were not stored. Apply supabase/product_size_ranges.sql, then save again.');
+      } else if (failedImagePaths.length) {
         toast.error(`Product saved, but these images could not be deleted: ${cleanupPathSummary(failedImagePaths)}. Check storage and try again later.`);
       } else if (sharedImagePaths.length) {
         toast.error(`Product saved; shared images kept: ${cleanupPathSummary(sharedImagePaths)}.`);
@@ -2251,6 +2282,85 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                         ))}
                     </div>
                   </div>
+                </div>
+
+                <div style={{ marginTop:16, padding:12, background:'var(--bg3)', borderRadius:6, border:'1px solid var(--border)' }}>
+                  <label style={{ fontSize:11, color:'var(--gold)', display:'block', marginBottom:6, letterSpacing:1, textTransform:'uppercase', fontWeight:600 }}>📏 Size finder windows</label>
+                  <p style={{ fontSize:11, color:'var(--text3)', margin:'0 0 12px', lineHeight:1.6 }}>
+                    The height and weight each size is made for. The storefront picks the nearest size for the customer. Leave a field blank to ignore it.
+                  </p>
+                  {(() => {
+                    const rangeSizes = uniqueDeclaredOptions(parseOptionList(form.sizes));
+                    if (rangeSizes.length === 0) {
+                      return <p style={{ fontSize:11, color:'var(--text3)', margin:0 }}>Add sizes above first.</p>;
+                    }
+                    const ranges = form.sizeRanges || {};
+                    const missing = rangeSizes.filter(size => {
+                      const range = ranges[size];
+                      return !range || !['minWeight','maxWeight','minHeight','maxHeight'].some(key => range[key] !== null && range[key] !== undefined && range[key] !== '');
+                    });
+                    const setField = (size, key, raw) => {
+                      const current = ranges[size] || {};
+                      const next = { ...ranges, [size]: { ...current, [key]: raw === '' ? null : Number(raw) } };
+                      update('sizeRanges', next);
+                    };
+                    const clearSize = (size) => {
+                      const next = { ...ranges };
+                      delete next[size];
+                      update('sizeRanges', next);
+                    };
+                    return (
+                      <>
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:10 }}>
+                          {rangeSizes.map(size => {
+                            const range = ranges[size] || {};
+                            const hasValues = ['minWeight','maxWeight','minHeight','maxHeight'].some(key => range[key] !== null && range[key] !== undefined && range[key] !== '');
+                            return (
+                              <div key={size} style={{ padding:10, border:'1px solid var(--border)', borderRadius:6, background:'var(--surface)' }}>
+                                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                                  <span style={{ fontSize:12, fontWeight:700, color:'var(--text)', letterSpacing:1 }}>{size}</span>
+                                  {hasValues && (
+                                    <button type="button" onClick={() => clearSize(size)} style={{ padding:'2px 8px', minHeight:28, background:'none', border:'1px solid var(--border)', borderRadius:4, color:'var(--text3)', fontSize:10, letterSpacing:1, textTransform:'uppercase', cursor:'pointer' }}>
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                                  {SIZE_RANGE_FIELDS.map(field => (
+                                    <label key={field.key} style={{ display:'grid', gap:4, fontSize:10, color:'var(--text3)', letterSpacing:0.5 }}>
+                                      {field.label}
+                                      <input
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={field.min}
+                                        max={field.max}
+                                        step={1}
+                                        aria-label={`${size} ${field.label}`}
+                                        placeholder={field.placeholder}
+                                        value={range[field.key] ?? ''}
+                                        onChange={e => setField(size, field.key, e.target.value)}
+                                        style={{ width:'100%', boxSizing:'border-box', padding:'7px 9px', minHeight:38, borderRadius:4, border:'1px solid var(--border)', background:'var(--bg2)', color:'var(--text)' }}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {missing.length > 0 && missing.length < rangeSizes.length && (
+                          <p role="status" style={{ fontSize:11, color:'var(--text3)', margin:'10px 0 0', lineHeight:1.6 }}>
+                            The size finder ignores {missing.join(', ')} until a window is added.
+                          </p>
+                        )}
+                        {missing.length === rangeSizes.length && (
+                          <p role="status" style={{ fontSize:11, color:'var(--text3)', margin:'10px 0 0', lineHeight:1.6 }}>
+                            No windows yet — the size finder uses the standard size chart for this product.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ marginTop:16, padding:12, background:'var(--bg3)', borderRadius:6, border:'1px solid var(--border)' }}>

@@ -29,15 +29,33 @@ function isUnknownColumn(error) {
   );
 }
 
+// True only when the missing column is the one we asked about, so a degraded
+// schema never produces a misleading warning (e.g. blaming `sizeRanges` when
+// `tags` was the absent column).
+function isMissingColumn(error, column) {
+  return isUnknownColumn(error) && String((error && error.message) || '').toLowerCase().includes(String(column).toLowerCase());
+}
+
 async function insertProduct(sb, row) {
+  const dropped = [];
   let { data, error } = await sb.from('products').insert([row]).select().single();
+  if (error && isMissingColumn(error, 'sizeRanges')) {
+    // `sizeRanges` ships with supabase/product_size_ranges.sql. Until that is
+    // applied the product must still save; the response reports the loss.
+    const withoutRanges = { ...row };
+    delete withoutRanges.sizeRanges;
+    dropped.push('sizeRanges');
+    ({ data, error } = await sb.from('products').insert([withoutRanges]).select().single());
+  }
   if (error && isUnknownColumn(error)) {
     const stripped = { ...row };
+    // Never re-introduce a column the previous retry already proved missing.
+    if (dropped.includes('sizeRanges')) delete stripped.sizeRanges;
     for (const col of OPTIONAL_COLUMNS) delete stripped[col];
     ({ data, error } = await sb.from('products').insert([stripped]).select().single());
   }
   if (error) throw error;
-  return data;
+  return { data, dropped };
 }
 
 function generateProductId() {
@@ -63,6 +81,7 @@ function buildInsertRow(p, id) {
     images: p.images || [],
     image: p.image || (Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : ''),
     sizeGuide: p.sizeGuide || null,
+    sizeRanges: p.sizeRanges || {},
   };
 }
 
@@ -99,13 +118,15 @@ async function createProducts(req, res) {
   try {
     const sb = supabaseAdmin();
     const created = [];
+    const warnings = {};
     for (const { input, p } of cleaned) {
       const id = input && Number.isFinite(Number(input.id)) && String(input.id).trim() !== ''
         ? Number(input.id)
         : generateProductId();
       const row = buildInsertRow(p, id);
       if (input && input.image && !row.image) row.image = String(input.image).slice(0, 2000);
-      const data = await insertProduct(sb, row);
+      const { data, dropped } = await insertProduct(sb, row);
+      if (dropped.includes('sizeRanges')) warnings.sizeRanges = 'column-missing';
       created.push({
         ...data,
         reservedStock: 0,
@@ -117,8 +138,8 @@ async function createProducts(req, res) {
       });
     }
 
-    if (isBulk) return json(res, 200, { success: true, count: created.length, products: created });
-    return json(res, 200, { success: true, product: created[0] });
+    if (isBulk) return json(res, 200, { success: true, count: created.length, products: created, warnings });
+    return json(res, 200, { success: true, product: created[0], warnings });
   } catch (err) {
     console.error('Product create failed:', err && err.message);
     const status = err && err.status ? err.status : 500;
@@ -162,7 +183,7 @@ async function updateProduct(req, res) {
     // Only write fields the client actually sent (mirrors previous behaviour).
     const allowedKeys = [
       'name', 'category', 'price', 'salePrice', 'description', 'stock', 'variantStock',
-      'sku', 'colors', 'sizes', 'images', 'image', 'sizeGuide', 'label', 'tags', 'active',
+      'sku', 'colors', 'sizes', 'images', 'image', 'sizeGuide', 'sizeRanges', 'label', 'tags', 'active',
     ];
     const write = {};
     for (const key of allowedKeys) {
@@ -178,6 +199,18 @@ async function updateProduct(req, res) {
     if (Object.keys(write).length === 0) return json(res, 400, { error: 'Nothing to update' });
 
     let { error: updErr } = await sb.from('products').update(write).eq('id', id);
+    const warnings = {};
+    if (updErr && isMissingColumn(updErr, 'sizeRanges')) {
+      // `sizeRanges` ships with supabase/product_size_ranges.sql. Until that is
+      // applied the rest of the edit must still save, and the client is told.
+      delete write.sizeRanges;
+      warnings.sizeRanges = 'column-missing';
+      if (Object.keys(write).length > 0) {
+        ({ error: updErr } = await sb.from('products').update(write).eq('id', id));
+      } else {
+        updErr = null;
+      }
+    }
     if (updErr && isUnknownColumn(updErr)) {
       // `active` (and similar) may not exist as a column in older schemas.
       delete write.active;
@@ -206,7 +239,7 @@ async function updateProduct(req, res) {
     for (const failed of cleanup.failed) {
       console.error(`Product image cleanup failed after retries — ${failed}`);
     }
-    return json(res, 200, { success: true, product: fresh, cleanup });
+    return json(res, 200, { success: true, product: fresh, cleanup, warnings });
   } catch (err) {
     console.error('Product update failed:', err && err.message);
     const status = err && err.status ? err.status : 500;

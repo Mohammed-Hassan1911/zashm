@@ -100,8 +100,10 @@ DROP VIEW IF EXISTS public.products_public;
 --
 -- Every exposed column must be needed by the public storefront:
 --   * `id`, `name`, `category`, `price`, `salePrice`, `description`, `label`,
---     `colors`, `sizes`, `images`, `image`, `sizeGuide`, `sku` — product display
---     and SEO structured data.
+--     `colors`, `sizes`, `images`, `image`, `sizeGuide`, `sizeRanges`, `sku` —
+--     product display and SEO structured data. `sizeRanges` holds the owner's
+--     per-size body height/weight windows for the storefront size finder
+--     (supabase/product_size_ranges.sql); it is public display data only.
 --   * `stock` and `variantStock` — availability and per-variant cart limits.
 --     They contain non-negative available quantities only (the same public
 --     availability class as `stock`). They never include `reservedStock`, cost,
@@ -119,7 +121,7 @@ DECLARE
   v_allow   text[] := ARRAY[
     'id', 'name', 'category', 'price', 'salePrice', 'description',
     'stock', 'variantStock', 'sku', 'label',
-    'colors', 'sizes', 'images', 'image', 'sizeGuide',
+    'colors', 'sizes', 'images', 'image', 'sizeGuide', 'sizeRanges',
     'rating', 'reviews'
   ];
   v_cols    text;
@@ -183,7 +185,7 @@ DECLARE
   v_allow text[] := ARRAY[
     'id', 'name', 'category', 'price', 'salePrice', 'description',
     'stock', 'variantStock', 'sku', 'label',
-    'colors', 'sizes', 'images', 'image', 'sizeGuide',
+    'colors', 'sizes', 'images', 'image', 'sizeGuide', 'sizeRanges',
     'rating', 'reviews'
   ];
   v_bad text;

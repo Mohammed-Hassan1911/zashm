@@ -6,6 +6,7 @@ import { fetchCatalogSnapshot } from './lib/resilience';
 import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
 import { clearOrderConfirmation } from './lib/orderConfirmation.mjs';
 import { effectivePrice, hasInvalidVariantConfig, hasVariantStock, isSellableVariant, sellableStockFor } from './lib/pricing';
+import { sanitizeSizeRanges } from './lib/fit';
 
 // دالة مساعدة موحدة لحساب تاريخ اليوم بالكامل بناءً على التوقيت المحلي (Local Time) لتجنب مشاكل الـ UTC
 function getLocalTodayDate() {
@@ -211,13 +212,17 @@ const initialRoute = typeof window !== 'undefined' ? resolveRoute() : { page: 'h
 // (`products`) rows. Admin rows also carry `tags` and inactive rows.
 function normalizeProductRow(p) {
   const row = p || {};
+  const sizes = Array.isArray(row.sizes) ? row.sizes : [];
   return {
     ...row,
     images: Array.isArray(row.images) && row.images.length
       ? row.images
       : (row.image ? [row.image] : []),
     colors: Array.isArray(row.colors) ? row.colors : [],
-    sizes: Array.isArray(row.sizes) ? row.sizes : [],
+    sizes,
+    // Per-size body height/weight windows published by the owner. Invalid or
+    // legacy values collapse to {} so the size finder falls back to the chart.
+    sizeRanges: sanitizeSizeRanges(row.sizeRanges, sizes),
     tags: row.tags || '',
     active: row.active === undefined || row.active === null ? true : Boolean(row.active),
     rating: row.rating || 0,
@@ -404,7 +409,9 @@ export const useStore = create((set, get) => ({
     try {
       const payload = await api.post('/admin/products', { product: p });
       if (!payload || !payload.product) return { success: false, error: 'No product returned' };
-      return payload.product;
+      // The full payload is returned so callers can surface server warnings
+      // (e.g. a size-range column that is not migrated yet) and cleanup info.
+      return payload;
     } catch (err) {
       console.error('addProduct failed:', err.message);
       throw err;

@@ -178,29 +178,42 @@ CREATE TRIGGER zshm_product_review_sync
 -- of `products` differs between environments; CREATE OR REPLACE refuses to
 -- reorder columns. The drop and re-create run in this one transaction, so the
 -- view is never visible in a half-built state.
+--
+-- The allow-list is intersected with the columns that actually exist, so this
+-- file can be re-applied before OR after supabase/product_size_ranges.sql:
+-- `sizeRanges` is included once the column exists and skipped until then. That
+-- keeps a re-run of this older migration from stripping a newer column.
 DROP VIEW IF EXISTS public.products_public;
-CREATE VIEW public.products_public
-WITH (security_invoker = false, security_barrier = true) AS
-SELECT
-  id,
-  name,
-  price,
-  "salePrice",
-  category,
-  stock,
-  image,
-  description,
-  label,
-  sku,
-  images,
-  colors,
-  sizes,
-  "variantStock",
-  "sizeGuide",
-  rating,
-  reviews
-FROM public.products
-WHERE active IS TRUE;
+DO $$
+DECLARE
+  v_allow text[] := ARRAY[
+    'id', 'name', 'price', 'salePrice', 'category', 'stock', 'image',
+    'description', 'label', 'sku', 'images', 'colors', 'sizes',
+    'variantStock', 'sizeGuide', 'sizeRanges', 'rating', 'reviews'
+  ];
+  v_cols text;
+BEGIN
+  IF 'reservedStock' = ANY (v_allow) THEN
+    RAISE EXCEPTION 'products_public allow-list must not contain reservedStock';
+  END IF;
+
+  SELECT string_agg(format('%I', column_name), ', ' ORDER BY ordinal_position)
+    INTO v_cols
+    FROM information_schema.columns
+   WHERE table_schema = 'public'
+     AND table_name = 'products'
+     AND column_name = ANY (v_allow);
+
+  IF v_cols IS NULL THEN
+    RAISE EXCEPTION 'public.products has none of the allow-listed public columns';
+  END IF;
+
+  EXECUTE format(
+    'CREATE VIEW public.products_public WITH (security_invoker = false, security_barrier = true) '
+    'AS SELECT %s FROM public.products WHERE active IS TRUE',
+    v_cols
+  );
+END $$;
 
 -- Keep the owner able to read the base table even after the Phase 3 revoke.
 DO $$
@@ -253,7 +266,8 @@ COMMIT;
 --   CREATE OR REPLACE VIEW public.products_public
 --   WITH (security_invoker = false, security_barrier = true) AS
 --   SELECT id, name, price, "salePrice", category, stock, image, description,
---          label, sku, images, colors, sizes, "variantStock", "sizeGuide"
+--          label, sku, images, colors, sizes, "variantStock", "sizeGuide",
+--          "sizeRanges"
 --     FROM public.products WHERE active IS TRUE;
 --   REVOKE ALL ON public.products_public FROM PUBLIC, anon, authenticated;
 --   GRANT SELECT ON public.products_public TO anon, authenticated;

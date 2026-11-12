@@ -62,6 +62,8 @@ const state = {
   ],
   productsReads: 0,
   failProducts: false,
+  missingSizeRanges: false,
+  missingTags: false,
 };
 
 function matches(row, filters) {
@@ -75,7 +77,11 @@ function makeQuery(table) {
   const q = {
     _filters: [],
     _order: null,
+    _insert: null,
+    _update: null,
     select() { return q; },
+    insert(rows) { q._insert = Array.isArray(rows) ? rows : [rows]; return q; },
+    update(values) { q._update = values; return q; },
     eq(col, val) { q._filters.push([col, val, 'eq']); return q; },
     neq(col, val) { q._filters.push([col, val, 'neq']); return q; },
     order(col, opts) { q._order = { col, ascending: !(opts && opts.ascending === false) }; return q; },
@@ -93,6 +99,37 @@ function makeQuery(table) {
       state.productsReads += 1;
       if (state.failProducts) {
         return { data: null, error: new Error('relation "products" internal secret detail') };
+      }
+      // Simulate a database where supabase/product_size_ranges.sql has not
+      // been applied yet. The real PostgREST error names the column.
+      const touchesRanges = (q._insert || []).some((row) => row && 'sizeRanges' in row)
+        || (q._update && 'sizeRanges' in q._update);
+      if (state.missingSizeRanges && touchesRanges) {
+        return {
+          data: null,
+          error: { code: 'PGRST204', message: "Could not find the 'sizeRanges' column of 'products' in the schema cache" },
+        };
+      }
+      const touchesTags = (q._insert || []).some((row) => row && 'tags' in row);
+      if (state.missingTags && touchesTags) {
+        return {
+          data: null,
+          error: { code: 'PGRST204', message: "Could not find the 'tags' column of 'products' in the schema cache" },
+        };
+      }
+      if (q._insert) {
+        const created = q._insert.map((row) => ({ ...row, id: row.id === undefined ? 900 : row.id }));
+        state.products.push(...created);
+        return { data: created.map((row) => ({ ...row })), error: null };
+      }
+      if (q._update) {
+        const updated = [];
+        for (const row of state.products) {
+          if (!matches(row, q._filters)) continue;
+          Object.assign(row, q._update);
+          updated.push({ ...row });
+        }
+        return { data: updated, error: null };
       }
       let rows = state.products.filter((r) => matches(r, q._filters)).map((r) => ({ ...r }));
       if (q._order) {
@@ -330,6 +367,137 @@ console.log('\n[7] order status safety (final statuses need confirmation)');
     'a successful status change is confirmed to the admin');
   ok(!/handleStatusChange/.test(src),
     'no code path can change a status without going through the confirmation helper');
+}
+
+console.log('\n[8] size finder windows: payload, persistence and degraded schema');
+{
+  // Server-side sanitizer mirrors src/lib/fit.js: case-resolve keys, clamp,
+  // swap an inverted pair, drop junk.
+  const normalized = lib.validateProductPayload({
+    name: 'Range Tee', category: 'Tees', price: 100, stock: 5,
+    sizes: ['M', 'L'], colors: ['Black'],
+    variantStock: { 'M-Black': 3, 'L-Black': 2 },
+    sizeRanges: {
+      m: { minWeight: '90', maxWeight: 60, minHeight: 190, maxHeight: 170 },
+      junk: { minWeight: 'abc', maxWeight: 9999 },
+      L: { minWeight: 71, maxWeight: 85, minHeight: 176, maxHeight: 188 },
+    },
+  });
+  eq(normalized.sizeRanges.M, { minWeight: 60, maxWeight: 90, minHeight: 170, maxHeight: 190 },
+    'keys resolve to the product spelling and inverted pairs are swapped');
+  eq(normalized.sizeRanges.L, { minWeight: 71, maxWeight: 85, minHeight: 176, maxHeight: 188 },
+    'a valid window survives untouched');
+  eq(Object.prototype.hasOwnProperty.call(normalized.sizeRanges, 'junk'), false,
+    'an entry with no usable bound is dropped');
+
+  eq(lib.validateProductPayload({
+    name: 'No Ranges', category: 'Tees', price: 100, stock: 1, sizes: ['M'], colors: ['Black'],
+    variantStock: { 'M-Black': 1 },
+  }).sizeRanges, {}, 'a product without windows stores an empty object');
+
+  // POST: the column exists — windows are stored and no warning is returned.
+  state.missingSizeRanges = false;
+  const post = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${tokenFor(admin)}` },
+    body: {
+      product: {
+        name: 'Range Tee', category: 'Tees', price: 100, stock: 5,
+        sizes: ['M', 'L'], colors: ['Black'],
+        variantStock: { 'M-Black': 3, 'L-Black': 2 },
+        images: ['https://example.test/range.jpg'],
+        sizeRanges: { M: { minWeight: 60, maxWeight: 75, minHeight: 165, maxHeight: 180 } },
+      },
+    },
+  });
+  eq(post.statusCode, 200, 'POST with sizeRanges succeeds');
+  eq(post.body.warnings, {}, 'no warning when the column exists');
+  eq(post.body.product.sizeRanges.M.maxWeight, 75, 'the window is stored on the new product');
+
+  // POST: column missing — the product still saves, and the client is told.
+  state.missingSizeRanges = true;
+  const degradedPost = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${tokenFor(admin)}` },
+    body: {
+      product: {
+        name: 'Degraded Tee', category: 'Tees', price: 90, stock: 2,
+        sizes: ['M'], colors: ['Black'], variantStock: { 'M-Black': 2 },
+        images: ['https://example.test/degraded.jpg'],
+        sizeRanges: { M: { minWeight: 60, maxWeight: 75 } },
+      },
+    },
+  });
+  state.missingSizeRanges = false;
+  eq(degradedPost.statusCode, 200, 'POST still succeeds when the column is missing');
+  eq(degradedPost.body.warnings.sizeRanges, 'column-missing', 'the response reports the missing column');
+  eq(degradedPost.body.product.name, 'Degraded Tee', 'the rest of the product is saved');
+  eq(degradedPost.body.product.sizeRanges, undefined, 'the unstored window is not echoed as saved');
+
+  // A different missing column must not be blamed on sizeRanges or drop it.
+  state.missingTags = true;
+  const tagsDegraded = await call({
+    method: 'POST',
+    headers: { authorization: `Bearer ${tokenFor(admin)}` },
+    body: {
+      product: {
+        name: 'Tagless Tee', category: 'Tees', price: 80, stock: 1,
+        sizes: ['M'], colors: ['Black'], variantStock: { 'M-Black': 1 },
+        images: ['https://example.test/tagless.jpg'], tags: 'summer',
+        sizeRanges: { M: { minWeight: 60, maxWeight: 70 } },
+      },
+    },
+  });
+  state.missingTags = false;
+  eq(tagsDegraded.statusCode, 200, 'a missing tags column still saves the product');
+  eq(tagsDegraded.body.warnings, {}, 'the tags failure is not misreported as a sizeRanges failure');
+  eq(tagsDegraded.body.product.sizeRanges.M.maxWeight, 70, 'sizeRanges survives a tags-only schema retry');
+
+  // PATCH: windows update in place.
+  const patch = await call({
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${tokenFor(admin)}` },
+    body: { id: 10, updates: { sizeRanges: { L: { minWeight: 71, maxWeight: 85 } } } },
+  });
+  eq(patch.statusCode, 200, 'PATCH with sizeRanges succeeds');
+  eq(patch.body.warnings, {}, 'PATCH reports no warning when the column exists');
+  eq(patch.body.product.sizeRanges.L.maxWeight, 85, 'the updated window is returned');
+
+  // PATCH: column missing — the other fields still save.
+  state.missingSizeRanges = true;
+  const degradedPatch = await call({
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${tokenFor(admin)}` },
+    body: { id: 9, updates: { label: 'Archive', sizeRanges: { M: { minWeight: 60, maxWeight: 70 } } } },
+  });
+  state.missingSizeRanges = false;
+  eq(degradedPatch.statusCode, 200, 'PATCH still succeeds when the column is missing');
+  eq(degradedPatch.body.warnings.sizeRanges, 'column-missing', 'PATCH reports the missing column');
+  eq(degradedPatch.body.product.label, 'Archive', 'the other edited fields are saved');
+
+  const src = readFileSync(new URL('../api/admin/products.js', import.meta.url), 'utf8');
+  ok(/req\.method\s*===\s*'POST'\s*\)\s*return createProduct/.test(src), 'POST is routed');
+  ok(/req\.method\s*===\s*'PATCH'\s*\)\s*return updateProduct/.test(src), 'PATCH is routed');
+  ok(/isMissingColumn\(updErr, 'sizeRanges'\)/.test(src), 'PATCH detects only the sizeRanges column');
+}
+
+console.log('\n[9] admin size-window editor wiring');
+{
+  const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
+  ok(/const SIZE_RANGE_FIELDS = \[/.test(src), 'the four window fields are declared');
+  ok(/key: 'minWeight'/.test(src) && /key: 'maxWeight'/.test(src)
+    && /key: 'minHeight'/.test(src) && /key: 'maxHeight'/.test(src),
+    'min/max weight and min/max height are all present');
+  ok(/📏 Size finder windows/.test(src), 'the panel is labelled for the owner');
+  ok(/sizeRangeProblems\(form\.sizeRanges\)/.test(src), 'inverted windows block the save');
+  ok(/toast\.error\(`⚠️ \$\{rangeProblems\[0\]\}/.test(src), 'the exact problem is shown to the owner');
+  ok(/sanitizeSizeRanges\(form\.sizeRanges, cleanSizes\)/.test(src), 'windows are sanitized against the declared sizes');
+  ok(/\.filter\(\(\[size\]\) => cleanSizes\.includes\(size\)\)/.test(src),
+    'windows for removed sizes are not saved');
+  ok(/warnings\?\.sizeRanges/.test(src), 'the admin surfaces the missing-column warning');
+  ok(/supabase\/product_size_ranges\.sql/.test(src), 'the warning names the migration to apply');
+  ok(/Clear/.test(src), 'each size window can be cleared');
+  ok(/aria-label=\{`\$\{size\} \$\{field\.label\}`\}/.test(src), 'each window input is labelled for screen readers');
 }
 
 console.log(`\nadmin-products: ${pass} passed, ${fail} failed`);

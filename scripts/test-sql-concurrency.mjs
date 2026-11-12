@@ -2256,6 +2256,69 @@ async function stagedMigrationRollout() {
   eq(scalarNum(DB, `SELECT ("variantStock"->>'M-White')::int FROM public.products WHERE id=30`), 4,
     'the orphan key is still there, untouched, with its quantity intact');
 
+  // ── product_size_ranges.sql: owner windows column + view exposure ───────
+  console.log('\n[9b] product_size_ranges: column, view allow-list, idempotency');
+  eq(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'products'
+                      AND column_name = 'sizeRanges'`), 0,
+    'products.sizeRanges does not exist before the migration');
+
+  apply(DB, 'supabase/product_size_ranges.sql');
+  // Idempotency: a second run must be a clean no-op, not an error.
+  apply(DB, 'supabase/product_size_ranges.sql');
+
+  eq(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'products'
+                      AND column_name = 'sizeRanges'
+                      AND data_type = 'jsonb'
+                      AND is_nullable = 'NO'
+                      AND column_default = '''{}''::jsonb'`), 1,
+    'products.sizeRanges is jsonb NOT NULL DEFAULT {}');
+  eq(scalarNum(DB, `SELECT count(*) FROM pg_constraint
+                    WHERE conrelid = 'public.products'::regclass
+                      AND conname = 'products_sizeRanges_object_chk'`), 1,
+    'the object-only check constraint is installed');
+  eq(scalarNum(DB, `SELECT count(*) FROM public.products WHERE "sizeRanges" = '{}'::jsonb`),
+    scalarNum(DB, `SELECT count(*) FROM public.products`),
+    'every existing product is backfilled with an empty window object');
+
+  // A bad write (array instead of object) must be refused by the database.
+  const arrayWrite = runSql(DB, `INSERT INTO public.products
+      (id, name, category, price, stock, "sizeRanges")
+      VALUES (91, 'Bad Ranges', 'Tees', 100, 1, '[1,2]'::jsonb);`);
+  ok(arrayWrite.status !== 0 && /products_sizeRanges_object_chk/.test(arrayWrite.out),
+    'the check constraint rejects a non-object sizeRanges payload');
+
+  runSql(DB, `INSERT INTO public.products
+      (id, name, category, price, stock, active, "sizeRanges")
+      VALUES (92, 'Range Tee', 'Tees', 100, 4, true,
+        '{"M":{"minWeight":60,"maxWeight":75,"minHeight":165,"maxHeight":180}}'::jsonb);`);
+  eq(scalar(DB, `SELECT "sizeRanges"->'M'->>'maxWeight' FROM public.products WHERE id = 92`), '75',
+    'owner windows round-trip through the column');
+
+  eq(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'products_public'
+                      AND column_name = 'sizeRanges'`), 1,
+    'products_public exposes sizeRanges');
+  eq(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'products_public'
+                      AND column_name IN ('rating','reviews')`), 2,
+    're-creating the view keeps rating and reviews');
+  eq(scalarNum(DB, `SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = 'products_public'
+                      AND lower(column_name) = 'reservedstock'`), 0,
+    'products_public still hides reservedStock');
+
+  {
+    const anonRanges = runSql(DB, `SET ROLE anon;
+      SELECT "sizeRanges"->'M'->>'minHeight' FROM public.products_public WHERE id = 92;`);
+    eq(anonRanges.status, 0, 'anon can read sizeRanges from the view');
+    eq(anonRanges.stdout.trim(), '165', 'anon sees the owner window');
+  }
+
+  eq(scalar(DB, `SELECT has_table_privilege('anon', 'public.products', 'SELECT')`), 'f',
+    'the base products table stays closed to anon');
+
   await stockHardeningChecks();
 }
 

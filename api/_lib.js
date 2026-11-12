@@ -1039,6 +1039,60 @@ function validateOrderEditPayload(body) {
   };
 }
 
+// ─── PER-SIZE BODY WINDOWS (size finder) ────────────────────────────────────
+// The owner can publish, per product and per size, the height/weight window a
+// size is meant for. Shape: { "M": { minWeight, maxWeight, minHeight, maxHeight } }.
+// This mirrors sanitizeSizeRanges() in src/lib/fit.js; keep the two in step.
+// Junk is dropped rather than stored, inverted pairs are swapped, and a size
+// with no usable bound is removed entirely.
+const SIZE_RANGE_BOUNDS = {
+  minWeight: [30, 250],
+  maxWeight: [30, 250],
+  minHeight: [120, 230],
+  maxHeight: [120, 230],
+};
+
+function sizeRangeBound(value, field) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const [min, max] = SIZE_RANGE_BOUNDS[field];
+  if (n < min || n > max) return null;
+  return Math.round(n);
+}
+
+function sanitizeSizeRangesInput(value, sizes) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const declared = new Map();
+  for (const size of Array.isArray(sizes) ? sizes : []) {
+    const label = str(size).trim();
+    if (label) declared.set(label.toLowerCase(), label);
+  }
+  const out = {};
+  for (const [rawKey, rawRange] of Object.entries(value)) {
+    if (!rawRange || typeof rawRange !== 'object' || Array.isArray(rawRange)) continue;
+    const trimmed = str(rawKey).trim();
+    if (!trimmed) continue;
+    const key = declared.get(trimmed.toLowerCase()) || trimmed;
+
+    let minWeight = sizeRangeBound(rawRange.minWeight, 'minWeight');
+    let maxWeight = sizeRangeBound(rawRange.maxWeight, 'maxWeight');
+    let minHeight = sizeRangeBound(rawRange.minHeight, 'minHeight');
+    let maxHeight = sizeRangeBound(rawRange.maxHeight, 'maxHeight');
+
+    if (minWeight !== null && maxWeight !== null && minWeight > maxWeight) {
+      [minWeight, maxWeight] = [maxWeight, minWeight];
+    }
+    if (minHeight !== null && maxHeight !== null && minHeight > maxHeight) {
+      [minHeight, maxHeight] = [maxHeight, minHeight];
+    }
+
+    if (minWeight === null && maxWeight === null && minHeight === null && maxHeight === null) continue;
+    out[key] = { minWeight, maxWeight, minHeight, maxHeight };
+  }
+  return out;
+}
+
 function validateProductPayload(p) {
   const errors = [];
   const name = cleanText(p.name, 1, 200);
@@ -1127,6 +1181,7 @@ function validateProductPayload(p) {
     label: str(p.label).replace(/[<>]/g, '').slice(0, 40),
     description: str(p.description).slice(0, 5000),
     sizeGuide: p.sizeGuide && isHttpsUrl(p.sizeGuide) ? str(p.sizeGuide).slice(0, 2000) : null,
+    sizeRanges: sanitizeSizeRangesInput(p.sizeRanges, sizes),
     active: p.active === undefined ? true : Boolean(p.active),
   };
 }

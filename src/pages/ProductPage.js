@@ -4,6 +4,7 @@ import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import ProductReviews from '../components/shop/ProductReviews';
+import SizeFinder from '../components/shop/SizeFinder';
 import SafeImage, { useImageFallback } from '../components/ui/SafeImage';
 import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
@@ -449,6 +450,15 @@ export default function ProductPage() {
     })}
   </div>
 </div>
+
+            <SizeFinder
+              sizes={p.sizes || []}
+              sizeRanges={p.sizeRanges}
+              selectedSize={selSize}
+              onSelect={(size) => { setSelSize(size); setQty(1); }}
+              stockFor={(size) => sellableStockFor(p, size, selColor)}
+              onOpenSizeGuide={() => setSizeGuideOpen(true)}
+            />
 
             {/* Qty + Add */}
             <div
