@@ -141,7 +141,7 @@ skipped suite as passing.
 Load only what a task needs; always load `testing-qa` before verification and
 `senior-code-review` before the final report.
 
-## 6. Agents (`.opencode/agents/`)
+## 6. Agents (`.agentconfig/agents/`)
 
 | Agent | Mode | Purpose |
 |---|---|---|

@@ -660,7 +660,7 @@ with the same order body plus a banner stating the order was NOT stored.
   `src/components/shop/Header.js` + both `src/App.js` img tags (header + splash).
   `public/zashm-z-monogram.png` downscaled to 232×223 / 35KB, still used by
   `src/lib/seo.js` for the JSON-LD logo. Original backed up at
-  `/private/var/folders/jt/xbz49b0n6_z32ssk5d3lsqww0000gn/T/opencode/zashm-z-monogram-original.png`.
+  `/private/var/folders/jt/xbz49b0n6_z32ssk5d3lsqww0000gn/T/agentconfig/zashm-z-monogram-original.png`.
 - **Vite:** `vite.config.js` injects `<link rel="preconnect" href="<supabase-origin>"
   crossorigin/>` via `supabasePreconnect()` (confirmed in `build/index.html`).
 - **ProductPage:** LCP image gets `fetchPriority="high"` / `loading="eager"` /
