@@ -84,7 +84,7 @@ view only, and never deletes or rewrites an existing review. No review exists
 in production until one is submitted after deployment, and submissions start
 `pending` until an admin approves them.
 
-### Product size windows (pending)
+### Product size windows (applied 2026-11-13)
 
 `supabase/product_size_ranges.sql` adds
 `public.products."sizeRanges" jsonb NOT NULL DEFAULT '{}'` and re-creates
@@ -102,6 +102,23 @@ added. The migration is idempotent (quoted constraint name, `IF NOT EXISTS`)
 and fails closed if `reservedStock` ever enters the allow-list. Its rollback
 block drops the column and therefore **permanently deletes every owner-entered
 window** — take a backup first.
+
+**Applied 2026-11-13** (project `ptegprcbtfylqhbnbkih`, session role `postgres`,
+no dependants on the view). Verified after applying:
+
+- `products."sizeRanges"` is `jsonb`, `NOT NULL`, default `'{}'::jsonb`;
+  constraint `products_sizeRanges_object_chk` exists; all 3 existing products
+  were backfilled with `{}`.
+- `products_public` exposes `sizeRanges` and still hides `reservedStock`;
+  `anon` can SELECT the view and cannot SELECT `products`.
+- PostgREST read paths return the column (anon view `200`, service-role table
+  `200`), so the schema cache was reloaded.
+- A `BEGIN; UPDATE … sizeRanges …; ROLLBACK;` round-trip on the T-Shirt row
+  wrote and read back the window and left the row as `{}`, proving the write
+  path before the owner re-saved from the admin.
+
+Pre-apply state (view definition, grants, columns, product ids, counts) is in
+`backups/2026-11-13T11-07-36Z-size-ranges-pre-apply/`.
 
 Deploy the updated frontend and `/api/orders` together: the API now requires
 the frontend's persistent idempotency key. Verify the atomic order-placement
