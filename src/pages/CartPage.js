@@ -1474,7 +1474,7 @@ export function CheckoutPage() {
               >
                 <RotateCcw size={12} color="var(--gold)" aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }} />
                 <span>
-                  Size not right? Exchange within <strong style={{ color: 'var(--text2)', fontWeight: 600 }}>4 days</strong> of delivery, returns within <strong style={{ color: 'var(--text2)', fontWeight: 600 }}>7 days</strong> — unworn, with tags.
+                  Size not right? Exchange or return within <strong style={{ color: 'var(--text2)', fontWeight: 600 }}>7 days</strong> of delivery — item in its original condition, unworn, with tags.
                 </span>
               </p>
             </div>

@@ -535,8 +535,8 @@ export default function ProductPage() {
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--text2)', fontSize: 12, lineHeight: 1.5 }}>
                 <RotateCcw size={16} color="var(--gold)" style={{ marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <strong style={{ color: 'white', display: 'block', marginBottom: 2, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>4-Day Exchange · 7-Day Returns</strong>
-                  Size exchange within 4 days, returns within 7 days of delivery. Items must be unworn, in original packaging, with all tags attached.
+                  <strong style={{ color: 'white', display: 'block', marginBottom: 2, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>7-Day Exchanges &amp; Returns</strong>
+                  Exchange or return within 7 days of delivery. Items must be unworn, in their original condition and packaging, with all tags attached.
                 </div>
               </div>
 

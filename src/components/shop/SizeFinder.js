@@ -455,7 +455,7 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                         {result.reason}
                       </p>
                       <p style={{ margin: 0, fontSize: 10, lineHeight: 1.6, color: 'var(--text3)' }}>
-                        No tape measure needed — exchange within 4 days if it is not right.
+                        No tape measure needed — exchange within 7 days if it is not right.
                       </p>
                     </div>
                   )}

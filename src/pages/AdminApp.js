@@ -2708,7 +2708,12 @@ function DiscountsPanel({ canEdit }) {
       await deleteDiscount(target.id);
       toast.success('Discount code deleted.');
     } catch (e) {
-      toast.error('Could not delete discount code. Please try again.');
+      // A coupon still used by open orders answers 409 with the real reason.
+      // Surfacing it lets the owner act instead of retrying blindly.
+      const msg = e && typeof e.message === 'string' && e.message
+        ? e.message
+        : 'Could not delete discount code. Please try again.';
+      toast.error(msg);
     }
   };
 

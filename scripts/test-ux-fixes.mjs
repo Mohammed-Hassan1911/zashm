@@ -601,14 +601,14 @@ try {
       assert.ok(/Coming soon/.test(cart), 'card option is advertised as coming soon');
     });
 
-    await step('the 4-day exchange reassurance sits under PLACE ORDER', () => {
+    await step('the 7-day exchange reassurance sits under PLACE ORDER', () => {
       const placeAt = cart.indexOf('PLACE ORDER');
       const noteAt = cart.indexOf('checkout-exchange-note');
       assert.ok(noteAt > placeAt, 'exchange note must render after the CTA');
-      assert.ok(/Exchange within/.test(cart), 'the note states the exchange window');
-      assert.ok(/4 days/.test(cart) && /returns within/.test(cart) && /7 days/.test(cart),
-        'the note states both windows: 4-day exchange, 7-day return');
-      assert.ok(/unworn, with tags/.test(cart), 'the condition is stated next to the promise');
+      assert.ok(/Exchange or return within/.test(cart), 'the note states the window');
+      assert.ok(/7 days/.test(cart), 'the note states 7 days');
+      assert.ok(/original condition, unworn, with tags/.test(cart),
+        'the note keeps the original-condition requirement');
     });
 
     const app = read('src/App.js');
@@ -904,12 +904,27 @@ try {
         'an empty description never renders an empty tab');
     });
 
-    await step('the return windows are split: 4-day exchange, 7-day return', () => {
-      assert.ok(/4-Day Exchange · 7-Day Returns/.test(product), 'product page headline states both windows');
-      assert.ok(/Size exchange within 4 days, returns within 7 days/.test(product), 'product page body states both windows');
-      assert.ok(/size exchange can be requested within 4 days, and a return within 7 days/.test(app),
-        'the policy modal states both windows');
-      assert.ok(!/within 7 days of receiving your order, provided/.test(app), 'the old single-window policy is gone');
+    await step('the return windows are unified: 7 days, original condition', () => {
+      assert.ok(/7-Day Exchanges &amp; Returns/.test(product), 'product page headline states the window');
+      assert.ok(/Exchange or return within 7 days of delivery/.test(product), 'product page body states the window');
+      assert.ok(/unworn, in their original condition and packaging/.test(product),
+        'product page keeps the original-condition requirement');
+      assert.ok(/exchange or return within 7 days of receiving your order/.test(app),
+        'the policy modal states the same window');
+      assert.ok(/original condition/.test(app), 'the policy modal keeps the original-condition requirement');
+      assert.ok(!/within 4 days/.test(product) && !/within 4 days/.test(app), 'no 4-day copy is left');
+    });
+
+    await step('a refused coupon delete shows the server reason', () => {
+      const adminSource = read('src/pages/AdminApp.js');
+      const start = adminSource.indexOf('const confirmDelete = async () => {');
+      assert.ok(start >= 0, 'the coupon delete handler exists');
+      const block = adminSource.slice(start, start + 900);
+      assert.ok(/const msg = e && typeof e\.message === 'string' && e\.message/.test(block),
+        'the toast prefers the API message');
+      assert.ok(/toast\.error\(msg\)/.test(block), 'the API message reaches the toast');
+      assert.ok(!/toast\.error\('Could not delete discount code\. Please try again\.'\);/.test(block),
+        'the generic retry message is no longer shown unconditionally');
     });
 
     await step('floating actions hide only while typing on a small screen', () => {
