@@ -282,6 +282,24 @@ ok(finder.includes('exchange within 7 days'), 'the exchange reassurance is shown
 ok(finder.includes('{result.reason}'), 'the component renders the engine explanation');
 ok(finder.includes('Why this size?'), 'the long explanation sits behind a disclosure');
 ok(finder.includes('resultProfile'), 'the collapsed facts come from the profile that produced the result');
+ok(finder.includes('const showResult = Boolean(result) && !editing;'),
+  'the recommendation is gated on not editing');
+ok(/const showResult[\s\S]*?\{showResult \? 'Your size' : 'Find my size'\}/.test(finder),
+  'the header title follows the same gate');
+ok((finder.match(/\{showResult && \(/g) || []).length === 2,
+  'both the header size and the result panel are hidden while editing');
+ok(!/fontSize: 34/.test(finder),
+  'the size is not duplicated inside the result panel');
+ok(finder.includes('Find my size') && !finder.includes('Suggest my size'),
+  'the CTA says what the shopper gets');
+ok(/style=\{UNIT\}>cm</.test(finder) && /style=\{UNIT\}>kg</.test(finder),
+  'units sit inside the fields so labels stay one word');
+ok(/gridTemplateColumns: 'repeat\(2, minmax\(0, 1fr\)\)'/.test(finder),
+  'the fit choices form a compact 2x2 grid');
+ok(finder.includes('{FIT_HINTS[fit] || FIT_HINTS.regular}'), 'the selected fit explains itself in place');
+ok(finder.includes('CONFIDENCE_PILL('), 'confidence renders as a bordered pill');
+ok(/className="sr-only">Your size is \{result.size\}/.test(finder),
+  'screen readers still hear the recommended size');
 ok(!/buildReason|inferGender/.test(finder), 'the component no longer builds its own reason or gender');
 ok(!/>\s*Women\s*</.test(finder) && !/>\s*Men\s*</.test(finder), 'no department choice ships in the finder');
 ok(!/'women'|"women"/.test(finder), 'no women branch ships in the finder');

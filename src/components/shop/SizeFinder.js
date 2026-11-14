@@ -66,6 +66,31 @@ const FIELD_LABEL = {
   textTransform: 'uppercase',
 };
 
+// The unit lives inside the field, so the label stays one word.
+const UNIT = {
+  position: 'absolute',
+  right: 12,
+  top: '50%',
+  transform: 'translateY(-50%)',
+  fontSize: 11,
+  color: 'var(--text3)',
+  pointerEvents: 'none',
+};
+
+const CONFIDENCE_PILL = (color, border) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '3px 8px',
+  borderRadius: 999,
+  border: `1px solid ${border}`,
+  fontSize: 10,
+  letterSpacing: 0.6,
+  textTransform: 'uppercase',
+  color,
+  whiteSpace: 'nowrap',
+});
+
 function readStorage() {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return null;
@@ -165,6 +190,9 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
   const profileLine = result && resultProfile
     ? `${resultProfile.height} cm · ${resultProfile.weight} kg · ${FIT_LABELS[resultProfile.fit] || FIT_LABELS.regular}`
     : '';
+  // While the shopper is editing, the previous recommendation is hidden
+  // everywhere — header and panel — so no stale size sits next to new numbers.
+  const showResult = Boolean(result) && !editing;
 
   return (
     <section
@@ -201,13 +229,13 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
         <Sparkles size={15} color="var(--gold)" aria-hidden="true" style={{ flexShrink: 0 }} />
         <span style={{ flex: 1, minWidth: 0 }}>
           <span id="size-finder-title" style={EYEBROW}>
-            {result ? 'Your size' : 'Find my size'}
+            {showResult ? 'Your size' : 'Find my size'}
           </span>
           <span style={META}>
-            {result ? profileLine : 'Height + weight + fit'}
+            {showResult ? profileLine : 'Height + weight + fit'}
           </span>
         </span>
-        {result && (
+        {showResult && (
           <span
             style={{
               fontFamily: 'var(--font-display)',
@@ -238,38 +266,44 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
                 <label style={FIELD_LABEL}>
-                  Height (cm)
-                  <input
-                    ref={heightRef}
-                    className="size-finder-input"
-                    type="number"
-                    inputMode="numeric"
-                    min={140}
-                    max={210}
-                    step={1}
-                    value={height}
-                    onChange={(event) => { setHeight(event.target.value); clearError(); }}
-                    placeholder="175"
-                    aria-describedby={error ? 'size-finder-error' : undefined}
-                    style={INPUT}
-                  />
+                  Height
+                  <span style={{ position: 'relative', display: 'block' }}>
+                    <input
+                      ref={heightRef}
+                      className="size-finder-input"
+                      type="number"
+                      inputMode="numeric"
+                      min={140}
+                      max={210}
+                      step={1}
+                      value={height}
+                      onChange={(event) => { setHeight(event.target.value); clearError(); }}
+                      placeholder="175"
+                      aria-describedby={error ? 'size-finder-error' : undefined}
+                      style={{ ...INPUT, paddingRight: 36 }}
+                    />
+                    <span aria-hidden="true" style={UNIT}>cm</span>
+                  </span>
                 </label>
                 <label style={FIELD_LABEL}>
-                  Weight (kg)
-                  <input
-                    ref={weightRef}
-                    className="size-finder-input"
-                    type="number"
-                    inputMode="numeric"
-                    min={35}
-                    max={200}
-                    step={1}
-                    value={weight}
-                    onChange={(event) => { setWeight(event.target.value); clearError(); }}
-                    placeholder="75"
-                    aria-describedby={error ? 'size-finder-error' : undefined}
-                    style={INPUT}
-                  />
+                  Weight
+                  <span style={{ position: 'relative', display: 'block' }}>
+                    <input
+                      ref={weightRef}
+                      className="size-finder-input"
+                      type="number"
+                      inputMode="numeric"
+                      min={35}
+                      max={200}
+                      step={1}
+                      value={weight}
+                      onChange={(event) => { setWeight(event.target.value); clearError(); }}
+                      placeholder="75"
+                      aria-describedby={error ? 'size-finder-error' : undefined}
+                      style={{ ...INPUT, paddingRight: 36 }}
+                    />
+                    <span aria-hidden="true" style={UNIT}>kg</span>
+                  </span>
                 </label>
               </div>
 
@@ -277,7 +311,11 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                 <span id="size-finder-fit-label" style={{ ...FIELD_LABEL, display: 'block', marginBottom: 6 }}>
                   Fit
                 </span>
-                <div role="group" aria-labelledby="size-finder-fit-label" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <div
+                  role="group"
+                  aria-labelledby="size-finder-fit-label"
+                  style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}
+                >
                   {FIT_OPTIONS.map((option) => {
                     const active = fit === option;
                     return (
@@ -287,9 +325,7 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                         aria-pressed={active}
                         onClick={() => { setFit(option); clearError(); }}
                         className="size-finder-chip"
-                        title={FIT_HINTS[option]}
                         style={{
-                          flex: '1 1 70px',
                           minHeight: 44,
                           padding: '6px 10px',
                           borderRadius: 3,
@@ -307,6 +343,9 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                     );
                   })}
                 </div>
+                <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+                  {FIT_HINTS[fit] || FIT_HINTS.regular}
+                </p>
               </div>
 
               {error && (
@@ -328,13 +367,13 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                   cursor: 'pointer',
                 }}
               >
-                Suggest my size
+                Find my size
               </button>
             </>
           )}
 
           <div ref={resultRef} aria-live="polite">
-            {result && (
+            {showResult && (
               <div
                 style={{
                   border: '1px solid rgba(201,168,76,0.28)',
@@ -345,23 +384,39 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                   gap: 10,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, color: 'var(--gold)' }}>
-                    {result.size}
-                  </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: confidence.color }}>
-                    <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: 999, background: confidence.color }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span
+                    style={CONFIDENCE_PILL(
+                      confidence.color,
+                      result.confidence === 'high'
+                        ? 'rgba(143,224,176,0.35)'
+                        : result.confidence === 'medium'
+                          ? 'rgba(201,168,76,0.35)'
+                          : 'var(--border)',
+                    )}
+                  >
+                    <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: 999, background: confidence.color }} />
                     {confidence.label}
                   </span>
-                  {!editing && (
-                    <button
-                      type="button"
-                      onClick={() => { setEditing(true); setShowWhy(false); }}
-                      style={{ marginLeft: 'auto', minHeight: 36, padding: '4px 12px', background: 'none', border: '1px solid var(--border)', borderRadius: 3, color: 'var(--text2)', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
-                    >
-                      Edit
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setEditing(true); setShowWhy(false); }}
+                    style={{
+                      marginLeft: 'auto',
+                      minHeight: 44,
+                      padding: '4px 14px',
+                      background: 'none',
+                      border: '1px solid var(--border)',
+                      borderRadius: 3,
+                      color: 'var(--text2)',
+                      fontSize: 10,
+                      letterSpacing: 1,
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Edit
+                  </button>
                 </div>
 
                 {result.swappedForStock && (
@@ -460,6 +515,10 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                     </div>
                   )}
                 </div>
+
+                {/* The size is shown in the header; announce it here so screen
+                    readers still hear the recommendation. */}
+                <span className="sr-only">Your size is {result.size}. {confidence.label}.</span>
               </div>
             )}
           </div>
