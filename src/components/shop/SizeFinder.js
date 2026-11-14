@@ -23,9 +23,47 @@ const FIT_HINTS = {
 };
 
 const CONFIDENCE = {
-  high: { label: 'High confidence', color: '#8fe0b0' },
-  medium: { label: 'Likely match', color: 'var(--gold)' },
-  low: { label: 'Rough estimate', color: 'var(--text3)' },
+  high: { label: 'High match', short: 'High match', color: '#8fe0b0' },
+  medium: { label: 'Likely match', short: 'Likely', color: 'var(--gold)' },
+  low: { label: 'Rough estimate', short: 'Estimate', color: 'var(--text3)' },
+};
+
+const EYEBROW = {
+  display: 'block',
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: 1.2,
+  textTransform: 'uppercase',
+  color: 'var(--gold)',
+};
+
+const META = {
+  display: 'block',
+  fontSize: 11,
+  color: 'var(--text3)',
+  marginTop: 3,
+  lineHeight: 1.5,
+};
+
+const INPUT = {
+  width: '100%',
+  boxSizing: 'border-box',
+  background: 'var(--bg2)',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  color: 'var(--text)',
+  padding: '10px 12px',
+  minHeight: 44,
+  outline: 'none',
+};
+
+const FIELD_LABEL = {
+  display: 'grid',
+  gap: 5,
+  fontSize: 11,
+  color: 'var(--text3)',
+  letterSpacing: 1,
+  textTransform: 'uppercase',
 };
 
 function readStorage() {
@@ -43,6 +81,9 @@ function readStorage() {
  * has them, and the published size chart otherwise. The recommendation is
  * computed locally and remembered on the device, so returning shoppers see
  * their size on every product page.
+ *
+ * The card stays quiet: the size and one line of facts are always visible, and
+ * the full explanation sits behind "Why this size?".
  */
 export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSelect, stockFor, onOpenSizeGuide }) {
   const supported = useMemo(() => supportsSizeGuidance(sizes, sizeRanges), [sizes, sizeRanges]);
@@ -71,6 +112,7 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
   const [fit, setFit] = useState(saved ? saved.fit : 'regular');
   const [error, setError] = useState('');
   const [result, setResult] = useState(initialResult);
+  const [showWhy, setShowWhy] = useState(false);
 
   const heightRef = useRef(null);
   const weightRef = useRef(null);
@@ -103,6 +145,7 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
     }
     setResult(next);
     setEditing(false);
+    setShowWhy(false);
     saveFitProfile({ height: h, weight: w, fit }, readStorage());
     if (typeof window !== 'undefined') {
       window.setTimeout(() => {
@@ -113,6 +156,9 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
 
   const confidence = result ? (CONFIDENCE[result.confidence] || CONFIDENCE.low) : null;
   const isSelected = result && String(selectedSize) === String(result.size);
+  const profileLine = result
+    ? `${height} cm · ${weight} kg · ${FIT_LABELS[fit] || FIT_LABELS.regular}`
+    : '';
 
   return (
     <section
@@ -122,8 +168,8 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
         marginTop: 4,
         marginBottom: 28,
         border: '1px solid var(--border-gold, rgba(201,168,76,0.35))',
-        borderRadius: 4,
-        background: 'rgba(201,168,76,0.04)',
+        borderRadius: 6,
+        background: 'rgba(201,168,76,0.045)',
         overflow: 'hidden',
       }}
     >
@@ -146,17 +192,28 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
           textAlign: 'left',
         }}
       >
-        <Sparkles size={16} color="var(--gold)" aria-hidden="true" style={{ flexShrink: 0 }} />
+        <Sparkles size={15} color="var(--gold)" aria-hidden="true" style={{ flexShrink: 0 }} />
         <span style={{ flex: 1, minWidth: 0 }}>
-          <span id="size-finder-title" style={{ display: 'block', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
-            {result ? `Your size: ${result.size}` : 'Find my size'}
+          <span id="size-finder-title" style={EYEBROW}>
+            {result ? 'Your size' : 'Find my size'}
           </span>
-          <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginTop: 3, lineHeight: 1.5 }}>
-            {result
-              ? `${confidence ? confidence.label : ''} · based on your saved height, weight and fit`
-              : 'Height + weight + the fit you like. No tape measure needed.'}
+          <span style={META}>
+            {result ? profileLine : 'Height + weight + fit'}
           </span>
         </span>
+        {result && (
+          <span
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 30,
+              lineHeight: 1,
+              color: 'var(--gold)',
+              flexShrink: 0,
+            }}
+          >
+            {result.size}
+          </span>
+        )}
         <ChevronDown
           size={16}
           aria-hidden="true"
@@ -174,7 +231,7 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
           {editing && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
-                <label style={{ display: 'grid', gap: 5, fontSize: 11, color: 'var(--text3)', letterSpacing: 1, textTransform: 'uppercase' }}>
+                <label style={FIELD_LABEL}>
                   Height (cm)
                   <input
                     ref={heightRef}
@@ -188,20 +245,10 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                     onChange={(event) => { setHeight(event.target.value); clearError(); }}
                     placeholder="175"
                     aria-describedby={error ? 'size-finder-error' : undefined}
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      background: 'var(--bg2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 4,
-                      color: 'var(--text)',
-                      padding: '10px 12px',
-                      minHeight: 44,
-                      outline: 'none',
-                    }}
+                    style={INPUT}
                   />
                 </label>
-                <label style={{ display: 'grid', gap: 5, fontSize: 11, color: 'var(--text3)', letterSpacing: 1, textTransform: 'uppercase' }}>
+                <label style={FIELD_LABEL}>
                   Weight (kg)
                   <input
                     ref={weightRef}
@@ -215,24 +262,14 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                     onChange={(event) => { setWeight(event.target.value); clearError(); }}
                     placeholder="75"
                     aria-describedby={error ? 'size-finder-error' : undefined}
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      background: 'var(--bg2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 4,
-                      color: 'var(--text)',
-                      padding: '10px 12px',
-                      minHeight: 44,
-                      outline: 'none',
-                    }}
+                    style={INPUT}
                   />
                 </label>
               </div>
 
               <div>
-                <span id="size-finder-fit-label" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>
-                  How do you like it to fit?
+                <span id="size-finder-fit-label" style={{ ...FIELD_LABEL, display: 'block', marginBottom: 6 }}>
+                  Fit
                 </span>
                 <div role="group" aria-labelledby="size-finder-fit-label" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {FIT_OPTIONS.map((option) => {
@@ -294,43 +331,41 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
             {result && (
               <div
                 style={{
-                  border: '1px solid rgba(201,168,76,0.35)',
+                  border: '1px solid rgba(201,168,76,0.28)',
                   background: 'rgba(0,0,0,0.25)',
-                  borderRadius: 3,
+                  borderRadius: 6,
                   padding: 12,
                   display: 'grid',
-                  gap: 8,
+                  gap: 10,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--text3)' }}>Your size</span>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 30, lineHeight: 1, color: 'var(--gold)' }}>{result.size}</span>
-                  <span style={{ fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: confidence.color, border: `1px solid ${confidence.color}`, borderRadius: 999, padding: '3px 8px' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 0.9, color: 'var(--gold)' }}>
+                    {result.size}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: confidence.color }}>
+                    <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: 999, background: confidence.color }} />
                     {confidence.label}
                   </span>
                   {!editing && (
                     <button
                       type="button"
-                      onClick={() => setEditing(true)}
-                      style={{ marginLeft: 'auto', minHeight: 32, padding: '4px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 3, color: 'var(--text2)', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
+                      onClick={() => { setEditing(true); setShowWhy(false); }}
+                      style={{ marginLeft: 'auto', minHeight: 36, padding: '4px 12px', background: 'none', border: '1px solid var(--border)', borderRadius: 3, color: 'var(--text2)', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer' }}
                     >
                       Edit
                     </button>
                   )}
                 </div>
 
-                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--text2)' }}>
-                  {result.reason}
-                </p>
-
                 {result.swappedForStock && (
-                  <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--gold)' }}>
-                    {result.skippedSize} is out of stock in this colour, so {result.size} is the closest available.
+                  <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--gold)' }}>
+                    {result.skippedSize} sold out — {result.size} is the closest available.
                   </p>
                 )}
                 {!result.swappedForStock && result.inStock === false && (
-                  <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--gold)' }}>
-                    {result.size} is out of stock in this colour — try another colour above.
+                  <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--gold)' }}>
+                    Sold out in this colour — try another one above.
                   </p>
                 )}
 
@@ -359,20 +394,19 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                       type="button"
                       onClick={onOpenSizeGuide}
                       style={{
-                        flex: '1 1 110px',
+                        flex: '0 0 auto',
                         minHeight: 44,
+                        padding: '0 12px',
                         borderRadius: 3,
                         border: '1px solid var(--border)',
                         background: 'transparent',
                         color: 'var(--text2)',
                         fontSize: 11,
                         fontWeight: 600,
-                        letterSpacing: 1,
-                        textTransform: 'uppercase',
+                        letterSpacing: 0.6,
                         cursor: 'pointer',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
                         gap: 6,
                       }}
                     >
@@ -382,9 +416,44 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
                   )}
                 </div>
 
-                <p style={{ margin: 0, fontSize: 10, lineHeight: 1.6, color: 'var(--text3)' }}>
-                  An estimate from height, weight and preferred fit. If it is not right, exchange within 7 days.
-                </p>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowWhy((value) => !value)}
+                    aria-expanded={showWhy}
+                    aria-controls={showWhy ? 'size-finder-why' : undefined}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      minHeight: 32,
+                      padding: '4px 0',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text3)',
+                      fontSize: 11,
+                      letterSpacing: 0.3,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Why this size?
+                    <ChevronDown
+                      size={12}
+                      aria-hidden="true"
+                      style={{ transform: showWhy ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                    />
+                  </button>
+                  {showWhy && (
+                    <div id="size-finder-why" style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+                      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--text2)' }}>
+                        {result.reason}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 10, lineHeight: 1.6, color: 'var(--text3)' }}>
+                        No tape measure needed — exchange within 7 days if it is not right.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
