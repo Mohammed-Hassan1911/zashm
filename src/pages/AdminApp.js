@@ -23,10 +23,12 @@ import {
   computeAnalyticsReport,
 } from '../lib/analytics';
 import AdminLogin from '../components/admin/AdminLogin';
+import DateField from '../components/admin/DateField';
 import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUploader';
 import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
 import { api, deleteStorageFile } from '../lib/api';
+import { formatDateLabel, inclusiveDays } from '../lib/calendar';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, Legend } from 'recharts';
 import Papa from 'papaparse';
 import { toast } from '../components/ui/BackToTop';
@@ -2829,16 +2831,43 @@ function DiscountsPanel({ canEdit }) {
                     <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Value *</label>
                     <input type="number" value={form.value} onChange={e => update('value', e.target.value)} style={{ width:'100%' }} placeholder="10" />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div className="admin-date-range">
                     <div>
                       <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Start</label>
-                      <input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} style={{ width:'100%', fontSize:11 }} />
+                      <DateField
+                        value={form.startDate}
+                        onChange={(value) => update('startDate', value)}
+                        ariaLabel="Start date"
+                        rangeStart={form.startDate}
+                        rangeEnd={form.endDate}
+                      />
                     </div>
                     <div>
                       <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>End</label>
-                      <input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} style={{ width:'100%', fontSize:11 }} />
+                      <DateField
+                        value={form.endDate}
+                        onChange={(value) => update('endDate', value)}
+                        ariaLabel="End date"
+                        minDate={form.startDate}
+                        rangeStart={form.startDate}
+                        rangeEnd={form.endDate}
+                        align="right"
+                      />
                     </div>
                   </div>
+                  {form.startDate && form.endDate && (
+                    form.endDate < form.startDate ? (
+                      <p className="admin-date-hint is-error" role="alert">
+                        The end date must be after the start date.
+                      </p>
+                    ) : (
+                      <p className="admin-date-hint">
+                        <span className="admin-date-days">{inclusiveDays(form.startDate, form.endDate)} days</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formatDateLabel(form.startDate)} → {formatDateLabel(form.endDate)}</span>
+                      </p>
+                    )
+                  )}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>

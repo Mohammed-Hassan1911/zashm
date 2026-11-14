@@ -2169,6 +2169,209 @@ main, [role="main"] {
   color: var(--gold);
 }
 
+/* ─── Admin: branded date field (discount window) ──────────────────────────── */
+.admin-date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.zshm-date { position: relative; }
+
+.zshm-date-trigger {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  text-align: left;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.zshm-date-trigger:hover {
+  border-color: rgba(201, 168, 76, 0.45);
+  background: var(--bg4);
+}
+.zshm-date-trigger:focus-visible,
+.zshm-date-trigger[aria-expanded="true"] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.14);
+  outline: none;
+}
+.zshm-date-icon { color: var(--gold); flex-shrink: 0; opacity: 0.85; }
+.zshm-date-value {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.zshm-date-placeholder { flex: 1; min-width: 0; color: var(--text3); }
+.zshm-date-chevron { color: var(--text3); flex-shrink: 0; transition: transform 0.2s, color 0.2s; }
+.zshm-date-trigger[aria-expanded="true"] .zshm-date-chevron { transform: rotate(180deg); color: var(--gold); }
+
+.zshm-date-pop {
+  position: absolute;
+  z-index: 40;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  padding: 12px;
+  background: linear-gradient(180deg, #151515 0%, #0b0b0b 100%);
+  border: 1px solid rgba(201, 168, 76, 0.34);
+  border-radius: 6px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.5);
+  animation: zshm-date-in 160ms ease-out;
+}
+.zshm-date-pop.is-down { top: calc(100% + 8px); }
+.zshm-date-pop.is-up { bottom: calc(100% + 8px); }
+.zshm-date-pop.is-left { left: 0; }
+.zshm-date-pop.is-right { right: 0; }
+
+@keyframes zshm-date-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.zshm-date-head { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
+.zshm-date-nav {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text2);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.zshm-date-nav:hover { border-color: var(--border); background: var(--bg3); color: var(--gold); }
+.zshm-date-nav:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.zshm-date-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+}
+.zshm-date-month { font-family: var(--font-display); font-size: 17px; line-height: 1; color: var(--text); }
+.zshm-date-year { font-size: 10px; letter-spacing: 1.6px; color: var(--gold); }
+
+.zshm-date-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.zshm-date-weekdays span {
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text3);
+}
+
+.zshm-date-grid { display: grid; gap: 2px; padding-top: 6px; }
+.zshm-date-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.zshm-date-day {
+  height: 38px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.zshm-date-day:hover:not(:disabled) { background: rgba(201, 168, 76, 0.12); color: var(--text); }
+.zshm-date-day:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; z-index: 1; }
+.zshm-date-day.is-outside { color: var(--text3); opacity: 0.45; }
+.zshm-date-day.is-today { border-color: rgba(201, 168, 76, 0.45); color: var(--gold); }
+.zshm-date-day.is-between { background: rgba(201, 168, 76, 0.12); color: var(--text); }
+.zshm-date-day.is-edge { border-color: var(--gold); color: var(--gold); }
+.zshm-date-day.is-selected {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0a0a0a;
+  font-weight: 700;
+}
+.zshm-date-day.is-selected:hover:not(:disabled) { background: var(--gold-light); color: #0a0a0a; }
+.zshm-date-day:disabled,
+.zshm-date-day.is-disabled {
+  color: var(--text3);
+  opacity: 0.25;
+  cursor: not-allowed;
+  background: transparent;
+  border-color: transparent;
+}
+
+.zshm-date-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.zshm-date-shortcut {
+  min-height: 32px;
+  padding: 0 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text3);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.zshm-date-shortcut:hover:not(:disabled) { color: var(--text); border-color: var(--border); }
+.zshm-date-shortcut.is-primary { color: var(--gold); }
+.zshm-date-shortcut.is-primary:hover:not(:disabled) {
+  border-color: rgba(201, 168, 76, 0.4);
+  background: rgba(201, 168, 76, 0.08);
+}
+.zshm-date-shortcut:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.zshm-date-shortcut:disabled { opacity: 0.35; cursor: not-allowed; }
+.zshm-date-foot-note { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); }
+
+.admin-date-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 0 0;
+  font-size: 11px;
+  color: var(--text3);
+}
+.admin-date-hint .admin-date-days { color: var(--gold); font-weight: 600; letter-spacing: 0.4px; }
+.admin-date-hint.is-error { color: #e74c3c; }
+
+@media (max-width: 380px) {
+  .admin-date-range { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zshm-date-pop { animation: none; }
+  .zshm-date-trigger,
+  .zshm-date-chevron,
+  .zshm-date-day,
+  .zshm-date-nav,
+  .zshm-date-shortcut { transition: none; }
+}
+
 /* ─── Admin dashboard: phone / small-screen tuning ─────────────────────────── */
 @media (max-width: 768px) {
   .admin-container input,
