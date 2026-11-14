@@ -23,9 +23,9 @@ const FIT_HINTS = {
 };
 
 const CONFIDENCE = {
-  high: { label: 'High match', short: 'High match', color: '#8fe0b0' },
-  medium: { label: 'Likely match', short: 'Likely', color: 'var(--gold)' },
-  low: { label: 'Rough estimate', short: 'Estimate', color: 'var(--text3)' },
+  high: { label: 'High match', color: '#8fe0b0' },
+  medium: { label: 'Likely match', color: 'var(--gold)' },
+  low: { label: 'Rough estimate', color: 'var(--text3)' },
 };
 
 const EYEBROW = {
@@ -112,6 +112,11 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
   const [fit, setFit] = useState(saved ? saved.fit : 'regular');
   const [error, setError] = useState('');
   const [result, setResult] = useState(initialResult);
+  // The profile that produced `result`. Kept separate from the form fields so
+  // editing the inputs never relabels an old recommendation with new numbers.
+  const [resultProfile, setResultProfile] = useState(
+    initialResult && saved ? { height: saved.height, weight: saved.weight, fit: saved.fit } : null,
+  );
   const [showWhy, setShowWhy] = useState(false);
 
   const heightRef = useRef(null);
@@ -144,6 +149,7 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
       return;
     }
     setResult(next);
+    setResultProfile({ height: h, weight: w, fit });
     setEditing(false);
     setShowWhy(false);
     saveFitProfile({ height: h, weight: w, fit }, readStorage());
@@ -156,8 +162,8 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
 
   const confidence = result ? (CONFIDENCE[result.confidence] || CONFIDENCE.low) : null;
   const isSelected = result && String(selectedSize) === String(result.size);
-  const profileLine = result
-    ? `${height} cm · ${weight} kg · ${FIT_LABELS[fit] || FIT_LABELS.regular}`
+  const profileLine = result && resultProfile
+    ? `${resultProfile.height} cm · ${resultProfile.weight} kg · ${FIT_LABELS[resultProfile.fit] || FIT_LABELS.regular}`
     : '';
 
   return (

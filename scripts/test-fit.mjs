@@ -280,6 +280,8 @@ ok(finder.includes('size-finder-input'), 'the inputs are scoped for mobile sizin
 ok(finder.includes('No tape measure needed'), 'the promise of no tape measure is stated');
 ok(finder.includes('exchange within 7 days'), 'the exchange reassurance is shown');
 ok(finder.includes('{result.reason}'), 'the component renders the engine explanation');
+ok(finder.includes('Why this size?'), 'the long explanation sits behind a disclosure');
+ok(finder.includes('resultProfile'), 'the collapsed facts come from the profile that produced the result');
 ok(!/buildReason|inferGender/.test(finder), 'the component no longer builds its own reason or gender');
 ok(!/>\s*Women\s*</.test(finder) && !/>\s*Men\s*</.test(finder), 'no department choice ships in the finder');
 ok(!/'women'|"women"/.test(finder), 'no women branch ships in the finder');
