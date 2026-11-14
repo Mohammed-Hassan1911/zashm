@@ -601,6 +601,16 @@ try {
       assert.ok(/Coming soon/.test(cart), 'card option is advertised as coming soon');
     });
 
+    await step('the 4-day exchange reassurance sits under PLACE ORDER', () => {
+      const placeAt = cart.indexOf('PLACE ORDER');
+      const noteAt = cart.indexOf('checkout-exchange-note');
+      assert.ok(noteAt > placeAt, 'exchange note must render after the CTA');
+      assert.ok(/Exchange within/.test(cart), 'the note states the exchange window');
+      assert.ok(/4 days/.test(cart) && /returns within/.test(cart) && /7 days/.test(cart),
+        'the note states both windows: 4-day exchange, 7-day return');
+      assert.ok(/unworn, with tags/.test(cart), 'the condition is stated next to the promise');
+    });
+
     const app = read('src/App.js');
     const css = read('src/index.css');
     await step('route skeletons reserve the final layout while chunks load', () => {
@@ -892,6 +902,14 @@ try {
         'gallery arrows and colour swatches are 44px');
       assert.ok(/const availableTabs = descriptionText \? \['description', 'details', 'care'\] : \['details', 'care'\]/.test(product),
         'an empty description never renders an empty tab');
+    });
+
+    await step('the return windows are split: 4-day exchange, 7-day return', () => {
+      assert.ok(/4-Day Exchange · 7-Day Returns/.test(product), 'product page headline states both windows');
+      assert.ok(/Size exchange within 4 days, returns within 7 days/.test(product), 'product page body states both windows');
+      assert.ok(/size exchange can be requested within 4 days, and a return within 7 days/.test(app),
+        'the policy modal states both windows');
+      assert.ok(!/within 7 days of receiving your order, provided/.test(app), 'the old single-window policy is gone');
     });
 
     await step('floating actions hide only while typing on a small screen', () => {

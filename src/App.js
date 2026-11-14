@@ -407,7 +407,7 @@ function InfoModal({ type, onClose }) {
       text: (
         <div style={{ fontSize: 13, lineHeight: 1.6, display: 'grid', gap: 12 }}>
           <p><strong>Standard Shipping:</strong> Delivery within 4-8 business days across Egypt.</p>
-          <p><strong>Return Policy:</strong> You can request a return or exchange within 7 days of receiving your order, provided the items are in their original package, unworn, and with all tags attached.</p>
+          <p><strong>Return Policy:</strong> A size exchange can be requested within 4 days, and a return within 7 days, of receiving your order — provided the items are in their original package, unworn, and with all tags attached.</p>
           <p><strong>Inspection:</strong> You have the right to inspect the quality of the fabrics upon delivery before paying the courier.</p>
         </div>
       )

@@ -278,7 +278,7 @@ ok(finder.includes('aria-live="polite"'), 'the result is announced politely');
 ok(finder.includes('noValidate'), 'the finder controls its own validation');
 ok(finder.includes('size-finder-input'), 'the inputs are scoped for mobile sizing');
 ok(finder.includes('No tape measure needed'), 'the promise of no tape measure is stated');
-ok(finder.includes('exchange within 7 days'), 'the exchange reassurance is shown');
+ok(finder.includes('exchange within 4 days'), 'the exchange reassurance is shown');
 ok(finder.includes('{result.reason}'), 'the component renders the engine explanation');
 ok(finder.includes('Why this size?'), 'the long explanation sits behind a disclosure');
 ok(finder.includes('resultProfile'), 'the collapsed facts come from the profile that produced the result');
