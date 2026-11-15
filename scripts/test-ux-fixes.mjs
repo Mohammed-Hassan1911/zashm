@@ -883,6 +883,19 @@ try {
         'framer-motion animations honour prefers-reduced-motion');
     });
 
+    await step('removing a wishlist item is red from both the card and the page', () => {
+      assert.ok(/isWished\s*\?\s*'error'\s*:\s*'success'/.test(card),
+        'the product card reports a removal as an error toast');
+      assert.ok(/isWished\s*\?\s*'error'\s*:\s*'success'/.test(product),
+        'the product page reports a removal as an error toast');
+      assert.ok(!/'info'/.test(card) && !/'info'/.test(product),
+        'neither heart uses the blue info toast any more');
+      assert.ok(/toggleWishlist\(product\.id\)[\s\S]{0,220}isWished \? 'error' : 'success'/.test(card),
+        'the colour follows the removal in the card, not the addition');
+      assert.ok(/toggleWishlist\(p\.id\)[\s\S]{0,220}isWished \? 'error' : 'success'/.test(product),
+        'the colour follows the removal on the product page, not the addition');
+    });
+
     await step('the home page shows every product once, whatever its label', () => {
       assert.ok(/curatedIds\.has\(product\.id\)/.test(home),
         'pieces outside Featured/New Arrival fall into The Collection row');

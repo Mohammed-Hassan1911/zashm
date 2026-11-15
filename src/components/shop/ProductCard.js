@@ -178,7 +178,7 @@ export default function ProductCard({ product, index = 0 }) {
                   isWished
                     ? 'Removed from wishlist'
                     : 'Added to wishlist',
-                  isWished ? 'info' : 'success'
+                  isWished ? 'error' : 'success'
                 );
               }
             }}
