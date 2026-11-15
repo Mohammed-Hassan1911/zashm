@@ -20,6 +20,7 @@ const {
   computeCouponDiscount,
   sendTelegramNotification,
   buildOrderStatusMessage,
+  buildOrderFeedbackActions,
   shouldNotifyStatusChange,
   buildOrderEditMessage,
   buildOrderTelegramActions,
@@ -251,11 +252,16 @@ async function updateOrder(req, res) {
           id: full.id || id,
           tracking_url: full.tracking_url || trackingUrlFor(full.id || id),
         };
+        // A delivered order gets one extra button: a WhatsApp chat with the
+        // customer, pre-filled with a request for their opinion on the product.
+        const replyMarkup = String(effectiveStatus) === 'Delivered'
+          ? buildOrderFeedbackActions(statusOrder, statusOrder.tracking_url)
+          : buildOrderTelegramActions(statusOrder, statusOrder.tracking_url, {
+            includeWhatsApp: false,
+          });
         await sendTelegramNotification(buildOrderStatusMessage(statusOrder, effectiveStatus), {
           parseMode: null,
-          replyMarkup: buildOrderTelegramActions(statusOrder, statusOrder.tracking_url, {
-            includeWhatsApp: false,
-          }),
+          replyMarkup,
         });
       } catch (e) {
         console.error('Telegram (status) failed:', e.message);

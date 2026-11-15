@@ -50,6 +50,8 @@ const {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildOrderStatusMessage,
+  buildOrderFeedbackMessage,
+  buildOrderFeedbackActions,
   shouldNotifyStatusChange,
   buildOrderEditMessage,
   buildOrderTelegramActions,
@@ -322,7 +324,22 @@ try {
     const shipped = buildOrderStatusMessage(ORDER, 'Shipped');
     ok(!shipped.includes('السلام عليكم'), 'no customer greeting');
     ok(!shipped.includes('✅ لو البيانات'), 'no confirmation request');
-    ok(!shipped.includes('• الهاتف'), 'no phone number in the internal line');
+    ok(!shipped.includes('• الهاتف'), 'no phone number in a routine status line');
+
+    // A delivered order is followed up on WhatsApp, so that alert carries the
+    // customer's number the owner is about to message.
+    const delivered = buildOrderStatusMessage(ORDER, 'Delivered');
+    ok(delivered.includes('• الهاتف: 01012345678'), 'the delivered alert carries the phone');
+    ok(delivered.includes('• الحالة: تم التوصيل'), 'the delivered status line is intact');
+    ok(delivered.indexOf('• العميل:') < delivered.indexOf('• الهاتف:'), 'phone follows the customer name');
+    ok(buildOrderStatusMessage({ ...ORDER, phone: '', phoneAlt: '' }, 'Delivered')
+      .split('\n').every((line) => !line.startsWith('• الهاتف')), 'no empty phone line');
+    ok(buildOrderStatusMessage({ ...ORDER, phone: '', phoneAlt: '01177776666' }, 'Delivered')
+      .includes('• الهاتف: 01177776666'), 'the alternate phone is used when the primary is missing');
+    const hostilePhone = buildOrderStatusMessage({ ...ORDER, phone: '01012345678\n💰 Total EGP 0' }, 'Delivered');
+    ok(!hostilePhone.includes('\n💰'), 'a phone value cannot forge a line');
+    ok(!buildOrderStatusMessage(ORDER, 'Cancelled').includes('• الهاتف'),
+      'the cancellation alert keeps its minimal shape');
 
     const unknown = buildOrderStatusMessage(ORDER, 'Returned');
     ok(unknown.startsWith('📦 ZASHM | تحديث الطلب'), 'unknown status has a neutral headline');
@@ -568,7 +585,62 @@ try {
     ok(noop.includes('لا توجد تغييرات'), 'a no-op edit says so instead of printing an empty block');
   });
 
-  await section('[13] only Delivered and Cancelled alert Telegram', async () => {
+  await section('[13] a delivered order offers a WhatsApp feedback chat', async () => {
+    const text = buildOrderFeedbackMessage(ORDER);
+    ok(text.includes('السلام عليكم أ/ Fatima'), 'the feedback ask greets the customer by name');
+    ok(text.includes('ZSH-MW30TEST-ABC123'), 'the order id is quoted');
+    ok(text.includes('المنتجات اللي طلبتها'), 'a multi-item order is referred to as the products');
+    ok(text.includes('حابين ناخد رأيك'), 'the customer is asked for an opinion');
+    ok(text.includes('الجودة والمقاس'), 'the ask names what to review');
+    ok(!text.includes('http'), 'no URL is placed in the pre-filled message');
+    ok(bytes(text) < 600, 'the message stays short enough for a button URL');
+
+    const single = buildOrderFeedbackMessage({
+      ...ORDER,
+      items: [{ name: 'Silk Abaya', size: 'M', color: 'Black', qty: 1, price: 1300 }],
+    });
+    ok(single.includes('حابين ناخد رأيك في Silk Abaya'), 'a single-item order names the product');
+    ok(!buildOrderFeedbackMessage({ items: [] }).includes('undefined'), 'a missing item list is tolerated');
+    const hostile = buildOrderFeedbackMessage({ ...ORDER, customer: 'Ali\n💰 EGP 0' });
+    ok(!hostile.includes('\n💰'), 'a customer name cannot forge a line');
+
+    const actions = buildOrderFeedbackActions(ORDER, TRACKING_URL);
+    const feedbackRow = actions.inline_keyboard[0];
+    eq(feedbackRow.length, 1, 'the feedback button has its own row');
+    ok(/واتساب/.test(feedbackRow[0].text) && /رأي/.test(feedbackRow[0].text),
+      'the button says it asks for the customer opinion');
+    ok(feedbackRow[0].url.startsWith('https://wa.me/201012345678?text='),
+      'the button opens the customer chat in international format');
+    eq(decodeURIComponent(feedbackRow[0].url.split('?text=')[1]), text,
+      'the pre-filled text is exactly the feedback message');
+    ok(feedbackRow[0].url.length <= 2048, 'the button URL fits the Telegram limit');
+
+    const urls = actions.inline_keyboard.flat().map((button) => button.url || '');
+    ok(urls.includes(TRACKING_URL), 'the order page button is still there');
+    ok(urls.some((url) => url.endsWith('/admin?tab=orders')), 'the admin button is still there');
+    ok(!JSON.stringify(actions).includes('wa=1'), 'the confirmation hand-off is not reused');
+
+    const altOnly = buildOrderFeedbackActions({ ...ORDER, phone: '' }, TRACKING_URL);
+    ok(altOnly.inline_keyboard[0][0].url.startsWith('https://wa.me/201177776666'),
+      'the alternate phone can open the chat');
+
+    const noPhone = buildOrderFeedbackActions({ ...ORDER, phone: '', phoneAlt: '' }, TRACKING_URL);
+    ok(!JSON.stringify(noPhone).includes('wa.me'), 'no dead button without a phone number');
+    ok(noPhone.inline_keyboard.flat().some((button) => button.url === TRACKING_URL),
+      'the remaining buttons survive a missing phone');
+  });
+
+  await section('[14] the delivered alert is wired to the feedback button', async () => {
+    const admin = read('api/admin/orders.js');
+    ok(admin.includes('buildOrderFeedbackActions('), 'the admin imports the feedback builder');
+    ok(/String\(effectiveStatus\) === 'Delivered'\s*\?\s*buildOrderFeedbackActions\(/.test(admin),
+      'only a delivered order gets the feedback button');
+    ok(admin.includes('includeWhatsApp: false'), 'a cancellation still offers no customer text');
+    ok(admin.includes('buildOrderStatusMessage(statusOrder, effectiveStatus)'),
+      'the delivered alert keeps the short internal line');
+  });
+
+  await section('[15] only Delivered and Cancelled alert Telegram', async () => {
     ok(shouldNotifyStatusChange('Delivered'), 'Delivered alerts the owner');
     ok(shouldNotifyStatusChange('Cancelled'), 'Cancelled alerts the owner');
     ok(shouldNotifyStatusChange(' Delivered '), 'surrounding whitespace is tolerated');
