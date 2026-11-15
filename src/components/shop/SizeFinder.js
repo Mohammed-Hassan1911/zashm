@@ -104,8 +104,9 @@ function readStorage() {
  * "Find my size" — height + weight + preferred fit, no tape measure.
  * Matching uses the owner's per-size height/weight windows when the product
  * has them, and the published size chart otherwise. The recommendation is
- * computed locally and remembered on the device, so returning shoppers see
- * their size on every product page.
+ * computed locally; the profile is remembered on the device so the next visit
+ * starts with the last numbers pre-filled, but the size itself is never
+ * restored on load — a refresh always starts at "Find my size".
  *
  * The card stays quiet: the size and one line of facts are always visible, and
  * the full explanation sits behind "Why this size?".
@@ -114,34 +115,16 @@ export default function SizeFinder({ sizes = [], sizeRanges, selectedSize, onSel
   const supported = useMemo(() => supportsSizeGuidance(sizes, sizeRanges), [sizes, sizeRanges]);
   const saved = useMemo(() => loadFitProfile(readStorage()), []);
 
-  // Mount-only: a saved profile is turned into a recommendation once. Later
-  // submits replace it through state.
-  const initialResult = useMemo(() => {
-    if (!saved) return null;
-    const recommendation = recommendSize({
-      height: saved.height,
-      weight: saved.weight,
-      fit: saved.fit,
-      sizes,
-      sizeRanges,
-      stockFor,
-    });
-    return recommendation.ok ? recommendation : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(!initialResult);
+  const [editing, setEditing] = useState(true);
   const [height, setHeight] = useState(saved ? String(saved.height) : '');
   const [weight, setWeight] = useState(saved ? String(saved.weight) : '');
   const [fit, setFit] = useState(saved ? saved.fit : 'regular');
   const [error, setError] = useState('');
-  const [result, setResult] = useState(initialResult);
+  const [result, setResult] = useState(null);
   // The profile that produced `result`. Kept separate from the form fields so
   // editing the inputs never relabels an old recommendation with new numbers.
-  const [resultProfile, setResultProfile] = useState(
-    initialResult && saved ? { height: saved.height, weight: saved.weight, fit: saved.fit } : null,
-  );
+  const [resultProfile, setResultProfile] = useState(null);
   const [showWhy, setShowWhy] = useState(false);
 
   const heightRef = useRef(null);

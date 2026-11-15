@@ -324,6 +324,121 @@ ok(migration.includes("'sizeRanges'"), 'the view allow-list includes sizeRanges'
 ok(migration.includes("'reservedStock' = ANY (v_allow)"), 'the migration fails closed on reservedStock');
 ok(/products_sizeRanges_object_chk/.test(migration), 'the migration constrains the column to an object');
 
+section('17 — the live production windows (Jacket-Boxy)');
+// Pinned copy of the windows the owner published for product 1794698667338998.
+// If these probes ever move, the storefront is recommending a different size
+// than the owner intended, so the suite fails loudly.
+const LIVE_SIZES = ['M', 'L', 'XL', 'XXL'];
+const LIVE_RANGES = {
+  M: { minWeight: 60, maxWeight: 75, minHeight: 160, maxHeight: 174 },
+  L: { minWeight: 70, maxWeight: 85, minHeight: 170, maxHeight: 185 },
+  XL: { minWeight: 80, maxWeight: 90, minHeight: 180, maxHeight: 195 },
+  XXL: { minWeight: 85, maxWeight: 110, minHeight: 190, maxHeight: 210 },
+};
+const live = (height, weight, extra = {}) => recommendSize({
+  height, weight, fit: 'regular', sizes: LIVE_SIZES, sizeRanges: LIVE_RANGES, ...extra,
+});
+const insideLive = (size, height, weight) => {
+  const range = LIVE_RANGES[size];
+  return weight >= range.minWeight && weight <= range.maxWeight
+    && height >= range.minHeight && height <= range.maxHeight;
+};
+
+eq(JSON.stringify(sanitizeSizeRanges(LIVE_RANGES, LIVE_SIZES)), JSON.stringify(LIVE_RANGES),
+  'every live window survives sanitizing unchanged');
+
+// Sweep the whole plausible body range: whenever a size window contains the
+// customer, the engine must return a size that also contains them.
+let containmentMisses = 0;
+for (let height = 155; height <= 210; height += 5) {
+  for (let weight = 55; weight <= 115; weight += 5) {
+    const containing = LIVE_SIZES.filter((size) => insideLive(size, height, weight));
+    if (!containing.length) continue;
+    const result = live(height, weight);
+    if (!containing.includes(result.size)) containmentMisses += 1;
+  }
+}
+eq(containmentMisses, 0, 'no body inside a live window is sent to a size outside it');
+
+const probes = [
+  [160, 60, 'M', 'the smallest window starts at M'],
+  [174, 75, 'L', 'the M/L overlap resolves to the roomier L'],
+  [175, 76, 'L', 'just above M stays in L'],
+  [180, 78, 'L', 'a tall, light body stays in L'],
+  [185, 85, 'XL', 'the L/XL overlap resolves to XL'],
+  [190, 90, 'XXL', 'the XL/XXL overlap resolves to XXL'],
+  [195, 95, 'XXL', 'above XL the engine moves to XXL'],
+  [200, 100, 'XXL', 'the top of the XXL window is still XXL'],
+  [210, 110, 'XXL', 'the published maximum is XXL'],
+];
+for (const [height, weight, size, label] of probes) {
+  eq(live(height, weight).size, size, `${height} cm / ${weight} kg → ${size} (${label})`);
+}
+
+const below = live(150, 45);
+eq(below.size, 'M', 'a body below every window still gets the nearest size');
+ok(below.distance > 0, 'the below-range distance is positive');
+eq(below.confidence, 'low', 'a body far outside every window reports low confidence');
+
+section('18 — confidence describes the body, not the fit nudge');
+// A slim nudge must not make an in-window shopper look like a poor match.
+const slimInside = live(185, 72, { fit: 'slim' });
+eq(slimInside.size, 'L', 'the slim nudge keeps an L body in L');
+eq(slimInside.distance, 2, 'the fit-adjusted distance is the nudged gap');
+eq(slimInside.bodyDistance, 0, 'the body itself is inside the window');
+eq(slimInside.confidence, 'high', 'an inside-the-window body keeps high confidence');
+ok(slimInside.reason.startsWith('Your height and weight are inside the L range'),
+  'the explanation still says the body is inside the range');
+
+const regularInside = live(172, 70);
+eq(regularInside.confidence, 'high', 'a regular in-window body is a high match');
+const nearMiss = live(190, 78);
+eq(nearMiss.distance, 2, 'a near miss keeps a small distance');
+eq(nearMiss.confidence, 'medium', 'a near miss reports medium confidence');
+eq(nearMiss.size, 'XL', 'a near miss moves up to the closer size');
+ok(nearMiss.reason.startsWith('Closest to size XL'), 'a near miss is described as the closest size');
+
+section('19 — stock swap uses the live matrix');
+// XXL ships only in Burgundy: Black XXL is 0, so the engine must not claim it.
+const blackStock = (size) => ({ M: 5, L: 6, XL: 6, XXL: 0 }[size] ?? 0);
+const burgundyStock = (size) => ({ M: 4, L: 5, XL: 4, XXL: 8 }[size] ?? 0);
+
+const blackNear = live(192, 92, { stockFor: blackStock });
+eq(blackNear.size, 'XL', 'a near-XXL body is offered XL when Black XXL is gone');
+eq(blackNear.swappedForStock, true, 'the swap is reported');
+eq(blackNear.skippedSize, 'XXL', 'the skipped size is named');
+eq(blackNear.inStock, true, 'the offered size is genuinely in stock');
+
+const blackFar = live(196, 96, { stockFor: blackStock });
+eq(blackFar.size, 'XXL', 'a far-XXL body is not pushed into a too-small XL');
+eq(blackFar.inStock, false, 'the engine admits XXL is sold out in this colour');
+eq(blackFar.swappedForStock, false, 'no dishonest swap happens');
+
+const burgundy = live(192, 92, { stockFor: burgundyStock });
+eq(burgundy.size, 'XXL', 'Burgundy XXL is offered when it is in stock');
+eq(burgundy.inStock, true, 'Burgundy XXL reports in stock');
+eq(burgundy.swappedForStock, false, 'no swap is needed when the right size exists');
+
+section('20 — a refresh starts clean');
+// The owner asked for the suggested size to disappear on refresh so other
+// numbers can be entered. The saved profile may pre-fill the form, but the
+// recommendation itself must never be restored on mount.
+ok(!finder.includes('initialResult'), 'the finder no longer restores a saved recommendation');
+ok(finder.includes('const [editing, setEditing] = useState(true)'),
+  'the form is the first thing a refreshed shopper sees');
+ok(finder.includes('const [result, setResult] = useState(null)'),
+  'no recommendation exists before the shopper submits');
+ok(finder.includes('const [resultProfile, setResultProfile] = useState(null)'),
+  'no result profile exists before the shopper submits');
+const recommendCalls = (finder.match(/recommendSize\(/g) || []).length;
+eq(recommendCalls, 1, 'recommendSize runs only from the submit handler');
+ok(finder.includes("const saved = useMemo(() => loadFitProfile(readStorage()), [])"),
+  'the saved profile is still read for pre-filling');
+ok(finder.includes("useState(saved ? String(saved.height) : '')") &&
+   finder.includes("useState(saved ? String(saved.weight) : '')") &&
+   finder.includes("useState(saved ? saved.fit : 'regular')"),
+  'the saved numbers still pre-fill the fields');
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
   console.log('Failures:');

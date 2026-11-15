@@ -249,7 +249,8 @@ export function describeRecommendation(result) {
   if (result.mode === 'ranges') {
     const window = describeRange(result.range);
     if (!window) return `Size ${result.size} is the closest to your height and weight for a ${fit} fit.`;
-    if (result.distance === 0) {
+    const distance = Number.isFinite(result.bodyDistance) ? result.bodyDistance : result.distance;
+    if (distance === 0) {
       return `Your height and weight are inside the ${result.size} range (${window}) — a ${fit} fit.`;
     }
     return `Closest to size ${result.size} (${window}) — a ${fit} fit.`;
@@ -298,7 +299,12 @@ export function recommendSize(input = {}) {
     if (!range) continue;
     const distance = windowGap(range.minWeight, range.maxWeight, effectiveWeight)
       + windowGap(range.minHeight, range.maxHeight, height);
-    candidates.push({ label: size, key: normalizeSize(size), range, distance });
+    // The customer's own body, before the fit preference shifts the weight.
+    // Confidence and the "inside the range" wording must describe the body, not
+    // the nudge: a slim shopper squarely inside a window is still an exact match.
+    const bodyDistance = windowGap(range.minWeight, range.maxWeight, weight)
+      + windowGap(range.minHeight, range.maxHeight, height);
+    candidates.push({ label: size, key: normalizeSize(size), range, distance, bodyDistance });
   }
 
   let mode = 'ranges';
@@ -360,7 +366,8 @@ export function recommendSize(input = {}) {
 
   const chosenStock = stockValue(chosen.label);
   const bmi = weight / ((height / 100) ** 2);
-  let confidence = chosen.distance === 0 ? 'high' : chosen.distance <= 3 ? 'medium' : 'low';
+  const bodyDistance = Number.isFinite(chosen.bodyDistance) ? chosen.bodyDistance : chosen.distance;
+  let confidence = bodyDistance === 0 ? 'high' : bodyDistance <= 3 ? 'medium' : 'low';
   if (Number.isFinite(bmi) && (bmi < 16 || bmi > 40)) confidence = 'low';
 
   const result = {
@@ -369,6 +376,7 @@ export function recommendSize(input = {}) {
     size: chosen.label,
     key: chosen.key,
     distance: chosen.distance,
+    bodyDistance,
     confidence,
     fit,
     inStock: chosenStock === null ? null : chosenStock > 0,

@@ -2064,6 +2064,18 @@ main, [role="main"] {
   .site-footer .footer-contact p:hover {
     transform: none;
   }
+
+  .zshm-date-pop {
+    animation: none;
+  }
+
+  .zshm-date-trigger,
+  .zshm-date-chevron,
+  .zshm-date-day,
+  .zshm-date-nav,
+  .zshm-date-shortcut {
+    transition: none;
+  }
 }
 
 /* Footer social links: always one row, icons adjacent. The 44px tap target is
@@ -2361,15 +2373,6 @@ main, [role="main"] {
 
 @media (max-width: 380px) {
   .admin-date-range { grid-template-columns: 1fr; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .zshm-date-pop { animation: none; }
-  .zshm-date-trigger,
-  .zshm-date-chevron,
-  .zshm-date-day,
-  .zshm-date-nav,
-  .zshm-date-shortcut { transition: none; }
 }
 
 /* ─── Admin dashboard: phone / small-screen tuning ─────────────────────────── */

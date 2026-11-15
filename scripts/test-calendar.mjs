@@ -151,7 +151,9 @@ ok(field.includes('const rangeActive = Boolean(rangeStart && rangeEnd && rangeSt
   'the range highlight needs both ends');
 ok(field.includes("classes.push('is-between')"), 'the days between the ends are tinted');
 ok(field.includes('POPOVER_ESTIMATE'), 'the popover flips when there is no room below');
-ok(!/<input/.test(field), 'the field draws its own calendar instead of a native input');
+// The doc comment mentions the native input it replaces; only real JSX counts.
+const fieldCode = field.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+ok(!/<input/.test(fieldCode), 'the field draws its own calendar instead of a native input');
 
 // ─── [5] the discount form wiring ───────────────────────────────────────────
 section('5 — discount form wiring');
@@ -188,7 +190,7 @@ ok(css.includes('.zshm-date-day:disabled'), 'disabled days look disabled');
 ok(css.includes('.zshm-date-day:focus-visible'), 'days have a visible focus ring');
 ok(css.includes('@media (max-width: 380px)') && css.includes('.admin-date-range { grid-template-columns: 1fr; }'),
   'the fields stack on very small screens');
-ok(css.includes('@media (prefers-reduced-motion: reduce)') && css.includes('.zshm-date-pop { animation: none; }'),
+ok(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.zshm-date-pop \{\s*animation: none;/.test(css),
   'reduced motion is honoured');
 ok(css.includes('.admin-date-hint .admin-date-days'), 'the window length is highlighted in gold');
 
