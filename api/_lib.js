@@ -2207,6 +2207,118 @@ function sanitizeStoragePath(path) {
   return p;
 }
 
+// ─── REVIEW PHOTOS (optional, customer-uploaded) ────────────────────────────
+//
+// Photos live in the existing public `products` bucket under `reviews/<id>/`,
+// so the feature needs no new bucket and no browser-side storage policy: the
+// browser never talks to Storage, the server writes with the service-role key.
+// The database only ever stores the short object path
+// (`product_reviews."photoPath"`), never the bytes, so the table stays tiny.
+// The file name is 24 random hex characters, so a pending photo cannot be
+// discovered by guessing a URL, and the public API only returns a URL for
+// APPROVED reviews.
+
+const REVIEW_PHOTO_BUCKET = 'products';
+const REVIEW_PHOTO_PREFIX = 'reviews';
+const REVIEW_PHOTO_MAX_BYTES = 1.5 * 1024 * 1024;
+const REVIEW_PHOTO_BODY_MAX = 2.2 * 1024 * 1024; // base64 body ceiling (~1.65MB decoded)
+const REVIEW_PHOTO_MIME_EXT = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+/** True when the optional `photoPath` column has been added to the database.
+ * Probed once per warm instance: a missing column means the migration has not
+ * been applied yet, and every photo path then stays switched off instead of
+ * turning every submission into a 500. */
+let _reviewPhotoColumnReady = null;
+async function reviewPhotosEnabled(sb, options = {}) {
+  if (options && options.refresh) _reviewPhotoColumnReady = null;
+  if (_reviewPhotoColumnReady !== null) return _reviewPhotoColumnReady;
+  try {
+    const { error } = await sb.from('product_reviews').select('"photoPath"').limit(1);
+    // A missing column is a definitive "no"; any other failure is transient and
+    // must not be cached as a permanent decision.
+    if (error && isMissingColumnError(error, 'photoPath')) {
+      _reviewPhotoColumnReady = false;
+    } else {
+      _reviewPhotoColumnReady = !error;
+    }
+  } catch (e) {
+    return false;
+  }
+  return _reviewPhotoColumnReady;
+}
+
+/** Test hook: forget the cached column probe. */
+function resetReviewPhotoSupportCache() {
+  _reviewPhotoColumnReady = null;
+}
+
+function isMissingColumnError(error, column) {
+  if (!error) return false;
+  const message = String(error.message || error.details || '');
+  return message.toLowerCase().includes(String(column).toLowerCase())
+    && /column|does not exist/i.test(message);
+}
+
+/** `reviews/<productId>/<24 hex>.<ext>` — random, unguessable, one folder per
+ * product so a single product's photos are easy to find and clean up. */
+function newReviewPhotoPath(productId, ext) {
+  const id = Number(productId);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  const suffix = String(ext || '').toLowerCase();
+  if (!/^[a-z0-9]{2,5}$/.test(suffix)) return null;
+  return `${REVIEW_PHOTO_PREFIX}/${id}/${crypto.randomBytes(12).toString('hex')}.${suffix}`;
+}
+
+/** Uploads a validated photo buffer. Returns the stored path, or null when the
+ * upload failed — a review without its optional photo is still worth keeping,
+ * so the caller decides what to tell the customer. */
+async function uploadReviewPhoto(sb, productId, photo) {
+  if (!photo || !Buffer.isBuffer(photo.buffer) || !photo.buffer.length) return null;
+  const ext = REVIEW_PHOTO_MIME_EXT[photo.contentType];
+  const path = newReviewPhotoPath(productId, ext);
+  if (!path) return null;
+  try {
+    const { error } = await sb.storage
+      .from(REVIEW_PHOTO_BUCKET)
+      .upload(path, photo.buffer, {
+        contentType: photo.contentType,
+        cacheControl: '31536000',
+        upsert: false,
+      });
+    if (error) throw error;
+    return path;
+  } catch (e) {
+    console.error('Review photo upload failed:', (e && e.message) || 'unknown');
+    return null;
+  }
+}
+
+/** Removes one review photo. Only paths under `reviews/` are ever touched, so a
+ * malformed or hostile `photoPath` can never delete a product image. */
+async function removeReviewPhoto(sb, path) {
+  const safe = sanitizeStoragePath(path);
+  if (!safe || !safe.startsWith(`${REVIEW_PHOTO_PREFIX}/`)) return false;
+  const { removed, failed } = await removeStorageFiles(sb, [safe]);
+  if (failed.length) console.error('Review photo delete failed:', safe);
+  return removed.length === 1;
+}
+
+/** Public URL for a stored review photo, or '' when the path is not ours. */
+function reviewPhotoPublicUrl(sb, path) {
+  const safe = sanitizeStoragePath(path);
+  if (!safe || !safe.startsWith(`${REVIEW_PHOTO_PREFIX}/`)) return '';
+  try {
+    const { data } = sb.storage.from(REVIEW_PHOTO_BUCKET).getPublicUrl(safe);
+    return (data && data.publicUrl) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 // Only public objects from this configured Supabase project and products bucket
 // can be cleaned up. External or similarly-shaped URLs are never guessed.
 const PRODUCT_STORAGE_URL_RE = /\/storage\/v1\/object\/public\/products\/(.+)$/;
@@ -2430,6 +2542,18 @@ module.exports = {
   sendPendingOrderAlert,
   detectImageType,
   sanitizeStoragePath,
+  REVIEW_PHOTO_BUCKET,
+  REVIEW_PHOTO_PREFIX,
+  REVIEW_PHOTO_MAX_BYTES,
+  REVIEW_PHOTO_BODY_MAX,
+  REVIEW_PHOTO_MIME_EXT,
+  reviewPhotosEnabled,
+  resetReviewPhotoSupportCache,
+  newReviewPhotoPath,
+  uploadReviewPhoto,
+  removeReviewPhoto,
+  reviewPhotoPublicUrl,
+  isMissingColumnError,
   filePathFromPublicUrl,
   pathsFromProductImageFields,
   storagePathsUsedByOtherProducts,

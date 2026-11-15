@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MessageSquare, Send, Star, X } from 'lucide-react';
+import { ImagePlus, MessageSquare, Send, Star, X } from 'lucide-react';
 import { api } from '../../lib/api';
+import { prepareImage } from '../../lib/imagePrep';
 import StarRating from './StarRating';
+
+// A phone photo is shrunk on the device before it is sent: the server caps the
+// decoded image at 1.5MB, and this keeps the base64 body far below that.
+const PHOTO_MAX_FILE = 12 * 1024 * 1024;
+const PHOTO_MAX_DIM = 1400;
+const PHOTO_MAX_COMPRESSED = 700 * 1024;
 
 const inputStyle = {
   width: '100%',
@@ -43,7 +50,7 @@ function normalizeEgyptPhone(value) {
  * Every read is revalidated in the background, so an approved review still
  * appears without a manual reload.
  */
-const reviewsCache = new Map(); // productId -> { summary, reviews, at }
+const reviewsCache = new Map(); // productId -> { summary, reviews, photosEnabled, at }
 
 function readReviewsCache(productId) {
   if (!productId) return null;
@@ -52,9 +59,9 @@ function readReviewsCache(productId) {
   return hit;
 }
 
-function writeReviewsCache(productId, summary, reviews) {
+function writeReviewsCache(productId, summary, reviews, photosEnabled) {
   if (!productId) return;
-  reviewsCache.set(String(productId), { summary, reviews, at: Date.now() });
+  reviewsCache.set(String(productId), { summary, reviews, photosEnabled: Boolean(photosEnabled), at: Date.now() });
 }
 
 /**
@@ -73,6 +80,13 @@ export default function ProductReviews({ product }) {
       : { average: Number(product && product.rating) || 0, count: Number(product && product.reviews) || 0 }
   ));
   const [reviews, setReviews] = useState(() => (initialCache ? initialCache.reviews : []));
+  // The photo picker only appears once the server can actually store a photo
+  // (the optional `photoPath` column is in place), so a deploy that lands
+  // before the SQL migration simply shows the form it shows today.
+  const [photosEnabled, setPhotosEnabled] = useState(() => Boolean(initialCache && initialCache.photosEnabled));
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const [photoSaved, setPhotoSaved] = useState(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -86,7 +100,8 @@ export default function ProductReviews({ product }) {
   const ratingRef = useRef(null);
   const commentRef = useRef(null);
   const successRef = useRef(null);
-  const [form, setForm] = useState({ name: '', rating: 0, comment: '', website: '', phone: '' });
+  const photoInputRef = useRef(null);
+  const [form, setForm] = useState({ name: '', rating: 0, comment: '', website: '', phone: '', photo: '' });
   const [hoverStar, setHoverStar] = useState(0);
 
   const load = useCallback(async (signal) => {
@@ -104,9 +119,11 @@ export default function ProductReviews({ product }) {
         count: Number(payload && payload.summary && payload.summary.count) || 0,
       };
       const nextReviews = Array.isArray(payload && payload.reviews) ? payload.reviews : [];
+      const nextPhotosEnabled = Boolean(payload && payload.photosEnabled);
       setSummary(nextSummary);
       setReviews(nextReviews);
-      writeReviewsCache(productId, nextSummary, nextReviews);
+      setPhotosEnabled(nextPhotosEnabled);
+      writeReviewsCache(productId, nextSummary, nextReviews, nextPhotosEnabled);
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       setLoadError('Could not load reviews right now.');
@@ -121,6 +138,7 @@ export default function ProductReviews({ product }) {
     if (cached) {
       setSummary(cached.summary);
       setReviews(cached.reviews);
+      setPhotosEnabled(Boolean(cached.photosEnabled));
       setLoading(false);
     } else {
       setSummary({
@@ -128,6 +146,7 @@ export default function ProductReviews({ product }) {
         count: Number(product && product.reviews) || 0,
       });
       setReviews([]);
+      setPhotosEnabled(false);
       setLoading(true);
     }
     setLoadError('');
@@ -177,6 +196,43 @@ export default function ProductReviews({ product }) {
     setErrorField((current) => (current === key ? null : current));
   };
 
+  const pickPhoto = async (event) => {
+    const input = event && event.target;
+    const file = input && input.files && input.files[0];
+    // Reset the input so choosing the same file again still fires onChange.
+    if (input) input.value = '';
+    if (!file) return;
+
+    setPhotoError('');
+    if (!/^image\//.test(String(file.type || ''))) {
+      setPhotoError('Please choose an image file (JPEG, PNG or WebP).');
+      return;
+    }
+    if (file.size > PHOTO_MAX_FILE) {
+      setPhotoError('That photo is larger than 12MB. Please choose a smaller one.');
+      return;
+    }
+
+    setPhotoBusy(true);
+    try {
+      const dataUrl = await prepareImage(file, {
+        maxFileSize: PHOTO_MAX_FILE,
+        maxDim: PHOTO_MAX_DIM,
+        maxSize: PHOTO_MAX_COMPRESSED,
+      });
+      update('photo', dataUrl);
+    } catch (err) {
+      setPhotoError((err && err.message) || 'Could not read that photo. Please try another.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const removePhoto = () => {
+    update('photo', '');
+    setPhotoError('');
+  };
+
   const submit = async (event) => {
     event.preventDefault();
     setFormError('');
@@ -202,20 +258,25 @@ export default function ProductReviews({ product }) {
     }
 
     setErrorField(null);
+    setPhotoSaved(null);
 
     setSending(true);
     try {
-      await api.post('/reviews', {
+      const payload = await api.post('/reviews', {
         productId,
         name,
         rating: form.rating,
         comment,
         website: form.website,
         phone: phone || undefined,
+        // Optional: the server stores it in Storage and keeps only the path.
+        photo: form.photo || undefined,
       });
       setSent(true);
       setErrorField(null);
-      setForm({ name: '', rating: 0, comment: '', website: '', phone: '' });
+      setPhotoSaved(form.photo ? Boolean(payload && payload.photoSaved) : null);
+      setPhotoError('');
+      setForm({ name: '', rating: 0, comment: '', website: '', phone: '', photo: '' });
       // Keep the form mounted so the page does not jump when the response
       // arrives; the success note appears in place above the fields.
     } catch (err) {
@@ -309,9 +370,16 @@ export default function ProductReviews({ product }) {
           </div>
 
           {sent && (
-            <p ref={successRef} role="status" style={{ background: 'rgba(39,174,96,0.10)', border: '1px solid rgba(39,174,96,0.35)', color: '#8fe0b0', borderRadius: 4, padding: '10px 12px', fontSize: 12, marginBottom: 14 }}>
-              Thanks! Your review was received and will appear here once approved.
-            </p>
+            <div ref={successRef} style={{ marginBottom: 14 }}>
+              <p role="status" style={{ background: 'rgba(39,174,96,0.10)', border: '1px solid rgba(39,174,96,0.35)', color: '#8fe0b0', borderRadius: 4, padding: '10px 12px', fontSize: 12, margin: 0 }}>
+                Thanks! Your review was received and will appear here once approved.
+              </p>
+              {photoSaved === false && (
+                <p role="status" style={{ background: 'rgba(243,156,18,0.10)', border: '1px solid rgba(243,156,18,0.35)', color: '#f0c274', borderRadius: 4, padding: '10px 12px', fontSize: 12, margin: '8px 0 0' }}>
+                  Your review was saved, but the photo could not be uploaded. You can add it later.
+                </p>
+              )}
+            </div>
           )}
 
           <div style={{ display: 'grid', gap: 12 }}>
@@ -399,6 +467,83 @@ export default function ProductReviews({ product }) {
                 {form.comment.length}/600
               </span>
             </div>
+
+            {/* Optional photo. Kept small on purpose: the file is resized in
+                the browser and the database only ever stores its path. */}
+            {photosEnabled && (
+              <div>
+                <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>
+                  Photo (optional)
+                </span>
+                <input
+                  ref={photoInputRef}
+                  id="review-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={pickPhoto}
+                  style={{ display: 'none' }}
+                />
+
+                {form.photo ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <img
+                      src={form.photo}
+                      alt="Preview of the photo you chose"
+                      style={{ width: 72, height: 90, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        minHeight: 44,
+                        padding: '8px 14px',
+                        background: 'transparent',
+                        color: 'var(--text2)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        fontSize: 11,
+                      }}
+                    >
+                      <X size={12} /> Remove photo
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { if (photoInputRef.current) photoInputRef.current.click(); }}
+                    disabled={photoBusy}
+                    aria-busy={photoBusy ? 'true' : 'false'}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      minHeight: 44,
+                      padding: '9px 14px',
+                      background: 'transparent',
+                      color: photoBusy ? 'var(--text3)' : 'var(--gold)',
+                      border: '1px dashed var(--border-gold, rgba(201,168,76,0.45))',
+                      borderRadius: 4,
+                      cursor: photoBusy ? 'wait' : 'pointer',
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    <ImagePlus size={13} /> {photoBusy ? 'Preparing photo…' : 'Add a photo'}
+                  </button>
+                )}
+
+                <span style={{ display: 'block', fontSize: 10, color: 'var(--text3)', marginTop: 5 }}>
+                  Optional — the piece on you or laid flat. It helps other shoppers see the real fit.
+                </span>
+                {photoError && (
+                  <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{photoError}</p>
+                )}
+              </div>
+            )}
 
             {/* Honeypot: hidden from people, tempting for bots. */}
             <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
@@ -490,6 +635,23 @@ export default function ProductReviews({ product }) {
               <p style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--text2)', margin: 0, overflowWrap: 'anywhere' }}>
                 {review.comment}
               </p>
+              {review.photoUrl && (
+                <a
+                  href={review.photoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open the photo attached by ${review.name}`}
+                  style={{ display: 'inline-block', marginTop: 10, lineHeight: 0 }}
+                >
+                  <img
+                    src={review.photoUrl}
+                    alt={`Photo attached by ${review.name}`}
+                    loading="lazy"
+                    decoding="async"
+                    style={{ width: 96, height: 120, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)' }}
+                  />
+                </a>
+              )}
             </article>
           ))}
           {summary.count > reviews.length && (

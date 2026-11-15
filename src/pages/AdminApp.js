@@ -3274,6 +3274,23 @@ function ReviewsPanel({ canEdit, onCountsChange }) {
                   <p style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--text2)', margin: '7px 0 0', overflowWrap: 'anywhere' }}>
                     {review.comment}
                   </p>
+                  {review.photoUrl && (
+                    <a
+                      href={review.photoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Open the photo attached by ${review.name}`}
+                      style={{ display: 'inline-block', marginTop: 10, lineHeight: 0 }}
+                    >
+                      <img
+                        src={review.photoUrl}
+                        alt={`Photo attached by ${review.name}`}
+                        loading="lazy"
+                        decoding="async"
+                        style={{ width: 72, height: 90, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg3)' }}
+                      />
+                    </a>
+                  )}
                   <p style={{ fontSize: 10, color: 'var(--text3)', margin: '6px 0 0' }}>
                     Submitted {review.createdAt ? new Date(review.createdAt).toLocaleString('en-GB') : '—'}
                     {review.publishedAt ? ` · Published ${new Date(review.publishedAt).toLocaleDateString('en-GB')}` : ''}

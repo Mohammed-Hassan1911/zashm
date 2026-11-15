@@ -679,10 +679,6 @@ select option { background: var(--bg3); }
     text-align: center;
   }
 
-  /* 7. سطر الاستبدال تحت زر الطلب يبقى مقروءًا على الشاشات الصغيرة. */
-  .checkout-exchange-note {
-    font-size: 12px !important;
-  }
 }
 
 /* ─── RESPONSIVE RULES (was inline <style> blocks — moved here for CSP) ────── */

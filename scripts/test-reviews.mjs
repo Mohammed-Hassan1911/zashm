@@ -38,11 +38,20 @@ const state = {
     { id: 8, active: false, rating: 0, reviews: 0 },
   ],
   reviews: [
-    { id: 1, productId: 7, name: 'Mona', rating: 5, comment: 'Lovely fabric', status: 'approved', createdAt: '2026-11-01T10:00:00.000Z', publishedAt: '2026-11-01T12:00:00.000Z', ipHash: 'secret' },
+    { id: 1, productId: 7, name: 'Mona', rating: 5, comment: 'Lovely fabric', status: 'approved', createdAt: '2026-11-01T10:00:00.000Z', publishedAt: '2026-11-01T12:00:00.000Z', ipHash: 'secret', photoPath: 'reviews/7/0123456789abcdef01234567.jpg' },
     { id: 2, productId: 7, name: 'Omar', rating: 4, comment: 'Great fit', status: 'approved', createdAt: '2026-11-02T10:00:00.000Z', publishedAt: null, ipHash: 'secret' },
     { id: 3, productId: 7, name: 'Hidden', rating: 1, comment: 'pending row', status: 'pending', createdAt: '2026-11-03T10:00:00.000Z', publishedAt: null, ipHash: 'secret' },
   ],
   inserts: [],
+  storage: new Map(),
+  storageRemoved: [],
+  storageFail: false,
+  missingPhotoColumn: false,
+};
+
+const MISSING_PHOTO_COLUMN = {
+  message: 'column product_reviews.photoPath does not exist',
+  code: '42703',
 };
 
 function makeQuery(table) {
@@ -50,11 +59,25 @@ function makeQuery(table) {
   let orderBy = null;
   let limitN = null;
   let mode = 'select';
+  let single = false;
   let insertRows = null;
+  let updateRow = null;
+  let columnError = null;
 
   const rows = () => (table === 'products' ? state.products : state.reviews);
 
+  // Before the migration the column genuinely is not in the table, so a row
+  // read from it must not carry `photoPath` at all.
+  function project(row) {
+    if (!row || !state.missingPhotoColumn) return row;
+    const copy = { ...row };
+    delete copy.photoPath;
+    return copy;
+  }
+
   function execute() {
+    if (columnError) return Promise.resolve({ data: null, error: columnError });
+
     if (mode === 'insert') {
       for (const row of insertRows || []) {
         state.inserts.push({ ...row });
@@ -62,8 +85,34 @@ function makeQuery(table) {
       return Promise.resolve({ data: null, error: null });
     }
 
+    if (mode === 'update') {
+      const updated = [];
+      state.reviews = state.reviews.map((row) => {
+        const hit = filters.every(([col, value]) => String(row[col]) === String(value));
+        if (!hit) return row;
+        const next = { ...row, ...updateRow };
+        updated.push(next);
+        return next;
+      });
+      return Promise.resolve({ data: single ? (updated[0] || null) : updated, error: null });
+    }
+
+    if (mode === 'delete') {
+      const removed = [];
+      state.reviews = state.reviews.filter((row) => {
+        const hit = filters.every(([col, value]) => String(row[col]) === String(value));
+        if (hit) removed.push({ ...row });
+        return !hit;
+      });
+      return Promise.resolve({ data: single ? (removed[0] || null) : removed, error: null });
+    }
+
     let result = rows().filter((row) =>
-      filters.every(([col, value]) => String(row[col]) === String(value))
+      filters.every(([col, value]) => (
+        Array.isArray(value)
+          ? value.map(String).includes(String(row[col]))
+          : String(row[col]) === String(value)
+      ))
     );
     if (orderBy) {
       const { col, ascending } = orderBy;
@@ -75,26 +124,62 @@ function makeQuery(table) {
     }
     if (limitN !== null) result = result.slice(0, limitN);
 
-    if (mode === 'single') {
-      return Promise.resolve({ data: result[0] || null, error: null });
+    if (single) {
+      return Promise.resolve({ data: project(result[0]) || null, error: null });
     }
-    return Promise.resolve({ data: JSON.parse(JSON.stringify(result)), error: null });
+    return Promise.resolve({
+      data: JSON.parse(JSON.stringify(result)).map(project),
+      error: null,
+    });
   }
 
   const query = {
-    select() { return query; },
+    select(cols) {
+      if (typeof cols === 'string' && cols.includes('photoPath') && state.missingPhotoColumn) {
+        columnError = MISSING_PHOTO_COLUMN;
+      }
+      return query;
+    },
     eq(col, value) { filters.push([col, value]); return query; },
+    in(col, values) { filters.push([col, values]); return query; },
     order(col, options) { orderBy = { col, ascending: !options || options.ascending !== false }; return query; },
     limit(n) { limitN = n; return query; },
-    maybeSingle() { mode = 'single'; return execute(); },
+    delete() { mode = 'delete'; return query; },
+    update(patch) { mode = 'update'; updateRow = patch; return query; },
+    maybeSingle() { single = true; return execute(); },
     insert(rowsToInsert) { mode = 'insert'; insertRows = rowsToInsert; return execute(); },
     then(resolve, reject) { return execute().then(resolve, reject); },
   };
   return query;
 }
 
+const fakeStorage = {
+  from: (bucket) => ({
+    upload: async (objectPath, buffer, options) => {
+      if (state.storageFail) return { error: { message: 'upload exploded' } };
+      state.storage.set(objectPath, {
+        bucket,
+        size: buffer.length,
+        contentType: options && options.contentType,
+      });
+      return { error: null };
+    },
+    remove: async (paths) => {
+      for (const objectPath of paths) {
+        state.storage.delete(objectPath);
+        state.storageRemoved.push(objectPath);
+      }
+      return { error: null };
+    },
+    getPublicUrl: (objectPath) => ({
+      data: { publicUrl: `https://zashm-test.supabase.co/storage/v1/object/public/products/${objectPath}` },
+    }),
+  }),
+};
+
 const fakeSupabase = {
   from: (table) => makeQuery(table),
+  storage: fakeStorage,
 };
 
 // ─── Patch the shared helpers BEFORE the handler is loaded ──────────────────
@@ -108,10 +193,15 @@ lib.rateLimitShared = async () => ({
   allowed: limiterAllowed,
   resetIn: limiterAllowed ? 0 : 42,
 });
+lib.requirePerm = async () => ({ id: 1, role: 'admin', permissions: ['reviews.read', 'reviews.write'] });
+const { resetReviewPhotoSupportCache } = lib;
 
 const handlerModule = require('../api/reviews.js');
 const handler = handlerModule;
 const { _test } = handlerModule;
+// Loaded after the helpers are patched so it captures the fake Supabase client
+// and the allow-all permission check.
+const adminHandler = require('../api/admin/reviews.js');
 
 function makeRes() {
   return {
@@ -125,10 +215,18 @@ function makeRes() {
 }
 
 async function call(method, { query = {}, body = null } = {}) {
+  return invoke(handler, method, { query, body });
+}
+
+async function callAdmin(method, { query = {}, body = null } = {}) {
+  return invoke(adminHandler, method, { query, body });
+}
+
+async function invoke(fn, method, { query, body }) {
   currentBody = body;
   const req = { method, query, headers: {}, body };
   const res = makeRes();
-  await handler(req, res);
+  await fn(req, res);
   let parsed = null;
   try { parsed = res.body ? JSON.parse(res.body) : null; } catch { parsed = res.body; }
   return { status: res.statusCode, body: parsed, headers: res.headers };
@@ -136,9 +234,21 @@ async function call(method, { query = {}, body = null } = {}) {
 
 function reset() {
   state.inserts = [];
+  state.storage = new Map();
+  state.storageRemoved = [];
+  state.storageFail = false;
+  state.missingPhotoColumn = false;
   limiterAllowed = true;
   currentBody = null;
+  resetReviewPhotoSupportCache();
 }
+
+// A tiny but valid JPEG: SOI + APP0 marker is all detectImageType needs.
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const jpegDataUrl = (extraBytes = 0) => (
+  `data:image/jpeg;base64,${Buffer.concat([JPEG_BYTES, Buffer.alloc(extraBytes)]).toString('base64')}`
+);
 
 // ─── [1] Text sanitisation ──────────────────────────────────────────────────
 console.log('\n[1] sanitisation');
@@ -179,6 +289,25 @@ console.log('\n[2] payload validation');
   eq(readReviewPayload({ productId: 7, name: 'Mona', rating: 5, comment: 'Nice', phone: '01012345678' }).value.phone, '01012345678', 'a valid phone is accepted and normalised');
   eq(readReviewPayload({ productId: 7, name: 'Mona', rating: 5, comment: 'Nice', phone: '010123456789' }).ok, false, 'an invalid phone rejects the payload');
   eq(readReviewPayload({ productId: 7, name: 'Mona', rating: 5, comment: 'Nice' }).value.phone, null, 'phone is optional');
+
+  const { readReviewPhoto } = _test;
+  const base = { productId: 7, name: 'Mona', rating: 5, comment: 'Nice' };
+  eq(readReviewPayload(base).value.photo, null, 'a photo is optional');
+  eq(readReviewPhoto(''), { photo: null }, 'an empty photo is treated as none');
+  eq(readReviewPayload({ ...base, photo: jpegDataUrl() }).value.photo.contentType, 'image/jpeg',
+    'a JPEG data URL is accepted');
+  eq(readReviewPayload({ ...base, photo: `data:image/png;base64,${PNG_BYTES.toString('base64')}` }).value.photo.contentType,
+    'image/png', 'a PNG data URL is accepted');
+  eq(readReviewPayload({ ...base, photo: 'https://example.com/photo.jpg' }).ok, false,
+    'a remote URL is not accepted as an upload');
+  eq(readReviewPayload({ ...base, photo: `data:image/gif;base64,${Buffer.from('GIF89a').toString('base64')}` }).ok, false,
+    'GIF is refused even though the bucket allows it for products');
+  eq(readReviewPayload({ ...base, photo: `data:image/jpeg;base64,${Buffer.from('not an image').toString('base64')}` }).ok,
+    false, 'the magic bytes decide, not the declared MIME type');
+  eq(readReviewPayload({ ...base, photo: jpegDataUrl(lib.REVIEW_PHOTO_MAX_BYTES) }).ok, false,
+    'a photo above the decoded cap is refused before storage');
+  ok(!JSON.stringify(readReviewPayload({ ...base, photo: jpegDataUrl(32) })).includes('data:image'),
+    'the payload carries the decoded photo, never the raw data URL string');
 }
 
 // ─── [3] IP hashing ─────────────────────────────────────────────────────────
@@ -210,6 +339,26 @@ console.log('\n[4] GET /api/reviews');
   ok(!('ipHash' in list.body.reviews[0]), 'the submitter hash is never exposed');
   ok(list.body.reviews.every((r) => !('phone' in r)), 'the submitter phone is never exposed publicly');
   eq(list.headers['cache-control'].includes('s-maxage'), true, 'the list is cacheable for a short window');
+
+  const withPhoto = list.body.reviews.find((r) => r.id === 1);
+  eq(withPhoto.photoUrl,
+    'https://zashm-test.supabase.co/storage/v1/object/public/products/reviews/7/0123456789abcdef01234567.jpg',
+    'an approved review exposes its photo URL');
+  ok(!('photoPath' in withPhoto), 'the stored object path stays server-side');
+  eq(list.body.photosEnabled, true, 'the form is told that photos can be stored');
+  const withoutPhoto = list.body.reviews.find((r) => r.id === 2);
+  ok(!('photoUrl' in withoutPhoto), 'a review without a photo has no photo key at all');
+
+  // Before the migration is applied the endpoint must still work, just without
+  // any photo support.
+  state.missingPhotoColumn = true;
+  resetReviewPhotoSupportCache();
+  const legacy = await call('GET', { query: { productId: 7 } });
+  eq(legacy.status, 200, 'reviews still load when the photo column is missing');
+  eq(legacy.body.photosEnabled, false, 'the form hides the picker until the column exists');
+  ok(legacy.body.reviews.every((r) => !('photoUrl' in r)), 'no photo URL is produced without the column');
+  state.missingPhotoColumn = false;
+  resetReviewPhotoSupportCache();
 }
 
 // ─── [5] POST contract ──────────────────────────────────────────────────────
@@ -249,10 +398,77 @@ console.log('\n[5] POST /api/reviews');
   const badPhone = await call('POST', { body: { productId: 7, name: 'Mona', rating: 5, comment: 'Nice', phone: '010123456789' } });
   eq(badPhone.status, 400, 'an invalid phone is rejected before the database');
   eq(state.inserts.length, 2, 'the invalid phone writes nothing');
+
+  const withPhoto = await call('POST', {
+    body: { productId: 7, name: 'Mona', rating: 5, comment: 'Nice', photo: jpegDataUrl(2048) },
+  });
+  eq(withPhoto.status, 201, 'a review with a photo is accepted');
+  eq(withPhoto.body.photoSaved, true, 'the response says the photo was stored');
+  const photoRow = state.inserts[state.inserts.length - 1];
+  ok(/^reviews\/7\/[a-f0-9]{24}\.jpg$/.test(photoRow.photoPath),
+    'the row stores only a short path under reviews/<productId>/');
+  ok(!JSON.stringify(photoRow).includes('base64'), 'no image bytes are written to the database');
+  eq(state.storage.get(photoRow.photoPath).contentType, 'image/jpeg', 'the file is stored with its real type');
+  eq(state.storage.get(photoRow.photoPath).bucket, 'products', 'the existing bucket is reused');
+
+  const before = state.storage.size;
+  state.storageFail = true;
+  const failedUpload = await call('POST', {
+    body: { productId: 7, name: 'Mona', rating: 5, comment: 'Nice', photo: jpegDataUrl(2048) },
+  });
+  eq(failedUpload.status, 201, 'a failed photo upload never loses the review');
+  eq(failedUpload.body.photoSaved, false, 'the response is honest about the lost photo');
+  eq(state.inserts[state.inserts.length - 1].photoPath, undefined, 'no path is stored for a failed upload');
+  eq(state.storage.size, before, 'nothing is left in storage');
+  state.storageFail = false;
+
+  state.missingPhotoColumn = true;
+  resetReviewPhotoSupportCache();
+  const noColumn = await call('POST', {
+    body: { productId: 7, name: 'Mona', rating: 5, comment: 'Nice', photo: jpegDataUrl(2048) },
+  });
+  eq(noColumn.status, 201, 'a submission still succeeds before the migration');
+  eq(noColumn.body.photoSaved, false, 'the photo is reported as not stored');
+  eq(state.inserts[state.inserts.length - 1].photoPath, undefined, 'the missing column is never referenced');
+  eq(state.storage.size, before, 'no orphan file is uploaded either');
+  state.missingPhotoColumn = false;
+  resetReviewPhotoSupportCache();
 }
 
-// ─── [6] Rate limit + method guard ─────────────────────────────────────────
-console.log('\n[6] abuse + method guards');
+// ─── [6] Admin moderation + photos ─────────────────────────────────────────
+console.log('\n[6] admin moderation + photos');
+{
+  reset();
+  const photoPath = 'reviews/7/0123456789abcdef01234567.jpg';
+  state.storage.set(photoPath, { bucket: 'products', size: 128, contentType: 'image/jpeg' });
+
+  const list = await callAdmin('GET', { query: { status: 'all' } });
+  eq(list.status, 200, 'the moderation list loads');
+  const withPhoto = list.body.reviews.find((r) => r.id === 1);
+  eq(withPhoto.photoUrl,
+    `https://zashm-test.supabase.co/storage/v1/object/public/products/${photoPath}`,
+    'the moderator sees the customer photo');
+  ok(!('photoPath' in withPhoto), 'the admin response never leaks the raw object path');
+  eq(list.body.reviews.find((r) => r.id === 2).photoUrl, null,
+    'a review without a photo reports null');
+
+  const hide = await callAdmin('PATCH', { body: { id: 1, status: 'rejected' } });
+  eq(hide.status, 200, 'a review can be hidden');
+  ok(state.storage.has(photoPath), 'hiding a review keeps its photo for a later re-approval');
+
+  const del = await callAdmin('DELETE', { body: { id: 1 } });
+  eq(del.status, 200, 'a review can be deleted');
+  ok(!state.storage.has(photoPath), 'deleting a review removes its stored photo');
+  ok(state.storageRemoved.includes(photoPath), 'the removal goes through the storage API');
+  ok(!state.reviews.some((r) => r.id === 1), 'the row is gone from the table');
+
+  const delPlain = await callAdmin('DELETE', { body: { id: 2 } });
+  eq(delPlain.status, 200, 'a review without a photo deletes cleanly');
+  eq(state.storageRemoved.length, 1, 'no storage call is made when there is no photo');
+}
+
+// ─── [7] Rate limit + method guard ─────────────────────────────────────────
+console.log('\n[7] abuse + method guards');
 {
   reset();
   limiterAllowed = false;
@@ -266,8 +482,8 @@ console.log('\n[6] abuse + method guards');
   ok(wrong.headers.allow.includes('POST'), 'the allowed methods are advertised');
 }
 
-// ─── [7] Static wiring ─────────────────────────────────────────────────────
-console.log('\n[7] static wiring');
+// ─── [8] Static wiring ─────────────────────────────────────────────────────
+console.log('\n[8] static wiring');
 {
   const read = (path) => readFileSync(`${ROOT}${path}`, 'utf8');
   const publicApi = read('api/reviews.js');
@@ -280,6 +496,9 @@ console.log('\n[7] static wiring');
   const reviewsUi = read('src/components/shop/ProductReviews.js');
   const adminUi = read('src/pages/AdminApp.js');
   const sql = read('supabase/product_reviews.sql');
+  const photoSql = read('supabase/product_review_photos.sql');
+  const imagePrep = read('src/lib/imagePrep.js');
+  const adminUploader = read('src/components/admin/ImageUploader.js');
 
   ok(publicApi.includes("status: 'pending'"), 'public submissions are forced to pending');
   ok(publicApi.includes('website'), 'the honeypot field is read server-side');
@@ -322,6 +541,44 @@ console.log('\n[7] static wiring');
   ok(/'rating',\s*'reviews'/.test(sql), 'the view allow-list exposes rating and reviews');
   ok(/'reservedStock' = ANY \(v_allow\)/.test(sql),
     'the recreated view fails closed if reservedStock enters the allow-list');
+
+  // ── optional review photos ──
+  ok(publicApi.includes('photoSaved'), 'the public API reports whether the photo was stored');
+  ok(publicApi.includes('photosEnabled'), 'the public API tells the form when photos are supported');
+  ok(publicApi.includes('uploadReviewPhoto'), 'the public API stores the photo in Supabase Storage');
+  ok(!/insertRow\.photo\s*=/.test(publicApi), 'the image bytes are never put on the database row');
+  ok(adminApi.includes('removeReviewPhoto'), 'deleting a review also removes its stored photo');
+  ok(adminApi.includes('photoUrl'), 'the moderation list returns a usable photo URL');
+
+  ok(serverLib.includes("const REVIEW_PHOTO_BUCKET = 'products'"),
+    'review photos reuse the existing products bucket (no new bucket needed)');
+  ok(serverLib.includes("const REVIEW_PHOTO_PREFIX = 'reviews'"),
+    'review photos are namespaced under reviews/ so they are easy to clean up');
+  ok(serverLib.includes('isMissingColumnError'),
+    'the optional column is probed instead of assumed');
+
+  ok(reviewsUi.includes('photosEnabled'), 'the form shows the picker only when storage is available');
+  ok(reviewsUi.includes('accept="image/jpeg,image/png,image/webp"'),
+    'the picker only offers the formats the server accepts');
+  ok(reviewsUi.includes('photo: form.photo'), 'the chosen photo is sent with the review');
+  ok(reviewsUi.includes('review.photoUrl'), 'approved reviews render their photo');
+  ok(reviewsUi.includes('prepareImage'), 'the photo is compressed in the browser before upload');
+  ok(reviewsUi.includes('photoSaved === false'),
+    'a lost photo is reported without hiding the saved review');
+  ok(adminUi.includes('review.photoUrl'), 'the moderator sees the attached photo');
+
+  ok(imagePrep.includes('export async function prepareImage'),
+    'the shared image pipeline exposes prepareImage');
+  ok(adminUploader.includes("from '../../lib/imagePrep'"),
+    'the admin uploader reuses the same pipeline instead of duplicating it');
+  ok(!/function compressImage/.test(adminUploader),
+    'the duplicated compression helpers were removed from the admin uploader');
+
+  ok(/"photoPath" text/.test(photoSql), 'the photo migration adds the short path column');
+  ok(/product_reviews_photo_path_len/.test(photoSql),
+    'the migration constrains the stored path');
+  ok(/ADD COLUMN IF NOT EXISTS "photoPath"/.test(sql),
+    'the canonical schema file also carries the column');
 }
 
 // ─── Summary ────────────────────────────────────────────────────────────────

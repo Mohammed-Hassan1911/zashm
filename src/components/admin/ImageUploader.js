@@ -11,13 +11,9 @@ import { Upload, X, AlertCircle } from 'lucide-react';
 import { api, deleteStorageFile } from '../../lib/api';
 import { getOptimizedImageUrl } from '../../lib/security';
 import { supabase } from '../../lib/supabase';
-
-const RAW_DIRECT_LIMIT = 600 * 1024;
-const MAX_COMPRESSED_SIZE = 900 * 1024;
-const DATAURL_LIMIT = 1.35 * 1024 * 1024;
+import { prepareImage as prepareImageForUpload } from '../../lib/imagePrep';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
-const MAX_DIM = 1600;
 // One at a time: two parallel 3MB bodies saturate a mobile uplink and make
 // both requests more likely to drop (which surfaces as a network error).
 const MAX_PARALLEL_UPLOADS = 1;
@@ -85,149 +81,6 @@ function storagePathFromUrl(url) {
 }
 
 export { storagePathFromUrl };
-
-// Convert Blob or File to Data URL.
-function readAsDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result);
-
-    reader.onerror = () => {
-      reject(new Error('Could not read image file'));
-    };
-
-    reader.onabort = () => {
-      reject(new Error('Image reading was cancelled'));
-    };
-
-    reader.readAsDataURL(blob);
-  });
-}
-
-// Load an image from a Blob without first converting it to Base64.
-function loadImageFromBlob(blob) {
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(blob);
-    const img = new Image();
-
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(img);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Invalid or unsupported image'));
-    };
-
-    img.src = objectUrl;
-  });
-}
-
-function canvasToBlob(canvas, type, quality) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => {
-      if (!blob) {
-        reject(new Error('Image compression failed'));
-        return;
-      }
-
-      resolve(blob);
-    }, type, quality);
-  });
-}
-
-function drawToCanvas(img, maxDim) {
-  let { width, height } = img;
-
-  if (width > maxDim || height > maxDim) {
-    const scale = Math.min(maxDim / width, maxDim / height);
-
-    width = Math.max(1, Math.round(width * scale));
-    height = Math.max(1, Math.round(height * scale));
-  }
-
-  const canvas = document.createElement('canvas');
-
-  canvas.width = width;
-  canvas.height = height;
-
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) {
-    throw new Error('Image processing is not supported');
-  }
-
-  ctx.drawImage(img, 0, 0, width, height);
-
-  return canvas;
-}
-
-// Compress an image using canvas.toBlob(). Tries quality first, then smaller
-// dimensions, so a 12MP phone photo still ends up under MAX_COMPRESSED_SIZE.
-async function compressImage(file) {
-  const img = await loadImageFromBlob(file);
-
-  const attempts = [
-    { maxDim: MAX_DIM, type: 'image/webp', quality: 0.82 },
-    { maxDim: MAX_DIM, type: 'image/jpeg', quality: 0.78 },
-    { maxDim: 1280, type: 'image/jpeg', quality: 0.68 },
-    { maxDim: 1024, type: 'image/jpeg', quality: 0.6 },
-  ];
-
-  let smallest = null;
-
-  for (const attempt of attempts) {
-    const canvas = drawToCanvas(img, attempt.maxDim);
-
-    let blob = await canvasToBlob(canvas, attempt.type, attempt.quality);
-
-    // Fallback if WebP is unsupported.
-    if (attempt.type === 'image/webp' && !blob.type.includes('webp')) {
-      blob = await canvasToBlob(canvas, 'image/jpeg', 0.78);
-    }
-
-    if (!smallest || blob.size < smallest.size) {
-      smallest = blob;
-    }
-
-    if (blob.size <= MAX_COMPRESSED_SIZE) {
-      return blob;
-    }
-  }
-
-  if (smallest && smallest.size <= MAX_COMPRESSED_SIZE) {
-    return smallest;
-  }
-
-  throw new Error(
-    'Image is too large after compression. Please choose a smaller image.'
-  );
-}
-
-// Prepare image before upload.
-async function prepareImage(file) {
-  // Send small files directly.
-  if (file.size <= RAW_DIRECT_LIMIT) {
-    const raw = await readAsDataUrl(file);
-
-    if (raw.length <= DATAURL_LIMIT) {
-      return raw;
-    }
-  }
-
-  // Compress large files before Base64 conversion.
-  const blob = await compressImage(file);
-
-  const dataUrl = await readAsDataUrl(blob);
-
-  if (dataUrl.length > DATAURL_LIMIT) {
-    throw new Error('Image exceeds the allowed upload size');
-  }
-
-  return dataUrl;
-}
 
 // Convert errors to readable messages.
 function getUploadError(err) {
@@ -369,7 +222,7 @@ export default function ImageUploader({
 
   // Upload a single file, retrying once on a dropped connection / cold 5xx.
   const uploadSingleFile = async (file) => {
-    const dataUrl = await prepareImage(file);
+    const dataUrl = await prepareImageForUpload(file);
 
     let lastError = null;
 

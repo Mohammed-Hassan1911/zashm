@@ -76,6 +76,30 @@ BEGIN
   END IF;
 END $$;
 
+-- Optional customer photo. Only the short Storage object path is stored here
+-- (`reviews/<productId>/<random>.<ext>`); the bytes live in the `products`
+-- bucket, so this column never grows beyond a few dozen characters per review.
+ALTER TABLE public.product_reviews
+  ADD COLUMN IF NOT EXISTS "photoPath" text;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'product_reviews_photo_path_len'
+  ) THEN
+    ALTER TABLE public.product_reviews
+      ADD CONSTRAINT product_reviews_photo_path_len
+      CHECK (
+        "photoPath" IS NULL
+        OR (
+          char_length("photoPath") BETWEEN 10 AND 300
+          AND left("photoPath", 1) <> '/'
+          AND position('..' IN "photoPath") = 0
+        )
+      );
+  END IF;
+END $$;
+
 COMMENT ON TABLE public.product_reviews IS
   'Customer reviews. Service-role only; the storefront reads approved rows through /api/reviews.';
 COMMENT ON COLUMN public.product_reviews.status IS
@@ -84,6 +108,8 @@ COMMENT ON COLUMN public.product_reviews."ipHash" IS
   'Salted hash of the submitter IP, used only for abuse investigation. Never exposed.';
 COMMENT ON COLUMN public.product_reviews.phone IS
   'Optional submitter phone, stored for follow-up only. Never exposed publicly (admin-only).';
+COMMENT ON COLUMN public.product_reviews."photoPath" IS
+  'Optional review photo: object path inside the products bucket (reviews/<productId>/...). The image bytes never live in this table.';
 
 CREATE INDEX IF NOT EXISTS product_reviews_product_approved_idx
   ON public.product_reviews ("productId", "createdAt" DESC)
@@ -256,6 +282,9 @@ COMMIT;
 -- SELECT count(*) FILTER (WHERE status = 'approved') AS approved,
 --        count(*) FILTER (WHERE status = 'pending')  AS pending
 --   FROM public.product_reviews;
+-- SELECT column_name, data_type FROM information_schema.columns
+--   WHERE table_schema = 'public' AND table_name = 'product_reviews'
+--     AND column_name = 'photoPath';
 
 -- ── ROLLBACK (review before running; deletes customer reviews) ──────────────
 -- BEGIN;

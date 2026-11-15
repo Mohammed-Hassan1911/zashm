@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, CreditCard, PackageSearch, Headset, RotateCcw } from 'lucide-react';
+import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, CreditCard, PackageSearch, Headset } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import StockFeedback from '../components/shop/StockFeedback';
@@ -1456,27 +1456,9 @@ export function CheckoutPage() {
                     </div>
                   )}
               </motion.button>
-              {/* Last-second doubt, answered where the decision happens: the
-                  exchange window sits directly under the CTA. */}
-              <p
-                className="checkout-exchange-note"
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'center',
-                  gap: 6,
-                  color: 'var(--text3)',
-                  fontSize: 11,
-                  lineHeight: 1.6,
-                  marginTop: 10,
-                  textAlign: 'center',
-                }}
-              >
-                <RotateCcw size={12} color="var(--gold)" aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }} />
-                <span>
-                  Size not right? Exchange or return within <strong style={{ color: 'var(--text2)', fontWeight: 600 }}>7 days</strong> of delivery — item in its original condition, unworn, with tags.
-                </span>
-              </p>
+              {/* The exchange window is promised once, on the product page.
+                  Repeating it under the CTA made checkout read as a wall of
+                  caveats at the moment the shopper is trying to pay. */}
             </div>
           </div>
         </div>

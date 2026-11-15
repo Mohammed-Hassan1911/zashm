@@ -84,6 +84,25 @@ view only, and never deletes or rewrites an existing review. No review exists
 in production until one is submitted after deployment, and submissions start
 `pending` until an admin approves them.
 
+### Review photos (pending owner action, 2026-11-16)
+
+`supabase/product_review_photos.sql` adds the optional
+`public.product_reviews."photoPath"` text column and a fail-closed length /
+path CHECK. Only the short object path is stored; the image bytes live in the
+existing public `products` bucket under `reviews/<productId>/<24 hex>.<ext>`.
+No new bucket, no browser Storage policy: `api/reviews.js` writes with the
+service-role key, and the public API returns a URL only for **approved**
+reviews.
+
+It is **not applied yet**. The deployed code is safe before it runs: the API
+probes the column once per warm instance, returns `photosEnabled: false`, so
+the storefront keeps today's form without a photo picker, and a submission
+that still carries a photo saves the review without it
+(`photoSaved: false`). Apply it **after** `product_reviews.sql`. The file is
+idempotent (`ADD COLUMN IF NOT EXISTS` + guarded constraint) and never
+modifies an existing row. Rollback drops the column and forgets the paths;
+the files stay in the bucket and can be deleted manually.
+
 ### Product size windows (applied 2026-11-13)
 
 `supabase/product_size_ranges.sql` adds

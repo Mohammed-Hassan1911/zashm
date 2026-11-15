@@ -629,13 +629,17 @@ console.log('\n[12] badge proximity and governorate copy');
 console.log('\n[13] admin image upload payload budget');
 {
   const uploader = read('src/components/admin/ImageUploader.js');
+  // The compression budget moved into the shared pipeline so the review form
+  // and the admin uploader cannot drift apart; read it from its new home.
+  const budgetSource = read('src/lib/imagePrep.js');
   const endpoint = read('api/admin/upload.js');
 
   // Parse the client constants so the budget is checked numerically, not by
   // trusting comments: a JSON body of {file: <dataUrl>} must stay well under
   // both the server limit and the ~4.5MB platform cap.
   const bytes = (name) => {
-    const m = uploader.match(new RegExp(`const ${name} = ([0-9.]+(?: \\* [0-9]+)+);`));
+    const pattern = new RegExp(`const ${name} = ([0-9.]+(?: \\* [0-9]+)+);`);
+    const m = budgetSource.match(pattern) || uploader.match(pattern);
     if (!m) return NaN;
     return m[1].split('*').map((part) => Number(part.trim()))
       .reduce((a, b) => a * b, 1);

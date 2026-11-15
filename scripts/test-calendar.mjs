@@ -111,7 +111,10 @@ eq(inclusiveDays('2026-11-29', '2026-12-02'), 4, 'a range can cross the month bo
 eq(inclusiveDays('', '2026-11-29'), 0, 'an incomplete range has no length');
 eq(inclusiveDays('2026-11-15', ''), 0, 'a missing end has no length');
 
-eq(clampISO('', '2026-11-15', '2026-12-31'), '2026-11-15', 'an empty value clamps to the minimum');
+// Date-independent: an empty value falls back to today, then clamps into the
+// window. Using a window far in the future keeps the assertion true on any day.
+eq(clampISO('', '2099-01-01', '2099-12-31'), '2099-01-01', 'an empty value clamps to the minimum');
+eq(clampISO('', '', ''), todayISO(), 'an empty value without a window falls back to today');
 eq(clampISO('2026-10-01', '2026-11-15', '2026-12-31'), '2026-11-15', 'a value below the window clamps up');
 eq(clampISO('2027-01-01', '2026-11-15', '2026-12-31'), '2026-12-31', 'a value above the window clamps down');
 eq(clampISO('2026-11-20', '2026-11-15', '2026-12-31'), '2026-11-20', 'a value inside the window is untouched');

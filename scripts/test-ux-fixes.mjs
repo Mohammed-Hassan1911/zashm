@@ -601,14 +601,22 @@ try {
       assert.ok(/Coming soon/.test(cart), 'card option is advertised as coming soon');
     });
 
-    await step('the 7-day exchange reassurance sits under PLACE ORDER', () => {
-      const placeAt = cart.indexOf('PLACE ORDER');
-      const noteAt = cart.indexOf('checkout-exchange-note');
-      assert.ok(noteAt > placeAt, 'exchange note must render after the CTA');
-      assert.ok(/Exchange or return within/.test(cart), 'the note states the window');
-      assert.ok(/7 days/.test(cart), 'the note states 7 days');
-      assert.ok(/original condition, unworn, with tags/.test(cart),
-        'the note keeps the original-condition requirement');
+    await step('checkout does not repeat the exchange promise', () => {
+      assert.ok(!/checkout-exchange-note/.test(cart),
+        'the exchange note is gone from the checkout view');
+      assert.ok(!/Exchange or return within/.test(cart),
+        'checkout no longer restates the return window under PLACE ORDER');
+      assert.ok(!/Size not right\?/.test(cart), 'the doubt line is gone too');
+      assert.ok(!/checkout-exchange-note/.test(read('src/index.css')),
+        'its now-unused responsive rule was removed as well');
+    });
+
+    await step('the product page still states the exchange window once', () => {
+      const productSource = read('src/pages/ProductPage.js');
+      assert.ok(/7-Day Exchanges &amp; Returns/.test(productSource),
+        'the product page keeps the exchange promise where the shopper decides');
+      assert.ok(/Exchange or return within 7 days of delivery/.test(productSource),
+        'the window and the condition are still spelled out');
     });
 
     const app = read('src/App.js');

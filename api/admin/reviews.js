@@ -7,6 +7,11 @@
  *   PATCH  { id, status }                          approve / reject / re-queue
  *   DELETE { id } | ?id=…                          remove a review permanently
  *
+ * A customer photo (optional) lives in the `products` bucket under
+ * `reviews/<productId>/`; only the short path is stored on the row. Hiding a
+ * review keeps its photo (so re-approving restores the original), deleting the
+ * review removes the file too.
+ *
  * The table itself is service-role only. Approving a review flips `status` and
  * `publishedAt`; a database trigger then recomputes products.rating/reviews, so
  * the storefront aggregate updates atomically with the moderation action.
@@ -22,6 +27,10 @@ const {
   tooMany,
   requirePerm,
   supabaseAdmin,
+  isMissingColumnError,
+  reviewPhotosEnabled,
+  removeReviewPhoto,
+  reviewPhotoPublicUrl,
 } = require('../_lib');
 
 const REVIEW_STATUSES = ['pending', 'approved', 'rejected'];
@@ -68,8 +77,11 @@ async function listReviews(req, res) {
   try {
     const sb = supabaseAdmin();
 
-    const selectWithPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt", phone';
-    const selectWithoutPhone = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt"';
+    const photosEnabled = await reviewPhotosEnabled(sb);
+    const baseSelect = 'id, "productId", name, rating, comment, status, "createdAt", "publishedAt"';
+    const photoSelect = photosEnabled ? ', "photoPath"' : '';
+    const selectWithPhone = `${baseSelect}, phone${photoSelect}`;
+    const selectWithoutPhone = `${baseSelect}${photoSelect}`;
 
     // The three counts are server-side COUNT queries (no rows transferred) and
     // run in parallel with the page of reviews. The old shape fetched every
@@ -126,6 +138,7 @@ async function listReviews(req, res) {
 
     const reviews = rows.map((row) => {
       const product = names.get(Number(row.productId));
+      const photoUrl = row.photoPath ? reviewPhotoPublicUrl(sb, row.photoPath) : '';
       return {
         id: Number(row.id),
         productId: Number(row.productId),
@@ -135,6 +148,7 @@ async function listReviews(req, res) {
         phone: row.phone ? String(row.phone) : null,
         rating: Number(row.rating) || 0,
         comment: String(row.comment || ''),
+        photoUrl: photoUrl || null,
         status: String(row.status || 'pending'),
         createdAt: row.createdAt || null,
         publishedAt: row.publishedAt || null,
@@ -229,14 +243,30 @@ async function deleteReview(req, res) {
 
   try {
     const sb = supabaseAdmin();
-    const { data: deleted, error } = await sb
+    const photosEnabled = await reviewPhotosEnabled(sb);
+    let selectCols = photosEnabled ? 'id, "photoPath"' : 'id';
+
+    let { data: deleted, error } = await sb
       .from('product_reviews')
       .delete()
       .eq('id', id)
-      .select('id')
+      .select(selectCols)
       .maybeSingle();
+    if (error && photosEnabled && isMissingColumnError(error, 'photoPath')) {
+      selectCols = 'id';
+      ({ data: deleted, error } = await sb
+        .from('product_reviews')
+        .delete()
+        .eq('id', id)
+        .select(selectCols)
+        .maybeSingle());
+    }
     if (error) throw error;
     if (!deleted) return json(res, 404, { error: 'Review not found.' });
+
+    // The row is gone, so the file is unreachable from the app either way; a
+    // failed delete only leaves an orphan, never a broken link.
+    if (deleted.photoPath) await removeReviewPhoto(sb, deleted.photoPath);
 
     return json(res, 200, { success: true });
   } catch (err) {

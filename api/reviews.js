@@ -8,9 +8,15 @@
  *        kept in sync by the database trigger, so it is correct even when the
  *        page shows only the latest 20 rows.
  *
- *   POST /api/reviews  { productId, name, rating, comment }
+ *   POST /api/reviews  { productId, name, rating, comment, phone?, photo? }
  *        Stores a review as `pending`. Nothing is published until an admin
  *        approves it in the dashboard (api/admin/reviews.js).
+ *
+ *        `photo` is an OPTIONAL base64 data URL. It is validated server-side
+ *        (magic bytes, size) and written to the `products` bucket under
+ *        `reviews/<productId>/`; the row stores only that short path, so the
+ *        database never holds image bytes. The public GET exposes a URL only
+ *        for APPROVED reviews.
  *
  * The product_reviews table is service-role only. The browser never reads or
  * writes it directly, so a forged request cannot publish a review or read the
@@ -29,6 +35,15 @@ const {
   rateLimitShared,
   tooMany,
   supabaseAdmin,
+  detectImageType,
+  isMissingColumnError,
+  reviewPhotosEnabled,
+  uploadReviewPhoto,
+  removeReviewPhoto,
+  reviewPhotoPublicUrl,
+  REVIEW_PHOTO_MAX_BYTES,
+  REVIEW_PHOTO_BODY_MAX,
+  REVIEW_PHOTO_MIME_EXT,
 } = require('./_lib');
 
 const RATE_MAX_ATTEMPTS = 5;
@@ -38,6 +53,7 @@ const REVIEWS_MAX_LIMIT = 50;
 const NAME_MAX = 40;
 const COMMENT_MAX = 600;
 const PHONE_MAX = 30;
+const REVIEW_SELECT_BASE = 'id, name, rating, comment, "createdAt", "publishedAt"';
 
 /** Collapse control characters/whitespace and neutralise angle brackets. React
  * already escapes the rendered text; this keeps stored data clean and prevents
@@ -73,6 +89,33 @@ function normalizeEgyptPhone(value) {
   return /^01[0125][0-9]{8}$/.test(digits) ? digits : undefined;
 }
 
+/**
+ * Decode an optional review photo. Only JPEG/PNG/WebP are accepted (the same
+ * formats the bucket allows), the declared MIME type is ignored in favour of
+ * the magic bytes, and the decoded size is capped well below the request body
+ * limit so a malicious client cannot stream a huge file into memory.
+ */
+function readReviewPhoto(raw) {
+  if (raw == null || raw === '') return { photo: null };
+  if (typeof raw !== 'string') return { error: 'The photo could not be read. Please choose the image again.' };
+
+  const match = /^data:([a-z0-9/+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(raw);
+  if (!match) return { error: 'The photo could not be read. Please choose the image again.' };
+
+  const buffer = Buffer.from(match[2], 'base64');
+  if (!buffer.length) return { error: 'The photo is empty. Please choose another image.' };
+  if (buffer.length > REVIEW_PHOTO_MAX_BYTES) {
+    return { error: 'That photo is too large. Please choose a smaller image.' };
+  }
+
+  const contentType = detectImageType(buffer);
+  if (!contentType || !REVIEW_PHOTO_MIME_EXT[contentType]) {
+    return { error: 'Please attach a JPEG, PNG or WebP photo.' };
+  }
+
+  return { photo: { buffer, contentType } };
+}
+
 /** Validate the POST body. Returns { ok, value } or { ok: false, error }. */
 function readReviewPayload(body) {
   const source = body && typeof body === 'object' ? body : {};
@@ -106,7 +149,14 @@ function readReviewPayload(body) {
     phone = normalized;
   }
 
-  return { ok: true, honeypot: false, value: { productId, name, rating, comment, phone } };
+  const photoResult = readReviewPhoto(source.photo);
+  if (photoResult.error) return { ok: false, error: photoResult.error };
+
+  return {
+    ok: true,
+    honeypot: false,
+    value: { productId, name, rating, comment, phone, photo: photoResult.photo },
+  };
 }
 
 /** Salted, truncated IP hash for abuse investigation only. Never displayed. */
@@ -136,6 +186,11 @@ async function listReviews(req, res) {
   // header is only set on success so a 500 is never cached.
   try {
     const sb = supabaseAdmin();
+    // Probed once per warm instance; false until the optional column exists.
+    const photosEnabled = await reviewPhotosEnabled(sb);
+    const reviewsSelect = photosEnabled
+      ? `${REVIEW_SELECT_BASE}, "photoPath"`
+      : REVIEW_SELECT_BASE;
 
     // Fetch the product row and the approved reviews together: the product row
     // is only needed for the 404/aggregate check, so waiting for it before
@@ -148,7 +203,7 @@ async function listReviews(req, res) {
         .maybeSingle(),
       sb
         .from('product_reviews')
-        .select('id, name, rating, comment, "createdAt", "publishedAt"')
+        .select(reviewsSelect)
         .eq('productId', productId)
         .eq('status', 'approved')
         .order('createdAt', { ascending: false })
@@ -165,13 +220,18 @@ async function listReviews(req, res) {
     const { data, error } = reviewsResult;
     if (error) throw error;
 
-    const reviews = (Array.isArray(data) ? data : []).map((row) => ({
-      id: Number(row.id),
-      name: String(row.name || ''),
-      rating: Number(row.rating) || 0,
-      comment: String(row.comment || ''),
-      createdAt: row.publishedAt || row.createdAt || null,
-    }));
+    const reviews = (Array.isArray(data) ? data : []).map((row) => {
+      const photoUrl = row.photoPath ? reviewPhotoPublicUrl(sb, row.photoPath) : '';
+      return {
+        id: Number(row.id),
+        name: String(row.name || ''),
+        rating: Number(row.rating) || 0,
+        comment: String(row.comment || ''),
+        createdAt: row.publishedAt || row.createdAt || null,
+        // Only the resolved URL is exposed; the stored path stays server-side.
+        ...(photoUrl ? { photoUrl } : {}),
+      };
+    });
 
     const average = Number(product.rating);
     const count = Number(product.reviews);
@@ -186,6 +246,9 @@ async function listReviews(req, res) {
         average: Number.isFinite(average) ? average : 0,
         count: Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0,
       },
+      // The form shows the optional photo picker only when the server can store
+      // it, so a deploy that lands before the SQL migration degrades quietly.
+      photosEnabled,
       reviews,
     });
   } catch (err) {
@@ -204,8 +267,13 @@ async function submitReview(req, res) {
 
   let body;
   try {
-    body = await readBody(req, 8 * 1024);
+    // Sized for an optional compressed photo (the browser shrinks it before
+    // sending); a review without a photo is still only a few hundred bytes.
+    body = await readBody(req, REVIEW_PHOTO_BODY_MAX);
   } catch (e) {
+    if (e.status === 413) {
+      return json(res, 413, { error: 'That photo is too large. Please choose a smaller image.' });
+    }
     return json(res, e.status || 400, { error: 'Invalid request body.' });
   }
 
@@ -216,7 +284,7 @@ async function submitReview(req, res) {
     return json(res, 201, { success: true, pending: true });
   }
 
-  const { productId, name, rating, comment, phone } = parsed.value;
+  const { productId, name, rating, comment, phone, photo } = parsed.value;
 
   try {
     const sb = supabaseAdmin();
@@ -231,6 +299,12 @@ async function submitReview(req, res) {
       return json(res, 404, { error: 'Product not found.' });
     }
 
+    // The photo is optional and never worth losing the review over: if the
+    // upload fails (or the migration is not applied yet) the row is still
+    // written and the response says the photo was not saved.
+    const photosEnabled = photo ? await reviewPhotosEnabled(sb) : false;
+    let photoPath = photosEnabled ? await uploadReviewPhoto(sb, productId, photo) : null;
+
     const insertRow = {
       productId,
       name,
@@ -240,17 +314,32 @@ async function submitReview(req, res) {
       ipHash: hashIp(ip),
     };
     if (phone) insertRow.phone = phone;
+    if (photoPath) insertRow.photoPath = photoPath;
 
     let { error } = await sb.from('product_reviews').insert([insertRow]);
-    if (error && phone && /phone/i.test(error.message || '') && /column/i.test(error.message || '')) {
+    if (error && insertRow.phone && isMissingColumnError(error, 'phone')) {
       delete insertRow.phone;
       ({ error } = await sb.from('product_reviews').insert([insertRow]));
     }
-    if (error) throw error;
+    if (error && insertRow.photoPath && isMissingColumnError(error, 'photoPath')) {
+      // The column vanished between the probe and the insert (or the probe was
+      // served by a different schema). Drop the reference and its orphan file
+      // instead of failing a review the customer already wrote.
+      const orphan = insertRow.photoPath;
+      delete insertRow.photoPath;
+      photoPath = null;
+      await removeReviewPhoto(sb, orphan);
+      ({ error } = await sb.from('product_reviews').insert([insertRow]));
+    }
+    if (error) {
+      if (photoPath) await removeReviewPhoto(sb, photoPath);
+      throw error;
+    }
 
     return json(res, 201, {
       success: true,
       pending: true,
+      photoSaved: Boolean(photoPath),
       message: 'Thanks! Your review was received and will appear once approved.',
     });
   } catch (err) {
@@ -275,6 +364,7 @@ module.exports._test = {
   cleanReviewText,
   normalizeEgyptPhone,
   readReviewPayload,
+  readReviewPhoto,
   hashIp,
   RATE_MAX_ATTEMPTS,
   RATE_WINDOW_MS,
