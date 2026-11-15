@@ -588,12 +588,15 @@ try {
   await section('[13] a delivered order offers a WhatsApp feedback chat', async () => {
     const text = buildOrderFeedbackMessage(ORDER);
     ok(text.includes('السلام عليكم أ/ Fatima'), 'the feedback ask greets the customer by name');
-    ok(text.includes('ZSH-MW30TEST-ABC123'), 'the order id is quoted');
+    ok(!text.includes('ZSH-MW30TEST-ABC123'), 'the order id is not sent to the customer');
+    ok(!/رقم الطلب/.test(text), 'no order-number line at all');
     ok(text.includes('المنتجات اللي طلبتها'), 'a multi-item order is referred to as the products');
     ok(text.includes('حابين ناخد رأيك'), 'the customer is asked for an opinion');
     ok(text.includes('الجودة والمقاس'), 'the ask names what to review');
+    ok(!text.includes('كلمة منك بتفرق'), 'the extra nudge line is gone');
+    ok(!text.includes('مش عاجبتك'), 'the complaints line is gone');
     ok(!text.includes('http'), 'no URL is placed in the pre-filled message');
-    ok(bytes(text) < 600, 'the message stays short enough for a button URL');
+    ok(bytes(text) < 400, 'the message stays short enough for a button URL');
 
     const single = buildOrderFeedbackMessage({
       ...ORDER,

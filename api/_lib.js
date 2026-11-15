@@ -2044,7 +2044,6 @@ function buildOrderTelegramActions(order = {}, trackingUrl, { includeWhatsApp = 
 function buildOrderFeedbackMessage(order = {}) {
   const nameText = safeLineText(order.customer, 60);
   const firstName = nameText.split(/\s+/)[0];
-  const orderId = safeLineText(order.id, 48);
   const items = Array.isArray(order.items)
     ? order.items.filter((item) => item && typeof item === 'object')
     : [];
@@ -2054,11 +2053,8 @@ function buildOrderFeedbackMessage(order = {}) {
   const lines = [];
   lines.push(`السلام عليكم أ/ ${firstName || 'عميلنا العزيز'} 👋`);
   lines.push('مع حضرتك فريق ZASHM. أتمنى إن الأوردر يكون وصلك بالسلامة وإن كل حاجة عجبتك.');
-  if (orderId) lines.push(`• رقم الطلب: ${orderId}`);
   lines.push('');
   lines.push(`حابين ناخد رأيك في ${subject}: الجودة والمقاس والتجربة بشكل عام.`);
-  lines.push('كلمة منك بتفرق معانا جدًا 🙏');
-  lines.push('ولو في أي حاجة مش عاجبتك، قولنا وإحنا هنحلها على طول.');
   return lines.join('\n');
 }
 
