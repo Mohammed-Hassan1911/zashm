@@ -1379,7 +1379,9 @@ select option { background: var(--bg3); }
   }
 
   footer.site-footer {
-    padding-bottom: calc(12px + 72px + env(safe-area-inset-bottom, 0px)) !important;
+    /* Reserve room for the 44px floating actions (positioned 84px above the
+       viewport bottom) as well as the fixed mobile navigation. */
+    padding-bottom: calc(12px + 128px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 

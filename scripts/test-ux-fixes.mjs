@@ -954,6 +954,11 @@ try {
       assert.ok(/!\(isEditingField && isSmallScreen\) && <BackToTop \/>/.test(app),
         'scroll-to-top follows the same rule');
     });
+
+    await step('mobile footer clears the floating actions above the bottom nav', () => {
+      assert.ok(/footer\.site-footer\s*\{[^}]*padding-bottom:\s*calc\(12px \+ 128px \+ env\(safe-area-inset-bottom, 0px\)\)/.test(css),
+        'footer reserves the full 128px floating-action region plus the safe area');
+    });
   }
 } catch (error) {
   console.error('Fatal test harness error:', error);
