@@ -645,9 +645,29 @@ console.log('\n[13] admin image upload payload budget');
       .reduce((a, b) => a * b, 1);
   };
 
-  eq(bytes('MAX_COMPRESSED_SIZE'), 900 * 1024, 'compressed images target 900KB');
+  eq(bytes('MAX_COMPRESSED_SIZE'), 120 * 1024, 'compressed images target 120KB');
   eq(bytes('DATAURL_LIMIT'), 1.35 * 1024 * 1024, 'the data URL is capped at 1.35MB');
   eq(bytes('MAX_FILE_SIZE'), 15 * 1024 * 1024, 'source files up to 15MB are accepted');
+
+  // Delivery size, not upload size: a gallery image wider than 1000px ships
+  // bytes no card or gallery on the site can use.
+  const maxDim = Number((budgetSource.match(/const MAX_DIM = (\d+);/) || [])[1]);
+  eq(maxDim, 1000, 'gallery images are capped at 1000px on the long edge');
+
+  // Every accepted file, including tiny originals, must be re-encoded.
+  ok(!/rawDirectLimit|RAW_DIRECT_LIMIT/.test(budgetSource) &&
+     !/file\.size\s*<=/.test(budgetSource),
+    'prepareImage does not pass any original image through unchanged');
+
+  // Review uploads use the same delivery budget as the product gallery.
+  const reviews = read('src/components/shop/ProductReviews.js');
+  ok(/prepareImage\(file,\s*\{\s*maxFileSize: PHOTO_MAX_FILE,?\s*\}\)/.test(reviews) &&
+     !/PHOTO_MAX_DIM|PHOTO_MAX_COMPRESSED|PHOTO_RAW_DIRECT|rawDirectLimit/.test(reviews),
+    'review photos inherit the same 1000px / 120KB compression budget');
+
+  ok(/while \(attemptDim >= 1\)/.test(budgetSource) &&
+     /attemptDim = Math\.max\(1, Math\.floor\(attemptDim \* 0\.8\)\)/.test(budgetSource),
+    'compression keeps adapting dimensions until the output meets its budget');
 
   const bodyBytes = bytes('DATAURL_LIMIT') + 64; // JSON envelope
   ok(bodyBytes < 1.5 * 1024 * 1024,

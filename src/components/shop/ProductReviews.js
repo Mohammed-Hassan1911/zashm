@@ -7,8 +7,6 @@ import StarRating from './StarRating';
 // A phone photo is shrunk on the device before it is sent: the server caps the
 // decoded image at 1.5MB, and this keeps the base64 body far below that.
 const PHOTO_MAX_FILE = 12 * 1024 * 1024;
-const PHOTO_MAX_DIM = 1400;
-const PHOTO_MAX_COMPRESSED = 700 * 1024;
 
 const inputStyle = {
   width: '100%',
@@ -220,11 +218,7 @@ export default function ProductReviews({ product }) {
 
     setPhotoBusy(true);
     try {
-      const dataUrl = await prepareImage(file, {
-        maxFileSize: PHOTO_MAX_FILE,
-        maxDim: PHOTO_MAX_DIM,
-        maxSize: PHOTO_MAX_COMPRESSED,
-      });
+      const dataUrl = await prepareImage(file, { maxFileSize: PHOTO_MAX_FILE });
       update('photo', dataUrl);
     } catch (err) {
       setPhotoError((err && err.message) || 'Could not read that photo. Please try another.');

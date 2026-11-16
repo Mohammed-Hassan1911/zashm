@@ -222,6 +222,8 @@ export default function ImageUploader({
 
   // Upload a single file, retrying once on a dropped connection / cold 5xx.
   const uploadSingleFile = async (file) => {
+    // No options on purpose: the gallery budget (1000px / 120KB) lives in
+    // lib/imagePrep so the admin uploader and the review form cannot drift.
     const dataUrl = await prepareImageForUpload(file);
 
     let lastError = null;
