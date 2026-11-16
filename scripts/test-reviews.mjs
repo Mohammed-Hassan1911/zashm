@@ -614,6 +614,26 @@ console.log('\n[8] static wiring');
     'the migration constrains the stored path');
   ok(/ADD COLUMN IF NOT EXISTS "photoPath"/.test(sql),
     'the canonical schema file also carries the column');
+
+  // ── photo field: same shape as every other field, with motion ──
+  ok(reviewsUi.includes('review-photo-drop'),
+    'the photo field is the full-width dropzone, not a small button');
+  ok(reviewsUi.includes('onDrop={onPhotoDrop}') && reviewsUi.includes('onDragOver={onPhotoDragOver}'),
+    'the dropzone accepts a dragged photo through the same pipeline');
+  ok(/Upload the product exactly as it arrived/.test(reviewsUi),
+    'the field explains what photo to send: the piece as it arrived');
+  ok(reviewsUi.includes('aria-describedby="review-photo-lede review-photo-meta"'),
+    'the dropzone is described by its helper copy for screen readers');
+  ok(reviewsUi.includes('className={`review-input${'),
+    'the text fields share the animated review-input treatment');
+  ok(/\.review-photo-drop \{[\s\S]{0,400}min-height: 172px/.test(css),
+    'the dropzone is tall enough to read as a field, not a link');
+  ok(/\.review-field:focus-within > label[\s\S]{0,80}color: var\(--gold\)/.test(css),
+    'field labels turn gold while the field has focus');
+  const motionCss = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+  ok(/\.review-photo-icon,[\s\S]{0,40}\.review-photo-preview \{\s*animation: none/.test(motionCss) &&
+     /\.review-photo-drop\.is-busy::before \{\s*animation: none/.test(motionCss),
+    'every new animation is disabled in the shared reduced-motion block');
 }
 
 // ─── Summary ────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ImagePlus, MessageSquare, Send, Star, X } from 'lucide-react';
+import { Check, ImagePlus, MessageSquare, Send, Star, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { prepareImage } from '../../lib/imagePrep';
 import StarRating from './StarRating';
@@ -13,13 +13,19 @@ const PHOTO_MAX_COMPRESSED = 700 * 1024;
 const inputStyle = {
   width: '100%',
   boxSizing: 'border-box',
-  background: 'var(--bg2)',
-  border: '1px solid var(--border)',
   borderRadius: 4,
   color: 'var(--text)',
   padding: '10px 12px',
   outline: 'none',
 };
+
+/** Rough size of the prepared data URL, for the "ready" line. */
+function dataUrlKb(value) {
+  if (typeof value !== 'string' || !value) return 0;
+  const comma = value.indexOf(',');
+  const chars = comma >= 0 ? value.length - comma - 1 : value.length;
+  return Math.max(1, Math.round((chars * 0.75) / 1024));
+}
 
 function formatDate(value) {
   const date = value ? new Date(value) : null;
@@ -87,6 +93,7 @@ export default function ProductReviews({ product }) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [photoSaved, setPhotoSaved] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -196,11 +203,9 @@ export default function ProductReviews({ product }) {
     setErrorField((current) => (current === key ? null : current));
   };
 
-  const pickPhoto = async (event) => {
-    const input = event && event.target;
-    const file = input && input.files && input.files[0];
-    // Reset the input so choosing the same file again still fires onChange.
-    if (input) input.value = '';
+  // Shared by the file picker and drag-and-drop, so both paths validate and
+  // compress exactly the same way.
+  const processPhotoFile = async (file) => {
     if (!file) return;
 
     setPhotoError('');
@@ -228,9 +233,44 @@ export default function ProductReviews({ product }) {
     }
   };
 
+  const pickPhoto = async (event) => {
+    const input = event && event.target;
+    const file = input && input.files && input.files[0];
+    // Reset the input so choosing the same file again still fires onChange.
+    if (input) input.value = '';
+    await processPhotoFile(file);
+  };
+
+  const openPhotoPicker = () => {
+    if (photoBusy) return;
+    if (photoInputRef.current) photoInputRef.current.click();
+  };
+
+  const onPhotoDragOver = (event) => {
+    if (!event.dataTransfer || photoBusy) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setDragActive(true);
+  };
+
+  const onPhotoDragLeave = (event) => {
+    // Ignore the leave events fired while crossing the button's own children.
+    if (event.currentTarget && event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return;
+    setDragActive(false);
+  };
+
+  const onPhotoDrop = (event) => {
+    event.preventDefault();
+    setDragActive(false);
+    if (photoBusy) return;
+    const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+    if (file) processPhotoFile(file);
+  };
+
   const removePhoto = () => {
     update('photo', '');
     setPhotoError('');
+    setDragActive(false);
   };
 
   const submit = async (event) => {
@@ -383,42 +423,44 @@ export default function ProductReviews({ product }) {
           )}
 
           <div style={{ display: 'grid', gap: 12 }}>
-            <div>
-              <label htmlFor="review-name" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your name</label>
+            <div className="review-field">
+              <label htmlFor="review-name">Your name</label>
               <input
                 id="review-name"
                 ref={nameRef}
                 type="text"
+                className={`review-input${errorField === 'name' ? ' is-invalid' : ''}`}
                 value={form.name}
                 onChange={(e) => update('name', e.target.value)}
                 maxLength={40}
                 autoComplete="name"
-                style={{ ...inputStyle, borderColor: errorField === 'name' ? '#e74c3c' : 'var(--border)' }}
+                style={inputStyle}
               />
               {errorField === 'name' && formError && (
                 <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
               )}
             </div>
 
-            <div>
-              <label htmlFor="review-phone" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Phone (optional)</label>
+            <div className="review-field">
+              <label htmlFor="review-phone">Phone (optional)</label>
               <input
                 id="review-phone"
                 ref={phoneRef}
                 type="tel"
+                className={`review-input${errorField === 'phone' ? ' is-invalid' : ''}`}
                 value={form.phone}
                 onChange={(e) => update('phone', e.target.value)}
                 maxLength={30}
                 autoComplete="tel"
                 placeholder="For follow-up only — not shown publicly"
-                style={{ ...inputStyle, borderColor: errorField === 'phone' ? '#e74c3c' : 'var(--border)' }}
+                style={inputStyle}
               />
               {errorField === 'phone' && formError && (
                 <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
               )}
             </div>
-            <div ref={ratingRef} role="radiogroup" aria-label="Your rating" style={{ borderColor: errorField === 'rating' ? '#e74c3c' : undefined, borderRadius: 4, padding: errorField === 'rating' ? 4 : 0, border: errorField === 'rating' ? '1px solid #e74c3c' : 'none' }}>
-              <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your rating</span>
+            <div ref={ratingRef} className="review-field" role="radiogroup" aria-label="Your rating" style={{ borderColor: errorField === 'rating' ? '#e74c3c' : undefined, borderRadius: 4, padding: errorField === 'rating' ? 4 : 0, border: errorField === 'rating' ? '1px solid #e74c3c' : 'none' }}>
+              <span className="review-field-label">Your rating</span>
               <div style={{ display: 'flex', gap: 4 }} onMouseLeave={() => setHoverStar(0)}>
                 {[1, 2, 3, 4, 5].map((star) => {
                   const active = star <= (hoverStar || form.rating);
@@ -448,17 +490,18 @@ export default function ProductReviews({ product }) {
               )}
             </div>
 
-            <div>
-              <label htmlFor="review-comment" style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>Your review</label>
+            <div className="review-field">
+              <label htmlFor="review-comment">Your review</label>
               <textarea
                 id="review-comment"
                 ref={commentRef}
+                className={`review-input${errorField === 'comment' ? ' is-invalid' : ''}`}
                 value={form.comment}
                 onChange={(e) => update('comment', e.target.value)}
                 maxLength={600}
                 rows={4}
                 placeholder="How is the fabric, the fit and the finishing?"
-                style={{ ...inputStyle, resize: 'vertical', minHeight: 90, fontFamily: 'inherit', borderColor: errorField === 'comment' ? '#e74c3c' : 'var(--border)' }}
+                style={{ ...inputStyle, resize: 'vertical', minHeight: 90, fontFamily: 'inherit' }}
               />
               {errorField === 'comment' && formError && (
                 <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
@@ -468,13 +511,18 @@ export default function ProductReviews({ product }) {
               </span>
             </div>
 
-            {/* Optional photo. Kept small on purpose: the file is resized in
-                the browser and the database only ever stores its path. */}
+            {/* Optional photo, shaped like every other field but inviting:
+                a full-width dropzone that accepts a click, a drag or a drop.
+                The file is resized in the browser and only its path is stored. */}
             {photosEnabled && (
-              <div>
-                <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>
-                  Photo (optional)
+              <div className="review-field review-photo">
+                <span className="review-field-label" id="review-photo-label">
+                  Photo of the piece <span style={{ color: 'var(--text3)' }}>· optional</span>
                 </span>
+                <p className="review-photo-lede" id="review-photo-lede">
+                  Upload the product exactly as it arrived — worn by you, or laid flat. Real photos help the next
+                  customer judge the fabric, the colour and the fit before they order.
+                </p>
                 <input
                   ref={photoInputRef}
                   id="review-photo"
@@ -482,62 +530,58 @@ export default function ProductReviews({ product }) {
                   accept="image/jpeg,image/png,image/webp"
                   onChange={pickPhoto}
                   style={{ display: 'none' }}
+                  tabIndex={-1}
+                  aria-hidden="true"
                 />
 
                 {form.photo ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <img
-                      src={form.photo}
-                      alt="Preview of the photo you chose"
-                      style={{ width: 72, height: 90, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={removePhoto}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        minHeight: 44,
-                        padding: '8px 14px',
-                        background: 'transparent',
-                        color: 'var(--text2)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        fontSize: 11,
-                      }}
-                    >
-                      <X size={12} /> Remove photo
-                    </button>
+                  <div className="review-photo-preview">
+                    <img src={form.photo} alt="Preview of the photo you chose" />
+                    <div className="review-photo-preview-bar">
+                      <span className="review-photo-ready">
+                        <Check size={13} aria-hidden="true" />
+                        {photoBusy ? 'Preparing…' : 'Ready to upload'}
+                        <span>· about {dataUrlKb(form.photo)} KB</span>
+                      </span>
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="review-photo-btn" onClick={openPhotoPicker} disabled={photoBusy}>
+                          <ImagePlus size={12} aria-hidden="true" /> Change photo
+                        </button>
+                        <button type="button" className="review-photo-btn is-quiet" onClick={removePhoto} disabled={photoBusy}>
+                          <X size={12} aria-hidden="true" /> Remove
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => { if (photoInputRef.current) photoInputRef.current.click(); }}
+                    className={`review-photo-drop${dragActive ? ' is-drag' : ''}${photoBusy ? ' is-busy' : ''}`}
+                    onClick={openPhotoPicker}
+                    onDragEnter={onPhotoDragOver}
+                    onDragOver={onPhotoDragOver}
+                    onDragLeave={onPhotoDragLeave}
+                    onDrop={onPhotoDrop}
                     disabled={photoBusy}
                     aria-busy={photoBusy ? 'true' : 'false'}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 7,
-                      minHeight: 44,
-                      padding: '9px 14px',
-                      background: 'transparent',
-                      color: photoBusy ? 'var(--text3)' : 'var(--gold)',
-                      border: '1px dashed var(--border-gold, rgba(201,168,76,0.45))',
-                      borderRadius: 4,
-                      cursor: photoBusy ? 'wait' : 'pointer',
-                      fontSize: 11,
-                      letterSpacing: 0.5,
-                    }}
+                    aria-labelledby="review-photo-label review-photo-title"
+                    aria-describedby="review-photo-lede review-photo-meta"
                   >
-                    <ImagePlus size={13} /> {photoBusy ? 'Preparing photo…' : 'Add a photo'}
+                    <span className="review-photo-icon" aria-hidden="true">
+                      <ImagePlus size={20} />
+                    </span>
+                    <span className="review-photo-title" id="review-photo-title">
+                      {photoBusy ? 'Preparing your photo…' : dragActive ? 'Drop it here' : 'Add a real photo'}
+                    </span>
+                    <span className="review-photo-cta">
+                      {photoBusy ? 'Optimising for upload' : 'Choose a photo'}
+                    </span>
+                    <span className="review-photo-drop-hint">or drag and drop it here</span>
                   </button>
                 )}
 
-                <span style={{ display: 'block', fontSize: 10, color: 'var(--text3)', marginTop: 5 }}>
-                  Optional — the piece on you or laid flat. It helps other shoppers see the real fit.
+                <span className="review-photo-meta" id="review-photo-meta">
+                  JPEG, PNG or WebP · up to 12MB · resized on your device · shown publicly once the review is approved.
                 </span>
                 {photoError && (
                   <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{photoError}</p>
