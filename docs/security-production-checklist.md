@@ -84,7 +84,7 @@ view only, and never deletes or rewrites an existing review. No review exists
 in production until one is submitted after deployment, and submissions start
 `pending` until an admin approves them.
 
-### Review photos (pending owner action, 2026-11-16)
+### Review photos (applied 2026-11-16)
 
 `supabase/product_review_photos.sql` adds the optional
 `public.product_reviews."photoPath"` text column and a fail-closed length /
@@ -94,14 +94,22 @@ No new bucket, no browser Storage policy: `api/reviews.js` writes with the
 service-role key, and the public API returns a URL only for **approved**
 reviews.
 
-It is **not applied yet**. The deployed code is safe before it runs: the API
-probes the column once per warm instance, returns `photosEnabled: false`, so
-the storefront keeps today's form without a photo picker, and a submission
-that still carries a photo saves the review without it
-(`photoSaved: false`). Apply it **after** `product_reviews.sql`. The file is
+**Applied 2026-11-16** (project `ptegprcbtfylqhbnbkih`) with
+`supabase db query --linked --file supabase/product_review_photos.sql` after
+`product_reviews.sql`. Verified afterwards: a service-role
+`select=id,"photoPath"` returns the existing rows with `photoPath: null`, and
+`pg_constraint` shows `product_reviews_photo_path_len` with the expected
+NULL / 10–300 chars / no leading `/` / no `..` definition. The migration is
 idempotent (`ADD COLUMN IF NOT EXISTS` + guarded constraint) and never
-modifies an existing row. Rollback drops the column and forgets the paths;
-the files stay in the bucket and can be deleted manually.
+modifies an existing row. Rollback drops the column and forgets the paths; the
+files stay in the bucket and can be deleted manually.
+
+The deployed code stays safe if the column is ever missing: the API probes it
+and answers `photosEnabled: false`, so the form keeps working without the
+picker and a submission that still carries a photo saves the review without it
+(`photoSaved: false`). A cached "no" is re-probed after 60 s, so a warm
+instance picks the column up shortly after a late migration instead of waiting
+for a cold start; transient probe failures are never cached.
 
 ### Product size windows (applied 2026-11-13)
 

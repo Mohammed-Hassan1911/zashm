@@ -47,6 +47,7 @@ const state = {
   storageRemoved: [],
   storageFail: false,
   missingPhotoColumn: false,
+  probeFail: false,
 };
 
 const MISSING_PHOTO_COLUMN = {
@@ -135,8 +136,13 @@ function makeQuery(table) {
 
   const query = {
     select(cols) {
-      if (typeof cols === 'string' && cols.includes('photoPath') && state.missingPhotoColumn) {
-        columnError = MISSING_PHOTO_COLUMN;
+      if (typeof cols === 'string' && cols.includes('photoPath')) {
+        if (state.probeFail && cols.trim() === '"photoPath"') {
+          // Only the one-column support probe fails, the way a timeout would.
+          columnError = { message: 'upstream request timed out', code: 'ETIMEDOUT' };
+        } else if (state.missingPhotoColumn) {
+          columnError = MISSING_PHOTO_COLUMN;
+        }
       }
       return query;
     },
@@ -238,6 +244,7 @@ function reset() {
   state.storageRemoved = [];
   state.storageFail = false;
   state.missingPhotoColumn = false;
+  state.probeFail = false;
   limiterAllowed = true;
   currentBody = null;
   resetReviewPhotoSupportCache();
@@ -358,6 +365,34 @@ console.log('\n[4] GET /api/reviews');
   eq(legacy.body.photosEnabled, false, 'the form hides the picker until the column exists');
   ok(legacy.body.reviews.every((r) => !('photoUrl' in r)), 'no photo URL is produced without the column');
   state.missingPhotoColumn = false;
+  resetReviewPhotoSupportCache();
+
+  // A transient probe failure (timeout, network) must never be remembered: the
+  // next request sees photos as soon as the database answers again.
+  state.probeFail = true;
+  resetReviewPhotoSupportCache();
+  const probeDown = await call('GET', { query: { productId: 7 } });
+  eq(probeDown.status, 200, 'reviews still load when the column probe fails');
+  eq(probeDown.body.photosEnabled, false, 'a failed probe answers this request without photos');
+  state.probeFail = false;
+  const probeBack = await call('GET', { query: { productId: 7 } });
+  eq(probeBack.body.photosEnabled, true, 'a transient probe failure is not cached');
+
+  // A cached "no" expires, so an instance that started before the migration
+  // offers the picker shortly after the column appears — no cold start needed.
+  state.missingPhotoColumn = true;
+  resetReviewPhotoSupportCache();
+  const beforeMigration = await call('GET', { query: { productId: 7 } });
+  eq(beforeMigration.body.photosEnabled, false, 'a missing column hides the picker');
+  state.missingPhotoColumn = false;
+  const realNow = Date.now;
+  Date.now = () => realNow() + 61 * 1000;
+  try {
+    const afterMigration = await call('GET', { query: { productId: 7 } });
+    eq(afterMigration.body.photosEnabled, true, 'a cached "no" is re-probed after its TTL');
+  } finally {
+    Date.now = realNow;
+  }
   resetReviewPhotoSupportCache();
 }
 

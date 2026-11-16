@@ -2228,23 +2228,36 @@ const REVIEW_PHOTO_MIME_EXT = {
   'image/webp': 'webp',
 };
 
+/** How long a cached "no" is trusted before the column is probed again. A warm
+ * instance must notice the migration shortly after it is applied instead of
+ * hiding the picker until the next cold start. */
+const REVIEW_PHOTO_FALSE_TTL_MS = 60 * 1000;
+
 /** True when the optional `photoPath` column has been added to the database.
- * Probed once per warm instance: a missing column means the migration has not
- * been applied yet, and every photo path then stays switched off instead of
- * turning every submission into a 500. */
+ * "Yes" is cached for the life of the instance; "no" is re-probed after
+ * REVIEW_PHOTO_FALSE_TTL_MS so a late migration takes effect quickly. Transient
+ * failures are answered "no" for that request only and never cached. */
 let _reviewPhotoColumnReady = null;
+let _reviewPhotoProbedAt = 0;
+
 async function reviewPhotosEnabled(sb, options = {}) {
-  if (options && options.refresh) _reviewPhotoColumnReady = null;
-  if (_reviewPhotoColumnReady !== null) return _reviewPhotoColumnReady;
+  if (options && options.refresh) {
+    _reviewPhotoColumnReady = null;
+    _reviewPhotoProbedAt = 0;
+  }
+  const now = Date.now();
+  if (_reviewPhotoColumnReady === true) return true;
+  if (_reviewPhotoColumnReady === false && now - _reviewPhotoProbedAt < REVIEW_PHOTO_FALSE_TTL_MS) {
+    return false;
+  }
   try {
     const { error } = await sb.from('product_reviews').select('"photoPath"').limit(1);
-    // A missing column is a definitive "no"; any other failure is transient and
-    // must not be cached as a permanent decision.
-    if (error && isMissingColumnError(error, 'photoPath')) {
-      _reviewPhotoColumnReady = false;
-    } else {
-      _reviewPhotoColumnReady = !error;
+    if (error && !isMissingColumnError(error, 'photoPath')) {
+      // Transient (network, timeout, permissions being fixed): do not remember it.
+      return false;
     }
+    _reviewPhotoColumnReady = !error;
+    _reviewPhotoProbedAt = now;
   } catch (e) {
     return false;
   }
@@ -2254,6 +2267,7 @@ async function reviewPhotosEnabled(sb, options = {}) {
 /** Test hook: forget the cached column probe. */
 function resetReviewPhotoSupportCache() {
   _reviewPhotoColumnReady = null;
+  _reviewPhotoProbedAt = 0;
 }
 
 function isMissingColumnError(error, column) {
