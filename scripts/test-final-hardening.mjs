@@ -546,14 +546,16 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok(/initial=\{\{ opacity: 0 \}\}[\s\S]*?exit=\{\{ opacity: 0 \}\}[\s\S]*?duration: 0\.38, ease: \[0\.4, 0, 0\.2, 1\]/.test(app),
     'storefront page transitions use a restrained crossfade without vertical jumps');
   const productCard = read('src/components/shop/ProductCard.js');
-  ok(/initial=\{\{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
-    'product cards use a brief fade with minimal stagger on collection entry');
+  ok(/initial=\{index === 0 \? false : \{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
+    'the LCP product card appears immediately while later cards use a brief fade');
   ok(/loading=\{index === 0 \? 'eager' : 'lazy'\}/.test(productCard) &&
      /fetchPriority=\{index === 0 \? 'high' : 'auto'\}/.test(productCard),
     'only the first collection image loads eagerly with high priority');
   ok(!/fonts\.googleapis\.com[^\n]*rel="stylesheet"/.test(read('index.html')) &&
      /requestAnimationFrame\(\(\) => requestAnimationFrame\(loadBrandFonts\)\)/.test(read('src/index.js')),
     'brand fonts load after the first render instead of blocking initial paint');
+  ok(/color: 'var\(--red-light\)'/.test(productCard) && /--red-light:\s*#ff786b/.test(read('src/index.css')),
+    'the small discount badge uses a high-contrast red');
 }
 
 // ─── [11] reload resilience and footer polish ──────────────────────────────

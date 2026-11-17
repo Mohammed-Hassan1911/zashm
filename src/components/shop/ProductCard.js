@@ -82,7 +82,8 @@ export default function ProductCard({ product, index = 0 }) {
   return (
     <motion.div
       className="product-card"
-      initial={{ opacity: 0 }}
+      // Keep the LCP card visible immediately; later cards retain the entrance fade.
+      initial={index === 0 ? false : { opacity: 0 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.3,
@@ -331,7 +332,7 @@ export default function ProductCard({ product, index = 0 }) {
                 borderRadius: 2,
                 background: 'rgba(192,57,43,0.14)',
                 border: '1px solid rgba(192,57,43,0.55)',
-                color: 'var(--red)',
+                color: 'var(--red-light)',
                 fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: 0.5,
