@@ -318,9 +318,9 @@ export function describeRecommendation(result) {
 }
 
 // ── Match quality ────────────────────────────────────────────────────────────
-// How well one window covers one number, from 1 (dead centre of the window) down
-// to 0. It is monotone: a candidate further away can never score higher, which
-// is what keeps "the highlighted size carries the highest percentage" true.
+// How well one window covers one number, from 1 at its centre down to 0 outside.
+// It compares sizes whose distance is tied and refines the score for sizes that
+// contain the shopper.
 //
 // Inside the window the score falls from 1 at the centre to 0.7 at the edge,
 // because a shopper sitting on the edge is one centimetre away from the next
@@ -355,9 +355,7 @@ function axisQuality(min, max, value) {
  * Build every candidate size with its distance, without deciding anything.
  *
  * This is the single source of truth for the model: `recommendSize` uses it to
- * pick one size, `scoreSizes` uses it to score all of them. Because both read
- * the same candidates, the highlighted size and the highest percentage can
- * never disagree.
+ * pick one size, `scoreSizes` uses it to score all of them.
  */
 function buildCandidates(input = {}) {
   const fit = FIT_OPTIONS.includes(input.fit) ? input.fit : 'regular';
@@ -548,15 +546,16 @@ export function recommendSize(input = {}) {
 //
 //   • inside the window it falls from 97 points at the centre to about 68 at the
 //     edge, because a shopper on the edge is one centimetre from the next size;
-//   • outside the window it keeps falling, with a short 2.6 cm/kg decay;
+//   • outside it falls smoothly with an 8-unit distance decay;
 //   • the published chart is an estimate from height and weight, not a
 //     measurement, so it is capped lower than a window the owner set himself.
 //
 // The store cannot see the garment on the body, so this relative ranking score
 // is never a probability or a guarantee.
-const SCORE_CEILING = { ranges: 1, chart: 0.9 };
+const SCORE_CEILING = { ranges: 0.97, chart: 0.9 };
 const SCORE_MAX = 97;
 const SCORE_RANK_STEP = 2;
+const SCORE_DECAY = { ranges: 8, chart: 8 };
 
 /**
  * Which edge of a two-sided window the shopper is closest to, when they are
@@ -625,9 +624,8 @@ function explainCandidate(candidate, ctx) {
  * Score every offered size, in the product's own size order.
  *
  * The recommendation comes from `recommendSize`, so the highlighted size is
- * exactly the one the engine would pick — including its stock swap. Because the
- * quality term is monotone in the same distance the engine ranked, the
- * recommended size always carries the highest relative score.
+ * exactly the one the engine would pick — including its stock swap. Scores
+ * follow the engine's distance order, using window quality to separate ties.
  */
 export function scoreSizes(input = {}) {
   const decision = recommendSize(input);
@@ -638,11 +636,16 @@ export function scoreSizes(input = {}) {
 
   const ordered = [...built.candidates].sort(compareCandidates);
   const ceiling = SCORE_CEILING[built.mode] ?? SCORE_CEILING.ranges;
+  const decay = SCORE_DECAY[built.mode] ?? SCORE_DECAY.ranges;
   const stockValue = stockReader(input);
 
   const sizes = ordered.map((candidate, index) => {
     const quality = Number.isFinite(candidate.quality) ? candidate.quality : 1;
-    const raw = Math.round(100 * ceiling * Math.max(0, Math.min(1, quality)));
+    const ceilingScore = 100 * ceiling;
+    const edgeScore = ceilingScore * (1 - QUALITY_EDGE_LOSS);
+    const raw = candidate.distance === 0
+      ? Math.round(ceilingScore * Math.max(0, Math.min(1, quality)))
+      : Math.round(edgeScore * Math.exp(-candidate.distance / decay));
     const stock = stockValue(candidate.label);
     return {
       label: candidate.label,

@@ -559,8 +559,8 @@ ok(!relaxedL.reason.includes('inside it'),
   'the reason never claims an exact fit while the score says otherwise');
 ok(relaxedL.reason.includes('relaxed fit'), 'the reason names the fit that moved the target');
 ok(relaxedL.reason.includes('plus 6 cm'), 'the reason quotes the ease the fit added');
-eq(relaxedScored.sizes.find((entry) => entry.label === 'XL').score, 99,
-  'the size that already covers the ease is the exact one');
+eq(relaxedScored.sizes.find((entry) => entry.label === 'XL').score, 83,
+  'an in-range chart match away from the centre stays below the ceiling');
 
 // Range mode has the same rule: the fit nudge is applied to the weight, so the
 // sentence has to say which weight was measured.
