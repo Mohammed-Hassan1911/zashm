@@ -557,67 +557,47 @@ const SCORE_MAX = 97;
 const SCORE_RANK_STEP = 2;
 const SCORE_DECAY = { ranges: 8, chart: 8 };
 
-/**
- * Which edge of a two-sided window the shopper is closest to, when they are
- * close enough for it to matter (60% of the half-window or more).
- */
-function edgeSide(min, max, value) {
-  if (min === null || max === null) return null;
-  const tolerance = (max - min) / 2;
-  if (!(tolerance > 0)) return null;
-  const ratio = Math.abs(value - (min + max) / 2) / tolerance;
-  if (ratio < 0.6) return null;
-  return { ratio, side: value >= (min + max) / 2 ? 'upper' : 'lower' };
-}
-
-/** The closest edge across the weight and height windows, or ''. */
-function nearestEdge(range, weight, height) {
-  const found = [
-    edgeSide(range.minWeight, range.maxWeight, weight),
-    edgeSide(range.minHeight, range.maxHeight, height),
-  ].filter(Boolean).sort((a, b) => b.ratio - a.ratio)[0];
-  return found ? found.side : '';
-}
-
 /** One honest sentence per size, used under every result. */
+function rangePosition(min, max, value, unit) {
+  if (min === null && max === null) return `no ${unit} range was set`;
+  const window = formatWindow(min, max, unit);
+  const delta = windowDelta(min, max, value);
+  if (delta === 0) return `within ${window}`;
+  return `${Math.abs(delta)} ${unit} ${delta > 0 ? 'above' : 'below'} ${window}`;
+}
+
+function signedAmount(value, unit) {
+  return `${value > 0 ? '+' : ''}${value} ${unit}`;
+}
+
 function explainCandidate(candidate, ctx) {
-  // Every sentence below describes the exact quantity the score was computed
-  // from — the fit-adjusted weight in range mode, the fit-adjusted chest in
-  // chart mode. A size can therefore never read "inside it" while showing a
-  // low percentage.
+  // Explain the actual comparison inputs so the customer can see how their fit
+  // preference and measurements affected this size's relative score.
   if (ctx.mode === 'ranges') {
     const range = candidate.range;
-    const window = describeRange(range);
-    const nudge = ctx.effectiveWeight - ctx.weight;
+    const fitNudge = FIT_WEIGHT_NUDGE[ctx.fit] || 0;
+    const shapeNudge = shapeWeightOffset(ctx.shape);
     const weightDelta = windowDelta(range.minWeight, range.maxWeight, ctx.effectiveWeight);
     const heightDelta = windowDelta(range.minHeight, range.maxHeight, ctx.height);
-    if (weightDelta === 0 && heightDelta === 0) {
-      const edge = nearestEdge(range, ctx.effectiveWeight, ctx.height);
-      const edgeText = edge ? `, close to its ${edge} edge` : '';
-      return nudge === 0
-        ? `Made for ${window}. Your ${ctx.weight} kg and ${ctx.height} cm sit inside that window${edgeText}.`
-        : `Made for ${window}. For a ${ctx.fit} fit your ${ctx.weight} kg counts as ${ctx.effectiveWeight} kg — still inside that window at ${ctx.height} cm${edgeText}.`;
-    }
-    const parts = [];
-    if (weightDelta) parts.push(`${Math.abs(weightDelta)} kg ${weightDelta > 0 ? 'over' : 'under'}`);
-    if (heightDelta) parts.push(`${Math.abs(heightDelta)} cm ${heightDelta > 0 ? 'over' : 'under'}`);
-    const measured = nudge === 0
-      ? `Your ${ctx.weight} kg and ${ctx.height} cm put you`
-      : `For a ${ctx.fit} fit we count ${ctx.effectiveWeight} kg (from ${ctx.weight} kg), so at ${ctx.height} cm you are`;
-    return `Made for ${window}. ${measured} ${parts.join(' and ')}.`;
+    const fitText = fitNudge === 0
+      ? `Your ${ctx.fit} fit adds no weight adjustment.`
+      : `For a ${ctx.fit} fit, we shift the comparison by ${signedAmount(fitNudge, 'kg')} ${fitNudge > 0 ? 'to allow a roomier fit' : 'for a closer fit'}.`;
+    const shapeText = shapeNudge === 0
+      ? ''
+      : ` Your shape answers shift it by another ${signedAmount(shapeNudge, 'kg')}.`;
+    return `This size is listed for ${describeRange(range)}. Your height (${ctx.height} cm) is ${rangePosition(range.minHeight, range.maxHeight, ctx.height, 'cm')}. Your weight is ${ctx.weight} kg. ${fitText}${shapeText} We compare ${ctx.effectiveWeight} kg with this size's weight range: ${rangePosition(range.minWeight, range.maxWeight, ctx.effectiveWeight, 'kg')}.`;
   }
 
   const [lo, hi] = candidate.chestRange;
-  const offset = ctx.target - ctx.bodyChest;
-  const counted = offset === 0
-    ? `Your estimate is ${ctx.bodyChest} cm`
-    : `Your ${ctx.bodyChest} cm estimate ${offset > 0 ? 'plus' : 'minus'} ${Math.abs(offset)} cm for a ${ctx.fit} fit is ${ctx.target} cm`;
-  const delta = windowDelta(lo, hi, ctx.target);
-  if (delta === 0) {
-    const edge = edgeSide(lo, hi, ctx.target);
-    return `Cut for a ${lo}–${hi} cm chest. ${counted}, inside it${edge ? `, close to its ${edge.side} edge` : ''}.`;
-  }
-  return `Cut for a ${lo}–${hi} cm chest. ${counted}, ${Math.abs(delta)} cm ${delta > 0 ? 'over' : 'under'}.`;
+  const shapeNudge = shapeChestOffset(ctx.shape);
+  const fitNudge = FIT_OFFSET[ctx.fit] || 0;
+  const shapeText = shapeNudge === 0
+    ? ''
+    : ` Your shape answers adjust the estimate by ${signedAmount(shapeNudge, 'cm')}.`;
+  const fitText = fitNudge === 0
+    ? ` Your ${ctx.fit} fit adds no ease adjustment.`
+    : ` For a ${ctx.fit} fit, we add ${Math.abs(fitNudge)} cm of ease to the comparison.`;
+  return `This size is cut for a ${lo}–${hi} cm chest. Your height and weight give an estimated chest of ${ctx.chest} cm.${shapeText}${fitText} We compare ${ctx.target} cm with this size's chart range: ${rangePosition(lo, hi, ctx.target, 'cm')}.`;
 }
 
 /**

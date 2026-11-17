@@ -331,6 +331,9 @@ ok(/transform: `scale\(\$\{widthScale\.toFixed\(3\)\}, \$\{heightScale\.toFixed\
 ok(finder.includes('CHEST_WIDTH') && finder.includes('WAIST_WIDTH'),
   'the chest and waist answers reshape the drawing');
 ok(finder.includes('MatchGauge'), 'the result renders a circular gauge');
+ok(finder.includes('We recommend size <strong>{shown.label}</strong>') && finder.includes('{shown.score}/100 match score'),
+  'the result names the recommended size and its relative score');
+ok(finder.includes('not a guaranteed-fit percentage'), 'the score is not presented as a probability');
 ok(finder.includes('scoreBand(shown.score,'), 'the estimated match score also reads as a sentence');
 ok(finder.includes('Best available in this colour'),
   'a stock swap is labelled as the best available size, not a rough estimate');
@@ -341,10 +344,19 @@ ok(!finder.includes("{step < 2 ? 'Next' : 'Find my size'}"), 'the last-step subm
 ok(finder.includes('onClick={() => setActiveSize(entry.label)}'),
   'the shopper can switch between sizes');
 ok(finder.includes('aria-label="Estimated match score for every size, out of 100"'), 'the size chips explain their score to screen readers');
+ok(finder.includes('className="size-finder-restart"'), 'the final step offers a restart control');
+ok(/\.size-finder-restart\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*5px/s.test(css),
+  'Start over has a visible, polished border');
 ok(finder.includes('role="dialog"') && finder.includes('aria-modal="true"'),
   'the flow is a modal dialog');
 ok(finder.includes("event.key === 'Escape'"), 'Escape closes the dialog');
 ok(finder.includes("document.body.style.overflow = 'hidden'"), 'the page behind the dialog is locked');
+ok(finder.includes("html.style.overflow = 'hidden'") && finder.includes("body.style.position = 'fixed'") &&
+   finder.includes('window.scrollTo(0, scrollY)'),
+  'opening the finder freezes the page and closing it restores the exact scroll position');
+ok(/\.size-finder-dialog\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s.test(css) &&
+   /\.size-finder-overlay\s*\{[^}]*overscroll-behavior:\s*none;/s.test(css),
+  'scroll stays inside the finder instead of chaining to the page behind it');
 ok(finder.includes('onDialogKeyDown'), 'Tab stays inside the dialog');
 ok(finder.includes('inStock === false') && finder.includes('Sold out'),
   'a sold-out size is marked, never recommended as available');
@@ -533,7 +545,7 @@ ok(byScore[0].distance <= byScore[byScore.length - 1].distance,
 
 const exactScore = scoreSizes({ height: 182, weight: 78, sizes: ['L'], sizeRanges: OWNER_RANGES });
 eq(exactScore.sizes[0].score, 97, 'an exact window match is capped at 97 points');
-ok(exactScore.sizes[0].reason.includes('inside'), 'an inside-the-window size says so');
+ok(exactScore.sizes[0].reason.includes('within'), 'an inside-the-window size is explained plainly');
 
 const farScore = scoreSizes({ height: 160, weight: 50, sizes: ['M', 'L', 'XL'], fit: 'regular' });
 ok(farScore.sizes.find((entry) => entry.label === 'M').score > farScore.sizes.find((entry) => entry.label === 'XL').score,
@@ -558,7 +570,8 @@ ok(relaxedL.score < 99, 'a size that only fits with ease is not scored as an exa
 ok(!relaxedL.reason.includes('inside it'),
   'the reason never claims an exact fit while the score says otherwise');
 ok(relaxedL.reason.includes('relaxed fit'), 'the reason names the fit that moved the target');
-ok(relaxedL.reason.includes('plus 6 cm'), 'the reason quotes the ease the fit added');
+ok(relaxedL.reason.includes('add 6 cm of ease'), 'the reason explains the ease added for the selected fit');
+ok(relaxedL.reason.includes('2 cm above 102–106 cm'), 'the reason states the exact chest-range difference');
 eq(relaxedScored.sizes.find((entry) => entry.label === 'XL').score, 83,
   'an in-range chart match away from the centre stays below the ceiling');
 
@@ -568,10 +581,11 @@ const nudgedScored = scoreSizes({
   height: 180, weight: 84, sizes: ['M', 'L', 'XL'], sizeRanges: OWNER_RANGES, fit: 'relaxed',
 });
 const nudgedL = nudgedScored.sizes.find((entry) => entry.label === 'L');
-ok(nudgedL.reason.includes('we count 87 kg'), 'the range reason shows the weight the fit counted');
-ok(!nudgedL.reason.includes('sit inside that window'),
+ok(nudgedL.reason.includes('compare 87 kg'), 'the range reason shows the adjusted comparison weight');
+ok(nudgedL.reason.includes('2 kg above 71–85 kg'), 'the range reason states the exact weight difference');
+ok(!nudgedL.reason.includes('within 71–85 kg'),
   'a nudged body outside the window is never described as inside');
-ok(nudgedScored.sizes.find((entry) => entry.label === 'XL').reason.includes('still inside that window'),
+ok(nudgedScored.sizes.find((entry) => entry.label === 'XL').reason.includes('within 86–105 kg'),
   'the roomier size explains that the counted weight fits it');
 
 section('22 — body shape answers');

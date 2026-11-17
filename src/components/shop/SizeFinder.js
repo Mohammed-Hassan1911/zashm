@@ -362,7 +362,7 @@ export default function SizeFinder({
     setOpen(false);
     if (typeof window !== 'undefined') {
       const node = restoreFocusRef.current;
-      window.setTimeout(() => node?.focus?.(), 0);
+      window.setTimeout(() => node?.focus?.({ preventScroll: true }), 0);
     }
   }, []);
 
@@ -372,7 +372,28 @@ export default function SizeFinder({
   useEffect(() => {
     if (!open) return undefined;
 
-    const previous = document.body.style.overflow;
+    const scrollY = window.scrollY;
+    const html = document.documentElement;
+    const body = document.body;
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      htmlScrollBehavior: html.style.scrollBehavior,
+      bodyOverflow: body.style.overflow,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyLeft: body.style.left,
+      bodyRight: body.style.right,
+      bodyWidth: body.style.width,
+    };
+    html.style.overflow = 'hidden';
+    html.style.scrollBehavior = 'auto';
+    // `overflow:hidden` alone does not reliably lock the page on iOS Safari.
+    // Fix the body in place and restore its exact scroll position on close.
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = `${html.clientWidth}px`;
     document.body.style.overflow = 'hidden';
 
     const onKeyDown = (event) => {
@@ -384,7 +405,15 @@ export default function SizeFinder({
 
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.body.style.overflow = previous;
+      html.style.overflow = previous.htmlOverflow;
+      html.style.scrollBehavior = previous.htmlScrollBehavior;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.position = previous.bodyPosition;
+      body.style.top = previous.bodyTop;
+      body.style.left = previous.bodyLeft;
+      body.style.right = previous.bodyRight;
+      body.style.width = previous.bodyWidth;
+      window.scrollTo(0, scrollY);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open, close]);
@@ -778,12 +807,15 @@ export default function SizeFinder({
                   {step === 3 && shown && (
                     <div className="size-finder-result">
                       <div aria-live="polite" className="sr-only">
-                        {`Your size is ${shown.label}, with an estimated match score of ${shown.score} out of 100. ${band.label}.`}
+                        {`We recommend size ${shown.label}, with a match score of ${shown.score} out of 100. ${band.label}.`}
                       </div>
 
+                      <p className="size-finder-recommendation">
+                        We recommend size <strong>{shown.label}</strong> · {shown.score}/100 match score
+                      </p>
                       <MatchGauge size={shown.label} score={shown.score} reduceMotion={reduceMotion} />
                       <p className="size-finder-score-note">
-                        Estimated match score out of 100, based on this item’s size information. It is not a probability or fit guarantee.
+                        This score compares your answers with this item’s size information. It is not a guaranteed-fit percentage.
                       </p>
 
                       <div className="size-finder-result-head">
