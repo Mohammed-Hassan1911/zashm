@@ -441,7 +441,7 @@ export default function ProductPage() {
           // ترك الأنميشن بالكامل لـ Framer Motion لمنع أي تعليق فلاشي
           animate={{ borderColor: isSelected ? 'var(--gold)' : 'var(--border)' }}
           transition={{ duration: 0.1 }}
-          whileHover={{ borderColor: isSizeOOSWithSelectedColor ? 'rgba(224,138,130,0.65)' : 'var(--gold)' }}
+          whileHover={{ borderColor: isSizeOOSWithSelectedColor ? '#c0392b' : 'var(--gold)' }}
           whileTap={{ scale: 0.95 }}
         >
           {s}
