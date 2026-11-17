@@ -53,6 +53,46 @@ export const FIT_OFFSET = { slim: -4, regular: 0, relaxed: 6, oversized: 12 };
  */
 export const FIT_WEIGHT_NUDGE = { slim: -4, regular: 0, relaxed: 3, oversized: 6 };
 
+// ── Body shape ───────────────────────────────────────────────────────────────
+// Two extra questions the finder asks, because two shoppers with identical
+// height and weight can still need different sizes: a broader chest fills a
+// garment that a narrower one swims in.
+//
+// The offsets are deliberately small. They break ties and nudge a boundary
+// case; they never override height and weight. `average` is exactly zero, so a
+// shopper who skips the questions gets the unchanged height/weight model.
+export const CHEST_SHAPES = ['slimmer', 'average', 'broader'];
+export const WAIST_SHAPES = ['flatter', 'average', 'rounder'];
+
+/** Chart mode: how the shape moves the estimated chest, in cm. */
+export const SHAPE_CHEST_CM = { slimmer: -3, average: 0, broader: 3 };
+export const SHAPE_WAIST_CM = { flatter: -1, average: 0, rounder: 2 };
+
+/** Range mode: the same idea expressed as kg, because windows are in kg. */
+export const SHAPE_CHEST_KG = { slimmer: -3, average: 0, broader: 3 };
+export const SHAPE_WAIST_KG = { flatter: -1, average: 0, rounder: 2 };
+
+export const BODY_SHAPE_DEFAULT = Object.freeze({ chest: 'average', waist: 'average' });
+
+/** Never throws: unknown answers collapse to `average`. */
+export function sanitizeBodyShape(shape) {
+  const chest = shape && CHEST_SHAPES.includes(shape.chest) ? shape.chest : 'average';
+  const waist = shape && WAIST_SHAPES.includes(shape.waist) ? shape.waist : 'average';
+  return { chest, waist };
+}
+
+/** Total chest offset in cm for a shape answer (0 for average/average). */
+export function shapeChestOffset(shape) {
+  const clean = sanitizeBodyShape(shape);
+  return SHAPE_CHEST_CM[clean.chest] + SHAPE_WAIST_CM[clean.waist];
+}
+
+/** Total weight offset in kg for a shape answer (0 for average/average). */
+export function shapeWeightOffset(shape) {
+  const clean = sanitizeBodyShape(shape);
+  return SHAPE_CHEST_KG[clean.chest] + SHAPE_WAIST_KG[clean.waist];
+}
+
 // Published "to fit chest" ranges (cm) — the same numbers as the size guide.
 const CHEST_RANGES = {
   XS: [86, 91],
@@ -216,6 +256,17 @@ function windowGap(min, max, value) {
   return 0;
 }
 
+/**
+ * Signed distance from a window: 0 inside, positive above the maximum,
+ * negative below the minimum. Used for wording ("3 kg above"), never for
+ * ranking — ranking uses the absolute gap so both sides cost the same.
+ */
+function windowDelta(min, max, value) {
+  if (min !== null && value < min) return value - min;
+  if (max !== null && value > max) return value - max;
+  return 0;
+}
+
 function formatWindow(min, max, unit) {
   if (min !== null && max !== null) return `${min}–${max} ${unit}`;
   if (min !== null) return `${min}+ ${unit}`;
@@ -267,17 +318,14 @@ export function describeRecommendation(result) {
 }
 
 /**
- * Recommend the closest size.
+ * Build every candidate size with its distance, without deciding anything.
  *
- * @param {object} input
- * @param {number} input.height  cm
- * @param {number} input.weight  kg
- * @param {'slim'|'regular'|'relaxed'|'oversized'} [input.fit]
- * @param {Array<string|number>} input.sizes  sizes offered by the product
- * @param {object} [input.sizeRanges]  owner ranges, keyed by size label
- * @param {(size: string) => number|null} [input.stockFor] stock for the colour
+ * This is the single source of truth for the model: `recommendSize` uses it to
+ * pick one size, `scoreSizes` uses it to score all of them. Because both read
+ * the same candidates, the highlighted size and the highest percentage can
+ * never disagree.
  */
-export function recommendSize(input = {}) {
+function buildCandidates(input = {}) {
   const fit = FIT_OPTIONS.includes(input.fit) ? input.fit : 'regular';
   const height = Number(input.height);
   const weight = Number(input.weight);
@@ -289,11 +337,13 @@ export function recommendSize(input = {}) {
     .filter(Boolean);
   if (!declaredSizes.length) return { ok: false, reason: 'unsupported-sizes' };
 
+  const shape = sanitizeBodyShape(input.bodyShape);
+  const bodyChest = chest + shapeChestOffset(shape);
   const ranges = sanitizeSizeRanges(input.sizeRanges, declaredSizes);
   const candidates = [];
 
   // ── Mode 1: owner ranges ──────────────────────────────────────────────────
-  const effectiveWeight = weight + FIT_WEIGHT_NUDGE[fit];
+  const effectiveWeight = weight + FIT_WEIGHT_NUDGE[fit] + shapeWeightOffset(shape);
   for (const size of declaredSizes) {
     const range = ranges[size];
     if (!range) continue;
@@ -312,8 +362,7 @@ export function recommendSize(input = {}) {
     // No size has an owner window yet. Fall back to the published chart so the
     // customer still gets an answer for products the owner has not configured.
     mode = 'chart';
-    const offset = FIT_OFFSET[fit];
-    const target = chest + offset;
+    const target = bodyChest + FIT_OFFSET[fit];
     for (const size of declaredSizes) {
       const key = normalizeSize(size);
       if (!key) continue;
@@ -325,30 +374,55 @@ export function recommendSize(input = {}) {
 
   if (!candidates.length) return { ok: false, reason: 'unsupported-sizes' };
 
-  // Closest wins. On a tie prefer the larger size: roomier is the safer
-  // mistake and never feels unexpectedly tight.
-  const sizeOrder = (candidate) => {
-    if (candidate.range) {
-      const mid = ((candidate.range.minWeight ?? candidate.range.maxWeight ?? 0)
-        + (candidate.range.maxWeight ?? candidate.range.minWeight ?? 0)) / 2;
-      const heightMid = ((candidate.range.minHeight ?? candidate.range.maxHeight ?? 0)
-        + (candidate.range.maxHeight ?? candidate.range.minHeight ?? 0)) / 2;
-      return mid + heightMid;
-    }
-    return candidate.chestRange[0];
+  return {
+    ok: true,
+    mode,
+    fit,
+    height,
+    weight,
+    chest,
+    bodyChest,
+    shape,
+    effectiveWeight,
+    target: bodyChest + FIT_OFFSET[fit],
+    declaredSizes,
+    candidates,
   };
-  candidates.sort((a, b) => a.distance - b.distance || sizeOrder(b) - sizeOrder(a));
+}
 
-  const nearest = candidates[0];
+// Closest wins. On a tie prefer the larger size: roomier is the safer mistake
+// and never feels unexpectedly tight.
+function sizeOrder(candidate) {
+  if (candidate.range) {
+    const mid = ((candidate.range.minWeight ?? candidate.range.maxWeight ?? 0)
+      + (candidate.range.maxWeight ?? candidate.range.minWeight ?? 0)) / 2;
+    const heightMid = ((candidate.range.minHeight ?? candidate.range.maxHeight ?? 0)
+      + (candidate.range.maxHeight ?? candidate.range.minHeight ?? 0)) / 2;
+    return mid + heightMid;
+  }
+  return candidate.chestRange[0];
+}
+
+function compareCandidates(a, b) {
+  return a.distance - b.distance || sizeOrder(b) - sizeOrder(a);
+}
+
+function stockReader(input) {
   const stockOf = typeof input.stockFor === 'function' ? input.stockFor : null;
-  const stockValue = (size) => {
+  return (size) => {
     if (!stockOf) return null;
     const value = Number(stockOf(size));
     return Number.isFinite(value) ? value : null;
   };
+}
 
-  // A different size is only offered when it is an equally good fit. A whole
-  // size away is never substituted just because the right size sold out.
+/**
+ * Pick the size to recommend from an already-sorted candidate list.
+ * A different size is only offered when it is an equally good fit. A whole
+ * size away is never substituted just because the right size sold out.
+ */
+function chooseCandidate(candidates, mode, stockValue) {
+  const nearest = candidates[0];
   const swapTolerance = mode === 'ranges' ? 4 : 2;
   let chosen = nearest;
   let skippedSize = null;
@@ -363,6 +437,29 @@ export function recommendSize(input = {}) {
       skippedSize = nearest.label;
     }
   }
+  return { chosen, skippedSize };
+}
+
+/**
+ * Recommend the closest size.
+ *
+ * @param {object} input
+ * @param {number} input.height  cm
+ * @param {number} input.weight  kg
+ * @param {'slim'|'regular'|'relaxed'|'oversized'} [input.fit]
+ * @param {{chest?: string, waist?: string}} [input.bodyShape]
+ * @param {Array<string|number>} input.sizes  sizes offered by the product
+ * @param {object} [input.sizeRanges]  owner ranges, keyed by size label
+ * @param {(size: string) => number|null} [input.stockFor] stock for the colour
+ */
+export function recommendSize(input = {}) {
+  const built = buildCandidates(input);
+  if (!built.ok) return built;
+
+  const { mode, fit, height, weight, chest, bodyChest, effectiveWeight } = built;
+  const candidates = [...built.candidates].sort(compareCandidates);
+  const stockValue = stockReader(input);
+  const { chosen, skippedSize } = chooseCandidate(candidates, mode, stockValue);
 
   const chosenStock = stockValue(chosen.label);
   const bmi = weight / ((height / 100) ** 2);
@@ -379,6 +476,7 @@ export function recommendSize(input = {}) {
     bodyDistance,
     confidence,
     fit,
+    bodyShape: built.shape,
     inStock: chosenStock === null ? null : chosenStock > 0,
     swappedForStock: skippedSize !== null,
     skippedSize,
@@ -393,13 +491,108 @@ export function recommendSize(input = {}) {
     result.effectiveWeight = effectiveWeight;
   } else {
     result.chest = chest;
+    result.bodyChest = bodyChest;
     result.offset = FIT_OFFSET[fit];
-    result.target = chest + FIT_OFFSET[fit];
+    result.target = bodyChest + FIT_OFFSET[fit];
     result.chestRange = chosen.chestRange;
   }
   result.reason = describeRecommendation(result);
   return result;
 }
+
+// ── Match percentages ────────────────────────────────────────────────────────
+// A percentage is only worth showing if it is derived from the same distance
+// that ranks the sizes, so it is: score = 100 * e^(-distance / decay), minus a
+// small step per rank so two sizes inside the same window are still ordered the
+// way the engine ordered them. `decay` is in the mode's own units (cm+kg for
+// owner windows, cm for the chart).
+const SCORE_DECAY = { ranges: 9, chart: 2.6 };
+// Never claim certainty: a size can be an excellent match, not a guaranteed fit.
+const SCORE_MAX = 99;
+// A floor keeps the worst sizes ordered instead of collapsing to the same 1%.
+const SCORE_FLOOR = 4;
+const SCORE_RANK_STEP = 2;
+
+/** One honest sentence per size, used under every result. */
+function explainCandidate(candidate, ctx) {
+  // Every sentence below describes the exact quantity the score was computed
+  // from — the fit-adjusted weight in range mode, the fit-adjusted chest in
+  // chart mode. A size can therefore never read "inside it" while showing a
+  // low percentage.
+  if (ctx.mode === 'ranges') {
+    const range = candidate.range;
+    const window = describeRange(range);
+    const nudge = ctx.effectiveWeight - ctx.weight;
+    const weightDelta = windowDelta(range.minWeight, range.maxWeight, ctx.effectiveWeight);
+    const heightDelta = windowDelta(range.minHeight, range.maxHeight, ctx.height);
+    if (weightDelta === 0 && heightDelta === 0) {
+      return nudge === 0
+        ? `Made for ${window}. Your ${ctx.weight} kg and ${ctx.height} cm sit inside that window.`
+        : `Made for ${window}. For a ${ctx.fit} fit your ${ctx.weight} kg counts as ${ctx.effectiveWeight} kg — still inside that window at ${ctx.height} cm.`;
+    }
+    const parts = [];
+    if (weightDelta) parts.push(`${Math.abs(weightDelta)} kg ${weightDelta > 0 ? 'over' : 'under'}`);
+    if (heightDelta) parts.push(`${Math.abs(heightDelta)} cm ${heightDelta > 0 ? 'over' : 'under'}`);
+    const measured = nudge === 0
+      ? `Your ${ctx.weight} kg and ${ctx.height} cm put you`
+      : `For a ${ctx.fit} fit we count ${ctx.effectiveWeight} kg (from ${ctx.weight} kg), so at ${ctx.height} cm you are`;
+    return `Made for ${window}. ${measured} ${parts.join(' and ')}.`;
+  }
+
+  const [lo, hi] = candidate.chestRange;
+  const offset = ctx.target - ctx.bodyChest;
+  const counted = offset === 0
+    ? `Your estimate is ${ctx.bodyChest} cm`
+    : `Your ${ctx.bodyChest} cm estimate plus ${offset} cm for a ${ctx.fit} fit is ${ctx.target} cm`;
+  const delta = windowDelta(lo, hi, ctx.target);
+  if (delta === 0) {
+    return `Cut for a ${lo}–${hi} cm chest. ${counted}, inside it.`;
+  }
+  return `Cut for a ${lo}–${hi} cm chest. ${counted}, ${Math.abs(delta)} cm ${delta > 0 ? 'over' : 'under'}.`;
+}
+
+/**
+ * Score every offered size, in the product's own size order.
+ *
+ * The recommendation comes from `recommendSize`, so the highlighted size is
+ * exactly the one the engine would pick — including its stock swap.
+ */
+export function scoreSizes(input = {}) {
+  const decision = recommendSize(input);
+  if (!decision.ok) return decision;
+
+  const built = buildCandidates(input);
+  if (!built.ok) return built;
+
+  const ordered = [...built.candidates].sort(compareCandidates);
+  const decay = SCORE_DECAY[built.mode];
+  const stockValue = stockReader(input);
+
+  const sizes = ordered.map((candidate, index) => {
+    const decayed = Math.max(SCORE_FLOOR, 100 * Math.exp(-candidate.distance / decay));
+    const stock = stockValue(candidate.label);
+    return {
+      label: candidate.label,
+      score: Math.max(1, Math.min(SCORE_MAX, Math.round(decayed) - index * SCORE_RANK_STEP)),
+      distance: candidate.distance,
+      inStock: stock === null ? null : stock > 0,
+      recommended: candidate.label === decision.size,
+      reason: explainCandidate(candidate, built),
+    };
+  });
+
+  // Keep the product's size order so the chips read XS → 3XL, not best-first.
+  sizes.sort((a, b) => built.declaredSizes.indexOf(a.label) - built.declaredSizes.indexOf(b.label));
+
+  return {
+    ok: true,
+    mode: built.mode,
+    sizes,
+    recommended: decision.size,
+    decision,
+  };
+}
+
 
 /** Read the saved profile, tolerating missing / corrupt storage. */
 export function loadFitProfile(storage) {
@@ -418,6 +611,7 @@ export function loadFitProfile(storage) {
       height: Math.round(height),
       weight: Math.round(weight),
       fit: FIT_OPTIONS.includes(parsed.fit) ? parsed.fit : 'regular',
+      bodyShape: sanitizeBodyShape(parsed.bodyShape),
     };
   } catch (error) {
     return null;
@@ -437,6 +631,7 @@ export function saveFitProfile(profile, storage) {
       height: Math.round(height),
       weight: Math.round(weight),
       fit: FIT_OPTIONS.includes(profile.fit) ? profile.fit : 'regular',
+      bodyShape: sanitizeBodyShape(profile.bodyShape),
     }));
     return true;
   } catch (error) {

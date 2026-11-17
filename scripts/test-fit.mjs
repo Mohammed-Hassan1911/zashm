@@ -8,16 +8,23 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
+  BODY_SHAPE_DEFAULT,
+  CHEST_SHAPES,
   FIT_OFFSET,
   FIT_WEIGHT_NUDGE,
+  WAIST_SHAPES,
   describeRange,
   estimateChest,
   hasOwnerRanges,
   loadFitProfile,
   normalizeSize,
   recommendSize,
+  sanitizeBodyShape,
   sanitizeSizeRanges,
   saveFitProfile,
+  scoreSizes,
+  shapeChestOffset,
+  shapeWeightOffset,
   sizeRangeProblems,
   supportsSizeGuidance,
 } from '../src/lib/fit.js';
@@ -279,32 +286,94 @@ ok(finder.includes('noValidate'), 'the finder controls its own validation');
 ok(finder.includes('size-finder-input'), 'the inputs are scoped for mobile sizing');
 ok(finder.includes('No tape measure needed'), 'the promise of no tape measure is stated');
 ok(finder.includes('exchange within 7 days'), 'the exchange reassurance is shown');
-ok(finder.includes('{result.reason}'), 'the component renders the engine explanation');
+ok(finder.includes('{shown.reason}'), 'every size renders its own explanation');
+ok(finder.includes('{result.decision?.reason}'), 'the engine explanation is still reachable');
 ok(finder.includes('Why this size?'), 'the long explanation sits behind a disclosure');
 ok(finder.includes('resultProfile'), 'the collapsed facts come from the profile that produced the result');
-ok(finder.includes('const showResult = Boolean(result) && !editing;'),
-  'the recommendation is gated on not editing');
-ok(/const showResult[\s\S]*?\{showResult \? 'Your size' : 'Find my size'\}/.test(finder),
-  'the header title follows the same gate');
-ok((finder.match(/\{showResult && \(/g) || []).length === 2,
-  'both the header size and the result panel are hidden while editing');
-ok(!/fontSize: 34/.test(finder),
-  'the size is not duplicated inside the result panel');
-ok(finder.includes('Find my size') && !finder.includes('Suggest my size'),
-  'the CTA says what the shopper gets');
-ok(/style=\{UNIT\}>cm</.test(finder) && /style=\{UNIT\}>kg</.test(finder),
-  'units sit inside the fields so labels stay one word');
-ok(/gridTemplateColumns: 'repeat\(2, minmax\(0, 1fr\)\)'/.test(finder),
-  'the fit choices form a compact 2x2 grid');
-ok(finder.includes('{FIT_HINTS[fit] || FIT_HINTS.regular}'), 'the selected fit explains itself in place');
-ok(finder.includes('CONFIDENCE_PILL('), 'confidence renders as a bordered pill');
-ok(/className="sr-only">Your size is \{result.size\}/.test(finder),
-  'screen readers still hear the recommended size');
-ok(!/buildReason|inferGender/.test(finder), 'the component no longer builds its own reason or gender');
+ok(finder.includes('const [result, setResult] = useState(null)'),
+  'no recommendation exists before the shopper submits');
+ok(finder.includes('const hasResult = Boolean(result) && step === 3;'),
+  'the result only shows on the last step');
+ok(finder.includes("const stepTitles = ["), 'the flow has three questions');
+ok((finder.match(/\{step === \d && \(/g) || []).length === 3, 'three step panels are rendered');
+ok(finder.includes('Find my size'), 'the CTA says what the shopper gets');
+ok(/label="Height in centimetres"/.test(finder) && /label="Weight in kilograms"/.test(finder),
+  'the numeric fields name their unit');
+ok(finder.includes('aria-label={label}'), 'the field passes that name to the input');
+ok(finder.includes('type="range"'), 'height and weight are sliders');
+ok(finder.includes('min={BODY_LIMITS.minHeight}') && finder.includes('max={BODY_LIMITS.maxHeight}'),
+  'the height slider uses the engine limits');
+ok(finder.includes('min={BODY_LIMITS.minWeight}') && finder.includes('max={BODY_LIMITS.maxWeight}'),
+  'the weight slider uses the engine limits');
+// The numeric fields must survive typing: clamping on every keystroke rewrites
+// "1" into "140" and makes a height like 180 impossible to enter.
+ok(finder.includes('function NumberField('), 'the numeric fields keep their own draft');
+ok(finder.includes('const [text, setText] = useState(String(value))'),
+  'the draft is seeded from the committed value');
+ok((finder.match(/<NumberField/g) || []).length === 2,
+  'both height and weight use the draft-based field');
+ok(/parsed >= min && parsed <= max[\s\S]{0,80}onChange\(Math\.round\(parsed\)\)/.test(finder),
+  'only in-range keystrokes move the live value');
+ok(/onBlur=\{\(event\) => \{[\s\S]{0,120}commit\(event\.target\.value\)/.test(finder),
+  'the draft is clamped when the field loses focus');
+ok(/event\.key === 'Enter'[\s\S]{0,200}commit\(event\.currentTarget\.value\)/.test(finder),
+  'Enter commits the draft too');
+ok(/Math\.min\(max, Math\.max\(min, Math\.round\(parsed\)\)\)/.test(finder),
+  'a committed value is clamped into the accepted range');
+ok(finder.includes('aria-valuetext={`${height} centimetres`}'), 'the slider announces its value');
+ok(finder.includes('CHEST_SHAPES.map') && finder.includes('WAIST_SHAPES.map'),
+  'chest and waist are both asked');
+ok(finder.includes('FIT_OPTIONS.map'), 'fit is asked');
+ok(finder.includes('FIT_HINTS[option]'), 'every fit choice explains itself in place');
+ok(finder.includes('BodySilhouette'), 'the live drawing is its own component');
+ok(/transform: `scale\(\$\{widthScale\.toFixed\(3\)\}, \$\{heightScale\.toFixed\(3\)\}\)`/.test(finder),
+  'the drawing scales with the slider values');
+ok(finder.includes('CHEST_WIDTH') && finder.includes('WAIST_WIDTH'),
+  'the chest and waist answers reshape the drawing');
+ok(finder.includes('MatchGauge'), 'the result renders a circular gauge');
+ok(finder.includes('scoreBand(shown.score,'), 'the percentage also reads as a sentence');
+ok(finder.includes('Best available in this colour'),
+  'a stock swap is labelled as the best available size, not a rough estimate');
+ok(finder.includes('result?.decision?.swappedForStock'), 'the band knows about the stock swap');
+ok(finder.includes('{entry.score}%'), 'every size chip shows its percentage');
+ok(finder.includes('onClick={() => setActiveSize(entry.label)}'),
+  'the shopper can switch between sizes');
+ok(finder.includes('aria-label="Match for every size"'), 'the size chips are grouped for screen readers');
+ok(finder.includes('role="dialog"') && finder.includes('aria-modal="true"'),
+  'the flow is a modal dialog');
+ok(finder.includes("event.key === 'Escape'"), 'Escape closes the dialog');
+ok(finder.includes("document.body.style.overflow = 'hidden'"), 'the page behind the dialog is locked');
+ok(finder.includes('onDialogKeyDown'), 'Tab stays inside the dialog');
+ok(finder.includes('inStock === false') && finder.includes('Sold out'),
+  'a sold-out size is marked, never recommended as available');
 ok(!/>\s*Women\s*</.test(finder) && !/>\s*Men\s*</.test(finder), 'no department choice ships in the finder');
 ok(!/'women'|"women"/.test(finder), 'no women branch ships in the finder');
 ok(css.includes('.size-finder-input') && /\.size-finder-input\s*\{\s*font-size:\s*16px/.test(css),
   'mobile inputs use 16px to prevent iOS zoom');
+ok(/\.size-finder-overlay\s*\{[\s\S]*?z-index:\s*(\d+)/.test(css), 'the dialog declares its layer');
+const overlayZ = Number((css.match(/\.size-finder-overlay\s*\{[\s\S]*?z-index:\s*(\d+)/) || [])[1]);
+ok(overlayZ > 0 && overlayZ < 30000,
+  `the dialog stays below the floating actions (z-index ${overlayZ})`);
+ok(/@media \(min-width: 880px\)[\s\S]*?\.size-finder-body\s*\{[\s\S]*?grid-template-columns:/.test(css),
+  'the dialog becomes two columns on a wide screen');
+ok(css.includes('@media (max-width: 640px)') && css.includes('align-items: flex-end'),
+  'phones get a bottom sheet');
+ok(css.includes('100dvh'), 'the dialog fits the visible viewport on mobile browsers');
+ok(css.includes('env(safe-area-inset-bottom'), 'the sheet clears the phone safe area');
+
+// The floating WhatsApp action is fixed to the bottom-left and must stay
+// visible, so on a phone the sheet's last two controls live on the right.
+const phoneCss = css.slice(css.indexOf('@media (max-width: 640px)'));
+ok(/\.size-finder-why\s*\{[\s\S]{0,80}text-align:\s*right/.test(phoneCss),
+  'the phone sheet moves its last controls away from the floating action');
+ok(/\.size-finder-restart\s*\{[\s\S]{0,60}justify-self:\s*end/.test(phoneCss),
+  'Start over also sits on the right on a phone');
+ok(/\.size-finder-why-body\s*\{[\s\S]{0,40}text-align:\s*left/.test(phoneCss),
+  'the explanation itself stays left-aligned');
+ok(/\.size-finder-why-toggle\s*\{[\s\S]{0,60}min-height:\s*44px/.test(css),
+  'the why link has a comfortable touch target');
+ok(/\.size-finder-restart\s*\{[\s\S]{0,60}min-height:\s*44px/.test(css),
+  'Start over has a comfortable touch target');
 const toolMarkers = ['open' + 'code', 'chat' + 'gpt', 'clau' + 'de', 'co' + 'pilot'];
 ok(!toolMarkers.some((marker) => finder.toLowerCase().includes(marker)), 'no tooling wording ships in the finder');
 
@@ -424,20 +493,124 @@ section('20 — a refresh starts clean');
 // numbers can be entered. The saved profile may pre-fill the form, but the
 // recommendation itself must never be restored on mount.
 ok(!finder.includes('initialResult'), 'the finder no longer restores a saved recommendation');
-ok(finder.includes('const [editing, setEditing] = useState(true)'),
-  'the form is the first thing a refreshed shopper sees');
 ok(finder.includes('const [result, setResult] = useState(null)'),
   'no recommendation exists before the shopper submits');
 ok(finder.includes('const [resultProfile, setResultProfile] = useState(null)'),
   'no result profile exists before the shopper submits');
-const recommendCalls = (finder.match(/recommendSize\(/g) || []).length;
-eq(recommendCalls, 1, 'recommendSize runs only from the submit handler');
+const scoreCalls = (finder.match(/scoreSizes\(/g) || []).length;
+eq(scoreCalls, 1, 'the engine runs only from the last-step handler');
+ok(!finder.includes('useEffect(() => {\n    if (!supported)'), 'no effect computes a size on mount');
 ok(finder.includes("const saved = useMemo(() => loadFitProfile(readStorage()), [])"),
   'the saved profile is still read for pre-filling');
-ok(finder.includes("useState(saved ? String(saved.height) : '')") &&
-   finder.includes("useState(saved ? String(saved.weight) : '')") &&
-   finder.includes("useState(saved ? saved.fit : 'regular')"),
-  'the saved numbers still pre-fill the fields');
+ok(finder.includes('clamp(saved.height, BODY_LIMITS.minHeight, BODY_LIMITS.maxHeight)') &&
+   finder.includes('clamp(saved.weight, BODY_LIMITS.minWeight, BODY_LIMITS.maxWeight)'),
+  'the saved numbers still pre-fill the sliders inside the accepted range');
+ok(finder.includes("saved?.bodyShape?.chest || 'average'") &&
+   finder.includes("saved?.bodyShape?.waist || 'average'"),
+  'the saved shape answers pre-fill too, with neutral defaults');
+
+section('21 — match percentages');
+const scored = scoreSizes({ height: 180, weight: 78, sizes: ['M', 'L', 'XL'], fit: 'regular' });
+eq(scored.ok, true, 'every offered size is scored');
+eq(scored.sizes.length, 3, 'one score per size');
+eq(scored.recommended, 'L', 'the percentage winner is the engine recommendation');
+const highest = [...scored.sizes].sort((a, b) => b.score - a.score)[0];
+eq(highest.label, 'L', 'the recommended size carries the highest percentage');
+ok(scored.sizes.every((entry) => entry.score >= 1 && entry.score <= 99),
+  'percentages stay inside 1–99, never a promise of certainty');
+ok(scored.sizes.every((entry) => typeof entry.reason === 'string' && entry.reason.length > 20),
+  'every size explains its own number');
+eq(scored.sizes.map((entry) => entry.label).join(','), 'M,L,XL',
+  'the chips keep the product size order');
+ok(scored.sizes.find((entry) => entry.label === 'L').reason.includes('chest'),
+  'the chart reason quotes the chest range');
+ok(/^\d+%$/.test(`${highest.score}%`), 'the percentage renders as a whole number');
+const byScore = [...scored.sizes].sort((a, b) => b.score - a.score);
+ok(byScore[0].distance <= byScore[byScore.length - 1].distance,
+  'a higher percentage never belongs to a more distant size');
+
+const exactScore = scoreSizes({ height: 180, weight: 78, sizes: ['L'], sizeRanges: OWNER_RANGES });
+eq(exactScore.sizes[0].score, 99, 'an exact window match is capped at 99%');
+ok(exactScore.sizes[0].reason.includes('inside'), 'an inside-the-window size says so');
+
+const farScore = scoreSizes({ height: 160, weight: 50, sizes: ['M', 'L', 'XL'], fit: 'regular' });
+ok(farScore.sizes.find((entry) => entry.label === 'M').score > farScore.sizes.find((entry) => entry.label === 'XL').score,
+  'closer sizes score higher than distant ones');
+
+const stockScored = scoreSizes({
+  height: 180, weight: 78, sizes: ['M', 'L'], fit: 'regular',
+  stockFor: (size) => ({ M: 5, L: 0 }[size]),
+});
+eq(stockScored.recommended, 'M', 'the recommendation still honours the stock swap');
+eq(stockScored.sizes.find((entry) => entry.label === 'L').inStock, false,
+  'the sold-out size is flagged, not hidden');
+eq(scoreSizes({ height: 100, weight: 78, sizes: ['M'] }).reason, 'invalid-body',
+  'an impossible body is refused, not scored');
+
+// The sentence under a size must describe the same quantity its percentage was
+// computed from. A relaxed fit adds 6 cm of ease, so a size can be "2 cm over"
+// even though the shopper's own chest estimate sits inside its range.
+const relaxedScored = scoreSizes({ height: 180, weight: 78, sizes: ['M', 'L', 'XL'], fit: 'relaxed' });
+const relaxedL = relaxedScored.sizes.find((entry) => entry.label === 'L');
+ok(relaxedL.score < 99, 'a size that only fits with ease is not scored as an exact match');
+ok(!relaxedL.reason.includes('inside it'),
+  'the reason never claims an exact fit while the percentage says otherwise');
+ok(relaxedL.reason.includes('relaxed fit'), 'the reason names the fit that moved the target');
+ok(relaxedL.reason.includes('plus 6 cm'), 'the reason quotes the ease the fit added');
+eq(relaxedScored.sizes.find((entry) => entry.label === 'XL').score, 99,
+  'the size that already covers the ease is the exact one');
+
+// Range mode has the same rule: the fit nudge is applied to the weight, so the
+// sentence has to say which weight was measured.
+const nudgedScored = scoreSizes({
+  height: 180, weight: 84, sizes: ['M', 'L', 'XL'], sizeRanges: OWNER_RANGES, fit: 'relaxed',
+});
+const nudgedL = nudgedScored.sizes.find((entry) => entry.label === 'L');
+ok(nudgedL.reason.includes('we count 87 kg'), 'the range reason shows the weight the fit counted');
+ok(!nudgedL.reason.includes('sit inside that window'),
+  'a nudged body outside the window is never described as inside');
+ok(nudgedScored.sizes.find((entry) => entry.label === 'XL').reason.includes('still inside that window'),
+  'the roomier size explains that the counted weight fits it');
+
+section('22 — body shape answers');
+eq(CHEST_SHAPES.join(','), 'slimmer,average,broader', 'chest has three answers');
+eq(WAIST_SHAPES.join(','), 'flatter,average,rounder', 'waist has three answers');
+eq(sanitizeBodyShape({ chest: 'broader', waist: 'rounder' }).chest, 'broader', 'known answers survive');
+eq(sanitizeBodyShape({ chest: 'wide', waist: 'thick' }).chest, 'average', 'unknown answers fall back');
+eq(sanitizeBodyShape(null).waist, 'average', 'missing answers fall back');
+eq(shapeChestOffset(BODY_SHAPE_DEFAULT), 0, 'average answers never move the chest estimate');
+eq(shapeWeightOffset(BODY_SHAPE_DEFAULT), 0, 'average answers never move the weight');
+ok(shapeChestOffset({ chest: 'broader', waist: 'average' }) > 0, 'a broader chest adds cm');
+ok(shapeChestOffset({ chest: 'slimmer', waist: 'flatter' }) < 0, 'a slimmer chest removes cm');
+
+// The shape must never override height and weight, only break the boundary.
+eq(recommendSize({ ...base, fit: 'regular', bodyShape: BODY_SHAPE_DEFAULT }).size, 'L',
+  'neutral answers leave the recommendation untouched');
+eq(recommendSize({ ...base, fit: 'regular' }).size,
+   recommendSize({ ...base, fit: 'regular', bodyShape: BODY_SHAPE_DEFAULT }).size,
+  'omitting the answers is the same as answering average');
+
+const slimBoundary = { height: 180, weight: 78, sizes: ['M', 'L', 'XL'], fit: 'regular' };
+eq(recommendSize({ ...slimBoundary, bodyShape: { chest: 'slimmer', waist: 'average' } }).size, 'M',
+  'a slimmer chest moves a boundary body down a size');
+const heavyBoundary = { height: 180, weight: 84, sizes: ['M', 'L', 'XL'], fit: 'regular' };
+eq(recommendSize(heavyBoundary).size, 'L', 'the plain boundary body is L');
+eq(recommendSize({ ...heavyBoundary, bodyShape: { chest: 'broader', waist: 'average' } }).size, 'XL',
+  'a broader chest moves the same body up a size');
+
+const shapeRangeBase = { ...ranged, height: 178, weight: 66, fit: 'regular' };
+eq(recommendSize(shapeRangeBase).size, 'M', 'the plain body sits in M');
+eq(recommendSize({ ...shapeRangeBase, bodyShape: { chest: 'broader', waist: 'rounder' } }).size, 'L',
+  'a fuller shape moves it to L inside owner windows');
+
+const shapeStorage = memoryStorage();
+ok(saveFitProfile({ height: 180, weight: 78, fit: 'relaxed', bodyShape: { chest: 'broader', waist: 'flatter' } }, shapeStorage),
+  'the shape answers are saved with the profile');
+eq(loadFitProfile(shapeStorage).bodyShape.chest, 'broader', 'the chest answer round-trips');
+eq(loadFitProfile(shapeStorage).bodyShape.waist, 'flatter', 'the waist answer round-trips');
+shapeStorage.setItem('zashm.fitProfile.v1', JSON.stringify({ height: 180, weight: 78, fit: 'regular' }));
+eq(loadFitProfile(shapeStorage).bodyShape.chest, 'average',
+  'a profile saved before this change still loads with neutral answers');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
