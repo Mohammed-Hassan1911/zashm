@@ -10,9 +10,13 @@ import {
 } from 'lucide-react';
 import {
   BODY_LIMITS,
+  BOTTOM_WAIST_SHAPES,
   CHEST_SHAPES,
   FIT_OPTIONS,
+  GARMENT,
+  SEAT_SHAPES,
   WAIST_SHAPES,
+  garmentKind,
   loadFitProfile,
   sanitizeBodyShape,
   saveFitProfile,
@@ -58,9 +62,44 @@ const WAIST_HINTS = {
   rounder: 'Fuller at the waist',
 };
 
+// Trousers are sized from the waistband and the seat, so the two shape
+// questions describe those instead of the chest. Same three answers, different
+// wording: "slimmer/wider" reads as circumference, which is what a waistband is.
+const BOTTOM_WAIST_LABELS = {
+  slimmer: 'Slimmer',
+  average: 'Average',
+  wider: 'Wider',
+};
+
+const BOTTOM_WAIST_HINTS = {
+  slimmer: 'Narrow waistband',
+  average: 'Proportional',
+  wider: 'Fuller waistband',
+};
+
+const SEAT_LABELS = {
+  narrow: 'Narrow',
+  average: 'Average',
+  wider: 'Wider',
+};
+
+const SEAT_HINTS = {
+  narrow: 'Straight through the seat',
+  average: 'Proportional',
+  wider: 'Fuller through the seat',
+};
+
+const FIT_HINTS_BOTTOM = {
+  slim: 'Close to the leg',
+  regular: 'Classic and easy',
+  relaxed: 'Roomy through the leg',
+  oversized: 'Loose and dropped',
+};
+
 // How the answers bend the drawing. Width only: height comes from the numbers.
 const CHEST_WIDTH = { slimmer: 0.88, average: 1, broader: 1.12 };
-const WAIST_WIDTH = { flatter: 0.9, average: 1, rounder: 1.11 };
+const WAIST_WIDTH = { flatter: 0.9, average: 1, rounder: 1.11, slimmer: 0.92, wider: 1.1 };
+const SEAT_WIDTH = { narrow: 0.93, average: 1, wider: 1.1 };
 
 // Height/weight, chest, waist, fit — then the result. Keeping the result off the
 // question count means "Step 4 of 4" stays honest while the last panel is a
@@ -99,33 +138,35 @@ function clamp(value, min, max) {
 /**
  * The live body drawing.
  *
- * Height and weight scale the whole figure (taller, wider); the chest and waist
- * answers reshape the torso path itself, so the two extra questions are visible
- * rather than abstract. `focus` rings the region the current question is about,
- * which turns the drawing into a live explanation instead of decoration.
- * Everything is driven by the current answers, so the drawing and the
- * recommendation can never drift apart.
+ * Height and weight scale the whole figure (taller, wider); the shape answers
+ * reshape the garment itself, so the extra questions are visible rather than
+ * abstract. A top draws a torso and rings the chest or the waist; a bottom draws
+ * a trouser and rings the waistband or the seat, because a trouser is never
+ * sized from the chest. `focus` follows the current question, which turns the
+ * drawing into a live explanation instead of decoration. Everything is driven by
+ * the current answers, so the drawing and the recommendation cannot drift apart.
  */
-function BodySilhouette({ height, weight, chest, waist, focus, reduceMotion }) {
+function BodySilhouette({ height, weight, chest, waist, seat, focus, garment, reduceMotion }) {
   const span = BODY_LIMITS.maxHeight - BODY_LIMITS.minHeight;
   const weightSpan = BODY_LIMITS.maxWeight - BODY_LIMITS.minWeight;
   const heightScale = 0.82 + ((height - BODY_LIMITS.minHeight) / span) * 0.36;
   const widthScale = 0.8 + ((weight - BODY_LIMITS.minWeight) / weightSpan) * 0.4;
 
   const cx = 60;
+  const isBottom = garment === GARMENT.BOTTOM;
+  const chestMul = CHEST_WIDTH[chest] || 1;
+  const waistMul = WAIST_WIDTH[waist] || 1;
+  const seatMul = SEAT_WIDTH[seat] || 1;
+
+  // Top geometry: shoulders, chest, waist, hip.
   const shoulderY = 78;
   const chestY = 106;
   const waistY = 144;
   const hipY = 172;
-
-  const chestMul = CHEST_WIDTH[chest] || 1;
-  const waistMul = WAIST_WIDTH[waist] || 1;
-
   const shoulderHalf = 26 * chestMul;
   const chestHalf = 23 * chestMul;
   const waistHalf = 18 * waistMul;
   const hipHalf = 21 * waistMul;
-
   const torso = [
     `M ${cx - shoulderHalf} ${shoulderY}`,
     `Q ${cx} ${shoulderY - 15} ${cx + shoulderHalf} ${shoulderY}`,
@@ -134,6 +175,33 @@ function BodySilhouette({ height, weight, chest, waist, focus, reduceMotion }) {
     `L ${cx - hipHalf} ${hipY + 12}`,
     `Q ${cx - hipHalf} ${hipY} ${cx - waistHalf} ${waistY}`,
     `Q ${cx - chestHalf} ${chestY} ${cx - shoulderHalf} ${shoulderY}`,
+    'Z',
+  ].join(' ');
+
+  // Trouser geometry: waistband, seat, crotch, hem. A trouser is drawn from the
+  // waistband down, so the same height/weight scale still reads correctly.
+  const bandTop = 74;
+  const bandBottom = 96;
+  const seatY = 124;
+  const crotchY = 152;
+  const hemY = 240;
+  const trouserWaist = 22 * waistMul;
+  const trouserSeat = 27 * seatMul;
+  const hemOuter = 24;
+  const hemInner = 9;
+  const waistRingY = (bandTop + bandBottom) / 2;
+  const trousers = [
+    `M ${cx - trouserWaist} ${bandBottom}`,
+    `L ${cx + trouserWaist} ${bandBottom}`,
+    `C ${cx + trouserWaist + 4} 112, ${cx + trouserSeat} 116, ${cx + trouserSeat} ${seatY + 4}`,
+    `L ${cx + hemOuter} ${hemY}`,
+    `L ${cx + hemInner} ${hemY}`,
+    `L ${cx + 7} ${crotchY}`,
+    `L ${cx - 7} ${crotchY}`,
+    `L ${cx - hemInner} ${hemY}`,
+    `L ${cx - hemOuter} ${hemY}`,
+    `L ${cx - trouserSeat} ${seatY + 4}`,
+    `C ${cx - trouserSeat} 116, ${cx - trouserWaist - 4} 112, ${cx - trouserWaist} ${bandBottom}`,
     'Z',
   ].join(' ');
 
@@ -185,68 +253,145 @@ function BodySilhouette({ height, weight, chest, waist, focus, reduceMotion }) {
           />
         ))}
 
-        {/* Head + neck */}
-        <circle cx="60" cy="48" r="16" fill="url(#zshm-body-fill)" stroke="var(--gold)" strokeWidth="1.4" />
-        <line x1="60" y1="64" x2="60" y2="76" stroke="var(--gold)" strokeWidth="5" strokeLinecap="round" opacity="0.55" />
-
-        {/* Torso */}
-        <path
-          d={torso}
-          fill="url(#zshm-body-fill)"
-          stroke="var(--gold)"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-
-        {/* The region the current question is about, so the answer has a place. */}
-        {focus === 'chest' && (
-          <g className="size-finder-figure-focus">
-            <ellipse
-              cx={cx}
-              cy={chestY - 2}
-              rx={chestHalf + 9}
-              ry="15"
-              fill="none"
-              stroke="var(--gold-light)"
-              strokeWidth="1.1"
-              strokeDasharray="4 4"
+        {isBottom ? (
+          <g>
+            {/* Waistband, then the two legs. */}
+            <rect
+              x={cx - trouserWaist}
+              y={bandTop}
+              width={trouserWaist * 2}
+              height={bandBottom - bandTop}
+              rx="3"
+              fill="url(#zshm-body-fill)"
+              stroke="var(--gold)"
+              strokeWidth="1.6"
             />
-            <line x1={cx - chestHalf - 16} y1={chestY - 2} x2={cx - chestHalf - 9} y2={chestY - 2}
-              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
-            <line x1={cx + chestHalf + 9} y1={chestY - 2} x2={cx + chestHalf + 16} y2={chestY - 2}
-              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+            <line
+              x1={cx - trouserWaist + 3}
+              y1={bandBottom - 7}
+              x2={cx + trouserWaist - 3}
+              y2={bandBottom - 7}
+              stroke="var(--gold)"
+              strokeWidth="1"
+              opacity="0.45"
+            />
+            <path
+              d={trousers}
+              fill="url(#zshm-body-fill)"
+              stroke="var(--gold)"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+            <line x1={cx} y1={bandBottom} x2={cx} y2={crotchY - 6}
+              stroke="var(--gold)" strokeWidth="1" opacity="0.4" />
+            <line x1={cx - hemOuter + 2} y1={hemY - 10} x2={cx - hemInner + 1} y2={hemY - 10}
+              stroke="var(--gold)" strokeWidth="1" opacity="0.35" />
+            <line x1={cx + hemInner - 1} y1={hemY - 10} x2={cx + hemOuter - 2} y2={hemY - 10}
+              stroke="var(--gold)" strokeWidth="1" opacity="0.35" />
+
+            {focus === 'waist' && (
+              <g className="size-finder-figure-focus">
+                <ellipse
+                  cx={cx}
+                  cy={waistRingY}
+                  rx={trouserWaist + 9}
+                  ry="12"
+                  fill="none"
+                  stroke="var(--gold-light)"
+                  strokeWidth="1.1"
+                  strokeDasharray="4 4"
+                />
+                <line x1={cx - trouserWaist - 16} y1={waistRingY} x2={cx - trouserWaist - 9} y2={waistRingY}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+                <line x1={cx + trouserWaist + 9} y1={waistRingY} x2={cx + trouserWaist + 16} y2={waistRingY}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+              </g>
+            )}
+            {focus === 'seat' && (
+              <g className="size-finder-figure-focus">
+                <ellipse
+                  cx={cx}
+                  cy={seatY}
+                  rx={trouserSeat + 9}
+                  ry="14"
+                  fill="none"
+                  stroke="var(--gold-light)"
+                  strokeWidth="1.1"
+                  strokeDasharray="4 4"
+                />
+                <line x1={cx - trouserSeat - 16} y1={seatY} x2={cx - trouserSeat - 9} y2={seatY}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+                <line x1={cx + trouserSeat + 9} y1={seatY} x2={cx + trouserSeat + 16} y2={seatY}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+              </g>
+            )}
+          </g>
+        ) : (
+          <g>
+            {/* Head + neck */}
+            <circle cx="60" cy="48" r="16" fill="url(#zshm-body-fill)" stroke="var(--gold)" strokeWidth="1.4" />
+            <line x1="60" y1="64" x2="60" y2="76" stroke="var(--gold)" strokeWidth="5" strokeLinecap="round" opacity="0.55" />
+
+            {/* Torso */}
+            <path
+              d={torso}
+              fill="url(#zshm-body-fill)"
+              stroke="var(--gold)"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+
+            {/* The region the current question is about, so the answer has a place. */}
+            {focus === 'chest' && (
+              <g className="size-finder-figure-focus">
+                <ellipse
+                  cx={cx}
+                  cy={chestY - 2}
+                  rx={chestHalf + 9}
+                  ry="15"
+                  fill="none"
+                  stroke="var(--gold-light)"
+                  strokeWidth="1.1"
+                  strokeDasharray="4 4"
+                />
+                <line x1={cx - chestHalf - 16} y1={chestY - 2} x2={cx - chestHalf - 9} y2={chestY - 2}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+                <line x1={cx + chestHalf + 9} y1={chestY - 2} x2={cx + chestHalf + 16} y2={chestY - 2}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+              </g>
+            )}
+            {focus === 'waist' && (
+              <g className="size-finder-figure-focus">
+                <ellipse
+                  cx={cx}
+                  cy={waistY - 2}
+                  rx={waistHalf + 9}
+                  ry="13"
+                  fill="none"
+                  stroke="var(--gold-light)"
+                  strokeWidth="1.1"
+                  strokeDasharray="4 4"
+                />
+                <line x1={cx - waistHalf - 16} y1={waistY - 2} x2={cx - waistHalf - 9} y2={waistY - 2}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+                <line x1={cx + waistHalf + 9} y1={waistY - 2} x2={cx + waistHalf + 16} y2={waistY - 2}
+                  stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+              </g>
+            )}
+
+            {/* Arms */}
+            <line x1={cx - shoulderHalf - 2} y1={shoulderY + 4} x2={cx - shoulderHalf - 8} y2={hipY + 16}
+              stroke="var(--gold)" strokeWidth="6" strokeLinecap="round" opacity="0.42" />
+            <line x1={cx + shoulderHalf + 2} y1={shoulderY + 4} x2={cx + shoulderHalf + 8} y2={hipY + 16}
+              stroke="var(--gold)" strokeWidth="6" strokeLinecap="round" opacity="0.42" />
+
+            {/* Legs */}
+            <line x1={cx - 9} y1={hipY + 12} x2={cx - 11} y2="240"
+              stroke="var(--gold)" strokeWidth="7" strokeLinecap="round" opacity="0.42" />
+            <line x1={cx + 9} y1={hipY + 12} x2={cx + 11} y2="240"
+              stroke="var(--gold)" strokeWidth="7" strokeLinecap="round" opacity="0.42" />
           </g>
         )}
-        {focus === 'waist' && (
-          <g className="size-finder-figure-focus">
-            <ellipse
-              cx={cx}
-              cy={waistY - 2}
-              rx={waistHalf + 9}
-              ry="13"
-              fill="none"
-              stroke="var(--gold-light)"
-              strokeWidth="1.1"
-              strokeDasharray="4 4"
-            />
-            <line x1={cx - waistHalf - 16} y1={waistY - 2} x2={cx - waistHalf - 9} y2={waistY - 2}
-              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
-            <line x1={cx + waistHalf + 9} y1={waistY - 2} x2={cx + waistHalf + 16} y2={waistY - 2}
-              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
-          </g>
-        )}
-
-        {/* Arms */}
-        <line x1={cx - shoulderHalf - 2} y1={shoulderY + 4} x2={cx - shoulderHalf - 8} y2={hipY + 16}
-          stroke="var(--gold)" strokeWidth="6" strokeLinecap="round" opacity="0.42" />
-        <line x1={cx + shoulderHalf + 2} y1={shoulderY + 4} x2={cx + shoulderHalf + 8} y2={hipY + 16}
-          stroke="var(--gold)" strokeWidth="6" strokeLinecap="round" opacity="0.42" />
-
-        {/* Legs */}
-        <line x1={cx - 9} y1={hipY + 12} x2={cx - 11} y2="240"
-          stroke="var(--gold)" strokeWidth="7" strokeLinecap="round" opacity="0.42" />
-        <line x1={cx + 9} y1={hipY + 12} x2={cx + 11} y2="240"
-          stroke="var(--gold)" strokeWidth="7" strokeLinecap="round" opacity="0.42" />
       </svg>
     </div>
   );
@@ -382,11 +527,12 @@ function Choice({ active, onClick, title, hint, index = 0, reduceMotion }) {
 /**
  * "Find my size" — a four-question flow that ends in an estimated match score.
  *
- * Height and weight come first because they do most of the work; chest and waist
- * each get their own step so the two answers can never be confused, and the fit
- * preference applies the shopper's own taste on top. Nothing is computed until
- * the shopper presses Next on the last question, and nothing is restored on
- * load: a refresh always starts from the first question.
+ * Height and weight come first because they do most of the work. The two shape
+ * questions then follow the garment: a top asks about the chest and waist, a
+ * trouser asks about the waistband and seat, because a trouser is never sized
+ * from the chest. The fit preference applies the shopper's own taste on top.
+ * Nothing is computed until the shopper presses Next on the last question, and
+ * nothing is restored on load: a refresh always starts from the first question.
  */
 export default function SizeFinder({
   sizes = [],
@@ -395,10 +541,22 @@ export default function SizeFinder({
   onSelect,
   stockFor,
   onOpenSizeGuide,
+  category,
+  name,
+  sizeGuideOpen = false,
 }) {
   const supported = useMemo(() => supportsSizeGuidance(sizes, sizeRanges), [sizes, sizeRanges]);
   const saved = useMemo(() => loadFitProfile(readStorage()), []);
   const reduceMotion = useReducedMotion();
+  const garment = useMemo(() => garmentKind({ category, name }), [category, name]);
+
+  // The saved waist answer may belong to the other garment kind ("wider" from a
+  // trouser, "rounder" from a shirt). Start from average instead of showing no
+  // selected answer.
+  const savedWaist = saved?.bodyShape?.waist;
+  const initialWaist = garment === GARMENT.BOTTOM
+    ? (BOTTOM_WAIST_SHAPES.includes(savedWaist) ? savedWaist : 'average')
+    : (WAIST_SHAPES.includes(savedWaist) ? savedWaist : 'average');
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -406,7 +564,8 @@ export default function SizeFinder({
   const [height, setHeight] = useState(saved ? clamp(saved.height, BODY_LIMITS.minHeight, BODY_LIMITS.maxHeight) : 175);
   const [weight, setWeight] = useState(saved ? clamp(saved.weight, BODY_LIMITS.minWeight, BODY_LIMITS.maxWeight) : 75);
   const [chest, setChest] = useState(saved?.bodyShape?.chest || 'average');
-  const [waist, setWaist] = useState(saved?.bodyShape?.waist || 'average');
+  const [waist, setWaist] = useState(initialWaist);
+  const [seat, setSeat] = useState(saved?.bodyShape?.seat || 'average');
   const [fit, setFit] = useState(saved?.fit || 'regular');
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
@@ -417,6 +576,21 @@ export default function SizeFinder({
   const titleRef = useRef(null);
   const restoreFocusRef = useRef(null);
   const backgroundScrollRef = useRef(0);
+  const guideButtonRef = useRef(null);
+  const sizeGuideOpenRef = useRef(false);
+  const guideWasOpenRef = useRef(false);
+
+  // The product page owns the size guide. While it is open, the finder stays
+  // mounted behind it: Escape belongs to the guide, and focus returns to the
+  // "Size guide" button when the guide closes, so the shopper never has to
+  // reopen the finder to get back to the result.
+  useEffect(() => {
+    sizeGuideOpenRef.current = sizeGuideOpen;
+    if (guideWasOpenRef.current && !sizeGuideOpen) {
+      guideButtonRef.current?.focus?.({ preventScroll: true });
+    }
+    guideWasOpenRef.current = sizeGuideOpen;
+  }, [sizeGuideOpen]);
 
   const close = useCallback(() => {
     setError('');
@@ -427,8 +601,9 @@ export default function SizeFinder({
     }
   }, []);
 
-  // Lock the page behind the dialog, hide WhatsApp while it is open, and let
-  // Escape close it. The page's exact scroll position is restored on exit.
+  // Lock the page behind the dialog and let Escape close it. The page's exact
+  // scroll position is restored on exit. While the size guide is open on top,
+  // Escape belongs to the guide, not to the finder.
   useEffect(() => {
     if (!open) return undefined;
 
@@ -465,10 +640,12 @@ export default function SizeFinder({
     body.classList.add('size-finder-open');
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        close();
-      }
+      if (event.key !== 'Escape') return;
+      // The guide is stacked above the finder and owns Escape while it is open.
+      // Do not stop propagation, so the product page can close the guide.
+      if (sizeGuideOpenRef.current) return;
+      event.stopPropagation();
+      close();
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -505,12 +682,20 @@ export default function SizeFinder({
 
   if (!supported) return null;
 
+  // Only answers that belong to this garment kind reach the engine, so a saved
+  // trouser answer can never move a shirt's chest and vice versa.
+  const chestValue = CHEST_SHAPES.includes(chest) ? chest : 'average';
+  const waistChoices = garment === GARMENT.BOTTOM ? BOTTOM_WAIST_SHAPES : WAIST_SHAPES;
+  const waistValue = waistChoices.includes(waist) ? waist : 'average';
+  const seatValue = SEAT_SHAPES.includes(seat) ? seat : 'average';
+
   const showRecommendation = (fitPreference = fit) => {
     setError('');
     const next = scoreSizes({
       height,
       weight,
-      bodyShape: { chest, waist },
+      garment,
+      bodyShape: { chest: chestValue, waist: waistValue, seat: seatValue },
       fit: fitPreference,
       sizes,
       sizeRanges,
@@ -523,10 +708,23 @@ export default function SizeFinder({
     }
 
     setResult(next);
-    setResultProfile({ height, weight, chest, waist, fit: fitPreference });
+    setResultProfile({
+      height,
+      weight,
+      chest: chestValue,
+      waist: waistValue,
+      seat: seatValue,
+      garment,
+      fit: fitPreference,
+    });
     setActiveSize(next.recommended);
     setStep(RESULT_STEP);
-    saveFitProfile({ height, weight, fit: fitPreference, bodyShape: { chest, waist } }, readStorage());
+    saveFitProfile({
+      height,
+      weight,
+      fit: fitPreference,
+      bodyShape: { chest: chestValue, waist: waistValue, seat: seatValue },
+    }, readStorage());
   };
 
   const goNext = () => {
@@ -554,8 +752,10 @@ export default function SizeFinder({
     setStep(0);
   };
 
-  // Keep Tab inside the dialog.
+  // Keep Tab inside the dialog. While the size guide is open it is the active
+  // dialog, so the finder must not steal focus back.
   const onDialogKeyDown = (event) => {
+    if (sizeGuideOpenRef.current) return;
     if (event.key !== 'Tab') return;
     const root = dialogRef.current;
     if (!root) return;
@@ -614,15 +814,27 @@ export default function SizeFinder({
   const hasResult = Boolean(result) && step === RESULT_STEP;
   const isSelected = shown && String(selectedSize) === String(shown.label);
 
-  const stepTitles = [
-    'Your height and weight',
-    'Your chest',
-    'Your waist',
-    'How should it sit?',
-  ];
+  const stepTitles = garment === GARMENT.BOTTOM
+    ? [
+        'Your height and weight',
+        'Your waist',
+        'Your seat',
+        'How should they sit?',
+      ]
+    : [
+        'Your height and weight',
+        'Your chest',
+        'Your waist',
+        'How should it sit?',
+      ];
 
-  // The figure highlights the region the current question is about.
-  const figureFocus = step === 1 ? 'chest' : step === 2 ? 'waist' : null;
+  // The figure highlights the region the current question is about. A trouser
+  // has no chest step, so its two shape questions ring the waistband and seat.
+  const figureFocus = step === 1
+    ? (garment === GARMENT.BOTTOM ? 'waist' : 'chest')
+    : step === 2
+      ? (garment === GARMENT.BOTTOM ? 'seat' : 'waist')
+      : null;
 
   const stepMotion = reduceMotion
     ? { initial: false, animate: { opacity: 1 }, exit: { opacity: 0 } }
@@ -682,8 +894,10 @@ export default function SizeFinder({
               ref={dialogRef}
               role="dialog"
               aria-modal="true"
+              aria-hidden={sizeGuideOpen ? 'true' : undefined}
               aria-labelledby="size-finder-dialog-title"
               className="size-finder-dialog"
+              data-size-guide-open={sizeGuideOpen ? 'true' : 'false'}
               tabIndex={-1}
               onKeyDown={onDialogKeyDown}
               onClick={(event) => event.stopPropagation()}
@@ -692,44 +906,49 @@ export default function SizeFinder({
               exit={reduceMotion ? undefined : { opacity: 0, y: 20, scale: 0.99 }}
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div className="size-finder-head">
-                <div className="size-finder-head-text">
-                  <span className="size-finder-eyebrow">
-                    <span className="size-finder-eyebrow-rule" aria-hidden="true" />
-                    {hasResult ? 'Your match' : `Step ${step + 1} of ${QUESTION_COUNT}`}
-                  </span>
-                  <h2 id="size-finder-dialog-title" ref={titleRef} tabIndex={-1} className="size-finder-dialog-title">
-                    {hasResult
-                      ? (shown && shown.label === recommended?.label ? 'Your size is' : `Size ${shown?.label || ''}`)
-                      : stepTitles[step]}
-                  </h2>
-                </div>
-                <button type="button" className="size-finder-close" onClick={close} aria-label="Close size finder">
-                  <X size={18} aria-hidden="true" />
-                </button>
-              </div>
-
-              {/* The header never scrolls: the progress and the question stay in
-                  place while the answers move underneath them. */}
-              <div className="size-finder-progress" role="presentation">
-                {Array.from({ length: QUESTION_COUNT }, (_, index) => (
-                  <span
-                    key={index}
-                    className="size-finder-progress-seg"
-                    data-done={(hasResult || index <= step) ? 'true' : 'false'}
-                    data-current={(!hasResult && index === step) ? 'true' : 'false'}
-                  />
-                ))}
-              </div>
-
               <div className="size-finder-scroll">
+                {/* The topbar is sticky inside the scroller: the question and the
+                    progress stay pinned while the answers move underneath, on
+                    every step including the result. */}
+                <div className="size-finder-topbar">
+                  <div className="size-finder-head">
+                    <div className="size-finder-head-text">
+                      <span className="size-finder-eyebrow">
+                        <span className="size-finder-eyebrow-rule" aria-hidden="true" />
+                        {hasResult ? 'Your match' : `Step ${step + 1} of ${QUESTION_COUNT}`}
+                      </span>
+                      <h2 id="size-finder-dialog-title" ref={titleRef} tabIndex={-1} className="size-finder-dialog-title">
+                        {hasResult
+                          ? (shown && shown.label === recommended?.label ? 'Your size is' : `Size ${shown?.label || ''}`)
+                          : stepTitles[step]}
+                      </h2>
+                    </div>
+                    <button type="button" className="size-finder-close" onClick={close} aria-label="Close size finder">
+                      <X size={18} aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <div className="size-finder-progress" role="presentation">
+                    {Array.from({ length: QUESTION_COUNT }, (_, index) => (
+                      <span
+                        key={index}
+                        className="size-finder-progress-seg"
+                        data-done={(hasResult || index <= step) ? 'true' : 'false'}
+                        data-current={(!hasResult && index === step) ? 'true' : 'false'}
+                      />
+                    ))}
+                  </div>
+                </div>
+
                 <div className="size-finder-body">
                   <div className="size-finder-figure-wrap">
                     <BodySilhouette
                       height={height}
                       weight={weight}
-                      chest={chest}
-                      waist={waist}
+                      chest={chestValue}
+                      waist={waistValue}
+                      seat={seatValue}
+                      garment={garment}
                       focus={figureFocus}
                       reduceMotion={reduceMotion}
                     />
@@ -820,59 +1039,115 @@ export default function SizeFinder({
                           )}
 
                           {step === 1 && (
-                            <motion.div key="step-chest" className="size-finder-step" {...stepMotion}>
-                              <p className="size-finder-helper">
-                                Chest and shoulders decide how the top half sits. Pick the closest.
-                              </p>
+                            <motion.div key={`step-shape-1-${garment}`} className="size-finder-step" {...stepMotion}>
+                              {garment === GARMENT.BOTTOM ? (
+                                <>
+                                  <p className="size-finder-helper">
+                                    A waistband is sized from your waist, not your chest. Pick the closest.
+                                  </p>
 
-                              <fieldset className="size-finder-fieldset">
-                                <legend className="size-finder-field-label">Chest</legend>
-                                <div className="size-finder-choices">
-                                  {CHEST_SHAPES.map((option, index) => (
-                                    <Choice
-                                      key={option}
-                                      index={index}
-                                      reduceMotion={reduceMotion}
-                                      active={chest === option}
-                                      onClick={() => setChest(option)}
-                                      title={CHEST_LABELS[option]}
-                                      hint={CHEST_HINTS[option]}
-                                    />
-                                  ))}
-                                </div>
-                              </fieldset>
+                                  <fieldset className="size-finder-fieldset">
+                                    <legend className="size-finder-field-label">Waist</legend>
+                                    <div className="size-finder-choices">
+                                      {BOTTOM_WAIST_SHAPES.map((option, index) => (
+                                        <Choice
+                                          key={option}
+                                          index={index}
+                                          reduceMotion={reduceMotion}
+                                          active={waistValue === option}
+                                          onClick={() => setWaist(option)}
+                                          title={BOTTOM_WAIST_LABELS[option]}
+                                          hint={BOTTOM_WAIST_HINTS[option]}
+                                        />
+                                      ))}
+                                    </div>
+                                  </fieldset>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="size-finder-helper">
+                                    Chest and shoulders decide how the top half sits. Pick the closest.
+                                  </p>
+
+                                  <fieldset className="size-finder-fieldset">
+                                    <legend className="size-finder-field-label">Chest</legend>
+                                    <div className="size-finder-choices">
+                                      {CHEST_SHAPES.map((option, index) => (
+                                        <Choice
+                                          key={option}
+                                          index={index}
+                                          reduceMotion={reduceMotion}
+                                          active={chestValue === option}
+                                          onClick={() => setChest(option)}
+                                          title={CHEST_LABELS[option]}
+                                          hint={CHEST_HINTS[option]}
+                                        />
+                                      ))}
+                                    </div>
+                                  </fieldset>
+                                </>
+                              )}
                             </motion.div>
                           )}
 
                           {step === 2 && (
-                            <motion.div key="step-waist" className="size-finder-step" {...stepMotion}>
-                              <p className="size-finder-helper">
-                                The waist usually breaks the tie between two neighbouring sizes.
-                              </p>
+                            <motion.div key={`step-shape-2-${garment}`} className="size-finder-step" {...stepMotion}>
+                              {garment === GARMENT.BOTTOM ? (
+                                <>
+                                  <p className="size-finder-helper">
+                                    The seat decides how the trousers hang from the hip. Pick the closest.
+                                  </p>
 
-                              <fieldset className="size-finder-fieldset">
-                                <legend className="size-finder-field-label">Waist</legend>
-                                <div className="size-finder-choices">
-                                  {WAIST_SHAPES.map((option, index) => (
-                                    <Choice
-                                      key={option}
-                                      index={index}
-                                      reduceMotion={reduceMotion}
-                                      active={waist === option}
-                                      onClick={() => setWaist(option)}
-                                      title={WAIST_LABELS[option]}
-                                      hint={WAIST_HINTS[option]}
-                                    />
-                                  ))}
-                                </div>
-                              </fieldset>
+                                  <fieldset className="size-finder-fieldset">
+                                    <legend className="size-finder-field-label">Seat</legend>
+                                    <div className="size-finder-choices">
+                                      {SEAT_SHAPES.map((option, index) => (
+                                        <Choice
+                                          key={option}
+                                          index={index}
+                                          reduceMotion={reduceMotion}
+                                          active={seatValue === option}
+                                          onClick={() => setSeat(option)}
+                                          title={SEAT_LABELS[option]}
+                                          hint={SEAT_HINTS[option]}
+                                        />
+                                      ))}
+                                    </div>
+                                  </fieldset>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="size-finder-helper">
+                                    The waist usually breaks the tie between two neighbouring sizes.
+                                  </p>
+
+                                  <fieldset className="size-finder-fieldset">
+                                    <legend className="size-finder-field-label">Waist</legend>
+                                    <div className="size-finder-choices">
+                                      {WAIST_SHAPES.map((option, index) => (
+                                        <Choice
+                                          key={option}
+                                          index={index}
+                                          reduceMotion={reduceMotion}
+                                          active={waistValue === option}
+                                          onClick={() => setWaist(option)}
+                                          title={WAIST_LABELS[option]}
+                                          hint={WAIST_HINTS[option]}
+                                        />
+                                      ))}
+                                    </div>
+                                  </fieldset>
+                                </>
+                              )}
                             </motion.div>
                           )}
 
                           {step === 3 && (
-                            <motion.div key="step-fit" className="size-finder-step" {...stepMotion}>
+                            <motion.div key={`step-fit-${garment}`} className="size-finder-step" {...stepMotion}>
                               <p className="size-finder-helper">
-                                Last one. How do you like a shirt or jacket to sit on you?
+                                {garment === GARMENT.BOTTOM
+                                  ? 'Last one. How do you like trousers to sit — close, classic, or roomy?'
+                                  : 'Last one. How do you like a shirt or jacket to sit on you?'}
                               </p>
 
                               <fieldset className="size-finder-fieldset">
@@ -886,7 +1161,7 @@ export default function SizeFinder({
                                       active={fit === option}
                                       onClick={() => setFit(option)}
                                       title={FIT_LABELS[option]}
-                                      hint={FIT_HINTS[option]}
+                                      hint={(garment === GARMENT.BOTTOM ? FIT_HINTS_BOTTOM : FIT_HINTS)[option]}
                                     />
                                   ))}
                                 </div>
@@ -977,6 +1252,14 @@ export default function SizeFinder({
                         <div className="size-finder-actions size-finder-actions-result">
                           <button
                             type="button"
+                            className="size-finder-back size-finder-back-result"
+                            onClick={goBack}
+                          >
+                            <ArrowLeft size={15} aria-hidden="true" />
+                            Back
+                          </button>
+                          <button
+                            type="button"
                             className="size-finder-next"
                             disabled={shown.inStock === false}
                             onClick={() => {
@@ -995,9 +1278,12 @@ export default function SizeFinder({
                           {typeof onOpenSizeGuide === 'function' && (
                             <button
                               type="button"
-                              className="size-finder-back"
+                              ref={guideButtonRef}
+                              className="size-finder-back size-finder-guide"
+                              aria-haspopup="dialog"
                               onClick={() => {
-                                close();
+                                // The guide opens above the finder; the finder stays
+                                // mounted so closing the guide returns to this result.
                                 onOpenSizeGuide();
                               }}
                             >

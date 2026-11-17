@@ -10,6 +10,7 @@ import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
 import { discountPercent, effectivePrice, hasInvalidVariantConfig, hasVariantStock, regularPrice, sellableStockFor } from '../lib/pricing';
+import { GARMENT, garmentKind } from '../lib/fit';
 import { resolveRoute } from '../lib/routes';
 import { getColorSwatch } from '../lib/productColors.mjs';
 
@@ -455,6 +456,9 @@ export default function ProductPage() {
               sizes={p.sizes || []}
               sizeRanges={p.sizeRanges}
               selectedSize={selSize}
+              category={p.category}
+              name={p.name}
+              sizeGuideOpen={sizeGuideOpen}
               onSelect={(size) => { setSelSize(size); setQty(1); }}
               stockFor={(size) => sellableStockFor(p, size, selColor)}
               onOpenSizeGuide={() => setSizeGuideOpen(true)}
@@ -776,10 +780,7 @@ export default function ProductPage() {
                       textAlign: 'center',
                       color: 'var(--text2, #ccc)',
                     }}>
-                      {(
-                        ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short'].some(word => (p.category ?? '').toLowerCase().includes(word)) ||
-                        ['pants', 'trousers', 'jeans', 'shorts', 'pant', 'trouser', 'jean', 'short'].some(word => (p.name ?? '').toLowerCase().includes(word))
-                      ) ? (
+                      {garmentKind({ category: p.category, name: p.name }) === GARMENT.BOTTOM ? (
                         <>
                           <thead>
                             <tr style={{ borderBottom: '1px solid var(--gold, #c9a84c)', color: 'var(--gold, #c9a84c)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>

@@ -39,11 +39,39 @@ export const RANGE_LIMITS = {
   maxHeight: 230,
 };
 
+// ── Garment kind ─────────────────────────────────────────────────────────────
+// A trouser is sized from the waist and seat, never from the chest, so the
+// finder asks different questions and the chart fallback scores a different
+// measurement. Categories are free text ("Shirts", "Trousers", ...), so the
+// kind is read from the category and the product name.
+//
+// A top word wins when both appear, because "denim jacket" and "short sleeve
+// shirt" are tops even though they contain a bottom word.
+export const GARMENT = { TOP: 'top', BOTTOM: 'bottom' };
+
+const TOP_PATTERN = /\b(shirts?|tees?|t-shirts?|tshirts?|polos?|jackets?|coats?|hoodies?|sweatshirts?|sweaters?|knitwear|cardigans?|blazers?|tops?|outerwear|overshirts?)\b/;
+const BOTTOM_PATTERN = /\b(pants?|trousers?|jeans?|shorts?|skirts?|chinos?|cargos?|joggers?|sweatpants?|trackpants?|denim|bermudas?)\b/;
+
+/** 'bottom' for trousers/shorts, 'top' for everything else (the safe default). */
+export function garmentKind(product = {}) {
+  const text = `${(product && product.category) || ''} ${(product && product.name) || ''}`.toLowerCase();
+  if (TOP_PATTERN.test(text)) return GARMENT.TOP;
+  if (BOTTOM_PATTERN.test(text)) return GARMENT.BOTTOM;
+  return GARMENT.TOP;
+}
+
 /**
  * Chart mode: how far the target chest moves from the body estimate, in cm.
  * Slim aims at the bottom of a size, oversized at the next size up.
  */
 export const FIT_OFFSET = { slim: -4, regular: 0, relaxed: 6, oversized: 12 };
+
+/**
+ * Chart mode for bottoms: how far the target waist moves, in cm. A trouser
+ * waistband is far less forgiving than a shirt, so the steps are smaller than
+ * the chest steps — an oversized trouser falls down rather than draping.
+ */
+export const FIT_WAIST_OFFSET = { slim: -3, regular: 0, relaxed: 4, oversized: 8 };
 
 /**
  * Range mode: how much the requested fit shifts the *effective* weight, in kg.
@@ -64,37 +92,69 @@ export const FIT_WEIGHT_NUDGE = { slim: -4, regular: 0, relaxed: 3, oversized: 6
 export const CHEST_SHAPES = ['slimmer', 'average', 'broader'];
 export const WAIST_SHAPES = ['flatter', 'average', 'rounder'];
 
+// Trousers are sized from the waist and the seat, so a bottom asks about those
+// two instead of the chest. The waist question keeps three answers, but they
+// describe circumference rather than profile, which is what a waistband needs.
+export const BOTTOM_WAIST_SHAPES = ['slimmer', 'average', 'wider'];
+export const SEAT_SHAPES = ['narrow', 'average', 'wider'];
+
+const WAIST_VALUES = ['flatter', 'average', 'rounder', 'slimmer', 'wider'];
+
 /** Chart mode: how the shape moves the estimated chest, in cm. */
 export const SHAPE_CHEST_CM = { slimmer: -3, average: 0, broader: 3 };
-export const SHAPE_WAIST_CM = { flatter: -1, average: 0, rounder: 2 };
+export const SHAPE_WAIST_CM = { flatter: -1, average: 0, rounder: 2, slimmer: -2, wider: 2 };
+export const SHAPE_SEAT_CM = { narrow: -2, average: 0, wider: 2 };
 
 /** Range mode: the same idea expressed as kg, because windows are in kg. */
 export const SHAPE_CHEST_KG = { slimmer: -3, average: 0, broader: 3 };
-export const SHAPE_WAIST_KG = { flatter: -1, average: 0, rounder: 2 };
+export const SHAPE_WAIST_KG = { flatter: -1, average: 0, rounder: 2, slimmer: -2, wider: 2 };
+export const SHAPE_SEAT_KG = { narrow: -2, average: 0, wider: 2 };
 
-export const BODY_SHAPE_DEFAULT = Object.freeze({ chest: 'average', waist: 'average' });
+// Top-only waist answers. A saved bottom answer ("slimmer"/"wider") must not
+// move a shirt's chest, so tops read this narrower map instead of the union.
+const SHAPE_CHEST_WAIST_CM = { flatter: -1, average: 0, rounder: 2 };
+const SHAPE_CHEST_WAIST_KG = { flatter: -1, average: 0, rounder: 2 };
+
+export const BODY_SHAPE_DEFAULT = Object.freeze({ chest: 'average', waist: 'average', seat: 'average' });
 
 /** Never throws: unknown answers collapse to `average`. */
 export function sanitizeBodyShape(shape) {
   const chest = shape && CHEST_SHAPES.includes(shape.chest) ? shape.chest : 'average';
-  const waist = shape && WAIST_SHAPES.includes(shape.waist) ? shape.waist : 'average';
-  return { chest, waist };
+  const waist = shape && WAIST_VALUES.includes(shape.waist) ? shape.waist : 'average';
+  const seat = shape && SEAT_SHAPES.includes(shape.seat) ? shape.seat : 'average';
+  return { chest, waist, seat };
 }
 
-/** Total chest offset in cm for a shape answer (0 for average/average). */
-export function shapeChestOffset(shape) {
+/**
+ * Total chest offset in cm for a shape answer (0 for average/average).
+ * A bottom never uses the chest answer: it cannot size a waistband.
+ */
+export function shapeChestOffset(shape, garment = GARMENT.TOP) {
+  if (garment === GARMENT.BOTTOM) return 0;
   const clean = sanitizeBodyShape(shape);
-  return SHAPE_CHEST_CM[clean.chest] + SHAPE_WAIST_CM[clean.waist];
+  // Only the top answers apply here: a bottom's "slimmer/wider" waist must not
+  // leak into a shirt's chest because the saved profile is shared.
+  const waist = SHAPE_CHEST_WAIST_CM[clean.waist] ?? 0;
+  return SHAPE_CHEST_CM[clean.chest] + waist;
+}
+
+/** Total waist offset in cm for a bottom's shape answer (0 for average/average). */
+export function shapeWaistOffset(shape) {
+  const clean = sanitizeBodyShape(shape);
+  return SHAPE_WAIST_CM[clean.waist] + SHAPE_SEAT_CM[clean.seat];
 }
 
 /** Total weight offset in kg for a shape answer (0 for average/average). */
-export function shapeWeightOffset(shape) {
+export function shapeWeightOffset(shape, garment = GARMENT.TOP) {
   const clean = sanitizeBodyShape(shape);
-  return SHAPE_CHEST_KG[clean.chest] + SHAPE_WAIST_KG[clean.waist];
+  if (garment === GARMENT.BOTTOM) {
+    return SHAPE_WAIST_KG[clean.waist] + SHAPE_SEAT_KG[clean.seat];
+  }
+  return SHAPE_CHEST_KG[clean.chest] + (SHAPE_CHEST_WAIST_KG[clean.waist] ?? 0);
 }
 
 // Published "to fit chest" ranges (cm) — the same numbers as the size guide.
-const CHEST_RANGES = {
+export const CHEST_RANGES = {
   XS: [86, 91],
   S: [92, 96],
   M: [97, 101],
@@ -102,6 +162,18 @@ const CHEST_RANGES = {
   XL: [107, 111],
   XXL: [112, 116],
   '3XL': [117, 121],
+};
+
+// Published "to fit waist" ranges (cm) — the waist column of the size guide.
+// A trouser is scored against these instead of the chest.
+export const WAIST_RANGES = {
+  XS: [71, 75],
+  S: [76, 80],
+  M: [81, 85],
+  L: [86, 90],
+  XL: [91, 95],
+  XXL: [96, 100],
+  '3XL': [101, 105],
 };
 
 // EU / Egyptian numeric sizes → letter sizes (48 is a medium, 50 a large).
@@ -141,6 +213,22 @@ export function estimateChest({ height, weight } = {}) {
   if (h < BODY_LIMITS.minHeight || h > BODY_LIMITS.maxHeight) return null;
   if (w < BODY_LIMITS.minWeight || w > BODY_LIMITS.maxWeight) return null;
   return Math.round(0.30 * h + 0.40 * w + 17);
+}
+
+/**
+ * Rough waist estimate in cm, or null when the input is unusable.
+ *
+ * Calibrated against the published waist chart: 165 cm / 60 kg ≈ 74 cm,
+ * 175 cm / 75 kg ≈ 82 cm, 180 cm / 78 kg ≈ 84 cm. It is an estimate from
+ * height and weight, not a measurement, and the result says so.
+ */
+export function estimateWaist({ height, weight } = {}) {
+  const h = Number(height);
+  const w = Number(weight);
+  if (!Number.isFinite(h) || !Number.isFinite(w)) return null;
+  if (h < BODY_LIMITS.minHeight || h > BODY_LIMITS.maxHeight) return null;
+  if (w < BODY_LIMITS.minWeight || w > BODY_LIMITS.maxWeight) return null;
+  return Math.round(0.13 * h + 0.44 * w + 26);
 }
 
 function bound(value, limits) {
@@ -307,6 +395,17 @@ export function describeRecommendation(result) {
     return `Closest to size ${result.size} (${window}) — a ${fit} fit.`;
   }
 
+  if (result.garment === GARMENT.BOTTOM) {
+    const waistRange = Array.isArray(result.waistRange) ? result.waistRange : [];
+    if (waistRange.length === 2) {
+      const base = `Waist ≈ ${result.waist} cm. Size ${result.size} is cut for ${waistRange[0]}–${waistRange[1]} cm`;
+      return result.distance === 0
+        ? `${base} — a ${fit} fit.`
+        : `${base} — the closest match for a ${fit} fit.`;
+    }
+    return `Waist ≈ ${result.waist} cm. Size ${result.size} is the closest match for a ${fit} fit.`;
+  }
+
   const range = Array.isArray(result.chestRange) ? result.chestRange : [];
   if (range.length === 2) {
     const base = `Chest ≈ ${result.chest} cm. Size ${result.size} is cut for ${range[0]}–${range[1]} cm`;
@@ -358,11 +457,13 @@ function axisQuality(min, max, value) {
  * pick one size, `scoreSizes` uses it to score all of them.
  */
 function buildCandidates(input = {}) {
+  const garment = input.garment === GARMENT.BOTTOM ? GARMENT.BOTTOM : GARMENT.TOP;
   const fit = FIT_OPTIONS.includes(input.fit) ? input.fit : 'regular';
   const height = Number(input.height);
   const weight = Number(input.weight);
   const chest = estimateChest({ height, weight });
-  if (chest == null) return { ok: false, reason: 'invalid-body' };
+  const waist = estimateWaist({ height, weight });
+  if (chest == null || waist == null) return { ok: false, reason: 'invalid-body' };
 
   const declaredSizes = (Array.isArray(input.sizes) ? input.sizes : [])
     .map((size) => String(size == null ? '' : size).trim())
@@ -370,12 +471,19 @@ function buildCandidates(input = {}) {
   if (!declaredSizes.length) return { ok: false, reason: 'unsupported-sizes' };
 
   const shape = sanitizeBodyShape(input.bodyShape);
-  const bodyChest = chest + shapeChestOffset(shape);
+  // A top is sized from the chest, a bottom from the waist. The unused
+  // measurement is still computed so the result can describe the body, but it
+  // never influences the choice.
+  const bodyChest = chest + shapeChestOffset(shape, garment);
+  const bodyWaist = waist + shapeWaistOffset(shape);
+  const chartRanges = garment === GARMENT.BOTTOM ? WAIST_RANGES : CHEST_RANGES;
+  const fitOffset = garment === GARMENT.BOTTOM ? FIT_WAIST_OFFSET[fit] : FIT_OFFSET[fit];
+  const target = (garment === GARMENT.BOTTOM ? bodyWaist : bodyChest) + fitOffset;
   const ranges = sanitizeSizeRanges(input.sizeRanges, declaredSizes);
   const candidates = [];
 
   // ── Mode 1: owner ranges ──────────────────────────────────────────────────
-  const effectiveWeight = weight + FIT_WEIGHT_NUDGE[fit] + shapeWeightOffset(shape);
+  const effectiveWeight = weight + FIT_WEIGHT_NUDGE[fit] + shapeWeightOffset(shape, garment);
   for (const size of declaredSizes) {
     const range = ranges[size];
     if (!range) continue;
@@ -398,14 +506,17 @@ function buildCandidates(input = {}) {
     // No size has an owner window yet. Fall back to the published chart so the
     // customer still gets an answer for products the owner has not configured.
     mode = 'chart';
-    const target = bodyChest + FIT_OFFSET[fit];
     for (const size of declaredSizes) {
       const key = normalizeSize(size);
       if (!key) continue;
-      const chestRange = CHEST_RANGES[key];
-      const distance = windowGap(chestRange[0], chestRange[1], target);
-      const quality = axisQuality(chestRange[0], chestRange[1], target);
-      candidates.push({ label: size, key, chestRange, distance, quality });
+      const sizeRange = chartRanges[key];
+      const distance = windowGap(sizeRange[0], sizeRange[1], target);
+      const quality = axisQuality(sizeRange[0], sizeRange[1], target);
+      if (garment === GARMENT.BOTTOM) {
+        candidates.push({ label: size, key, waistRange: sizeRange, distance, quality });
+      } else {
+        candidates.push({ label: size, key, chestRange: sizeRange, distance, quality });
+      }
     }
   }
 
@@ -414,14 +525,17 @@ function buildCandidates(input = {}) {
   return {
     ok: true,
     mode,
+    garment,
     fit,
     height,
     weight,
     chest,
+    waist,
     bodyChest,
+    bodyWaist,
     shape,
     effectiveWeight,
-    target: bodyChest + FIT_OFFSET[fit],
+    target,
     declaredSizes,
     candidates,
   };
@@ -437,7 +551,8 @@ function sizeOrder(candidate) {
       + (candidate.range.maxHeight ?? candidate.range.minHeight ?? 0)) / 2;
     return mid + heightMid;
   }
-  return candidate.chestRange[0];
+  const chartRange = candidate.chestRange || candidate.waistRange;
+  return chartRange ? chartRange[0] : 0;
 }
 
 function compareCandidates(a, b) {
@@ -495,7 +610,7 @@ export function recommendSize(input = {}) {
   const built = buildCandidates(input);
   if (!built.ok) return built;
 
-  const { mode, fit, height, weight, chest, bodyChest, effectiveWeight } = built;
+  const { mode, garment, fit, height, weight, chest, waist, bodyChest, bodyWaist, effectiveWeight } = built;
   const candidates = [...built.candidates].sort(compareCandidates);
   const stockValue = stockReader(input);
   const { chosen, skippedSize } = chooseCandidate(candidates, mode, stockValue);
@@ -509,6 +624,7 @@ export function recommendSize(input = {}) {
   const result = {
     ok: true,
     mode,
+    garment,
     size: chosen.label,
     key: chosen.key,
     distance: chosen.distance,
@@ -528,6 +644,12 @@ export function recommendSize(input = {}) {
   if (mode === 'ranges') {
     result.range = chosen.range;
     result.effectiveWeight = effectiveWeight;
+  } else if (garment === GARMENT.BOTTOM) {
+    result.waist = waist;
+    result.bodyWaist = bodyWaist;
+    result.offset = FIT_WAIST_OFFSET[fit];
+    result.target = bodyWaist + FIT_WAIST_OFFSET[fit];
+    result.waistRange = chosen.waistRange;
   } else {
     result.chest = chest;
     result.bodyChest = bodyChest;
@@ -579,9 +701,10 @@ function explainCandidate(candidate, ctx) {
     return `${heightText}, and ${weightText}.${nudge}`;
   }
 
-  const [lo, hi] = candidate.chestRange;
-  const shapeNudge = shapeChestOffset(ctx.shape);
-  const fitNudge = FIT_OFFSET[ctx.fit] || 0;
+  const isBottom = ctx.garment === GARMENT.BOTTOM;
+  const [lo, hi] = isBottom ? candidate.waistRange : candidate.chestRange;
+  const shapeNudge = isBottom ? shapeWaistOffset(ctx.shape) : shapeChestOffset(ctx.shape, ctx.garment);
+  const fitNudge = (isBottom ? FIT_WAIST_OFFSET[ctx.fit] : FIT_OFFSET[ctx.fit]) || 0;
   const causes = [];
   if (shapeNudge) causes.push('your build');
   if (fitNudge) causes.push(`a ${ctx.fit} fit`);
@@ -592,7 +715,8 @@ function explainCandidate(candidate, ctx) {
   const position = delta === 0
     ? `sits inside this size's ${lo}–${hi} cm cut`
     : `is ${Math.abs(delta)} cm ${delta > 0 ? 'over' : 'under'} this size's ${lo}–${hi} cm cut`;
-  return `Your ${ctx.chest} cm chest estimate${adjusted} ${position}.`;
+  const body = isBottom ? `Your ${ctx.waist} cm waist estimate` : `Your ${ctx.chest} cm chest estimate`;
+  return `${body}${adjusted} ${position}.`;
 }
 
 /**
@@ -639,6 +763,7 @@ export function scoreSizes(input = {}) {
   return {
     ok: true,
     mode: built.mode,
+    garment: built.garment,
     sizes,
     recommended: decision.size,
     decision,

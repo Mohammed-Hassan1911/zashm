@@ -9,12 +9,18 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   BODY_SHAPE_DEFAULT,
+  BOTTOM_WAIST_SHAPES,
   CHEST_SHAPES,
   FIT_OFFSET,
   FIT_WEIGHT_NUDGE,
+  GARMENT,
+  SEAT_SHAPES,
+  WAIST_RANGES,
   WAIST_SHAPES,
   describeRange,
   estimateChest,
+  estimateWaist,
+  garmentKind,
   hasOwnerRanges,
   loadFitProfile,
   normalizeSize,
@@ -24,6 +30,7 @@ import {
   saveFitProfile,
   scoreSizes,
   shapeChestOffset,
+  shapeWaistOffset,
   shapeWeightOffset,
   sizeRangeProblems,
   supportsSizeGuidance,
@@ -281,6 +288,12 @@ ok(productPage.includes('<SizeFinder'), 'the product page renders the finder');
 ok(productPage.includes('sizeRanges={p.sizeRanges}'), 'the finder receives the owner windows');
 ok(productPage.includes('stockFor={(size) => sellableStockFor(p, size, selColor)}'),
   'the finder receives live per-colour stock');
+ok(productPage.includes('category={p.category}') && productPage.includes('name={p.name}'),
+  'the finder is told which garment it is sizing');
+ok(productPage.includes('sizeGuideOpen={sizeGuideOpen}'),
+  'the finder knows when the size guide is stacked above it');
+ok(productPage.includes('garmentKind({ category: p.category, name: p.name }) === GARMENT.BOTTOM'),
+  'the size guide shares the garment detection instead of duplicating keywords');
 ok(finder.includes('aria-live="polite"'), 'the result is announced politely');
 ok(finder.includes('noValidate'), 'the finder controls its own validation');
 ok(finder.includes('size-finder-input'), 'the inputs are scoped for mobile sizing');
@@ -300,16 +313,25 @@ ok(finder.includes('const hasResult = Boolean(result) && step === RESULT_STEP;')
   'the result only shows on the last step');
 ok(finder.includes('const QUESTION_COUNT = 4;') && finder.includes('const RESULT_STEP = QUESTION_COUNT;'),
   'the flow declares four questions plus a result');
-ok(finder.includes("const stepTitles = ["), 'the flow has four questions');
+ok(finder.includes('const stepTitles = garment === GARMENT.BOTTOM'),
+  'the flow has four questions, worded for the garment');
 ok((finder.match(/\{step === \d && \(/g) || []).length === 4, 'four step panels are rendered');
 ok(finder.includes('step === 1') && finder.includes('step === 2') && finder.includes('step === 3'),
-  'chest, waist and fit each get their own panel');
-const chestPanel = finder.slice(finder.indexOf('key="step-chest"'), finder.indexOf('key="step-waist"'));
-const waistPanel = finder.slice(finder.indexOf('key="step-waist"'), finder.indexOf('key="step-fit"'));
-ok(chestPanel.includes('CHEST_SHAPES.map') && !chestPanel.includes('WAIST_SHAPES.map'),
-  'the chest step asks only about the chest');
-ok(waistPanel.includes('WAIST_SHAPES.map') && !waistPanel.includes('CHEST_SHAPES.map'),
-  'the waist step asks only about the waist');
+  'the two shape questions and the fit each get their own panel');
+const firstShapePanel = finder.slice(
+  finder.indexOf('key={`step-shape-1-${garment}`}'),
+  finder.indexOf('key={`step-shape-2-${garment}`}'),
+);
+const secondShapePanel = finder.slice(
+  finder.indexOf('key={`step-shape-2-${garment}`}'),
+  finder.indexOf('key={`step-fit-${garment}`}'),
+);
+ok(firstShapePanel.includes('CHEST_SHAPES.map') && firstShapePanel.includes('BOTTOM_WAIST_SHAPES.map'),
+  'the first shape step asks about the chest for a top and the waist for a trouser');
+ok(secondShapePanel.includes('WAIST_SHAPES.map') && secondShapePanel.includes('SEAT_SHAPES.map'),
+  'the second shape step asks about the waist for a top and the seat for a trouser');
+ok(!firstShapePanel.includes('SEAT_SHAPES.map') && !secondShapePanel.includes('CHEST_SHAPES.map'),
+  'chest and seat are never asked on the same step');
 ok(finder.includes('Find my size'), 'the CTA says what the shopper gets');
 ok(/label="Height in centimetres"/.test(finder) && /label="Weight in kilograms"/.test(finder),
   'the numeric fields name their unit');
@@ -338,7 +360,8 @@ ok(finder.includes('aria-valuetext={`${height} centimetres`}'), 'the slider anno
 ok(finder.includes('CHEST_SHAPES.map') && finder.includes('WAIST_SHAPES.map'),
   'chest and waist are both asked');
 ok(finder.includes('FIT_OPTIONS.map'), 'fit is asked');
-ok(finder.includes('FIT_HINTS[option]'), 'every fit choice explains itself in place');
+ok(finder.includes('FIT_HINTS_BOTTOM : FIT_HINTS)[option]'),
+  'every fit choice explains itself in place, worded for the garment');
 ok(finder.includes('onClick={() => setFit(option)}') && !finder.includes('showRecommendation(option)'),
   'the fit step is a normal choice: tapping an answer only selects it');
 ok(finder.includes('BodySilhouette'), 'the live drawing is its own component');
@@ -369,19 +392,37 @@ ok(/\.size-finder-restart\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*5px/
   'Start over has a visible, polished border');
 ok(finder.includes('className="size-finder-explanation"') &&
    finder.includes('${entry.label} fits better (${entry.score}/100 vs ${shown.score}/100)') &&
-   finder.includes('setResultProfile({ height, weight, chest, waist, fit: fitPreference })'),
-  'the reason changes with the chosen size');
+   /setResultProfile\(\{[\s\S]{0,220}garment,/.test(finder),
+  'the reason changes with the chosen size and records the garment kind');
 ok(finder.includes('Next closest is ${closest.label} at ${closest.score}/100'),
   'the comparison names the closest alternative without repeating the score above');
 const resultActionsStart = finder.indexOf('size-finder-actions size-finder-actions-result');
-const resultActions = finder.slice(resultActionsStart, resultActionsStart + 1800);
-ok(!resultActions.includes('goBack') && !resultActions.includes('>Back'),
-  'the result no longer offers a Back control');
+const resultActions = finder.slice(resultActionsStart, resultActionsStart + 2600);
+ok(resultActions.includes('goBack') && resultActions.includes('size-finder-back-result'),
+  'the result restores Back in the bottom action row');
+ok(resultActions.indexOf('size-finder-back-result') < resultActions.indexOf('size-finder-next'),
+  'Back sits before the primary Select size action');
+const finderHeader = finder.slice(
+  finder.indexOf('className="size-finder-topbar"'),
+  finder.indexOf('className="size-finder-body"'),
+);
+ok(!finderHeader.includes('>Back') && !finderHeader.includes('ArrowLeft'),
+  'the result header still has no Back word');
 ok(resultActions.includes('Select size ${shown.label}') && resultActions.includes('Size guide'),
   'Select size and Size guide share the final action group');
+ok(finder.includes('aria-hidden={sizeGuideOpen ? \'true\' : undefined}') &&
+   /onClick=\{\(\) => \{[\s\S]{0,220}onOpenSizeGuide\(\);/.test(finder) &&
+   !/onClick=\{\(\) => \{[\s\S]{0,120}close\(\);[\s\S]{0,80}onOpenSizeGuide\(\)/.test(finder),
+  'the size guide opens above the finder and never closes it');
+ok(finder.includes('if (sizeGuideOpenRef.current) return;') &&
+   finder.includes("event.key !== 'Escape'"),
+  'Escape belongs to the size guide while it is open');
+ok(finder.includes('guideButtonRef.current?.focus?.({ preventScroll: true })'),
+  'closing the guide returns focus to the Size guide button');
 ok(finder.includes('role="dialog"') && finder.includes('aria-modal="true"'),
   'the flow is a modal dialog');
-ok(finder.includes("event.key === 'Escape'"), 'Escape closes the dialog');
+ok(finder.includes("event.key !== 'Escape'") && finder.includes('event.stopPropagation();'),
+  'Escape closes the dialog');
 ok(finder.includes("body.style.overflow = 'hidden'"), 'the page behind the dialog is locked');
 ok(finder.includes("html.style.overflow = 'hidden'") && finder.includes("body.style.position = 'fixed'") &&
    finder.includes('window.scrollTo(0, scrollY)') && finder.includes("body.classList.add('size-finder-open')") &&
@@ -411,8 +452,10 @@ ok(css.includes('@media (max-width: 640px)') && css.includes('align-items: flex-
   'phones get a bottom sheet');
 ok(css.includes('100dvh'), 'the dialog fits the visible viewport on mobile browsers');
 ok(css.includes('env(safe-area-inset-bottom'), 'the sheet clears the phone safe area');
-ok(/body\.size-finder-open \.whatsapp-fab\s*\{[^}]*visibility:\s*hidden/.test(css),
-  'WhatsApp is hidden only while the size finder is open');
+ok(!/body\.size-finder-open\s+\.whatsapp-fab/.test(css),
+  'the finder keeps the floating WhatsApp action visible like the rest of the site');
+ok(/\.size-finder-scroll\s*\{[^}]*padding-bottom:\s*calc\([\s\S]{0,140}?88px/s.test(css),
+  'the phone sheet reserves room for the floating actions');
 ok(/\.size-finder-scroll::-webkit-scrollbar-thumb\s*\{[^}]*linear-gradient\(180deg, #e8c870, #a98736\)/.test(css) &&
    /\.size-finder-scroll\s*\{[^}]*scrollbar-color:\s*var\(--gold\)/s.test(css),
   'the finder scrollbar is gold on standard and WebKit browsers');
@@ -420,9 +463,10 @@ ok(/\.size-finder-dialog\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;
   'the dialog is a fixed shell and only its body scrolls');
 ok(/\.size-finder-scroll\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/s.test(css),
   'the scrolling body fills the space under the fixed header');
-ok(finder.indexOf('className="size-finder-head"') < finder.indexOf('className="size-finder-scroll"') &&
-   finder.includes('data-done={(hasResult || index <= step) ? \'true\' : \'false\'}'),
-  'the header and progress sit outside the scrolling area and stay visible on the result');
+ok(finder.indexOf('className="size-finder-scroll"') < finder.indexOf('className="size-finder-topbar"') &&
+   finder.includes('data-done={(hasResult || index <= step) ? \'true\' : \'false\'}') &&
+   /\.size-finder-topbar\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/s.test(css),
+  'the question and progress are a sticky topbar inside the scroller, so they stay pinned on the result');
 ok((finder.match(/className="size-finder-progress-seg"/g) || []).length === 1 &&
    /Array\.from\(\{ length: QUESTION_COUNT \}/.test(finder),
   'the progress shows one segment per question');
@@ -432,8 +476,11 @@ ok(css.includes('.size-finder-gauge-halo') && css.includes('@keyframes size-find
   'the result gauge is lit by a slow halo');
 ok(css.includes('.size-finder-figure-focus') && css.includes('@keyframes size-finder-focus-breathe'),
   'the drawing rings the region the current question asks about');
-ok(finder.includes('focus={figureFocus}') && finder.includes("const figureFocus = step === 1 ? 'chest' : step === 2 ? 'waist' : null;"),
-  'the chest and waist steps each highlight their own region');
+ok(finder.includes('focus={figureFocus}') &&
+   /const figureFocus = step === 1[\s\S]{0,180}GARMENT\.BOTTOM \? 'waist' : 'chest'[\s\S]{0,180}GARMENT\.BOTTOM \? 'seat' : 'waist'/.test(finder),
+  'each shape step highlights the region it asks about, following the garment');
+ok(finder.includes('garment={garment}') && finder.includes('seat={seatValue}'),
+  'the drawing is told the garment kind and the seat answer');
 ok(/html\s*\{[^}]*scrollbar-color:\s*var\(--gold\) var\(--bg2\)/s.test(css) &&
    /::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--gold\)/.test(css),
   'the site-wide scrollbar is gold outside the finder too');
@@ -458,8 +505,10 @@ ok(/\.size-finder-gauge-halo,[\s\S]{0,120}\.size-finder-result > \*\s*\{\s*anima
 ok(/\.size-finder-progress-seg\[data-current='true'\]::after,[\s\S]{0,80}\.size-finder-next::after\s*\{\s*display:\s*none/.test(reducedCss),
   'the progress sweep and button sheen are removed for reduced-motion users');
 ok(/\.size-finder-actions\s*\{[^}]*flex-wrap:\s*nowrap/s.test(phoneCss) &&
-   /\.size-finder-actions-result\s*\{[^}]*flex-wrap:\s*wrap/s.test(phoneCss),
-  'phones keep Back beside Next, while the result stacks its two controls');
+   /\.size-finder-actions-result\s*\{[^}]*flex-wrap:\s*wrap/s.test(phoneCss) &&
+   /\.size-finder-actions-result \.size-finder-back-result\s*\{[^}]*order:\s*1/s.test(phoneCss) &&
+   /\.size-finder-actions-result \.size-finder-guide\s*\{[^}]*flex:\s*1 1 100%/s.test(phoneCss),
+  'phones keep Back beside Next, and the result puts Back + Select size on row one and Size guide on row two');
 ok(finder.includes('size-finder-actions size-finder-actions-result'),
   'the result action group is marked so phones can stack it');
 const toolMarkers = ['open' + 'code', 'chat' + 'gpt', 'clau' + 'de', 'co' + 'pilot'];
@@ -594,8 +643,9 @@ ok(finder.includes('clamp(saved.height, BODY_LIMITS.minHeight, BODY_LIMITS.maxHe
    finder.includes('clamp(saved.weight, BODY_LIMITS.minWeight, BODY_LIMITS.maxWeight)'),
   'the saved numbers still pre-fill the sliders inside the accepted range');
 ok(finder.includes("saved?.bodyShape?.chest || 'average'") &&
-   finder.includes("saved?.bodyShape?.waist || 'average'"),
-  'the saved shape answers pre-fill too, with neutral defaults');
+   finder.includes('BOTTOM_WAIST_SHAPES.includes(savedWaist)') &&
+   finder.includes('WAIST_SHAPES.includes(savedWaist)'),
+  'the saved shape answers pre-fill too, guarded per garment kind');
 
 section('21 — estimated match scores');
 const scored = scoreSizes({ height: 180, weight: 78, sizes: ['M', 'L', 'XL'], fit: 'regular' });
@@ -731,6 +781,89 @@ const jacketRelaxed = jacketFit(165, 65, 'relaxed');
 eq(jacketRelaxed.recommended, 'L', 'relaxed preference is applied before scoring');
 ok(jacketRelaxed.sizes.find((entry) => entry.label === 'L').reason.includes('we count 65 kg as 68 kg'),
   'the result text names the 3 kg relaxed-fit adjustment');
+
+section('24 — garment kind decides which questions are asked');
+eq(GARMENT.TOP, 'top', 'tops are the default kind');
+eq(garmentKind({ category: 'Shirts', name: 'T-SHIRT' }), GARMENT.TOP, 'a shirt is a top');
+eq(garmentKind({ category: 'Trousers', name: 'CHINO' }), GARMENT.BOTTOM, 'a trouser is a bottom');
+eq(garmentKind({ category: 'Denim', name: 'DENIM JACKET' }), GARMENT.TOP,
+  'a denim jacket stays a top even though the category says denim');
+eq(garmentKind({ category: '', name: 'SHORT SLEEVE SHIRT' }), GARMENT.TOP,
+  'a short sleeve shirt is not mistaken for shorts');
+eq(garmentKind({}), GARMENT.TOP, 'an unlabelled product defaults to a top');
+eq(garmentKind({ category: 'Shorts', name: 'LINEN SHORTS' }), GARMENT.BOTTOM, 'shorts are a bottom');
+eq(garmentKind({ category: 'Joggers', name: '' }), GARMENT.BOTTOM, 'joggers are a bottom');
+eq(garmentKind({ category: '', name: 'SWEATPANTS' }), GARMENT.BOTTOM, 'sweatpants are a bottom');
+eq(BOTTOM_WAIST_SHAPES.join(','), 'slimmer,average,wider', 'the trouser waist has three answers');
+eq(SEAT_SHAPES.join(','), 'narrow,average,wider', 'the seat has three answers');
+
+section('25 — trouser waist estimate and chart');
+eq(estimateWaist({ height: 165, weight: 60 }), 74, '165/60 estimates a 74 cm waist');
+eq(estimateWaist({ height: 175, weight: 75 }), 82, '175/75 estimates an 82 cm waist');
+eq(estimateWaist({ height: 180, weight: 78 }), 84, '180/78 estimates an 84 cm waist');
+eq(estimateWaist({ height: 100, weight: 78 }), null, 'an impossible height has no waist');
+eq(WAIST_RANGES.M.join('-'), '81-85', 'the M waist range matches the size guide');
+
+const trouserBase = { height: 180, weight: 78, sizes: ['M', 'L', 'XL', 'XXL'] };
+const trouser = recommendSize({ ...trouserBase, fit: 'regular', garment: GARMENT.BOTTOM });
+eq(trouser.garment, GARMENT.BOTTOM, 'the result records the garment kind');
+eq(trouser.waist, 84, 'the result exposes the estimated waist');
+eq(trouser.size, 'M', 'an 84 cm waist picks M from the waist chart');
+eq(trouser.waistRange.join('-'), '81-85', 'the result exposes the waist range, not a chest range');
+ok(trouser.reason.includes('Waist ≈ 84 cm') && trouser.reason.includes('81–85 cm'),
+  'the trouser reason quotes the waist and the waist range');
+ok(!trouser.reason.toLowerCase().includes('chest'), 'the trouser reason never mentions a chest');
+
+const trouserSlim = recommendSize({ ...trouserBase, fit: 'slim', garment: GARMENT.BOTTOM });
+eq(trouserSlim.target, 81, 'a slim trouser targets a 3 cm smaller waist');
+eq(trouserSlim.size, 'M', 'the slim target stays inside M');
+const trouserRelaxed = recommendSize({ ...trouserBase, fit: 'relaxed', garment: GARMENT.BOTTOM });
+eq(trouserRelaxed.target, 88, 'a relaxed trouser adds 4 cm of ease');
+eq(trouserRelaxed.size, 'L', 'the relaxed target moves up to L');
+const trouserOversized = recommendSize({ ...trouserBase, fit: 'oversized', garment: GARMENT.BOTTOM });
+eq(trouserOversized.target, 92, 'an oversized trouser adds 8 cm');
+eq(trouserOversized.size, 'XL', 'the oversized target moves up to XL');
+
+const trouserScores = scoreSizes({ ...trouserBase, fit: 'regular', garment: GARMENT.BOTTOM });
+eq(trouserScores.garment, GARMENT.BOTTOM, 'scoring keeps the garment kind');
+eq(trouserScores.recommended, 'M', 'the trouser scores recommend M');
+eq(trouserScores.sizes.map((entry) => `${entry.label}:${entry.score}`).join(' '), 'M:83 L:47 XL:22 XXL:8',
+  'the trouser scores fall away from the waistband');
+ok(trouserScores.sizes.find((entry) => entry.recommended).reason.includes('waist estimate'),
+  'the trouser explanation names the waist estimate');
+
+// The chest answer cannot size a waistband, and a saved trouser waist answer
+// cannot move a shirt's chest.
+const chestNoise = recommendSize({
+  ...trouserBase, fit: 'regular', garment: GARMENT.BOTTOM,
+  bodyShape: { chest: 'broader', waist: 'average', seat: 'average' },
+});
+eq(chestNoise.size, trouser.size, 'a broader chest does not change a trouser size');
+eq(chestNoise.target, trouser.target, 'a broader chest does not change the trouser target');
+eq(shapeChestOffset({ chest: 'broader' }, GARMENT.BOTTOM), 0, 'a bottom ignores the chest offset entirely');
+const topWaistNoise = recommendSize({
+  ...trouserBase, fit: 'regular',
+  bodyShape: { chest: 'average', waist: 'wider', seat: 'average' },
+});
+const topPlain = recommendSize({ ...trouserBase, fit: 'regular' });
+eq(topWaistNoise.size, topPlain.size, 'a saved trouser waist answer does not move a shirt');
+eq(topWaistNoise.target, topPlain.target, 'the shirt target ignores the trouser waist answer');
+eq(shapeChestOffset({ waist: 'wider' }, GARMENT.TOP), 0, 'a top ignores the bottom waist answer');
+eq(shapeWeightOffset({ waist: 'wider' }, GARMENT.TOP), 0, 'a top ignores the bottom waist weight nudge');
+
+eq(shapeWaistOffset(BODY_SHAPE_DEFAULT), 0, 'average trouser answers never move the waist');
+eq(shapeWaistOffset({ waist: 'wider', seat: 'wider' }), 4, 'a wider waist and seat add 4 cm');
+eq(shapeWaistOffset({ waist: 'slimmer', seat: 'narrow' }), -4, 'a slimmer waist and narrow seat remove 4 cm');
+
+// Owner windows still outrank the chart for trousers.
+const trouserWindow = recommendSize({
+  ...trouserBase, fit: 'regular', garment: GARMENT.BOTTOM,
+  sizeRanges: { L: { minWeight: 70, maxWeight: 82, minHeight: 175, maxHeight: 185 } },
+});
+eq(trouserWindow.mode, 'ranges', 'owner windows still win for a trouser');
+eq(trouserWindow.size, 'L', 'the owner trouser window picks L');
+ok(trouserWindow.reason.includes('inside the L range') && !trouserWindow.reason.includes('waist'),
+  'an owner window explains itself in height and weight, not a guessed waist');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {
