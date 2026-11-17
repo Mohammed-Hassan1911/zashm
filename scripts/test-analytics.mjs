@@ -229,10 +229,11 @@ console.log('\n[Storage] cleanup safety with mocked Supabase only');
   const previousUrl = process.env.SUPABASE_URL;
   process.env.SUPABASE_URL = 'https://zashm-test.supabase.co';
   const image = (path) => `https://zashm-test.supabase.co/storage/v1/object/public/products/${path}`;
-  const makeSupabase = (rows, failingPaths = [], orderRows = []) => {
+  const makeSupabase = (rows, failingPaths = [], orderRows = [], reviewRows = []) => {
     const state = {
       rows: rows.map((row) => ({ ...row })),
       orderRows: orderRows.map((row) => ({ ...row })),
+      reviewRows: reviewRows.map((row) => ({ ...row })),
       attempts: [],
       removed: [],
       deleteCount: 0,
@@ -240,19 +241,29 @@ console.log('\n[Storage] cleanup safety with mocked Supabase only');
     };
     const client = {
       from(table) {
-        if (table !== 'products' && table !== 'orders') throw new Error(`Unexpected table: ${table}`);
-        const tableRows = () => table === 'products' ? state.rows : state.orderRows;
+        if (!['products', 'orders', 'product_reviews'].includes(table)) throw new Error(`Unexpected table: ${table}`);
+        const tableRows = () => table === 'products' ? state.rows : table === 'orders' ? state.orderRows : state.reviewRows;
         return {
-          select: () => ({
-            range: async (start, end) => {
-              state.ranges.push([start, end]);
-              return { data: tableRows().slice(start, end + 1).map((row) => ({ ...row })), error: null };
-            },
-          }),
+          select: () => {
+            const query = {
+              range: async (start, end) => {
+                state.ranges.push([start, end]);
+                return { data: tableRows().slice(start, end + 1).map((row) => ({ ...row })), error: null };
+              },
+              in: async (column, values) => ({
+                data: tableRows()
+                  .filter((row) => values.map(String).includes(String(row[column])))
+                  .map((row) => ({ ...row })),
+                error: null,
+              }),
+            };
+            return query;
+          },
           delete: () => ({
             in: async (_column, ids) => {
               state.deleteCount += 1;
               state.rows = state.rows.filter((row) => !ids.map(String).includes(String(row.id)));
+              state.reviewRows = state.reviewRows.filter((row) => !ids.map(String).includes(String(row.productId)));
               return { error: null };
             },
           }),
@@ -298,6 +309,29 @@ console.log('\n[Storage] cleanup safety with mocked Supabase only');
     eq(deleteState.deleteCount, 1, 'deletes product rows before storage cleanup');
     eq(deleteState.removed.sort(), ['back.webp', 'front.webp', 'guide.webp'], 'cleans all unique product and size-guide images');
     eq(deleted.shared, ['shared.webp'], 'keeps an image still used by another product');
+
+    const reviewPhoto = 'reviews/deleted/0123456789abcdef01234567.jpg';
+    const { client: productWithReviewClient, state: productWithReviewState } = makeSupabase(
+      [{ id: 'deleted', images: [] }],
+      [],
+      [],
+      [{ id: 9, productId: 'deleted', photoPath: reviewPhoto }],
+    );
+    const productWithReview = await deleteProductRows(productWithReviewClient, ['deleted'], [{ id: 'deleted', images: [] }]);
+    eq(productWithReviewState.reviewRows.length, 0, 'the product deletion cascades its review rows');
+    eq(productWithReviewState.removed, [reviewPhoto], 'deleting a product removes its cascaded review photo from Storage');
+    eq(productWithReview.reviewPhotosRemoved, [reviewPhoto], 'reports successful review photo cleanup');
+
+    const { client: reviewPhotoFailureClient, state: reviewPhotoFailureState } = makeSupabase(
+      [{ id: 'deleted', images: [] }],
+      [reviewPhoto],
+      [],
+      [{ id: 10, productId: 'deleted', photoPath: reviewPhoto }],
+    );
+    const reviewPhotoFailure = await deleteProductRows(reviewPhotoFailureClient, ['deleted'], [{ id: 'deleted', images: [] }]);
+    eq(reviewPhotoFailureState.deleteCount, 1, 'a Storage failure does not undo the product deletion');
+    eq(reviewPhotoFailure.reviewPhotosFailed, [reviewPhoto], 'reports the orphaned review photo after bounded retries');
+    eq(reviewPhotoFailureState.attempts.length, 3, 'retries review photo cleanup a bounded number of times');
 
     const { client: replaceClient, state: replaceState } = makeSupabase([
       { id: 'updated', images: [image('new.webp')], image: image('new.webp') },

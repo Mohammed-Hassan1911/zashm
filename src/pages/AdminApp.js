@@ -1772,7 +1772,10 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     setProductToDelete(null);
     try {
       const payload = await deleteProduct(target.id);
-      const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
+      const failed = [
+        ...((payload && payload.cleanup && payload.cleanup.failed) || []),
+        ...((payload && payload.cleanup && payload.cleanup.reviewPhotosFailed) || []),
+      ];
       const shared = (payload && payload.cleanup && payload.cleanup.shared) || [];
       if (failed.length) {
         toast.error(`Product deleted, but these images could not be cleaned up: ${cleanupPathSummary(failed)}. Try again later.`);
@@ -1795,7 +1798,10 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     setConfirmBulk(null);
     try {
       const payload = await bulkDeleteProducts(ids);
-      const failed = (payload && payload.cleanup && payload.cleanup.failed) || [];
+      const failed = [
+        ...((payload && payload.cleanup && payload.cleanup.failed) || []),
+        ...((payload && payload.cleanup && payload.cleanup.reviewPhotosFailed) || []),
+      ];
       const shared = (payload && payload.cleanup && payload.cleanup.shared) || [];
       if (failed.length) {
         toast.error(`Products deleted, but these images could not be cleaned up: ${cleanupPathSummary(failed)}. Try again later.`);

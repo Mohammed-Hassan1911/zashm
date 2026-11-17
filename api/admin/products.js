@@ -11,6 +11,8 @@ const {
   requirePerm,
   supabaseAdmin,
   validateProductPayload,
+  removeReviewPhoto,
+  isMissingColumnError,
   pathsFromProductImageFields,
   cleanupUnreferencedProductImages,
 } = require('../_lib');
@@ -299,12 +301,32 @@ async function listProducts(req, res) {
 //     reported back to the client so the UI never claims full success falsely.
 function deleteProductRows(sb, ids, rows) {
   const candidates = [...new Set(rows.flatMap((r) => pathsFromProductImageFields(r)))];
-  const cleanup = { removed: [], failed: [], shared: [] };
+  const cleanup = { removed: [], failed: [], shared: [], reviewPhotosRemoved: [], reviewPhotosFailed: [] };
 
   const run = async () => {
+    // Product deletion cascades its reviews. Capture their optional photo paths
+    // first so the corresponding Storage objects can be removed after the row
+    // delete succeeds. If the table/column is absent, this is an older schema
+    // with no review photos; any other read error must stop before deletion.
+    let reviewPhotoPaths = [];
+    const { data: reviewRows, error: reviewError } = await sb
+      .from('product_reviews')
+      .select('photoPath')
+      .in('productId', ids);
+    if (reviewError) {
+      const message = String(reviewError.message || '').toLowerCase();
+      const missingReviews = reviewError.code === '42P01'
+        || reviewError.code === 'PGRST205'
+        || /relation .*product_reviews.* does not exist|could not find the table .*product_reviews/i.test(message);
+      if (!missingReviews && !isMissingColumnError(reviewError, 'photoPath')) throw reviewError;
+    } else {
+      reviewPhotoPaths = [...new Set((reviewRows || []).map((review) => review.photoPath).filter(Boolean))];
+    }
+
+    const { error } = await sb.from('products').delete().in('id', ids);
+    if (error) throw error;
+
     if (candidates.length > 0) {
-      const { error } = await sb.from('products').delete().in('id', ids);
-      if (error) throw error;
       try {
         const result = await cleanupUnreferencedProductImages(sb, candidates);
         cleanup.removed = result.removed;
@@ -318,10 +340,20 @@ function deleteProductRows(sb, ids, rows) {
       for (const failed of cleanup.failed) {
         console.error(`Product delete: file still present after retries — ${failed}`);
       }
-      return cleanup;
     }
-    const { error } = await sb.from('products').delete().in('id', ids);
-    if (error) throw error;
+
+    for (const path of reviewPhotoPaths) {
+      try {
+        if (await removeReviewPhoto(sb, path)) cleanup.reviewPhotosRemoved.push(path);
+        else cleanup.reviewPhotosFailed.push(path);
+      } catch (cleanupError) {
+        cleanup.reviewPhotosFailed.push(path);
+        console.error('Product review photo cleanup failed after product deletion:', cleanupError && cleanupError.message);
+      }
+    }
+    for (const failed of cleanup.reviewPhotosFailed) {
+      console.error(`Product delete: review photo still present after retries — ${failed}`);
+    }
     return cleanup;
   };
 
