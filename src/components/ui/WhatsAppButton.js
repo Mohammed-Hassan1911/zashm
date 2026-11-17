@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 
@@ -6,48 +6,7 @@ const WHATSAPP_NUMBER = '201013380313'; // store support line (01013380313)
 const MESSAGE = 'Hello ZASHM, I would like to know more about your collection.';
 
 export default function WhatsAppButton() {
-  const [side, setSide] = useState('left');
   const href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(MESSAGE)}`;
-
-  useEffect(() => {
-    const updateSide = () => {
-      const mobile = window.innerWidth <= 768;
-      const size = mobile ? 44 : 52;
-      const offset = mobile ? 84 : 24;
-      const edge = mobile ? 16 : 24;
-      const y = window.innerHeight - offset - size;
-      const cards = [...document.querySelectorAll('.product-collection-grid .product-card')]
-        .map((card) => card.getBoundingClientRect())
-        .filter((rect) => rect.bottom > y && rect.top < y + size);
-      const overlap = (x) => cards.reduce((total, rect) => {
-        const width = Math.max(0, Math.min(x + size, rect.right) - Math.max(x, rect.left));
-        const height = Math.max(0, Math.min(y + size, rect.bottom) - Math.max(y, rect.top));
-        return total + width * height;
-      }, 0);
-      const leftOverlap = overlap(edge);
-      const rightOverlap = overlap(window.innerWidth - edge - size);
-      const nextSide = rightOverlap < leftOverlap ? 'right' : 'left';
-      setSide((current) => current === nextSide ? current : nextSide);
-    };
-
-    let frame = 0;
-    const scheduleUpdate = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(updateSide);
-    };
-    const observer = new MutationObserver(scheduleUpdate);
-    observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('resize', scheduleUpdate, { passive: true });
-    window.addEventListener('scroll', scheduleUpdate, { passive: true });
-    scheduleUpdate();
-
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener('resize', scheduleUpdate);
-      window.removeEventListener('scroll', scheduleUpdate);
-    };
-  }, []);
 
   return createPortal(
     <motion.a
@@ -60,7 +19,6 @@ export default function WhatsAppButton() {
       whileHover={{ scale: 1.08, backgroundColor: 'var(--gold)', color: 'var(--bg)' }}
       whileTap={{ scale: 0.92 }}
       className="whatsapp-fab"
-      data-side={side}
       style={{
         borderRadius: '50%',
         background: 'var(--bg)', color: 'var(--gold)', border: '1px solid var(--gold)',

@@ -1309,11 +1309,6 @@ select option { background: var(--bg3); }
   height: 52px;
 }
 
-.whatsapp-fab[data-side="right"] {
-  left: auto;
-  right: calc(24px + env(safe-area-inset-right, 0px));
-}
-
 .size-guide-overlay {
   align-items: center;
   box-sizing: border-box;
@@ -1370,9 +1365,6 @@ select option { background: var(--bg3); }
     right: auto;
     width: 44px;
     height: 44px;
-  }
-  .whatsapp-fab[data-side="right"] {
-    right: calc(16px + env(safe-area-inset-right, 0px));
   }
   .back-to-top svg {
     width: 16px;

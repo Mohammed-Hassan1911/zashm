@@ -495,9 +495,10 @@ console.log('\n[9] floating actions stay accessible');
   ok(/\.back-to-top svg\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px/.test(css) &&
      /\.whatsapp-fab svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px/.test(css),
     'mobile floating icons shrink proportionally');
-  ok(/data-side=\{side\}/.test(whatsapp) && /rightOverlap < leftOverlap/.test(whatsapp) &&
-     /\.whatsapp-fab\[data-side="right"\]/.test(css),
-    'mobile WhatsApp placement moves to the side with less product-card overlap');
+  ok(!/data-side|setSide|leftOverlap|rightOverlap/.test(whatsapp) &&
+     !/\.whatsapp-fab\[data-side="right"\]/.test(css) &&
+     /\.whatsapp-fab\s*\{[^}]*left:\s*calc\(16px \+ env\(safe-area-inset-left/.test(css),
+    'WhatsApp stays on the left, separate from the right-side scroll-to-top button');
 }
 
 // ─── [10] public SEO and empty checkout accessibility ────────────────────────
