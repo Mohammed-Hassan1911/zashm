@@ -2124,6 +2124,7 @@ main, [role="main"] {
   .size-finder-next,
   .size-finder-back,
   .size-finder-chip,
+  .size-finder-close,
   .size-finder-slider::-webkit-slider-thumb,
   .size-finder-slider::-moz-range-thumb {
     transition: none;
@@ -2132,8 +2133,21 @@ main, [role="main"] {
   .size-finder-trigger:hover,
   .size-finder-trigger:focus-visible,
   .size-finder-next:hover:not(:disabled),
-  .size-finder-chip:hover {
+  .size-finder-chip:hover,
+  .size-finder-close:hover,
+  .size-finder-close:focus-visible {
     transform: none;
+  }
+
+  .size-finder-gauge-halo,
+  .size-finder-figure-focus,
+  .size-finder-result > * {
+    animation: none;
+  }
+
+  .size-finder-progress-seg[data-current='true']::after,
+  .size-finder-next::after {
+    display: none;
   }
 
   .size-finder-figure {
@@ -2641,16 +2655,15 @@ main, [role="main"] {
 .size-finder-dialog {
   --sf-pad: clamp(16px, 4vw, 26px);
   position: relative;
+  /* A fixed header needs a non-scrolling shell: the dialog is a flex column,
+     the head and progress never move, and only .size-finder-scroll scrolls. */
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 860px;
   max-height: calc(100dvh - clamp(16px, 6vw, 48px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-color: var(--gold) rgba(255, 255, 255, 0.08);
-  scrollbar-width: thin;
+  overflow: hidden;
   box-sizing: border-box;
-  padding: var(--sf-pad);
   border: 1px solid rgba(201, 168, 76, 0.32);
   border-radius: 10px;
   background:
@@ -2659,50 +2672,50 @@ main, [role="main"] {
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.75), 0 0 34px rgba(201, 168, 76, 0.08);
   outline: none;
 }
-.size-finder-dialog::-webkit-scrollbar {
-  width: 8px;
-}
-.size-finder-dialog::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-}
-.size-finder-dialog::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #e8c870, #a98736);
-  border: 2px solid #11100d;
-  border-radius: 999px;
-}
-.size-finder-dialog::-webkit-scrollbar-thumb:hover {
-  background: #f0d783;
-}
 
 .size-finder-dialog::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
+  z-index: 4;
   height: 1px;
   background: linear-gradient(90deg, rgba(201, 168, 76, 0) 0%, rgba(232, 200, 112, 0.75) 50%, rgba(201, 168, 76, 0) 100%);
+  pointer-events: none;
+}
+
+/* The one scrolling region. The header above it stays put while this moves. */
+.size-finder-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-color: var(--gold) rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
+  padding: 0 var(--sf-pad) var(--sf-pad);
+}
+.size-finder-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.size-finder-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+.size-finder-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #e8c870, #a98736);
+  border: 2px solid #11100d;
+  border-radius: 999px;
+}
+.size-finder-scroll::-webkit-scrollbar-thumb:hover {
+  background: #f0d783;
 }
 
 .size-finder-head {
-  /* Pinned inside the scrolling dialog so the close control is reachable even
-     when a phone sheet is scrolled to its tallest step. The gradient fades the
-     pinned edge instead of cutting the content with a hard line. */
-  position: sticky;
-  /* The negative offset lets the pinned bar cover the dialog's top padding,
-     which otherwise lets a sliver of scrolling content peek above it. */
-  top: calc(-1 * var(--sf-pad, 16px));
-  z-index: 3;
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin: 0 -4px 10px;
-  padding: 4px 4px 8px;
-  background: linear-gradient(
-    180deg,
-    rgba(14, 13, 10, 0.95) 0%,
-    rgba(13, 12, 10, 0.88) 74%,
-    rgba(13, 12, 10, 0) 100%
-  );
+  padding: var(--sf-pad) var(--sf-pad) 0;
 }
 
 .size-finder-head-text {
@@ -2711,21 +2724,30 @@ main, [role="main"] {
 }
 
 .size-finder-eyebrow {
-  display: block;
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 1.4px;
+  letter-spacing: 1.9px;
   text-transform: uppercase;
   color: var(--gold);
 }
 
+.size-finder-eyebrow-rule {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.12), rgba(232, 200, 112, 0.9));
+}
+
 .size-finder-dialog-title {
-  margin: 4px 0 0;
+  margin: 11px 0 0;
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: clamp(22px, 5.4vw, 30px);
-  line-height: 1.15;
-  letter-spacing: 0.4px;
+  font-size: clamp(24px, 5.6vw, 33px);
+  line-height: 1.08;
+  letter-spacing: 0.3px;
   color: var(--text);
   outline: none;
 }
@@ -2735,37 +2757,55 @@ main, [role="main"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  margin-top: -2px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text3);
-  transition: border-color 0.2s, color 0.2s, background 0.2s;
+  transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
 }
 .size-finder-close:hover,
 .size-finder-close:focus-visible {
   border-color: var(--gold);
   color: var(--gold);
   background: rgba(201, 168, 76, 0.08);
+  transform: rotate(90deg);
   outline: none;
 }
 
 .size-finder-progress {
+  flex: 0 0 auto;
   display: flex;
   gap: 6px;
-  margin: 0 0 16px;
+  margin: 0;
+  padding: 15px var(--sf-pad) 14px;
 }
 .size-finder-progress-seg {
+  position: relative;
+  overflow: hidden;
   flex: 1 1 0;
   height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.09);
-  transition: background 0.35s;
+  transition: background 0.35s, box-shadow 0.35s;
 }
 .size-finder-progress-seg[data-done='true'] {
   background: linear-gradient(90deg, var(--gold-dark), var(--gold-light));
   box-shadow: 0 0 10px rgba(201, 168, 76, 0.35);
+}
+.size-finder-progress-seg[data-current='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: size-finder-progress-sweep 2.4s ease-in-out infinite;
+}
+
+@keyframes size-finder-progress-sweep {
+  0% { transform: translateX(-110%); }
+  60%, 100% { transform: translateX(110%); }
 }
 
 /* ── Layout: figure beside the questions ───────────────────────────────────── */
@@ -2796,6 +2836,15 @@ main, [role="main"] {
   width: auto;
   max-width: 100%;
   display: block;
+}
+
+/* The dashed ring around the region the current question asks about. */
+.size-finder-figure-focus {
+  animation: size-finder-focus-breathe 2.6s ease-in-out infinite;
+}
+@keyframes size-finder-focus-breathe {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.95; }
 }
 
 .size-finder-figure-facts {
@@ -2958,6 +3007,7 @@ main, [role="main"] {
 }
 
 .size-finder-choice {
+  position: relative;
   display: grid;
   gap: 2px;
   min-height: 48px;
@@ -2967,11 +3017,12 @@ main, [role="main"] {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.015);
   color: var(--text2);
-  transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.2s;
+  transition: border-color 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
 }
 .size-finder-choice:hover {
   border-color: rgba(201, 168, 76, 0.55);
   color: var(--text);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
 }
 .size-finder-choice:focus-visible {
   outline: none;
@@ -2982,7 +3033,18 @@ main, [role="main"] {
   border-color: var(--gold);
   background: linear-gradient(160deg, rgba(201, 168, 76, 0.16), rgba(201, 168, 76, 0.05));
   color: var(--gold-light);
-  box-shadow: inset 0 0 0 1px rgba(201, 168, 76, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(201, 168, 76, 0.18), 0 0 18px rgba(201, 168, 76, 0.1);
+}
+/* A slim gold spine on the chosen answer, so the selection reads at a glance. */
+.size-finder-choice[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--gold-light), var(--gold-dark));
 }
 
 .size-finder-choice-title {
@@ -3019,6 +3081,8 @@ main, [role="main"] {
 }
 
 .size-finder-next {
+  position: relative;
+  overflow: hidden;
   flex: 1 1 150px;
   display: inline-flex;
   align-items: center;
@@ -3034,11 +3098,25 @@ main, [role="main"] {
   font-weight: 700;
   letter-spacing: 1.4px;
   text-transform: uppercase;
-  transition: filter 0.2s, transform 0.2s, opacity 0.2s;
+  transition: filter 0.2s, transform 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+/* A single light pass across the gold on hover. */
+.size-finder-next::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.42) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.size-finder-next:hover:not(:disabled)::after {
+  transform: translateX(120%);
 }
 .size-finder-next:hover:not(:disabled) {
   filter: brightness(1.08);
   transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(201, 168, 76, 0.22);
 }
 .size-finder-next:focus-visible {
   outline: none;
@@ -3080,13 +3158,52 @@ main, [role="main"] {
   gap: 12px;
 }
 
+/* The result arrives in layers: gauge first, then the verdict, then the
+   explanation and the size chips. Purely visual, and switched off below. */
+.size-finder-result > * {
+  animation: size-finder-result-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.size-finder-result > *:nth-child(2) { animation-delay: 0.05s; }
+.size-finder-result > *:nth-child(3) { animation-delay: 0.1s; }
+.size-finder-result > *:nth-child(4) { animation-delay: 0.15s; }
+.size-finder-result > *:nth-child(5) { animation-delay: 0.2s; }
+.size-finder-result > *:nth-child(6) { animation-delay: 0.25s; }
+.size-finder-result > *:nth-child(7) { animation-delay: 0.3s; }
+.size-finder-result > *:nth-child(n + 8) { animation-delay: 0.34s; }
+
+@keyframes size-finder-result-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
 .size-finder-gauge {
   position: relative;
   width: clamp(148px, 42vw, 186px);
   aspect-ratio: 1;
   margin: 2px auto 0;
 }
+/* A slow comet of light behind the ring, so the result feels lit rather than
+   printed. Sits behind the svg and ignores pointer events. */
+.size-finder-gauge-halo {
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(201, 168, 76, 0) 0deg,
+    rgba(232, 200, 112, 0.3) 55deg,
+    rgba(201, 168, 76, 0) 130deg,
+    rgba(201, 168, 76, 0) 360deg
+  );
+  filter: blur(10px);
+  animation: size-finder-halo-spin 7s linear infinite;
+  pointer-events: none;
+}
+@keyframes size-finder-halo-spin {
+  to { transform: rotate(360deg); }
+}
 .size-finder-gauge svg {
+  position: relative;
   width: 100%;
   height: 100%;
   display: block;
@@ -3316,10 +3433,13 @@ main, [role="main"] {
     max-width: 100%;
     max-height: 92dvh;
     border-radius: 14px 14px 0 0;
-    /* A little breathing room under the last control, so the sheet never ends
-       flush against the screen edge. */
+  }
+
+  /* A little breathing room under the last control, so the sheet never ends
+     flush against the screen edge. */
+  .size-finder-scroll {
     padding-bottom: calc(
-      clamp(16px, 4vw, 26px) + env(safe-area-inset-bottom, 0px) + 24px
+      var(--sf-pad) + env(safe-area-inset-bottom, 0px) + 24px
     );
   }
 
@@ -3345,8 +3465,31 @@ main, [role="main"] {
     justify-self: end;
   }
 
-  .size-finder-next,
-  .size-finder-back {
+  /* Back stays a compact pill beside Next instead of stacking above it. */
+  .size-finder-actions {
+    flex-wrap: nowrap;
+    margin-top: 12px;
+  }
+
+  .size-finder-actions .size-finder-next {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 12px;
+  }
+
+  .size-finder-actions .size-finder-back {
+    flex: 0 0 auto;
+    padding: 0 14px;
+  }
+
+  /* The result has no Back: Select size gets the full width, Size guide sits
+     underneath it. */
+  .size-finder-actions-result {
+    flex-wrap: wrap;
+  }
+
+  .size-finder-actions-result .size-finder-next,
+  .size-finder-actions-result .size-finder-back {
     flex: 1 1 100%;
   }
 }

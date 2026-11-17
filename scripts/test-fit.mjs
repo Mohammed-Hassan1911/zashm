@@ -296,10 +296,20 @@ ok(!finder.includes('Why this size?') && !finder.includes('size-finder-compariso
 ok(finder.includes('resultProfile'), 'the collapsed facts come from the profile that produced the result');
 ok(finder.includes('const [result, setResult] = useState(null)'),
   'no recommendation exists before the shopper submits');
-ok(finder.includes('const hasResult = Boolean(result) && step === 3;'),
+ok(finder.includes('const hasResult = Boolean(result) && step === RESULT_STEP;'),
   'the result only shows on the last step');
-ok(finder.includes("const stepTitles = ["), 'the flow has three questions');
-ok((finder.match(/\{step === \d && \(/g) || []).length === 3, 'three step panels are rendered');
+ok(finder.includes('const QUESTION_COUNT = 4;') && finder.includes('const RESULT_STEP = QUESTION_COUNT;'),
+  'the flow declares four questions plus a result');
+ok(finder.includes("const stepTitles = ["), 'the flow has four questions');
+ok((finder.match(/\{step === \d && \(/g) || []).length === 4, 'four step panels are rendered');
+ok(finder.includes('step === 1') && finder.includes('step === 2') && finder.includes('step === 3'),
+  'chest, waist and fit each get their own panel');
+const chestPanel = finder.slice(finder.indexOf('key="step-chest"'), finder.indexOf('key="step-waist"'));
+const waistPanel = finder.slice(finder.indexOf('key="step-waist"'), finder.indexOf('key="step-fit"'));
+ok(chestPanel.includes('CHEST_SHAPES.map') && !chestPanel.includes('WAIST_SHAPES.map'),
+  'the chest step asks only about the chest');
+ok(waistPanel.includes('WAIST_SHAPES.map') && !waistPanel.includes('CHEST_SHAPES.map'),
+  'the waist step asks only about the waist');
 ok(finder.includes('Find my size'), 'the CTA says what the shopper gets');
 ok(/label="Height in centimetres"/.test(finder) && /label="Weight in kilograms"/.test(finder),
   'the numeric fields name their unit');
@@ -329,6 +339,8 @@ ok(finder.includes('CHEST_SHAPES.map') && finder.includes('WAIST_SHAPES.map'),
   'chest and waist are both asked');
 ok(finder.includes('FIT_OPTIONS.map'), 'fit is asked');
 ok(finder.includes('FIT_HINTS[option]'), 'every fit choice explains itself in place');
+ok(finder.includes('onClick={() => setFit(option)}') && !finder.includes('showRecommendation(option)'),
+  'the fit step is a normal choice: tapping an answer only selects it');
 ok(finder.includes('BodySilhouette'), 'the live drawing is its own component');
 ok(/transform: `scale\(\$\{widthScale\.toFixed\(3\)\}, \$\{heightScale\.toFixed\(3\)\}\)`/.test(finder),
   'the drawing scales with the slider values');
@@ -345,7 +357,9 @@ ok(finder.includes('Best available in this colour'),
   'a stock swap is labelled as the best available size, not a rough estimate');
 ok(finder.includes('result?.decision?.swappedForStock'), 'the band knows about the stock swap');
 ok(finder.includes('{entry.score}/100'), 'every size chip shows a score out of 100');
-ok(finder.includes('showRecommendation(option)'), 'choosing a fit immediately shows the recommendation');
+ok(finder.includes('goNext') && /if \(step < RESULT_STEP - 1\)/.test(finder) &&
+   finder.includes('setStep(RESULT_STEP);'),
+  'Next advances the questions and only the last one reveals the result');
 ok(!finder.includes("{step < 2 ? 'Next' : 'Find my size'}"), 'the last-step submit button is removed');
 ok(finder.includes('onClick={() => setActiveSize(entry.label)}'),
   'the shopper can switch between sizes');
@@ -355,14 +369,16 @@ ok(/\.size-finder-restart\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*5px/
   'Start over has a visible, polished border');
 ok(finder.includes('className="size-finder-explanation"') &&
    finder.includes('${entry.label} fits better (${entry.score}/100 vs ${shown.score}/100)') &&
-   finder.includes('setResultProfile({ height, weight, chest, waist, fit: fitPreference })') && finder.includes('onClick={goBack}'),
-  'the reason changes with the chosen size and Back is available at the result actions');
+   finder.includes('setResultProfile({ height, weight, chest, waist, fit: fitPreference })'),
+  'the reason changes with the chosen size');
 ok(finder.includes('Next closest is ${closest.label} at ${closest.score}/100'),
   'the comparison names the closest alternative without repeating the score above');
-const resultActionsStart = finder.lastIndexOf('<div className="size-finder-actions">');
+const resultActionsStart = finder.indexOf('size-finder-actions size-finder-actions-result');
 const resultActions = finder.slice(resultActionsStart, resultActionsStart + 1800);
-ok(resultActions.includes('Back') && resultActions.includes('Select size ${shown.label}') && resultActions.includes('Size guide'),
-  'Back, Select size and Size guide share the final action group');
+ok(!resultActions.includes('goBack') && !resultActions.includes('>Back'),
+  'the result no longer offers a Back control');
+ok(resultActions.includes('Select size ${shown.label}') && resultActions.includes('Size guide'),
+  'Select size and Size guide share the final action group');
 ok(finder.includes('role="dialog"') && finder.includes('aria-modal="true"'),
   'the flow is a modal dialog');
 ok(finder.includes("event.key === 'Escape'"), 'Escape closes the dialog');
@@ -371,11 +387,11 @@ ok(finder.includes("html.style.overflow = 'hidden'") && finder.includes("body.st
    finder.includes('window.scrollTo(0, scrollY)') && finder.includes("body.classList.add('size-finder-open')") &&
    finder.includes("body.classList.remove('size-finder-open')"),
   'opening the finder freezes the page and closing it restores the exact scroll position');
-eq((finder.match(/window\.scrollTo\(0, scrollY\)/g) || []).length, 1,
-  'the saved scroll position is restored once, without a second animated correction');
+ok(/window\.requestAnimationFrame\?\.\(\(\) => window\.scrollTo\(0, scrollY\)\)/.test(finder),
+  'the saved scroll position is re-asserted after the un-fixed page has been laid out');
 ok(finder.indexOf('window.scrollTo(0, scrollY)') < finder.indexOf('html.style.scrollBehavior = previous.htmlScrollBehavior'),
   'scroll is restored before global smooth scrolling is re-enabled');
-ok(/\.size-finder-dialog\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s.test(css) &&
+ok(/\.size-finder-scroll\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s.test(css) &&
    /\.size-finder-overlay\s*\{[^}]*overscroll-behavior:\s*none;/s.test(css),
   'scroll stays inside the finder instead of chaining to the page behind it');
 ok(finder.includes('onDialogKeyDown'), 'Tab stays inside the dialog');
@@ -397,9 +413,27 @@ ok(css.includes('100dvh'), 'the dialog fits the visible viewport on mobile brows
 ok(css.includes('env(safe-area-inset-bottom'), 'the sheet clears the phone safe area');
 ok(/body\.size-finder-open \.whatsapp-fab\s*\{[^}]*visibility:\s*hidden/.test(css),
   'WhatsApp is hidden only while the size finder is open');
-ok(/\.size-finder-dialog::-webkit-scrollbar-thumb\s*\{[^}]*linear-gradient\(180deg, #e8c870, #a98736\)/.test(css) &&
-   /\.size-finder-dialog\s*\{[^}]*scrollbar-color:\s*var\(--gold\)/s.test(css),
+ok(/\.size-finder-scroll::-webkit-scrollbar-thumb\s*\{[^}]*linear-gradient\(180deg, #e8c870, #a98736\)/.test(css) &&
+   /\.size-finder-scroll\s*\{[^}]*scrollbar-color:\s*var\(--gold\)/s.test(css),
   'the finder scrollbar is gold on standard and WebKit browsers');
+ok(/\.size-finder-dialog\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;/s.test(css),
+  'the dialog is a fixed shell and only its body scrolls');
+ok(/\.size-finder-scroll\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/s.test(css),
+  'the scrolling body fills the space under the fixed header');
+ok(finder.indexOf('className="size-finder-head"') < finder.indexOf('className="size-finder-scroll"') &&
+   finder.includes('data-done={(hasResult || index <= step) ? \'true\' : \'false\'}'),
+  'the header and progress sit outside the scrolling area and stay visible on the result');
+ok((finder.match(/className="size-finder-progress-seg"/g) || []).length === 1 &&
+   /Array\.from\(\{ length: QUESTION_COUNT \}/.test(finder),
+  'the progress shows one segment per question');
+ok(/\.size-finder-result > \*\s*\{[^}]*animation:\s*size-finder-result-rise/.test(css),
+  'the result reveals itself in layers');
+ok(css.includes('.size-finder-gauge-halo') && css.includes('@keyframes size-finder-halo-spin'),
+  'the result gauge is lit by a slow halo');
+ok(css.includes('.size-finder-figure-focus') && css.includes('@keyframes size-finder-focus-breathe'),
+  'the drawing rings the region the current question asks about');
+ok(finder.includes('focus={figureFocus}') && finder.includes("const figureFocus = step === 1 ? 'chest' : step === 2 ? 'waist' : null;"),
+  'the chest and waist steps each highlight their own region');
 ok(/html\s*\{[^}]*scrollbar-color:\s*var\(--gold\) var\(--bg2\)/s.test(css) &&
    /::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--gold\)/.test(css),
   'the site-wide scrollbar is gold outside the finder too');
@@ -418,6 +452,16 @@ ok(/\.size-finder-restart\s*\{[^}]*animation:\s*size-finder-restart-shine/.test(
 ok(css.includes('@media (prefers-reduced-motion: reduce)') &&
    /\.size-finder-restart\s*\{\s*animation:\s*none/s.test(css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))),
   'the shine respects reduced-motion preferences');
+const reducedCss = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+ok(/\.size-finder-gauge-halo,[\s\S]{0,120}\.size-finder-result > \*\s*\{\s*animation:\s*none/.test(reducedCss),
+  'the new finder animations stop for reduced-motion users');
+ok(/\.size-finder-progress-seg\[data-current='true'\]::after,[\s\S]{0,80}\.size-finder-next::after\s*\{\s*display:\s*none/.test(reducedCss),
+  'the progress sweep and button sheen are removed for reduced-motion users');
+ok(/\.size-finder-actions\s*\{[^}]*flex-wrap:\s*nowrap/s.test(phoneCss) &&
+   /\.size-finder-actions-result\s*\{[^}]*flex-wrap:\s*wrap/s.test(phoneCss),
+  'phones keep Back beside Next, while the result stacks its two controls');
+ok(finder.includes('size-finder-actions size-finder-actions-result'),
+  'the result action group is marked so phones can stack it');
 const toolMarkers = ['open' + 'code', 'chat' + 'gpt', 'clau' + 'de', 'co' + 'pilot'];
 ok(!toolMarkers.some((marker) => finder.toLowerCase().includes(marker)), 'no tooling wording ships in the finder');
 

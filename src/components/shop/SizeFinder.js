@@ -62,6 +62,12 @@ const WAIST_HINTS = {
 const CHEST_WIDTH = { slimmer: 0.88, average: 1, broader: 1.12 };
 const WAIST_WIDTH = { flatter: 0.9, average: 1, rounder: 1.11 };
 
+// Height/weight, chest, waist, fit — then the result. Keeping the result off the
+// question count means "Step 4 of 4" stays honest while the last panel is a
+// normal choice page with a normal Next button.
+const QUESTION_COUNT = 4;
+const RESULT_STEP = QUESTION_COUNT;
+
 // Score bands, so the number also reads as a sentence. The thresholds follow
 // the scoring model: 88+ means the shopper sits near the middle of the size's
 // own window, 52–71 means the window covers them but close to an edge. When the
@@ -95,10 +101,12 @@ function clamp(value, min, max) {
  *
  * Height and weight scale the whole figure (taller, wider); the chest and waist
  * answers reshape the torso path itself, so the two extra questions are visible
- * rather than abstract. Everything is driven by the current slider values, so
- * the drawing and the recommendation can never drift apart.
+ * rather than abstract. `focus` rings the region the current question is about,
+ * which turns the drawing into a live explanation instead of decoration.
+ * Everything is driven by the current answers, so the drawing and the
+ * recommendation can never drift apart.
  */
-function BodySilhouette({ height, weight, chest, waist, reduceMotion }) {
+function BodySilhouette({ height, weight, chest, waist, focus, reduceMotion }) {
   const span = BODY_LIMITS.maxHeight - BODY_LIMITS.minHeight;
   const weightSpan = BODY_LIMITS.maxWeight - BODY_LIMITS.minWeight;
   const heightScale = 0.82 + ((height - BODY_LIMITS.minHeight) / span) * 0.36;
@@ -190,6 +198,44 @@ function BodySilhouette({ height, weight, chest, waist, reduceMotion }) {
           strokeLinejoin="round"
         />
 
+        {/* The region the current question is about, so the answer has a place. */}
+        {focus === 'chest' && (
+          <g className="size-finder-figure-focus">
+            <ellipse
+              cx={cx}
+              cy={chestY - 2}
+              rx={chestHalf + 9}
+              ry="15"
+              fill="none"
+              stroke="var(--gold-light)"
+              strokeWidth="1.1"
+              strokeDasharray="4 4"
+            />
+            <line x1={cx - chestHalf - 16} y1={chestY - 2} x2={cx - chestHalf - 9} y2={chestY - 2}
+              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+            <line x1={cx + chestHalf + 9} y1={chestY - 2} x2={cx + chestHalf + 16} y2={chestY - 2}
+              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+          </g>
+        )}
+        {focus === 'waist' && (
+          <g className="size-finder-figure-focus">
+            <ellipse
+              cx={cx}
+              cy={waistY - 2}
+              rx={waistHalf + 9}
+              ry="13"
+              fill="none"
+              stroke="var(--gold-light)"
+              strokeWidth="1.1"
+              strokeDasharray="4 4"
+            />
+            <line x1={cx - waistHalf - 16} y1={waistY - 2} x2={cx - waistHalf - 9} y2={waistY - 2}
+              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+            <line x1={cx + waistHalf + 9} y1={waistY - 2} x2={cx + waistHalf + 16} y2={waistY - 2}
+              stroke="var(--gold-light)" strokeWidth="1" opacity="0.7" />
+          </g>
+        )}
+
         {/* Arms */}
         <line x1={cx - shoulderHalf - 2} y1={shoulderY + 4} x2={cx - shoulderHalf - 8} y2={hipY + 16}
           stroke="var(--gold)" strokeWidth="6" strokeLinecap="round" opacity="0.42" />
@@ -214,6 +260,7 @@ function MatchGauge({ size, score, reduceMotion }) {
 
   return (
     <div className="size-finder-gauge">
+      <span className="size-finder-gauge-halo" aria-hidden="true" />
       <svg viewBox="0 0 132 132" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="zshm-gauge-gold" x1="0" y1="0" x2="1" y2="1">
@@ -306,30 +353,40 @@ function NumberField({ value, min, max, unit, label, onChange }) {
   );
 }
 
-/** One option in a choice group. */
-function Choice({ active, onClick, title, hint }) {
+/** One option in a choice group. Choices arrive one after another so a step
+ *  reads as a short list being laid out, not a wall of buttons appearing. */
+function Choice({ active, onClick, title, hint, index = 0, reduceMotion }) {
   return (
-    <button
+    <motion.button
       type="button"
       aria-pressed={active}
       onClick={onClick}
       className="size-finder-choice"
       data-active={active ? 'true' : 'false'}
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { duration: 0.38, delay: 0.06 + index * 0.07, ease: [0.22, 1, 0.36, 1] }
+      }
+      whileHover={reduceMotion ? undefined : { y: -2 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.99 }}
     >
       <span className="size-finder-choice-title">{title}</span>
       <span className="size-finder-choice-hint">{hint}</span>
-    </button>
+    </motion.button>
   );
 }
 
 /**
- * "Find my size" — a three-question flow that ends in an estimated match score.
+ * "Find my size" — a four-question flow that ends in an estimated match score.
  *
- * Height and weight come first because they do most of the work; the chest and
- * waist questions only break ties between neighbouring sizes, and the fit
+ * Height and weight come first because they do most of the work; chest and waist
+ * each get their own step so the two answers can never be confused, and the fit
  * preference applies the shopper's own taste on top. Nothing is computed until
- * the shopper reaches the last step, and nothing is restored on load: a refresh
- * always starts from the first question.
+ * the shopper presses Next on the last question, and nothing is restored on
+ * load: a refresh always starts from the first question.
  */
 export default function SizeFinder({
   sizes = [],
@@ -345,6 +402,7 @@ export default function SizeFinder({
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
+  const [direction, setDirection] = useState(1);
   const [height, setHeight] = useState(saved ? clamp(saved.height, BODY_LIMITS.minHeight, BODY_LIMITS.maxHeight) : 175);
   const [weight, setWeight] = useState(saved ? clamp(saved.weight, BODY_LIMITS.minWeight, BODY_LIMITS.maxWeight) : 75);
   const [chest, setChest] = useState(saved?.bodyShape?.chest || 'average');
@@ -361,6 +419,7 @@ export default function SizeFinder({
   const backgroundScrollRef = useRef(0);
 
   const close = useCallback(() => {
+    setError('');
     setOpen(false);
     if (typeof window !== 'undefined') {
       const node = restoreFocusRef.current;
@@ -373,7 +432,13 @@ export default function SizeFinder({
   useEffect(() => {
     if (!open) return undefined;
 
-    const scrollY = backgroundScrollRef.current;
+    // Read the live offset here as well as at click time: the click handler can
+    // run before a smooth scroll has settled, while this effect always sees the
+    // position the shopper is actually looking at.
+    const liveY = typeof window.scrollY === 'number' ? window.scrollY : window.pageYOffset;
+    const scrollY = Number.isFinite(liveY) ? liveY : backgroundScrollRef.current;
+    backgroundScrollRef.current = scrollY;
+
     const html = document.documentElement;
     const body = document.body;
     const lockedWidth = html.clientWidth;
@@ -420,6 +485,10 @@ export default function SizeFinder({
       body.style.right = previous.bodyRight;
       body.style.width = previous.bodyWidth;
       window.scrollTo(0, scrollY);
+      // Un-fixing the body and re-enabling the root scroller can clamp the
+      // offset for a frame on mobile browsers. Re-assert it once the layout has
+      // settled so the shopper lands exactly where they opened the finder.
+      window.requestAnimationFrame?.(() => window.scrollTo(0, scrollY));
       html.style.scrollBehavior = previous.htmlScrollBehavior;
       body.classList.remove('size-finder-open');
       document.removeEventListener('keydown', onKeyDown);
@@ -456,13 +525,14 @@ export default function SizeFinder({
     setResult(next);
     setResultProfile({ height, weight, chest, waist, fit: fitPreference });
     setActiveSize(next.recommended);
-    setStep(3);
+    setStep(RESULT_STEP);
     saveFitProfile({ height, weight, fit: fitPreference, bodyShape: { chest, waist } }, readStorage());
   };
 
   const goNext = () => {
     setError('');
-    if (step < 2) {
+    if (step < RESULT_STEP - 1) {
+      setDirection(1);
       setStep(step + 1);
       return;
     }
@@ -471,6 +541,7 @@ export default function SizeFinder({
 
   const goBack = () => {
     setError('');
+    setDirection(-1);
     setStep((value) => Math.max(0, value - 1));
   };
 
@@ -478,6 +549,8 @@ export default function SizeFinder({
     setResult(null);
     setResultProfile(null);
     setActiveSize(null);
+    setError('');
+    setDirection(-1);
     setStep(0);
   };
 
@@ -538,14 +611,27 @@ export default function SizeFinder({
   const profileLine = resultProfile
     ? `${resultProfile.height} cm · ${resultProfile.weight} kg · ${FIT_LABELS[resultProfile.fit] || FIT_LABELS.regular}`
     : '';
-  const hasResult = Boolean(result) && step === 3;
+  const hasResult = Boolean(result) && step === RESULT_STEP;
   const isSelected = shown && String(selectedSize) === String(shown.label);
 
   const stepTitles = [
     'Your height and weight',
-    'How do you carry it?',
+    'Your chest',
+    'Your waist',
     'How should it sit?',
   ];
+
+  // The figure highlights the region the current question is about.
+  const figureFocus = step === 1 ? 'chest' : step === 2 ? 'waist' : null;
+
+  const stepMotion = reduceMotion
+    ? { initial: false, animate: { opacity: 1 }, exit: { opacity: 0 } }
+    : {
+        initial: { opacity: 0, x: direction * 26 },
+        animate: { opacity: 1, x: 0 },
+        exit: { opacity: 0, y: -10, transition: { duration: 0.16, ease: 'easeIn' } },
+        transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] },
+      };
 
   return (
     <section aria-labelledby="size-finder-title" className="size-finder">
@@ -558,8 +644,8 @@ export default function SizeFinder({
         onClick={() => {
           backgroundScrollRef.current = window.scrollY;
           setOpen(true);
-          if (hasResult) setStep(3);
-          else setStep(0);
+          setDirection(1);
+          setStep(hasResult ? RESULT_STEP : 0);
         }}
       >
         <span className="size-finder-trigger-icon" aria-hidden="true">
@@ -570,7 +656,7 @@ export default function SizeFinder({
             {hasResult ? 'Your size' : 'Find my size'}
           </span>
           <span className="size-finder-trigger-meta">
-            {hasResult ? profileLine : 'Three quick questions · no tape measure'}
+            {hasResult ? profileLine : 'Four quick questions · no tape measure'}
           </span>
         </span>
         {hasResult && shown && (
@@ -609,10 +695,11 @@ export default function SizeFinder({
               <div className="size-finder-head">
                 <div className="size-finder-head-text">
                   <span className="size-finder-eyebrow">
-                    {step === 3 ? 'Your match' : `Step ${step + 1} of 3`}
+                    <span className="size-finder-eyebrow-rule" aria-hidden="true" />
+                    {hasResult ? 'Your match' : `Step ${step + 1} of ${QUESTION_COUNT}`}
                   </span>
                   <h2 id="size-finder-dialog-title" ref={titleRef} tabIndex={-1} className="size-finder-dialog-title">
-                    {step === 3
+                    {hasResult
                       ? (shown && shown.label === recommended?.label ? 'Your size is' : `Size ${shown?.label || ''}`)
                       : stepTitles[step]}
                   </h2>
@@ -622,320 +709,310 @@ export default function SizeFinder({
                 </button>
               </div>
 
-              {step < 3 && (
-                <div className="size-finder-progress" role="presentation">
-                  {[0, 1, 2].map((index) => (
-                    <span
-                      key={index}
-                      className="size-finder-progress-seg"
-                      data-done={index <= step ? 'true' : 'false'}
-                    />
-                  ))}
-                </div>
-              )}
-
-              <div className="size-finder-body">
-                <div className="size-finder-figure-wrap">
-                  <BodySilhouette
-                    height={height}
-                    weight={weight}
-                    chest={chest}
-                    waist={waist}
-                    reduceMotion={reduceMotion}
+              {/* The header never scrolls: the progress and the question stay in
+                  place while the answers move underneath them. */}
+              <div className="size-finder-progress" role="presentation">
+                {Array.from({ length: QUESTION_COUNT }, (_, index) => (
+                  <span
+                    key={index}
+                    className="size-finder-progress-seg"
+                    data-done={(hasResult || index <= step) ? 'true' : 'false'}
+                    data-current={(!hasResult && index === step) ? 'true' : 'false'}
                   />
-                  <div className="size-finder-figure-facts" aria-hidden="true">
-                    <span>{height} cm</span>
-                    <span>{weight} kg</span>
+                ))}
+              </div>
+
+              <div className="size-finder-scroll">
+                <div className="size-finder-body">
+                  <div className="size-finder-figure-wrap">
+                    <BodySilhouette
+                      height={height}
+                      weight={weight}
+                      chest={chest}
+                      waist={waist}
+                      focus={figureFocus}
+                      reduceMotion={reduceMotion}
+                    />
+                    <div className="size-finder-figure-facts" aria-hidden="true">
+                      <span>{height} cm</span>
+                      <span>{weight} kg</span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="size-finder-content">
-                  <form
-                    noValidate
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      goNext();
-                    }}
-                  >
-                    <AnimatePresence mode="wait" initial={false}>
-                      {step === 0 && (
-                        <motion.div
-                          key="step-body"
-                          className="size-finder-step"
-                          initial={reduceMotion ? false : { opacity: 0, x: 18 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={reduceMotion ? undefined : { opacity: 0, x: -18 }}
-                          transition={{ duration: 0.24 }}
-                        >
-                          <p className="size-finder-helper">
-                            Slide to your numbers. They drive the recommendation — the drawing moves with you.
-                          </p>
+                  <div className="size-finder-content">
+                    {!hasResult && (
+                      <form
+                        noValidate
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          goNext();
+                        }}
+                      >
+                        <AnimatePresence mode="wait" initial={false}>
+                          {step === 0 && (
+                            <motion.div key="step-body" className="size-finder-step" {...stepMotion}>
+                              <p className="size-finder-helper">
+                                Slide to your numbers. They drive the recommendation — the drawing moves with you.
+                              </p>
 
-                          <div className="size-finder-field">
-                            <label htmlFor="size-finder-height" className="size-finder-field-label">
-                              Height
-                            </label>
-                            <div className="size-finder-slider-row">
-                              <input
-                                id="size-finder-height"
-                                className="size-finder-slider"
-                                type="range"
-                                min={BODY_LIMITS.minHeight}
-                                max={BODY_LIMITS.maxHeight}
-                                step={1}
-                                value={height}
-                                aria-valuetext={`${height} centimetres`}
-                                onChange={(event) => setHeight(clamp(event.target.value, BODY_LIMITS.minHeight, BODY_LIMITS.maxHeight))}
-                              />
-                              <NumberField
-                                value={height}
-                                min={BODY_LIMITS.minHeight}
-                                max={BODY_LIMITS.maxHeight}
-                                unit="cm"
-                                label="Height in centimetres"
-                                onChange={setHeight}
-                              />
-                            </div>
-                            <div className="size-finder-scale" aria-hidden="true">
-                              <span>{BODY_LIMITS.minHeight}</span>
-                              <span>{BODY_LIMITS.maxHeight}</span>
-                            </div>
-                          </div>
+                              <div className="size-finder-field">
+                                <label htmlFor="size-finder-height" className="size-finder-field-label">
+                                  Height
+                                </label>
+                                <div className="size-finder-slider-row">
+                                  <input
+                                    id="size-finder-height"
+                                    className="size-finder-slider"
+                                    type="range"
+                                    min={BODY_LIMITS.minHeight}
+                                    max={BODY_LIMITS.maxHeight}
+                                    step={1}
+                                    value={height}
+                                    aria-valuetext={`${height} centimetres`}
+                                    onChange={(event) => setHeight(clamp(event.target.value, BODY_LIMITS.minHeight, BODY_LIMITS.maxHeight))}
+                                  />
+                                  <NumberField
+                                    value={height}
+                                    min={BODY_LIMITS.minHeight}
+                                    max={BODY_LIMITS.maxHeight}
+                                    unit="cm"
+                                    label="Height in centimetres"
+                                    onChange={setHeight}
+                                  />
+                                </div>
+                                <div className="size-finder-scale" aria-hidden="true">
+                                  <span>{BODY_LIMITS.minHeight}</span>
+                                  <span>{BODY_LIMITS.maxHeight}</span>
+                                </div>
+                              </div>
 
-                          <div className="size-finder-field">
-                            <label htmlFor="size-finder-weight" className="size-finder-field-label">
-                              Weight
-                            </label>
-                            <div className="size-finder-slider-row">
-                              <input
-                                id="size-finder-weight"
-                                className="size-finder-slider"
-                                type="range"
-                                min={BODY_LIMITS.minWeight}
-                                max={BODY_LIMITS.maxWeight}
-                                step={1}
-                                value={weight}
-                                aria-valuetext={`${weight} kilograms`}
-                                onChange={(event) => setWeight(clamp(event.target.value, BODY_LIMITS.minWeight, BODY_LIMITS.maxWeight))}
-                              />
-                              <NumberField
-                                value={weight}
-                                min={BODY_LIMITS.minWeight}
-                                max={BODY_LIMITS.maxWeight}
-                                unit="kg"
-                                label="Weight in kilograms"
-                                onChange={setWeight}
-                              />
-                            </div>
-                            <div className="size-finder-scale" aria-hidden="true">
-                              <span>{BODY_LIMITS.minWeight}</span>
-                              <span>{BODY_LIMITS.maxWeight}</span>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
+                              <div className="size-finder-field">
+                                <label htmlFor="size-finder-weight" className="size-finder-field-label">
+                                  Weight
+                                </label>
+                                <div className="size-finder-slider-row">
+                                  <input
+                                    id="size-finder-weight"
+                                    className="size-finder-slider"
+                                    type="range"
+                                    min={BODY_LIMITS.minWeight}
+                                    max={BODY_LIMITS.maxWeight}
+                                    step={1}
+                                    value={weight}
+                                    aria-valuetext={`${weight} kilograms`}
+                                    onChange={(event) => setWeight(clamp(event.target.value, BODY_LIMITS.minWeight, BODY_LIMITS.maxWeight))}
+                                  />
+                                  <NumberField
+                                    value={weight}
+                                    min={BODY_LIMITS.minWeight}
+                                    max={BODY_LIMITS.maxWeight}
+                                    unit="kg"
+                                    label="Weight in kilograms"
+                                    onChange={setWeight}
+                                  />
+                                </div>
+                                <div className="size-finder-scale" aria-hidden="true">
+                                  <span>{BODY_LIMITS.minWeight}</span>
+                                  <span>{BODY_LIMITS.maxWeight}</span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
 
-                      {step === 1 && (
-                        <motion.div
-                          key="step-shape"
-                          className="size-finder-step"
-                          initial={reduceMotion ? false : { opacity: 0, x: 18 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={reduceMotion ? undefined : { opacity: 0, x: -18 }}
-                          transition={{ duration: 0.24 }}
-                        >
-                          <p className="size-finder-helper">
-                            Two shoppers can weigh the same and still need different sizes. Pick what is closest.
-                          </p>
+                          {step === 1 && (
+                            <motion.div key="step-chest" className="size-finder-step" {...stepMotion}>
+                              <p className="size-finder-helper">
+                                Chest and shoulders decide how the top half sits. Pick the closest.
+                              </p>
 
-                          <fieldset className="size-finder-fieldset">
-                            <legend className="size-finder-field-label">Chest</legend>
-                            <div className="size-finder-choices">
-                              {CHEST_SHAPES.map((option) => (
-                                <Choice
-                                  key={option}
-                                  active={chest === option}
-                                  onClick={() => setChest(option)}
-                                  title={CHEST_LABELS[option]}
-                                  hint={CHEST_HINTS[option]}
-                                />
-                              ))}
-                            </div>
-                          </fieldset>
+                              <fieldset className="size-finder-fieldset">
+                                <legend className="size-finder-field-label">Chest</legend>
+                                <div className="size-finder-choices">
+                                  {CHEST_SHAPES.map((option, index) => (
+                                    <Choice
+                                      key={option}
+                                      index={index}
+                                      reduceMotion={reduceMotion}
+                                      active={chest === option}
+                                      onClick={() => setChest(option)}
+                                      title={CHEST_LABELS[option]}
+                                      hint={CHEST_HINTS[option]}
+                                    />
+                                  ))}
+                                </div>
+                              </fieldset>
+                            </motion.div>
+                          )}
 
-                          <fieldset className="size-finder-fieldset">
-                            <legend className="size-finder-field-label">Waist</legend>
-                            <div className="size-finder-choices">
-                              {WAIST_SHAPES.map((option) => (
-                                <Choice
-                                  key={option}
-                                  active={waist === option}
-                                  onClick={() => setWaist(option)}
-                                  title={WAIST_LABELS[option]}
-                                  hint={WAIST_HINTS[option]}
-                                />
-                              ))}
-                            </div>
-                          </fieldset>
-                        </motion.div>
-                      )}
+                          {step === 2 && (
+                            <motion.div key="step-waist" className="size-finder-step" {...stepMotion}>
+                              <p className="size-finder-helper">
+                                The waist usually breaks the tie between two neighbouring sizes.
+                              </p>
 
-                      {step === 2 && (
-                        <motion.div
-                          key="step-fit"
-                          className="size-finder-step"
-                          initial={reduceMotion ? false : { opacity: 0, x: 18 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={reduceMotion ? undefined : { opacity: 0, x: -18 }}
-                          transition={{ duration: 0.24 }}
-                        >
-                          <p className="size-finder-helper">
-                            Last one. How do you like a shirt or jacket to sit on you?
-                          </p>
+                              <fieldset className="size-finder-fieldset">
+                                <legend className="size-finder-field-label">Waist</legend>
+                                <div className="size-finder-choices">
+                                  {WAIST_SHAPES.map((option, index) => (
+                                    <Choice
+                                      key={option}
+                                      index={index}
+                                      reduceMotion={reduceMotion}
+                                      active={waist === option}
+                                      onClick={() => setWaist(option)}
+                                      title={WAIST_LABELS[option]}
+                                      hint={WAIST_HINTS[option]}
+                                    />
+                                  ))}
+                                </div>
+                              </fieldset>
+                            </motion.div>
+                          )}
 
-                          <fieldset className="size-finder-fieldset">
-                            <legend className="size-finder-field-label">Fit</legend>
-                            <div className="size-finder-choices">
-                              {FIT_OPTIONS.map((option) => (
-                                <Choice
-                                  key={option}
-                                  active={fit === option}
-                                  onClick={() => {
-                                    setFit(option);
-                                    showRecommendation(option);
-                                  }}
-                                  title={FIT_LABELS[option]}
-                                  hint={FIT_HINTS[option]}
-                                />
-                              ))}
-                            </div>
-                          </fieldset>
+                          {step === 3 && (
+                            <motion.div key="step-fit" className="size-finder-step" {...stepMotion}>
+                              <p className="size-finder-helper">
+                                Last one. How do you like a shirt or jacket to sit on you?
+                              </p>
 
-                          <p className="size-finder-note">
-                            No tape measure needed — exchange within 7 days if it is not right.
-                          </p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                              <fieldset className="size-finder-fieldset">
+                                <legend className="size-finder-field-label">Fit</legend>
+                                <div className="size-finder-choices">
+                                  {FIT_OPTIONS.map((option, index) => (
+                                    <Choice
+                                      key={option}
+                                      index={index}
+                                      reduceMotion={reduceMotion}
+                                      active={fit === option}
+                                      onClick={() => setFit(option)}
+                                      title={FIT_LABELS[option]}
+                                      hint={FIT_HINTS[option]}
+                                    />
+                                  ))}
+                                </div>
+                              </fieldset>
 
-                    {error && (
-                      <p role="alert" className="size-finder-error">{error}</p>
+                              <p className="size-finder-note">
+                                No tape measure needed — exchange within 7 days if it is not right.
+                              </p>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {error && (
+                          <p role="alert" className="size-finder-error">{error}</p>
+                        )}
+
+                        <div className="size-finder-actions">
+                          {step > 0 && (
+                            <button type="button" className="size-finder-back" onClick={goBack}>
+                              <ArrowLeft size={15} aria-hidden="true" />
+                              Back
+                            </button>
+                          )}
+                          <button type="submit" className="size-finder-next">
+                            Next
+                            <ArrowRight size={15} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </form>
                     )}
 
-                    <div className="size-finder-actions">
-                      {step > 0 && (
-                        <button type="button" className="size-finder-back" onClick={goBack}>
-                          <ArrowLeft size={15} aria-hidden="true" />
-                          Back
-                        </button>
-                      )}
-                      {step < 2 && (
-                        <button type="submit" className="size-finder-next">
-                          Next
-                          <ArrowRight size={15} aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                  </form>
+                    {hasResult && shown && (
+                      <div className="size-finder-result">
+                        <div aria-live="polite" className="sr-only">
+                          {shown.label === recommended?.label
+                            ? `We recommend size ${shown.label}, with a match score of ${shown.score} out of 100. ${band.label}.`
+                            : `You are viewing size ${shown.label}. We recommend size ${recommended?.label}.`}
+                        </div>
 
-                  {step === 3 && shown && (
-                    <div className="size-finder-result">
-                      <div aria-live="polite" className="sr-only">
-                        {shown.label === recommended?.label
-                          ? `We recommend size ${shown.label}, with a match score of ${shown.score} out of 100. ${band.label}.`
-                          : `You are viewing size ${shown.label}. We recommend size ${recommended?.label}.`}
-                      </div>
-
-                      <MatchGauge size={shown.label} score={shown.score} reduceMotion={reduceMotion} />
-                      <p className="size-finder-score-note">
-                        Fit score, not a fit guarantee.
-                      </p>
-
-                      <div className="size-finder-result-head">
-                        <span className="size-finder-band" style={{ color: band.color, borderColor: band.color }}>
-                          <span className="size-finder-band-dot" style={{ background: band.color }} aria-hidden="true" />
-                          {band.label}
-                        </span>
-                        {shown.inStock === false && (
-                          <span className="size-finder-oos">Sold out in this colour</span>
-                        )}
-                      </div>
-
-                      <div className="size-finder-explanation" aria-live="polite">
-                        <p className="size-finder-reason">{shown.reason}</p>
-                        {preferenceExplanation && (
-                          <p className="size-finder-preference-reason">{preferenceExplanation}</p>
-                        )}
-                      </div>
-
-                      {result.decision && result.decision.swappedForStock && (
-                        <p className="size-finder-warn">
-                          {result.decision.skippedSize} fits you slightly better but is sold out in this colour — {result.decision.size} is the closest available.
+                        <MatchGauge size={shown.label} score={shown.score} reduceMotion={reduceMotion} />
+                        <p className="size-finder-score-note">
+                          Fit score, not a fit guarantee.
                         </p>
-                      )}
 
-                      <div className="size-finder-chips" role="group" aria-label="Estimated match score for every size, out of 100">
-                        {result.sizes.map((entry) => (
-                          <button
-                            key={entry.label}
-                            type="button"
-                            className="size-finder-chip"
-                            data-active={entry.label === shown.label ? 'true' : 'false'}
-                            data-oos={entry.inStock === false ? 'true' : 'false'}
-                            aria-pressed={entry.label === shown.label}
-                            onClick={() => setActiveSize(entry.label)}
-                          >
-                            <span className="size-finder-chip-size">{entry.label}</span>
-                            <span className="size-finder-chip-score">{entry.score}/100</span>
-                            {entry.inStock === false && (
-                              <span className="size-finder-chip-oos">Sold out</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
+                        <div className="size-finder-result-head">
+                          <span className="size-finder-band" style={{ color: band.color, borderColor: band.color }}>
+                            <span className="size-finder-band-dot" style={{ background: band.color }} aria-hidden="true" />
+                            {band.label}
+                          </span>
+                          {shown.inStock === false && (
+                            <span className="size-finder-oos">Sold out in this colour</span>
+                          )}
+                        </div>
 
-                      <div className="size-finder-actions">
-                        <button type="button" className="size-finder-back" onClick={goBack}>
-                          <ArrowLeft size={15} aria-hidden="true" />
-                          Back
-                        </button>
-                        <button
-                          type="button"
-                          className="size-finder-next"
-                          disabled={shown.inStock === false}
-                          onClick={() => {
-                            if (shown.inStock === false) return;
-                            if (typeof onSelect === 'function') onSelect(shown.label);
-                            close();
-                          }}
-                        >
-                          <Check size={15} aria-hidden="true" />
-                          {shown.inStock === false
-                            ? 'Sold out'
-                            : isSelected
-                              ? `Selected ${shown.label}`
-                              : `Select size ${shown.label}`}
-                        </button>
-                        {typeof onOpenSizeGuide === 'function' && (
+                        <div className="size-finder-explanation" aria-live="polite">
+                          <p className="size-finder-reason">{shown.reason}</p>
+                          {preferenceExplanation && (
+                            <p className="size-finder-preference-reason">{preferenceExplanation}</p>
+                          )}
+                        </div>
+
+                        {result.decision && result.decision.swappedForStock && (
+                          <p className="size-finder-warn">
+                            {result.decision.skippedSize} fits you slightly better but is sold out in this colour — {result.decision.size} is the closest available.
+                          </p>
+                        )}
+
+                        <div className="size-finder-chips" role="group" aria-label="Estimated match score for every size, out of 100">
+                          {result.sizes.map((entry) => (
+                            <button
+                              key={entry.label}
+                              type="button"
+                              className="size-finder-chip"
+                              data-active={entry.label === shown.label ? 'true' : 'false'}
+                              data-oos={entry.inStock === false ? 'true' : 'false'}
+                              aria-pressed={entry.label === shown.label}
+                              onClick={() => setActiveSize(entry.label)}
+                            >
+                              <span className="size-finder-chip-size">{entry.label}</span>
+                              <span className="size-finder-chip-score">{entry.score}/100</span>
+                              {entry.inStock === false && (
+                                <span className="size-finder-chip-oos">Sold out</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="size-finder-actions size-finder-actions-result">
                           <button
                             type="button"
-                            className="size-finder-back"
+                            className="size-finder-next"
+                            disabled={shown.inStock === false}
                             onClick={() => {
+                              if (shown.inStock === false) return;
+                              if (typeof onSelect === 'function') onSelect(shown.label);
                               close();
-                              onOpenSizeGuide();
                             }}
                           >
-                            <Ruler size={14} aria-hidden="true" />
-                            Size guide
+                            <Check size={15} aria-hidden="true" />
+                            {shown.inStock === false
+                              ? 'Sold out'
+                              : isSelected
+                                ? `Selected ${shown.label}`
+                                : `Select size ${shown.label}`}
                           </button>
-                        )}
-                      </div>
+                          {typeof onOpenSizeGuide === 'function' && (
+                            <button
+                              type="button"
+                              className="size-finder-back"
+                              onClick={() => {
+                                close();
+                                onOpenSizeGuide();
+                              }}
+                            >
+                              <Ruler size={14} aria-hidden="true" />
+                              Size guide
+                            </button>
+                          )}
+                        </div>
 
-                      <button type="button" className="size-finder-restart" onClick={startOver}>
-                        Start over
-                      </button>
-                    </div>
-                  )}
+                        <button type="button" className="size-finder-restart" onClick={startOver}>
+                          Start over
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
