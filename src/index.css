@@ -2639,6 +2639,7 @@ main, [role="main"] {
 }
 
 .size-finder-dialog {
+  --sf-pad: clamp(16px, 4vw, 26px);
   position: relative;
   width: 100%;
   max-width: 860px;
@@ -2649,7 +2650,7 @@ main, [role="main"] {
   scrollbar-color: var(--gold) rgba(255, 255, 255, 0.08);
   scrollbar-width: thin;
   box-sizing: border-box;
-  padding: clamp(16px, 4vw, 26px);
+  padding: var(--sf-pad);
   border: 1px solid rgba(201, 168, 76, 0.32);
   border-radius: 10px;
   background:
@@ -2683,10 +2684,25 @@ main, [role="main"] {
 }
 
 .size-finder-head {
+  /* Pinned inside the scrolling dialog so the close control is reachable even
+     when a phone sheet is scrolled to its tallest step. The gradient fades the
+     pinned edge instead of cutting the content with a hard line. */
+  position: sticky;
+  /* The negative offset lets the pinned bar cover the dialog's top padding,
+     which otherwise lets a sliver of scrolling content peek above it. */
+  top: calc(-1 * var(--sf-pad, 16px));
+  z-index: 3;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 10px;
+  margin: 0 -4px 10px;
+  padding: 4px 4px 8px;
+  background: linear-gradient(
+    180deg,
+    rgba(14, 13, 10, 0.95) 0%,
+    rgba(13, 12, 10, 0.88) 74%,
+    rgba(13, 12, 10, 0) 100%
+  );
 }
 
 .size-finder-head-text {
@@ -3064,18 +3080,6 @@ main, [role="main"] {
   gap: 12px;
 }
 
-.size-finder-recommendation {
-  margin: 0;
-  color: var(--text2);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-align: center;
-}
-.size-finder-recommendation strong {
-  color: var(--gold);
-  font-size: 14px;
-}
-
 .size-finder-gauge {
   position: relative;
   width: clamp(148px, 42vw, 186px);
@@ -3317,6 +3321,24 @@ main, [role="main"] {
     padding-bottom: calc(
       clamp(16px, 4vw, 26px) + env(safe-area-inset-bottom, 0px) + 24px
     );
+  }
+
+  /* A phone sheet is short: keep the drawing present but give the questions
+     the height they need, so fewer steps have to scroll. */
+  .size-finder-body {
+    gap: 10px;
+  }
+
+  .size-finder-figure {
+    height: 124px;
+  }
+
+  .size-finder-helper {
+    margin-bottom: 10px;
+  }
+
+  .size-finder-fieldset {
+    margin-bottom: 12px;
   }
 
   .size-finder-restart {

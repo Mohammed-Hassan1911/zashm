@@ -557,43 +557,42 @@ const SCORE_MAX = 97;
 const SCORE_RANK_STEP = 2;
 const SCORE_DECAY = { ranges: 8, chart: 8 };
 
-function signedAmount(value, unit) {
-  return `${value > 0 ? '+' : ''}${value} ${unit}`;
-}
-
 function explainCandidate(candidate, ctx) {
-  // Keep the storefront explanation short while showing the actual comparison
-  // values and the distance from this size's published window.
+  // The sentence describes the same numbers the score was computed from: the
+  // fit-adjusted weight in range mode, the fit-adjusted chest in chart mode.
+  // It never repeats the size label, because the result already shows it.
   if (ctx.mode === 'ranges') {
     const range = candidate.range;
-    const fitNudge = FIT_WEIGHT_NUDGE[ctx.fit] || 0;
-    const shapeNudge = shapeWeightOffset(ctx.shape);
-    const adjustments = [
-      fitNudge ? `${ctx.fit} ${signedAmount(fitNudge, 'kg')}` : '',
-      shapeNudge ? `shape ${signedAmount(shapeNudge, 'kg')}` : '',
-    ].filter(Boolean);
     const heightWindow = formatWindow(range.minHeight, range.maxHeight, 'cm');
     const weightWindow = formatWindow(range.minWeight, range.maxWeight, 'kg');
     const heightDelta = windowDelta(range.minHeight, range.maxHeight, ctx.height);
     const weightDelta = windowDelta(range.minWeight, range.maxWeight, ctx.effectiveWeight);
-    const position = (delta, unit) => delta === 0 ? 'in range' : `${Math.abs(delta)} ${unit} ${delta > 0 ? 'over' : 'under'}`;
-    const adjustmentText = adjustments.length ? `; ${adjustments.join(', ')}` : '';
-    return `${candidate.label}: ${ctx.height} cm (${position(heightDelta, 'cm')} ${heightWindow}), ${ctx.effectiveWeight} kg (${position(weightDelta, 'kg')} ${weightWindow}${adjustmentText}).`;
+    const heightText = heightDelta === 0
+      ? `Your ${ctx.height} cm is inside this size's height window (${heightWindow})`
+      : `Your ${ctx.height} cm is ${Math.abs(heightDelta)} cm ${heightDelta > 0 ? 'over' : 'under'} this size's height window (${heightWindow})`;
+    const weightText = weightDelta === 0
+      ? `your ${ctx.effectiveWeight} kg is inside its weight window (${weightWindow})`
+      : `your ${ctx.effectiveWeight} kg is ${Math.abs(weightDelta)} kg ${weightDelta > 0 ? 'over' : 'under'} its weight window (${weightWindow})`;
+    const nudge = ctx.effectiveWeight !== ctx.weight
+      ? ` For a ${ctx.fit} fit we count ${ctx.weight} kg as ${ctx.effectiveWeight} kg.`
+      : '';
+    return `${heightText}, and ${weightText}.${nudge}`;
   }
 
   const [lo, hi] = candidate.chestRange;
   const shapeNudge = shapeChestOffset(ctx.shape);
   const fitNudge = FIT_OFFSET[ctx.fit] || 0;
-  const shapeText = shapeNudge
-    ? ` ${shapeNudge > 0 ? '+' : '−'} ${Math.abs(shapeNudge)} cm shape`
+  const causes = [];
+  if (shapeNudge) causes.push('your build');
+  if (fitNudge) causes.push(`a ${ctx.fit} fit`);
+  const adjusted = causes.length
+    ? `, adjusted to ${ctx.target} cm for ${causes.join(' and ')}`
     : '';
-  const fitText = fitNudge
-    ? ` ${fitNudge > 0 ? '+' : '−'} ${Math.abs(fitNudge)} cm ${ctx.fit}`
-    : '';
-  const formula = `${shapeText}${fitText}`;
   const delta = windowDelta(lo, hi, ctx.target);
-  const position = delta === 0 ? 'in range' : `${Math.abs(delta)} cm ${delta > 0 ? 'over' : 'under'}`;
-  return `${candidate.label}: chest ${ctx.chest}${formula} = ${ctx.target} cm (${position} ${lo}–${hi}).`;
+  const position = delta === 0
+    ? `sits inside this size's ${lo}–${hi} cm cut`
+    : `is ${Math.abs(delta)} cm ${delta > 0 ? 'over' : 'under'} this size's ${lo}–${hi} cm cut`;
+  return `Your ${ctx.chest} cm chest estimate${adjusted} ${position}.`;
 }
 
 /**

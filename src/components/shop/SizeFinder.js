@@ -62,14 +62,16 @@ const WAIST_HINTS = {
 const CHEST_WIDTH = { slimmer: 0.88, average: 1, broader: 1.12 };
 const WAIST_WIDTH = { flatter: 0.9, average: 1, rounder: 1.11 };
 
-// Score bands, so the number also reads as a sentence. When the engine had to
-// step away from the best-fitting size because it is sold out, the band says so
-// instead of calling a deliberately chosen size a rough estimate.
+// Score bands, so the number also reads as a sentence. The thresholds follow
+// the scoring model: 88+ means the shopper sits near the middle of the size's
+// own window, 52–71 means the window covers them but close to an edge. When the
+// engine had to step away from the best-fitting size because it is sold out,
+// the band says so instead of calling a deliberately chosen size a rough guess.
 function scoreBand(score, swapped = false) {
   if (swapped) return { label: 'Best available in this colour', color: 'var(--gold)' };
-  if (score >= 90) return { label: 'Excellent match', color: '#8fe0b0' };
-  if (score >= 75) return { label: 'Strong match', color: 'var(--gold)' };
-  if (score >= 55) return { label: 'Close match', color: 'var(--gold)' };
+  if (score >= 88) return { label: 'Excellent match', color: '#8fe0b0' };
+  if (score >= 72) return { label: 'Strong match', color: 'var(--gold)' };
+  if (score >= 52) return { label: 'Likely fit', color: 'var(--gold)' };
   return { label: 'Rough estimate', color: 'var(--text3)' };
 }
 
@@ -522,7 +524,7 @@ export default function SizeFinder({
       if (!closest) return `${recommended.label} is the only size available.`;
       const stockNote = result.decision?.swappedForStock
         && result.decision.skippedSize === closest.label ? ' (sold out)' : '';
-      return `${recommended.label} chosen (${recommended.score}/100); next closest ${closest.label} (${closest.score}/100)${stockNote}.`;
+      return `Next closest is ${closest.label} at ${closest.score}/100${stockNote}.`;
     }
 
     const preferred = alternatives.filter((entry) =>
@@ -610,7 +612,9 @@ export default function SizeFinder({
                     {step === 3 ? 'Your match' : `Step ${step + 1} of 3`}
                   </span>
                   <h2 id="size-finder-dialog-title" ref={titleRef} tabIndex={-1} className="size-finder-dialog-title">
-                    {step === 3 ? 'Your size is' : stepTitles[step]}
+                    {step === 3
+                      ? (shown && shown.label === recommended?.label ? 'Your size is' : `Size ${shown?.label || ''}`)
+                      : stepTitles[step]}
                   </h2>
                 </div>
                 <button type="button" className="size-finder-close" onClick={close} aria-label="Close size finder">
@@ -842,11 +846,6 @@ export default function SizeFinder({
                           : `You are viewing size ${shown.label}. We recommend size ${recommended?.label}.`}
                       </div>
 
-                      <p className="size-finder-recommendation">
-                        {shown.label === recommended?.label
-                          ? <>We recommend size <strong>{shown.label}</strong> · {shown.score}/100 match score</>
-                          : <>Reviewing size <strong>{shown.label}</strong> · recommended size {recommended?.label}</>}
-                      </p>
                       <MatchGauge size={shown.label} score={shown.score} reduceMotion={reduceMotion} />
                       <p className="size-finder-score-note">
                         Fit score, not a fit guarantee.
