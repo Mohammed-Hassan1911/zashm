@@ -358,6 +358,10 @@ ok(finder.includes("html.style.overflow = 'hidden'") && finder.includes("body.st
    finder.includes('window.scrollTo(0, scrollY)') && finder.includes("body.classList.add('size-finder-open')") &&
    finder.includes("body.classList.remove('size-finder-open')"),
   'opening the finder freezes the page and closing it restores the exact scroll position');
+eq((finder.match(/window\.scrollTo\(0, scrollY\)/g) || []).length, 1,
+  'the saved scroll position is restored once, without a second animated correction');
+ok(finder.indexOf('window.scrollTo(0, scrollY)') < finder.indexOf('html.style.scrollBehavior = previous.htmlScrollBehavior'),
+  'scroll is restored before global smooth scrolling is re-enabled');
 ok(/\.size-finder-dialog\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s.test(css) &&
    /\.size-finder-overlay\s*\{[^}]*overscroll-behavior:\s*none;/s.test(css),
   'scroll stays inside the finder instead of chaining to the page behind it');

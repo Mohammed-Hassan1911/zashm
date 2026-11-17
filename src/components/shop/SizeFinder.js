@@ -363,11 +363,7 @@ export default function SizeFinder({
     setOpen(false);
     if (typeof window !== 'undefined') {
       const node = restoreFocusRef.current;
-      const scrollY = backgroundScrollRef.current;
-      window.setTimeout(() => {
-        node?.focus?.({ preventScroll: true });
-        window.scrollTo(0, scrollY);
-      }, 0);
+      window.setTimeout(() => node?.focus?.({ preventScroll: true }), 0);
     }
   }, []);
 
@@ -412,7 +408,10 @@ export default function SizeFinder({
     document.addEventListener('keydown', onKeyDown);
     return () => {
       html.style.overflow = previous.htmlOverflow;
-      html.style.scrollBehavior = previous.htmlScrollBehavior;
+      // The site uses smooth scrolling globally. Keep it disabled until the
+      // saved position is restored so closing the dialog never animates from
+      // the top of the page back to the trigger.
+      html.style.scrollBehavior = 'auto';
       body.style.overflow = previous.bodyOverflow;
       body.style.position = previous.bodyPosition;
       body.style.top = previous.bodyTop;
@@ -420,6 +419,7 @@ export default function SizeFinder({
       body.style.right = previous.bodyRight;
       body.style.width = previous.bodyWidth;
       window.scrollTo(0, scrollY);
+      html.style.scrollBehavior = previous.htmlScrollBehavior;
       body.classList.remove('size-finder-open');
       document.removeEventListener('keydown', onKeyDown);
     };
