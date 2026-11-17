@@ -1350,7 +1350,10 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
               style={{ position:'fixed', top:'10%', left:'50%', transform:'translateX(-50%)', width:'92%', maxWidth:460, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:20, zIndex:2501, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', paddingBottom:12, marginBottom:16 }}>
                 <div>
-                  <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600 }}>📋 Repeat order history</h3>
+                  <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600, display:'flex', alignItems:'center', gap:7 }}>
+                    <span aria-hidden="true" style={{ fontFamily:'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif', fontSize:17, lineHeight:1 }}>📋</span>
+                    Repeat order history
+                  </h3>
                   <p style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>Phone: {selectedCustomerPhone}</p>
                 </div>
                 <button onClick={() => setShowHistoryModal(false)} style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:28, height:28, borderRadius:6, cursor:'pointer', fontSize:12 }}>✕</button>
