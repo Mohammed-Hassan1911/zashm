@@ -519,8 +519,13 @@ ok((finder.match(/className="size-finder-progress-seg"/g) || []).length === 1 &&
   'the progress shows one segment per question');
 ok(/\.size-finder-result > \*\s*\{[^}]*animation:\s*size-finder-result-rise/.test(css),
   'the result reveals itself in layers');
-ok(css.includes('.size-finder-gauge-halo') && css.includes('@keyframes size-finder-halo-spin'),
-  'the result gauge is lit by a slow halo');
+ok(!css.includes('.size-finder-gauge-halo') && !css.includes('size-finder-halo-spin'),
+  'the rotating light behind the gauge is gone');
+ok(/\.size-finder-gauge-size\s*\{[^}]*animation:\s*size-finder-size-glow/s.test(css),
+  'the recommended size itself breathes a gold glow');
+ok(/\.size-finder-gauge-star\s*\{[^}]*animation:\s*size-finder-star-twinkle/s.test(css) &&
+   (finder.match(/className="size-finder-gauge-star"/g) || []).length === 3,
+  'three small stars twinkle around the size');
 ok(css.includes('.size-finder-figure-focus') && css.includes('@keyframes size-finder-focus-breathe'),
   'the drawing rings the region the current question asks about');
 ok(finder.includes('focus={figureFocus}') &&
@@ -547,8 +552,8 @@ ok(css.includes('@media (prefers-reduced-motion: reduce)') &&
    /\.size-finder-restart\s*\{\s*animation:\s*none/s.test(css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))),
   'the shine respects reduced-motion preferences');
 const reducedCss = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
-ok(/\.size-finder-gauge-halo,[\s\S]{0,120}\.size-finder-result > \*\s*\{\s*animation:\s*none/.test(reducedCss),
-  'the new finder animations stop for reduced-motion users');
+ok(/\.size-finder-gauge-size,[\s\S]{0,140}\.size-finder-result > \*\s*\{\s*animation:\s*none/.test(reducedCss),
+  'the size glow and stars stop for reduced-motion users');
 ok(/\.size-finder-progress-seg\[data-current='true'\]::after,[\s\S]{0,80}\.size-finder-next::after\s*\{\s*display:\s*none/.test(reducedCss),
   'the progress sweep and button sheen are removed for reduced-motion users');
 ok(/\.size-finder-actions\s*\{[^}]*flex-wrap:\s*nowrap/s.test(phoneCss) &&

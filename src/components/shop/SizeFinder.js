@@ -407,7 +407,6 @@ function MatchGauge({ size, score, reduceMotion }) {
 
   return (
     <div className="size-finder-gauge">
-      <span className="size-finder-gauge-halo" aria-hidden="true" />
       <svg viewBox="0 0 132 132" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="zshm-gauge-gold" x1="0" y1="0" x2="1" y2="1">
@@ -434,7 +433,14 @@ function MatchGauge({ size, score, reduceMotion }) {
         />
       </svg>
       <div className="size-finder-gauge-center">
-        <span className="size-finder-gauge-size">{size}</span>
+        <span className="size-finder-gauge-size-wrap">
+          <span className="size-finder-gauge-size">{size}</span>
+          <span className="size-finder-gauge-stars" aria-hidden="true">
+            <span className="size-finder-gauge-star">✦</span>
+            <span className="size-finder-gauge-star">✦</span>
+            <span className="size-finder-gauge-star">✦</span>
+          </span>
+        </span>
         <span className="size-finder-gauge-score">{score}/100</span>
       </div>
     </div>

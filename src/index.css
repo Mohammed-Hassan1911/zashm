@@ -2141,7 +2141,8 @@ main, [role="main"] {
     transform: none;
   }
 
-  .size-finder-gauge-halo,
+  .size-finder-gauge-size,
+  .size-finder-gauge-star,
   .size-finder-figure-focus,
   .size-finder-result > * {
     animation: none;
@@ -3219,26 +3220,6 @@ main, [role="main"] {
   aspect-ratio: 1;
   margin: 2px auto 0;
 }
-/* A slow comet of light behind the ring, so the result feels lit rather than
-   printed. Sits behind the svg and ignores pointer events. */
-.size-finder-gauge-halo {
-  position: absolute;
-  inset: -14%;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 0deg,
-    rgba(201, 168, 76, 0) 0deg,
-    rgba(232, 200, 112, 0.3) 55deg,
-    rgba(201, 168, 76, 0) 130deg,
-    rgba(201, 168, 76, 0) 360deg
-  );
-  filter: blur(10px);
-  animation: size-finder-halo-spin 7s linear infinite;
-  pointer-events: none;
-}
-@keyframes size-finder-halo-spin {
-  to { transform: rotate(360deg); }
-}
 .size-finder-gauge svg {
   position: relative;
   width: 100%;
@@ -3255,12 +3236,58 @@ main, [role="main"] {
   gap: 2px;
   pointer-events: none;
 }
+/* The size itself carries the light: the letter breathes a soft gold glow and
+   three small stars twinkle around it. No rotating halo behind the ring. */
+.size-finder-gauge-size-wrap {
+  position: relative;
+  display: inline-block;
+}
 .size-finder-gauge-size {
   font-family: var(--font-display);
   font-size: clamp(38px, 12vw, 52px);
   line-height: 1;
   color: var(--gold);
-  text-shadow: 0 0 22px rgba(201, 168, 76, 0.3);
+  text-shadow: 0 0 18px rgba(201, 168, 76, 0.35);
+  animation: size-finder-size-glow 3.6s ease-in-out infinite;
+}
+@keyframes size-finder-size-glow {
+  0%, 100% { text-shadow: 0 0 14px rgba(201, 168, 76, 0.28); }
+  50% { text-shadow: 0 0 24px rgba(232, 200, 112, 0.58), 0 0 44px rgba(201, 168, 76, 0.2); }
+}
+.size-finder-gauge-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.size-finder-gauge-star {
+  position: absolute;
+  color: #f0d68a;
+  font-size: 10px;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(232, 200, 112, 0.75);
+  animation: size-finder-star-twinkle 2.8s ease-in-out infinite;
+}
+.size-finder-gauge-star:nth-child(1) {
+  top: -6px;
+  right: -13px;
+  font-size: 11px;
+  animation-delay: 0s;
+}
+.size-finder-gauge-star:nth-child(2) {
+  bottom: -4px;
+  left: -15px;
+  font-size: 9px;
+  animation-delay: 0.9s;
+}
+.size-finder-gauge-star:nth-child(3) {
+  top: 46%;
+  right: -17px;
+  font-size: 7px;
+  animation-delay: 1.6s;
+}
+@keyframes size-finder-star-twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.75) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.05) rotate(18deg); }
 }
 .size-finder-gauge-score {
   font-size: 11px;
