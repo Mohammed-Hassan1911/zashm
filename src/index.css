@@ -2612,6 +2612,9 @@ main, [role="main"] {
   flex: 0 0 auto;
   display: grid;
   justify-items: center;
+  /* The size and its score are two separate numbers. With line-height 1 and no
+     gap they sat as one glued block on the product page. */
+  gap: 5px;
   line-height: 1;
 }
 
@@ -3381,10 +3384,8 @@ main, [role="main"] {
   min-width: 62px;
   display: grid;
   justify-items: center;
-  /* The size and its score are two different numbers: keep real air between
-     them so a numeric size like "34" never reads as one glued block. */
-  gap: 8px;
-  padding: 9px 9px;
+  gap: 1px;
+  padding: 7px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.015);
