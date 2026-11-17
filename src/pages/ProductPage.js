@@ -425,6 +425,8 @@ export default function ProductPage() {
       return (
         <motion.button 
           key={s} 
+          className="product-size-option"
+          data-oos={isSizeOOSWithSelectedColor ? 'true' : 'false'}
           type="button" // يمنع أي تعليق أو تداخل مع الفورم
           onClick={() => { setSelSize(s); setQty(1); }}
           aria-pressed={isSelected}
@@ -435,13 +437,11 @@ export default function ProductPage() {
             background: isSelected ? 'rgba(201,168,76,0.1)' : 'transparent', 
             color: isSelected ? 'var(--gold)' : isSizeOOSWithSelectedColor ? 'var(--text3)' : 'var(--text2)', 
             cursor: 'pointer',
-            textDecorationLine: isSizeOOSWithSelectedColor ? 'line-through' : 'none',
-            textDecorationColor: 'rgba(160,153,138,0.65)'
           }}
           // ترك الأنميشن بالكامل لـ Framer Motion لمنع أي تعليق فلاشي
           animate={{ borderColor: isSelected ? 'var(--gold)' : 'var(--border)' }}
           transition={{ duration: 0.1 }}
-          whileHover={{ borderColor: 'var(--gold)' }} 
+          whileHover={{ borderColor: isSizeOOSWithSelectedColor ? 'rgba(224,138,130,0.65)' : 'var(--gold)' }}
           whileTap={{ scale: 0.95 }}
         >
           {s}

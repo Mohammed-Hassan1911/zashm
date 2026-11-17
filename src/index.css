@@ -2473,6 +2473,26 @@ main, [role="main"] {
    fluid: the dialog is a centred card on desktop and a bottom sheet on a phone,
    and no rule depends on a fixed pixel width that would break at 320px. */
 
+.product-size-option {
+  position: relative;
+  overflow: hidden;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.product-size-option[data-oos='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -20%;
+  width: 140%;
+  height: 1.5px;
+  border-radius: 999px;
+  background: rgba(224, 138, 130, 0.9);
+  box-shadow: 0 0 5px rgba(224, 138, 130, 0.22);
+  transform: rotate(-45deg);
+  pointer-events: none;
+}
+
 .size-finder {
   margin-top: 4px;
   margin-bottom: 28px;
