@@ -85,11 +85,8 @@ function AppInner() {
   // document height; mounting the footer at that moment made it jump when the
   // real content replaced the loader (CLS 0.103 / 0.146 at 1440px).
   const [firstPageReady, setFirstPageReady] = useState(false);
-  // While an input/textarea/select/contenteditable field is focused (the user
-  // is typing) on a small screen, the floating WhatsApp and scroll-to-top
-  // actions hide so they never overlap the form or the on-screen keyboard.
-  // They reappear as soon as focus leaves an editable element. On larger
-  // screens the actions stay visible (no keyboard overlap there).
+  // On a phone, hide only scroll-to-top while an editable field is focused so
+  // it does not compete with the on-screen keyboard. WhatsApp stays available.
   const [isEditingField, setIsEditingField] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -291,7 +288,7 @@ function AppInner() {
           {firstPageReady && <Footer setModal={setActiveModal} />}
           <MobileNav />
           {!(isEditingField && isSmallScreen) && <BackToTop />}
-          {!(isEditingField && isSmallScreen) && <WhatsAppButton />}
+          <WhatsAppButton />
 
           <InfoModal type={activeModal} onClose={() => setActiveModal(null)} />
         </>

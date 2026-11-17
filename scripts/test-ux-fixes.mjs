@@ -948,7 +948,7 @@ try {
         'the generic retry message is no longer shown unconditionally');
     });
 
-    await step('floating actions hide only while typing on a small screen', () => {
+    await step('WhatsApp stays visible while the mobile scroll action hides during typing', () => {
       assert.ok(/isEditingField/.test(app) && /isSmallScreen/.test(app),
         'focus and breakpoint state exist');
       assert.ok(/matchMedia\('\(max-width: 768px\)'\)/.test(app),
@@ -957,8 +957,10 @@ try {
         'any text field triggers it');
       assert.ok(/el\.isContentEditable/.test(app), 'contenteditable fields count too');
       assert.ok(/focusin/.test(app) && /focusout/.test(app), 'focus is tracked both ways');
-      assert.ok(/!\(isEditingField && isSmallScreen\) && <WhatsAppButton \/>/.test(app),
-        'WhatsApp returns as soon as typing stops');
+      assert.ok(/<WhatsAppButton \/>/.test(app),
+        'WhatsApp remains rendered while an editable field is focused');
+      assert.ok(!/!\(isEditingField && isSmallScreen\) && <WhatsAppButton \/>/.test(app),
+        'WhatsApp is not hidden by the mobile keyboard state');
       assert.ok(/!\(isEditingField && isSmallScreen\) && <BackToTop \/>/.test(app),
         'scroll-to-top follows the same rule');
     });
