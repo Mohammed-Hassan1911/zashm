@@ -204,7 +204,7 @@ function BodySilhouette({ height, weight, chest, waist, reduceMotion }) {
   );
 }
 
-/** The circular match gauge: size in the middle, percentage on the ring. */
+/** The circular match gauge: size in the middle, relative score out of 100. */
 function MatchGauge({ size, score, reduceMotion }) {
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
@@ -239,7 +239,7 @@ function MatchGauge({ size, score, reduceMotion }) {
       </svg>
       <div className="size-finder-gauge-center">
         <span className="size-finder-gauge-size">{size}</span>
-        <span className="size-finder-gauge-score">{score}%</span>
+        <span className="size-finder-gauge-score">{score}/100</span>
       </div>
     </div>
   );
@@ -321,7 +321,7 @@ function Choice({ active, onClick, title, hint }) {
 }
 
 /**
- * "Find my size" — a three-question flow that ends in a match percentage.
+ * "Find my size" — a three-question flow that ends in an estimated match score.
  *
  * Height and weight come first because they do most of the work; the chest and
  * waist questions only break ties between neighbouring sizes, and the fit
@@ -399,18 +399,13 @@ export default function SizeFinder({
 
   if (!supported) return null;
 
-  const goNext = () => {
+  const showRecommendation = (fitPreference = fit) => {
     setError('');
-    if (step < 2) {
-      setStep(step + 1);
-      return;
-    }
-
     const next = scoreSizes({
       height,
       weight,
       bodyShape: { chest, waist },
-      fit,
+      fit: fitPreference,
       sizes,
       sizeRanges,
       stockFor,
@@ -426,7 +421,16 @@ export default function SizeFinder({
     setActiveSize(next.recommended);
     setShowWhy(false);
     setStep(3);
-    saveFitProfile({ height, weight, fit, bodyShape: { chest, waist } }, readStorage());
+    saveFitProfile({ height, weight, fit: fitPreference, bodyShape: { chest, waist } }, readStorage());
+  };
+
+  const goNext = () => {
+    setError('');
+    if (step < 2) {
+      setStep(step + 1);
+      return;
+    }
+    showRecommendation();
   };
 
   const goBack = () => {
@@ -501,7 +505,7 @@ export default function SizeFinder({
           <Sparkles size={15} />
         </span>
         <span className="size-finder-trigger-text">
-          <span id="size-finder-title" className="size-finder-eyebrow">
+          <span id="size-finder-title" className="size-finder-trigger-title">
             {hasResult ? 'Your size' : 'Find my size'}
           </span>
           <span className="size-finder-trigger-meta">
@@ -511,7 +515,7 @@ export default function SizeFinder({
         {hasResult && shown && (
           <span className="size-finder-trigger-result">
             <span className="size-finder-trigger-size">{shown.label}</span>
-            <span className="size-finder-trigger-score">{shown.score}%</span>
+            <span className="size-finder-trigger-score">{shown.score}/100</span>
           </span>
         )}
         <ArrowRight size={16} aria-hidden="true" className="size-finder-trigger-arrow" />
@@ -733,7 +737,10 @@ export default function SizeFinder({
                                 <Choice
                                   key={option}
                                   active={fit === option}
-                                  onClick={() => setFit(option)}
+                                  onClick={() => {
+                                    setFit(option);
+                                    showRecommendation(option);
+                                  }}
                                   title={FIT_LABELS[option]}
                                   hint={FIT_HINTS[option]}
                                 />
@@ -759,20 +766,25 @@ export default function SizeFinder({
                           Back
                         </button>
                       )}
-                      <button type="submit" className="size-finder-next">
-                        {step < 2 ? 'Next' : 'Find my size'}
-                        <ArrowRight size={15} aria-hidden="true" />
-                      </button>
+                      {step < 2 && (
+                        <button type="submit" className="size-finder-next">
+                          Next
+                          <ArrowRight size={15} aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                   </form>
 
                   {step === 3 && shown && (
                     <div className="size-finder-result">
                       <div aria-live="polite" className="sr-only">
-                        {`Your size is ${shown.label}, a ${shown.score} percent match. ${band.label}.`}
+                        {`Your size is ${shown.label}, with an estimated match score of ${shown.score} out of 100. ${band.label}.`}
                       </div>
 
                       <MatchGauge size={shown.label} score={shown.score} reduceMotion={reduceMotion} />
+                      <p className="size-finder-score-note">
+                        Estimated match score out of 100, based on this item’s size information. It is not a probability or fit guarantee.
+                      </p>
 
                       <div className="size-finder-result-head">
                         <span className="size-finder-band" style={{ color: band.color, borderColor: band.color }}>
@@ -792,7 +804,7 @@ export default function SizeFinder({
                         </p>
                       )}
 
-                      <div className="size-finder-chips" role="group" aria-label="Match for every size">
+                      <div className="size-finder-chips" role="group" aria-label="Estimated match score for every size, out of 100">
                         {result.sizes.map((entry) => (
                           <button
                             key={entry.label}
@@ -804,7 +816,7 @@ export default function SizeFinder({
                             onClick={() => setActiveSize(entry.label)}
                           >
                             <span className="size-finder-chip-size">{entry.label}</span>
-                            <span className="size-finder-chip-score">{entry.score}%</span>
+                            <span className="size-finder-chip-score">{entry.score}/100</span>
                             {entry.inStock === false && (
                               <span className="size-finder-chip-oos">Sold out</span>
                             )}

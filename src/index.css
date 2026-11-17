@@ -2469,17 +2469,24 @@ main, [role="main"] {
    end of this file, together with the rest of the site. */
 
 /* ─── Product page: "Find my size" ─────────────────────────────────────────── */
-/* A three-question flow that ends in a match percentage. Everything below is
+/* A three-question flow that ends in an estimated match score. Everything below is
    fluid: the dialog is a centred card on desktop and a bottom sheet on a phone,
    and no rule depends on a fixed pixel width that would break at 320px. */
 
 .size-finder {
   margin-top: 4px;
   margin-bottom: 28px;
+  /* The site clips every <section> horizontally as a safety net, which also
+     clipped this button's glow (and its old 1px hover lift). Nothing here can
+     spill sideways — the trigger is exactly 100% wide and the dialog is fixed —
+     so let the trigger's edge breathe. */
+  overflow: visible;
 }
 
 /* ── Collapsed trigger ─────────────────────────────────────────────────────── */
 .size-finder-trigger {
+  position: relative;
+  overflow: hidden;
   width: 100%;
   display: flex;
   align-items: center;
@@ -2487,23 +2494,42 @@ main, [role="main"] {
   min-height: 58px;
   padding: 12px 14px;
   text-align: left;
-  border: 1px solid var(--border-gold, rgba(201, 168, 76, 0.35));
+  border: 1px solid rgba(201, 168, 76, 0.34);
   border-radius: 6px;
-  background:
-    radial-gradient(120% 160% at 0% 0%, rgba(201, 168, 76, 0.12) 0%, rgba(201, 168, 76, 0) 62%),
-    rgba(201, 168, 76, 0.045);
+  background: linear-gradient(180deg, rgba(201, 168, 76, 0.085) 0%, rgba(201, 168, 76, 0.03) 100%);
   color: var(--text);
-  transition: border-color 0.25s, background 0.25s, transform 0.25s, box-shadow 0.25s;
+  transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
 }
+
+/* A hairline pinned to the top edge. Hover brightens the surface, which used to
+   wash the gold border out at the top; the hairline keeps that edge defined. */
+.size-finder-trigger::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(232, 200, 112, 0) 0%,
+    rgba(232, 200, 112, 0.55) 50%,
+    rgba(232, 200, 112, 0) 100%
+  );
+  opacity: 0.65;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
 .size-finder-trigger:hover,
 .size-finder-trigger:focus-visible {
-  border-color: var(--gold);
-  background:
-    radial-gradient(120% 160% at 0% 0%, rgba(201, 168, 76, 0.2) 0%, rgba(201, 168, 76, 0) 62%),
-    rgba(201, 168, 76, 0.07);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(201, 168, 76, 0.16);
-  transform: translateY(-1px);
+  border-color: rgba(201, 168, 76, 0.8);
+  background: linear-gradient(180deg, rgba(201, 168, 76, 0.145) 0%, rgba(201, 168, 76, 0.05) 100%);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42), 0 0 24px rgba(201, 168, 76, 0.12);
   outline: none;
+}
+
+.size-finder-trigger:hover::before,
+.size-finder-trigger:focus-visible::before {
+  opacity: 1;
 }
 
 .size-finder-trigger-icon {
@@ -2524,6 +2550,16 @@ main, [role="main"] {
   min-width: 0;
   display: grid;
   gap: 3px;
+}
+
+/* The trigger's own title: sentence case, in the display face, so it reads as
+   the action it is instead of repeating a small uppercase section label. */
+.size-finder-trigger-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: 0.2px;
+  color: var(--text);
 }
 
 .size-finder-trigger-meta {
@@ -3020,6 +3056,15 @@ main, [role="main"] {
   letter-spacing: 1.4px;
   color: var(--text2);
   font-variant-numeric: tabular-nums;
+}
+
+.size-finder-score-note {
+  max-width: 420px;
+  margin: -4px auto 0;
+  color: var(--text3);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: center;
 }
 
 .size-finder-result-head {

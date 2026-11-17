@@ -317,6 +317,40 @@ export function describeRecommendation(result) {
   return `Chest ≈ ${result.chest} cm. Size ${result.size} is the closest match for a ${fit} fit.`;
 }
 
+// ── Match quality ────────────────────────────────────────────────────────────
+// How well one window covers one number, from 1 (dead centre of the window) down
+// to 0. It is monotone: a candidate further away can never score higher, which
+// is what keeps "the highlighted size carries the highest percentage" true.
+//
+// Inside the window the score falls from 1 at the centre to 0.7 at the edge,
+// because a shopper sitting on the edge is one centimetre away from the next
+// size. Outside it keeps falling with a short decay. `average` shape answers and
+// a regular fit leave every input untouched, so they never move the number.
+const QUALITY_EDGE_LOSS = 0.3;
+const QUALITY_DECAY = 2.6;
+
+function axisQuality(min, max, value) {
+  if (min === null && max === null) return 1;
+
+  if (min !== null && max !== null) {
+    const mid = (min + max) / 2;
+    const tolerance = (max - min) / 2;
+    const deviation = Math.abs(value - mid);
+    if (tolerance === 0) {
+      return deviation === 0 ? 1 : (1 - QUALITY_EDGE_LOSS) * Math.exp(-deviation / QUALITY_DECAY);
+    }
+    if (deviation <= tolerance) {
+      return 1 - QUALITY_EDGE_LOSS * (deviation / tolerance) ** 2;
+    }
+    return (1 - QUALITY_EDGE_LOSS) * Math.exp(-(deviation - tolerance) / QUALITY_DECAY);
+  }
+
+  // One-sided window: the owner only promised "from here up" (or down), so there
+  // is no centre to sit in.
+  const gap = min !== null ? Math.max(0, min - value) : Math.max(0, value - max);
+  return gap === 0 ? 1 : (1 - QUALITY_EDGE_LOSS) * Math.exp(-gap / QUALITY_DECAY);
+}
+
 /**
  * Build every candidate size with its distance, without deciding anything.
  *
@@ -354,7 +388,11 @@ function buildCandidates(input = {}) {
     // the nudge: a slim shopper squarely inside a window is still an exact match.
     const bodyDistance = windowGap(range.minWeight, range.maxWeight, weight)
       + windowGap(range.minHeight, range.maxHeight, height);
-    candidates.push({ label: size, key: normalizeSize(size), range, distance, bodyDistance });
+    const quality = Math.min(
+      axisQuality(range.minWeight, range.maxWeight, effectiveWeight),
+      axisQuality(range.minHeight, range.maxHeight, height),
+    );
+    candidates.push({ label: size, key: normalizeSize(size), range, distance, bodyDistance, quality });
   }
 
   let mode = 'ranges';
@@ -368,7 +406,8 @@ function buildCandidates(input = {}) {
       if (!key) continue;
       const chestRange = CHEST_RANGES[key];
       const distance = windowGap(chestRange[0], chestRange[1], target);
-      candidates.push({ label: size, key, chestRange, distance });
+      const quality = axisQuality(chestRange[0], chestRange[1], target);
+      candidates.push({ label: size, key, chestRange, distance, quality });
     }
   }
 
@@ -404,7 +443,9 @@ function sizeOrder(candidate) {
 }
 
 function compareCandidates(a, b) {
-  return a.distance - b.distance || sizeOrder(b) - sizeOrder(a);
+  return a.distance - b.distance
+    || (b.quality ?? 0) - (a.quality ?? 0)
+    || sizeOrder(b) - sizeOrder(a);
 }
 
 function stockReader(input) {
@@ -500,18 +541,44 @@ export function recommendSize(input = {}) {
   return result;
 }
 
-// ── Match percentages ────────────────────────────────────────────────────────
-// A percentage is only worth showing if it is derived from the same distance
-// that ranks the sizes, so it is: score = 100 * e^(-distance / decay), minus a
-// small step per rank so two sizes inside the same window are still ordered the
-// way the engine ordered them. `decay` is in the mode's own units (cm+kg for
-// owner windows, cm for the chart).
-const SCORE_DECAY = { ranges: 9, chart: 2.6 };
-// Never claim certainty: a size can be an excellent match, not a guaranteed fit.
-const SCORE_MAX = 99;
-// A floor keeps the worst sizes ordered instead of collapsing to the same 1%.
-const SCORE_FLOOR = 4;
+// ── Relative match scores ────────────────────────────────────────────────────
+// This is a heuristic score, not a calibrated probability. It answers one
+// question — how well does this size's own window cover your numbers? — and
+// never claims more than that:
+//
+//   • inside the window it falls from 97 points at the centre to about 68 at the
+//     edge, because a shopper on the edge is one centimetre from the next size;
+//   • outside the window it keeps falling, with a short 2.6 cm/kg decay;
+//   • the published chart is an estimate from height and weight, not a
+//     measurement, so it is capped lower than a window the owner set himself.
+//
+// The store cannot see the garment on the body, so this relative ranking score
+// is never a probability or a guarantee.
+const SCORE_CEILING = { ranges: 1, chart: 0.9 };
+const SCORE_MAX = 97;
 const SCORE_RANK_STEP = 2;
+
+/**
+ * Which edge of a two-sided window the shopper is closest to, when they are
+ * close enough for it to matter (60% of the half-window or more).
+ */
+function edgeSide(min, max, value) {
+  if (min === null || max === null) return null;
+  const tolerance = (max - min) / 2;
+  if (!(tolerance > 0)) return null;
+  const ratio = Math.abs(value - (min + max) / 2) / tolerance;
+  if (ratio < 0.6) return null;
+  return { ratio, side: value >= (min + max) / 2 ? 'upper' : 'lower' };
+}
+
+/** The closest edge across the weight and height windows, or ''. */
+function nearestEdge(range, weight, height) {
+  const found = [
+    edgeSide(range.minWeight, range.maxWeight, weight),
+    edgeSide(range.minHeight, range.maxHeight, height),
+  ].filter(Boolean).sort((a, b) => b.ratio - a.ratio)[0];
+  return found ? found.side : '';
+}
 
 /** One honest sentence per size, used under every result. */
 function explainCandidate(candidate, ctx) {
@@ -526,9 +593,11 @@ function explainCandidate(candidate, ctx) {
     const weightDelta = windowDelta(range.minWeight, range.maxWeight, ctx.effectiveWeight);
     const heightDelta = windowDelta(range.minHeight, range.maxHeight, ctx.height);
     if (weightDelta === 0 && heightDelta === 0) {
+      const edge = nearestEdge(range, ctx.effectiveWeight, ctx.height);
+      const edgeText = edge ? `, close to its ${edge} edge` : '';
       return nudge === 0
-        ? `Made for ${window}. Your ${ctx.weight} kg and ${ctx.height} cm sit inside that window.`
-        : `Made for ${window}. For a ${ctx.fit} fit your ${ctx.weight} kg counts as ${ctx.effectiveWeight} kg — still inside that window at ${ctx.height} cm.`;
+        ? `Made for ${window}. Your ${ctx.weight} kg and ${ctx.height} cm sit inside that window${edgeText}.`
+        : `Made for ${window}. For a ${ctx.fit} fit your ${ctx.weight} kg counts as ${ctx.effectiveWeight} kg — still inside that window at ${ctx.height} cm${edgeText}.`;
     }
     const parts = [];
     if (weightDelta) parts.push(`${Math.abs(weightDelta)} kg ${weightDelta > 0 ? 'over' : 'under'}`);
@@ -543,10 +612,11 @@ function explainCandidate(candidate, ctx) {
   const offset = ctx.target - ctx.bodyChest;
   const counted = offset === 0
     ? `Your estimate is ${ctx.bodyChest} cm`
-    : `Your ${ctx.bodyChest} cm estimate plus ${offset} cm for a ${ctx.fit} fit is ${ctx.target} cm`;
+    : `Your ${ctx.bodyChest} cm estimate ${offset > 0 ? 'plus' : 'minus'} ${Math.abs(offset)} cm for a ${ctx.fit} fit is ${ctx.target} cm`;
   const delta = windowDelta(lo, hi, ctx.target);
   if (delta === 0) {
-    return `Cut for a ${lo}–${hi} cm chest. ${counted}, inside it.`;
+    const edge = edgeSide(lo, hi, ctx.target);
+    return `Cut for a ${lo}–${hi} cm chest. ${counted}, inside it${edge ? `, close to its ${edge.side} edge` : ''}.`;
   }
   return `Cut for a ${lo}–${hi} cm chest. ${counted}, ${Math.abs(delta)} cm ${delta > 0 ? 'over' : 'under'}.`;
 }
@@ -555,7 +625,9 @@ function explainCandidate(candidate, ctx) {
  * Score every offered size, in the product's own size order.
  *
  * The recommendation comes from `recommendSize`, so the highlighted size is
- * exactly the one the engine would pick — including its stock swap.
+ * exactly the one the engine would pick — including its stock swap. Because the
+ * quality term is monotone in the same distance the engine ranked, the
+ * recommended size always carries the highest relative score.
  */
 export function scoreSizes(input = {}) {
   const decision = recommendSize(input);
@@ -565,16 +637,18 @@ export function scoreSizes(input = {}) {
   if (!built.ok) return built;
 
   const ordered = [...built.candidates].sort(compareCandidates);
-  const decay = SCORE_DECAY[built.mode];
+  const ceiling = SCORE_CEILING[built.mode] ?? SCORE_CEILING.ranges;
   const stockValue = stockReader(input);
 
   const sizes = ordered.map((candidate, index) => {
-    const decayed = Math.max(SCORE_FLOOR, 100 * Math.exp(-candidate.distance / decay));
+    const quality = Number.isFinite(candidate.quality) ? candidate.quality : 1;
+    const raw = Math.round(100 * ceiling * Math.max(0, Math.min(1, quality)));
     const stock = stockValue(candidate.label);
     return {
       label: candidate.label,
-      score: Math.max(1, Math.min(SCORE_MAX, Math.round(decayed) - index * SCORE_RANK_STEP)),
+      score: Math.max(1, Math.min(SCORE_MAX, raw - index * SCORE_RANK_STEP)),
       distance: candidate.distance,
+      quality,
       inStock: stock === null ? null : stock > 0,
       recommended: candidate.label === decision.size,
       reason: explainCandidate(candidate, built),

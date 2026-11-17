@@ -331,14 +331,16 @@ ok(/transform: `scale\(\$\{widthScale\.toFixed\(3\)\}, \$\{heightScale\.toFixed\
 ok(finder.includes('CHEST_WIDTH') && finder.includes('WAIST_WIDTH'),
   'the chest and waist answers reshape the drawing');
 ok(finder.includes('MatchGauge'), 'the result renders a circular gauge');
-ok(finder.includes('scoreBand(shown.score,'), 'the percentage also reads as a sentence');
+ok(finder.includes('scoreBand(shown.score,'), 'the estimated match score also reads as a sentence');
 ok(finder.includes('Best available in this colour'),
   'a stock swap is labelled as the best available size, not a rough estimate');
 ok(finder.includes('result?.decision?.swappedForStock'), 'the band knows about the stock swap');
-ok(finder.includes('{entry.score}%'), 'every size chip shows its percentage');
+ok(finder.includes('{entry.score}/100'), 'every size chip shows a score out of 100');
+ok(finder.includes('showRecommendation(option)'), 'choosing a fit immediately shows the recommendation');
+ok(!finder.includes("{step < 2 ? 'Next' : 'Find my size'}"), 'the last-step submit button is removed');
 ok(finder.includes('onClick={() => setActiveSize(entry.label)}'),
   'the shopper can switch between sizes');
-ok(finder.includes('aria-label="Match for every size"'), 'the size chips are grouped for screen readers');
+ok(finder.includes('aria-label="Estimated match score for every size, out of 100"'), 'the size chips explain their score to screen readers');
 ok(finder.includes('role="dialog"') && finder.includes('aria-modal="true"'),
   'the flow is a modal dialog');
 ok(finder.includes("event.key === 'Escape'"), 'Escape closes the dialog');
@@ -498,7 +500,7 @@ ok(finder.includes('const [result, setResult] = useState(null)'),
 ok(finder.includes('const [resultProfile, setResultProfile] = useState(null)'),
   'no result profile exists before the shopper submits');
 const scoreCalls = (finder.match(/scoreSizes\(/g) || []).length;
-eq(scoreCalls, 1, 'the engine runs only from the last-step handler');
+eq(scoreCalls, 1, 'the engine runs only after the last answer is provided');
 ok(!finder.includes('useEffect(() => {\n    if (!supported)'), 'no effect computes a size on mount');
 ok(finder.includes("const saved = useMemo(() => loadFitProfile(readStorage()), [])"),
   'the saved profile is still read for pre-filling');
@@ -509,28 +511,28 @@ ok(finder.includes("saved?.bodyShape?.chest || 'average'") &&
    finder.includes("saved?.bodyShape?.waist || 'average'"),
   'the saved shape answers pre-fill too, with neutral defaults');
 
-section('21 — match percentages');
+section('21 — estimated match scores');
 const scored = scoreSizes({ height: 180, weight: 78, sizes: ['M', 'L', 'XL'], fit: 'regular' });
 eq(scored.ok, true, 'every offered size is scored');
 eq(scored.sizes.length, 3, 'one score per size');
-eq(scored.recommended, 'L', 'the percentage winner is the engine recommendation');
+eq(scored.recommended, 'L', 'the highest score is the engine recommendation');
 const highest = [...scored.sizes].sort((a, b) => b.score - a.score)[0];
-eq(highest.label, 'L', 'the recommended size carries the highest percentage');
-ok(scored.sizes.every((entry) => entry.score >= 1 && entry.score <= 99),
-  'percentages stay inside 1–99, never a promise of certainty');
+eq(highest.label, 'L', 'the recommended size carries the highest score');
+ok(scored.sizes.every((entry) => entry.score >= 1 && entry.score <= 97),
+  'scores stay within the heuristic scale ceiling');
 ok(scored.sizes.every((entry) => typeof entry.reason === 'string' && entry.reason.length > 20),
   'every size explains its own number');
 eq(scored.sizes.map((entry) => entry.label).join(','), 'M,L,XL',
   'the chips keep the product size order');
 ok(scored.sizes.find((entry) => entry.label === 'L').reason.includes('chest'),
   'the chart reason quotes the chest range');
-ok(/^\d+%$/.test(`${highest.score}%`), 'the percentage renders as a whole number');
+ok(/^\d+\/100$/.test(`${highest.score}/100`), 'the score is presented out of 100, not as probability');
 const byScore = [...scored.sizes].sort((a, b) => b.score - a.score);
 ok(byScore[0].distance <= byScore[byScore.length - 1].distance,
-  'a higher percentage never belongs to a more distant size');
+  'a higher match score never belongs to a more distant size');
 
-const exactScore = scoreSizes({ height: 180, weight: 78, sizes: ['L'], sizeRanges: OWNER_RANGES });
-eq(exactScore.sizes[0].score, 99, 'an exact window match is capped at 99%');
+const exactScore = scoreSizes({ height: 182, weight: 78, sizes: ['L'], sizeRanges: OWNER_RANGES });
+eq(exactScore.sizes[0].score, 97, 'an exact window match is capped at 97 points');
 ok(exactScore.sizes[0].reason.includes('inside'), 'an inside-the-window size says so');
 
 const farScore = scoreSizes({ height: 160, weight: 50, sizes: ['M', 'L', 'XL'], fit: 'regular' });
@@ -547,14 +549,14 @@ eq(stockScored.sizes.find((entry) => entry.label === 'L').inStock, false,
 eq(scoreSizes({ height: 100, weight: 78, sizes: ['M'] }).reason, 'invalid-body',
   'an impossible body is refused, not scored');
 
-// The sentence under a size must describe the same quantity its percentage was
+// The sentence under a size must describe the same quantity its score was
 // computed from. A relaxed fit adds 6 cm of ease, so a size can be "2 cm over"
 // even though the shopper's own chest estimate sits inside its range.
 const relaxedScored = scoreSizes({ height: 180, weight: 78, sizes: ['M', 'L', 'XL'], fit: 'relaxed' });
 const relaxedL = relaxedScored.sizes.find((entry) => entry.label === 'L');
 ok(relaxedL.score < 99, 'a size that only fits with ease is not scored as an exact match');
 ok(!relaxedL.reason.includes('inside it'),
-  'the reason never claims an exact fit while the percentage says otherwise');
+  'the reason never claims an exact fit while the score says otherwise');
 ok(relaxedL.reason.includes('relaxed fit'), 'the reason names the fit that moved the target');
 ok(relaxedL.reason.includes('plus 6 cm'), 'the reason quotes the ease the fit added');
 eq(relaxedScored.sizes.find((entry) => entry.label === 'XL').score, 99,
