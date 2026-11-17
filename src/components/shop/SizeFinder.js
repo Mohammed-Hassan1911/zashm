@@ -352,7 +352,6 @@ export default function SizeFinder({
   const [result, setResult] = useState(null);
   const [resultProfile, setResultProfile] = useState(null);
   const [activeSize, setActiveSize] = useState(null);
-  const [showWhy, setShowWhy] = useState(false);
 
   const dialogRef = useRef(null);
   const titleRef = useRef(null);
@@ -455,7 +454,6 @@ export default function SizeFinder({
     setResult(next);
     setResultProfile({ height, weight, chest, waist, fit });
     setActiveSize(next.recommended);
-    setShowWhy(false);
     setStep(3);
     saveFitProfile({ height, weight, fit: fitPreference, bodyShape: { chest, waist } }, readStorage());
   };
@@ -478,7 +476,6 @@ export default function SizeFinder({
     setResult(null);
     setResultProfile(null);
     setActiveSize(null);
-    setShowWhy(false);
     setStep(0);
   };
 
@@ -512,7 +509,41 @@ export default function SizeFinder({
     ? scoreBand(shown.score, Boolean(result?.decision?.swappedForStock) && shown.label === result.recommended)
     : null;
   const recommended = result?.sizes?.find((entry) => entry.label === result.recommended) || shown;
-  const otherSizes = result?.sizes?.filter((entry) => entry.label !== result.recommended) || [];
+  const preferenceExplanation = useMemo(() => {
+    if (!shown || !recommended || !result?.sizes) return '';
+    const alternatives = result.sizes.filter((entry) => entry.label !== shown.label);
+
+    if (shown.label === recommended.label) {
+      if (alternatives.length === 0) return 'This is the only size available for this item.';
+      const comparisons = alternatives.map((entry) => {
+        const skippedForStock = result.decision?.swappedForStock
+          && result.decision.skippedSize === entry.label;
+        let lead;
+        if (skippedForStock) {
+          lead = `${entry.label} scored ${entry.score}/100 and was the closer fit, but it is sold out in this colour. We chose available size ${recommended.label} instead. `;
+        } else if (entry.score < recommended.score) {
+          lead = `We preferred ${recommended.label} (${recommended.score}/100) over ${entry.label} (${entry.score}/100). `;
+        } else if (entry.score === recommended.score) {
+          lead = `We preferred ${recommended.label} after comparing it with ${entry.label} (${entry.score}/100). `;
+        } else {
+          lead = `${entry.label} scored ${entry.score}/100, but the fit engine selected ${recommended.label} after comparing the full size ranges. `;
+        }
+        return `${lead}${entry.reason}`;
+      }).join(' ');
+      return comparisons;
+    }
+
+    const preferred = alternatives.filter((entry) =>
+      entry.label === recommended.label || entry.score > shown.score
+    );
+    return preferred.map((entry) => {
+      const soldOut = entry.inStock === false;
+      const lead = soldOut
+        ? `${entry.label} scored ${entry.score}/100 and is a closer fit than ${shown.label}, but it is sold out in this colour. `
+        : `We preferred ${entry.label} (${entry.score}/100) over ${shown.label} (${shown.score}/100). `;
+      return `${lead}${entry.reason}`;
+    }).join(' ');
+  }, [shown, recommended, result]);
   const profileLine = resultProfile
     ? `${resultProfile.height} cm · ${resultProfile.weight} kg · ${FIT_LABELS[resultProfile.fit] || FIT_LABELS.regular}`
     : '';
@@ -817,11 +848,15 @@ export default function SizeFinder({
                   {step === 3 && shown && (
                     <div className="size-finder-result">
                       <div aria-live="polite" className="sr-only">
-                        {`We recommend size ${shown.label}, with a match score of ${shown.score} out of 100. ${band.label}.`}
+                        {shown.label === recommended?.label
+                          ? `We recommend size ${shown.label}, with a match score of ${shown.score} out of 100. ${band.label}.`
+                          : `You are viewing size ${shown.label}. We recommend size ${recommended?.label}.`}
                       </div>
 
                       <p className="size-finder-recommendation">
-                        We recommend size <strong>{shown.label}</strong> · {shown.score}/100 match score
+                        {shown.label === recommended?.label
+                          ? <>We recommend size <strong>{shown.label}</strong> · {shown.score}/100 match score</>
+                          : <>Reviewing size <strong>{shown.label}</strong> · recommended size {recommended?.label}</>}
                       </p>
                       <MatchGauge size={shown.label} score={shown.score} reduceMotion={reduceMotion} />
                       <p className="size-finder-score-note">
@@ -838,7 +873,12 @@ export default function SizeFinder({
                         )}
                       </div>
 
-                      <p className="size-finder-reason">{shown.reason}</p>
+                      <div className="size-finder-explanation" aria-live="polite">
+                        <p className="size-finder-reason">{shown.reason}</p>
+                        {preferenceExplanation && (
+                          <p className="size-finder-preference-reason">{preferenceExplanation}</p>
+                        )}
+                      </div>
 
                       {result.decision && result.decision.swappedForStock && (
                         <p className="size-finder-warn">
@@ -867,6 +907,10 @@ export default function SizeFinder({
                       </div>
 
                       <div className="size-finder-actions">
+                        <button type="button" className="size-finder-back" onClick={goBack}>
+                          <ArrowLeft size={15} aria-hidden="true" />
+                          Back
+                        </button>
                         <button
                           type="button"
                           className="size-finder-next"
@@ -898,54 +942,6 @@ export default function SizeFinder({
                           </button>
                         )}
                       </div>
-
-                      <div className="size-finder-why">
-                        <button
-                          type="button"
-                          className="size-finder-why-toggle"
-                          aria-expanded={showWhy}
-                          aria-controls={showWhy ? 'size-finder-why-body' : undefined}
-                          onClick={() => setShowWhy((value) => !value)}
-                        >
-                          Why this size?
-                        </button>
-                        {showWhy && (
-                          <div id="size-finder-why-body" className="size-finder-why-body">
-                            <p>{result.decision?.reason}</p>
-                            <p className="size-finder-why-meta">
-                              {result.mode === 'ranges'
-                                ? 'Matched against the size windows published for this item.'
-                                : 'Matched against the published chest chart for this item.'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {recommended && otherSizes.length > 0 && (
-                        <section className="size-finder-comparisons" aria-label="Why other sizes were not recommended">
-                          <h3>Why we recommended {recommended.label}</h3>
-                          {otherSizes.map((entry) => {
-                            const skippedForStock = result.decision?.swappedForStock
-                              && result.decision.skippedSize === entry.label;
-                            let comparison;
-                            if (skippedForStock) {
-                              comparison = `${entry.label} was the closest fit, but it is sold out in this colour. We recommended available size ${recommended.label} instead.`;
-                            } else if (entry.score < recommended.score) {
-                              comparison = `We preferred ${recommended.label} (${recommended.score}/100) over ${entry.label} (${entry.score}/100) because it matches your measurements more closely.`;
-                            } else if (entry.score === recommended.score) {
-                              comparison = `These sizes scored equally. We preferred ${recommended.label} after comparing the full height and weight ranges.`;
-                            } else {
-                              comparison = `${entry.label} scored ${entry.score}/100, but the fit engine recommended ${recommended.label} after comparing the full size ranges and availability.`;
-                            }
-                            return (
-                              <div className="size-finder-comparison" key={`comparison-${entry.label}`}>
-                                <p className="size-finder-comparison-title">{comparison}</p>
-                                <p className="size-finder-comparison-reason">{entry.reason}</p>
-                              </div>
-                            );
-                          })}
-                        </section>
-                      )}
 
                       <button type="button" className="size-finder-restart" onClick={startOver}>
                         Start over

@@ -287,8 +287,10 @@ ok(finder.includes('size-finder-input'), 'the inputs are scoped for mobile sizin
 ok(finder.includes('No tape measure needed'), 'the promise of no tape measure is stated');
 ok(finder.includes('exchange within 7 days'), 'the exchange reassurance is shown');
 ok(finder.includes('{shown.reason}'), 'every size renders its own explanation');
-ok(finder.includes('{result.decision?.reason}'), 'the engine explanation is still reachable');
-ok(finder.includes('Why this size?'), 'the long explanation sits behind a disclosure');
+ok(finder.includes('{preferenceExplanation}') && finder.includes('entry.reason'),
+  'the selected size explanation updates with its comparison against alternatives');
+ok(!finder.includes('Why this size?') && !finder.includes('size-finder-comparisons'),
+  'there is no separate explanation block below the result');
 ok(finder.includes('resultProfile'), 'the collapsed facts come from the profile that produced the result');
 ok(finder.includes('const [result, setResult] = useState(null)'),
   'no recommendation exists before the shopper submits');
@@ -347,9 +349,13 @@ ok(finder.includes('aria-label="Estimated match score for every size, out of 100
 ok(finder.includes('className="size-finder-restart"'), 'the final step offers a restart control');
 ok(/\.size-finder-restart\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*5px/s.test(css),
   'Start over has a visible, polished border');
-ok(finder.includes('className="size-finder-comparisons"') && finder.includes('{entry.reason}') &&
-   finder.includes('We preferred ${recommended.label}'),
-  'the final result explains why each other size ranked lower');
+ok(finder.includes('className="size-finder-explanation"') &&
+   finder.includes('We preferred ${entry.label}') && finder.includes('onClick={goBack}'),
+  'the reason changes with the chosen size and Back is available at the result actions');
+const resultActionsStart = finder.lastIndexOf('<div className="size-finder-actions">');
+const resultActions = finder.slice(resultActionsStart, resultActionsStart + 1800);
+ok(resultActions.includes('Back') && resultActions.includes('Select size ${shown.label}') && resultActions.includes('Size guide'),
+  'Back, Select size and Size guide share the final action group');
 ok(finder.includes('role="dialog"') && finder.includes('aria-modal="true"'),
   'the flow is a modal dialog');
 ok(finder.includes("event.key === 'Escape'"), 'Escape closes the dialog');
@@ -391,17 +397,13 @@ ok(/html\s*\{[^}]*scrollbar-color:\s*var\(--gold\) var\(--bg2\)/s.test(css) &&
    /::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--gold\)/.test(css),
   'the site-wide scrollbar is gold outside the finder too');
 
-// The floating WhatsApp action is fixed to the bottom-left and must stay
-// visible, so on a phone the sheet's last two controls live on the right.
+// On phones the result controls share the bottom action group and the
+// explanation stays inside the result panel.
 const phoneCss = css.slice(css.indexOf('@media (max-width: 640px)'));
-ok(/\.size-finder-why\s*\{[\s\S]{0,80}text-align:\s*right/.test(phoneCss),
-  'the phone sheet moves its last controls away from the floating action');
 ok(/\.size-finder-restart\s*\{[\s\S]{0,60}justify-self:\s*end/.test(phoneCss),
   'Start over also sits on the right on a phone');
-ok(/\.size-finder-why-body\s*\{[\s\S]{0,40}text-align:\s*left/.test(phoneCss),
-  'the explanation itself stays left-aligned');
-ok(/\.size-finder-why-toggle\s*\{[\s\S]{0,60}min-height:\s*44px/.test(css),
-  'the why link has a comfortable touch target');
+ok(/\.size-finder-explanation\s*\{[^}]*display:\s*grid/.test(css),
+  'the comparison explanation stays in the selected-size result area');
 ok(/\.size-finder-restart\s*\{[\s\S]{0,60}min-height:\s*44px/.test(css),
   'Start over has a comfortable touch target');
 const toolMarkers = ['open' + 'code', 'chat' + 'gpt', 'clau' + 'de', 'co' + 'pilot'];

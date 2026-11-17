@@ -3152,14 +3152,27 @@ main, [role="main"] {
 
 .size-finder-reason {
   margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text2);
+}
+
+.size-finder-explanation {
+  display: grid;
+  gap: 10px;
   padding: 12px 14px;
   border: 1px solid rgba(201, 168, 76, 0.2);
   border-left: 2px solid rgba(201, 168, 76, 0.65);
   border-radius: 6px;
   background: rgba(201, 168, 76, 0.045);
-  font-size: 12px;
-  line-height: 1.8;
+}
+.size-finder-preference-reason {
+  margin: 0;
+  padding-top: 9px;
+  border-top: 1px solid rgba(201, 168, 76, 0.16);
   color: var(--text2);
+  font-size: 11px;
+  line-height: 1.75;
 }
 
 .size-finder-warn {
@@ -3167,42 +3180,6 @@ main, [role="main"] {
   font-size: 11px;
   line-height: 1.6;
   color: var(--gold);
-}
-
-.size-finder-comparisons {
-  display: grid;
-  gap: 10px;
-  padding: 13px 14px;
-  border: 1px solid rgba(201, 168, 76, 0.18);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.018);
-}
-.size-finder-comparisons h3,
-.size-finder-comparison p {
-  margin: 0;
-}
-.size-finder-comparisons h3 {
-  color: var(--gold);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.size-finder-comparison {
-  display: grid;
-  gap: 4px;
-  padding-top: 9px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-.size-finder-comparison-title {
-  color: var(--text);
-  font-size: 11px;
-  line-height: 1.55;
-}
-.size-finder-comparison-reason {
-  color: var(--text2);
-  font-size: 11px;
-  line-height: 1.7;
 }
 
 .size-finder-chips {
@@ -3261,38 +3238,6 @@ main, [role="main"] {
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: #d98383;
-}
-
-.size-finder-why-toggle {
-  min-height: 44px;
-  padding: 4px 0;
-  font-size: 11px;
-  letter-spacing: 0.4px;
-  color: var(--text3);
-  text-decoration: underline;
-  text-decoration-color: rgba(201, 168, 76, 0.35);
-  text-underline-offset: 3px;
-}
-.size-finder-why-toggle:hover,
-.size-finder-why-toggle:focus-visible {
-  color: var(--gold);
-  outline: none;
-}
-
-.size-finder-why-body {
-  display: grid;
-  gap: 6px;
-  margin-top: 6px;
-}
-.size-finder-why-body p {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.65;
-  color: var(--text2);
-}
-.size-finder-why-meta {
-  color: var(--text3) !important;
-  font-size: 10px !important;
 }
 
 .size-finder-restart {
@@ -3360,17 +3305,6 @@ main, [role="main"] {
     padding-bottom: calc(
       clamp(16px, 4vw, 26px) + env(safe-area-inset-bottom, 0px) + 24px
     );
-  }
-
-  /* The floating WhatsApp action owns the bottom-left corner of the screen at
-     every scroll position (it must stay visible), so the sheet's last two
-     controls sit on the right and can never be tapped through it. */
-  .size-finder-why {
-    text-align: right;
-  }
-
-  .size-finder-why-body {
-    text-align: left;
   }
 
   .size-finder-restart {
