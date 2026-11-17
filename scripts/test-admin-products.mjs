@@ -489,7 +489,8 @@ console.log('\n[9] admin size-window editor wiring');
     && /key: 'minHeight'/.test(src) && /key: 'maxHeight'/.test(src),
     'min/max weight and min/max height are all present');
   ok(/📏 Size finder windows/.test(src), 'the panel is labelled for the owner');
-  ok(/sizeRangeProblems\(form\.sizeRanges\)/.test(src), 'inverted windows block the save');
+  ok(/sizeRangeProblems\(form\.sizeRanges, cleanSizes\)/.test(src),
+    'inverted or out-of-range windows block the save, for declared sizes only');
   ok(/toast\.error\(`⚠️ \$\{rangeProblems\[0\]\}/.test(src), 'the exact problem is shown to the owner');
   ok(/sanitizeSizeRanges\(form\.sizeRanges, cleanSizes\)/.test(src), 'windows are sanitized against the declared sizes');
   ok(/\.filter\(\(\[size\]\) => cleanSizes\.includes\(size\)\)/.test(src),

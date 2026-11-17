@@ -579,12 +579,17 @@ console.log('\n[4b] Admin shows the orphaned stock it refuses to sell');
     'the product editor imports the orphan report');
   ok(/import \{[^}]*hasInvalidVariantConfig[^}]*\} from '\.\.\/lib\/pricing'/.test(adminSrc),
     'and the invalid-configuration check');
-  ok(/orphaned stock entr/.test(adminSrc) && /that cannot be sold/.test(adminSrc),
-    'the warning counts the entries and the units that cannot be sold');
-  ok(/cannot be sold[\s\S]{0,700}nothing[\s\S]{0,60}?deleted|Stock total shown here and saved on the product = declared combinations only/.test(adminSrc),
-    'the warning explains that the count is declared-only and nothing is deleted');
+  ok(/undeclared combination/.test(adminSrc) && /excluded from stock/.test(adminSrc),
+    'the warning counts the combinations and the units that cannot be sold');
+  ok(/Nothing is deleted[\s\S]{0,260}sellable again/.test(adminSrc),
+    'the warning explains that nothing is deleted and re-adding revives the units');
+  ok(/Saved stock = declared combinations only/.test(adminSrc),
+    'the warning explains that the saved total is declared-only');
+  ok(/<details>/.test(adminSrc) && /<summary/.test(adminSrc),
+    'the full per-combination list stays available behind a disclosure');
   eq(adminSrc.split('key="__orphaned__"').length - 1, 1, 'the orphan panel renders once');
-  ok(/role="alert"/.test(adminSrc), 'the panel is announced to screen readers');
+  ok(/role="status"[^>]*>[\s\S]{0,120}<details/.test(adminSrc),
+    'the collapsed panel is announced politely instead of as an alarm');
   ok(!/update\('variantStock',\s*\{\}/.test(adminSrc), 'the panel offers no bulk-clear action');
 }
 

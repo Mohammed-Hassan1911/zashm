@@ -12,7 +12,11 @@ import {
   BOTTOM_WAIST_SHAPES,
   CHEST_SHAPES,
   FIT_OFFSET,
+  FIT_OPTIONS,
+  FIT_OPTIONS_BOTTOM,
   FIT_WEIGHT_NUDGE,
+  FIT_WEIGHT_NUDGE_BOTTOM,
+  FIT_WAIST_OFFSET,
   GARMENT,
   SEAT_SHAPES,
   WAIST_RANGES,
@@ -20,9 +24,11 @@ import {
   describeRange,
   estimateChest,
   estimateWaist,
+  fitOptionsFor,
   garmentKind,
   hasOwnerRanges,
   loadFitProfile,
+  normalizeFit,
   normalizeSize,
   recommendSize,
   sanitizeBodyShape,
@@ -107,6 +113,27 @@ ok(FIT_OFFSET.slim < FIT_OFFSET.regular && FIT_OFFSET.regular < FIT_OFFSET.relax
 eq(FIT_OFFSET.regular, 0, 'regular keeps the body estimate');
 eq(FIT_WEIGHT_NUDGE.regular, 0, 'regular never shifts the owner windows');
 ok(FIT_WEIGHT_NUDGE.slim < FIT_WEIGHT_NUDGE.oversized, 'slim nudges down, oversized nudges up');
+
+// Trousers offer a wide leg, not an oversized waistband.
+eq(FIT_OPTIONS.join(','), 'slim,regular,relaxed,oversized', 'tops keep the four familiar fits');
+eq(FIT_OPTIONS_BOTTOM.join(','), 'slim,regular,relaxed,wide', 'trousers replace oversized with wide leg');
+eq(fitOptionsFor(GARMENT.BOTTOM).join(','), FIT_OPTIONS_BOTTOM.join(','), 'bottoms get the bottom options');
+eq(fitOptionsFor(GARMENT.TOP).join(','), FIT_OPTIONS.join(','), 'tops keep the top options');
+eq(normalizeFit('oversized', GARMENT.BOTTOM), 'wide', 'a saved oversized shirt fit becomes wide leg on a trouser');
+eq(normalizeFit('wide', GARMENT.TOP), 'oversized', 'a saved wide trouser fit becomes oversized on a shirt');
+eq(normalizeFit('relaxed', GARMENT.BOTTOM), 'relaxed', 'a fit both garments offer is kept as-is');
+eq(normalizeFit('nonsense', GARMENT.BOTTOM), 'regular', 'an unknown fit falls back to regular');
+ok(FIT_WAIST_OFFSET.slim < FIT_WAIST_OFFSET.regular
+  && FIT_WAIST_OFFSET.regular < FIT_WAIST_OFFSET.relaxed
+  && FIT_WAIST_OFFSET.relaxed < FIT_WAIST_OFFSET.wide,
+  'trouser waist ease grows slim → regular → relaxed → wide');
+ok(FIT_WAIST_OFFSET.wide < 8, 'a wide leg adds less waist ease than the old oversized (8 cm)');
+eq(FIT_WAIST_OFFSET.regular, 0, 'a regular trouser keeps the estimated waist');
+eq(FIT_WEIGHT_NUDGE_BOTTOM.regular, 0, 'a regular trouser never shifts the owner windows');
+ok(FIT_WEIGHT_NUDGE_BOTTOM.relaxed < FIT_WEIGHT_NUDGE.relaxed,
+  'the trouser weight nudge is gentler than the shirt nudge');
+ok(FIT_WEIGHT_NUDGE_BOTTOM.wide < FIT_WEIGHT_NUDGE.oversized,
+  'wide leg nudges less than oversized did');
 
 section('4 — chart mode: recommendation follows height, weight and fit');
 const base = { height: 180, weight: 78, sizes: ['M', 'L', 'XL'] };
@@ -223,6 +250,23 @@ eq(JSON.stringify(sizeRangeProblems({ M: { maxHeight: 100 } })),
   JSON.stringify(['M: maximum height must be between 120 and 230 cm']),
   'an out-of-range height is reported');
 eq(sizeRangeProblems(null).length, 0, 'missing ranges have no problems');
+// A window kept for a size the product no longer declares must not block the
+// save: that field is not on screen, so the admin could never fix it.
+eq(JSON.stringify(sizeRangeProblems(
+  { M: { minHeight: 100 }, 32: { minHeight: 160, maxHeight: 175 } },
+  ['32', '34'],
+)), '[]', 'a hidden window for a removed size never blocks the save');
+eq(JSON.stringify(sizeRangeProblems(
+  { M: { minHeight: 100 }, 32: { minHeight: 100 } },
+  ['M', '32'],
+)), JSON.stringify([
+  '32: minimum height must be between 120 and 230 cm',
+  'M: minimum height must be between 120 and 230 cm',
+]), 'every declared size is still checked');
+eq(sizeRangeProblems({ m: { minHeight: 100 } }, ['M']).length, 1,
+  'the declared-size match ignores letter case');
+eq(sizeRangeProblems({ 32: { minHeight: 100 } }, ['32', '34']).length, 1,
+  'numeric trouser sizes are checked like any other size');
 eq(describeRange({ minWeight: 60, maxWeight: 75, minHeight: 165, maxHeight: 180 }), '60–75 kg, 165–180 cm',
   'describeRange formats a full window');
 eq(describeRange({ minWeight: 80, maxWeight: null, minHeight: null, maxHeight: 190 }), '80+ kg, up to 190 cm',
@@ -359,7 +403,8 @@ ok(/Math\.min\(max, Math\.max\(min, Math\.round\(parsed\)\)\)/.test(finder),
 ok(finder.includes('aria-valuetext={`${height} centimetres`}'), 'the slider announces its value');
 ok(finder.includes('CHEST_SHAPES.map') && finder.includes('WAIST_SHAPES.map'),
   'chest and waist are both asked');
-ok(finder.includes('FIT_OPTIONS.map'), 'fit is asked');
+ok(finder.includes('fitOptions.map') && finder.includes('fitOptionsFor(garment)'),
+  'the fit step asks with the options the garment offers');
 ok(finder.includes('FIT_HINTS_BOTTOM : FIT_HINTS)[option]'),
   'every fit choice explains itself in place, worded for the garment');
 ok(finder.includes('onClick={() => setFit(option)}') && !finder.includes('showRecommendation(option)'),
@@ -452,8 +497,10 @@ ok(css.includes('@media (max-width: 640px)') && css.includes('align-items: flex-
   'phones get a bottom sheet');
 ok(css.includes('100dvh'), 'the dialog fits the visible viewport on mobile browsers');
 ok(css.includes('env(safe-area-inset-bottom'), 'the sheet clears the phone safe area');
-ok(!/body\.size-finder-open\s+\.whatsapp-fab/.test(css),
-  'the finder keeps the floating WhatsApp action visible like the rest of the site');
+ok(/body\.size-finder-open\s+\.whatsapp-fab\s*\{[^}]*visibility:\s*hidden/s.test(css),
+  'opening the finder takes the WhatsApp action out of the way');
+ok(/body\.size-finder-open\s+\.whatsapp-fab\s*\{[^}]*pointer-events:\s*none/s.test(css),
+  'the hidden WhatsApp action cannot be clicked through');
 ok(/\.size-finder-scroll\s*\{[^}]*padding-bottom:\s*calc\([\s\S]{0,140}?88px/s.test(css),
   'the phone sheet reserves room for the floating actions');
 ok(/\.size-finder-scroll::-webkit-scrollbar-thumb\s*\{[^}]*linear-gradient\(180deg, #e8c870, #a98736\)/.test(css) &&
@@ -505,10 +552,13 @@ ok(/\.size-finder-gauge-halo,[\s\S]{0,120}\.size-finder-result > \*\s*\{\s*anima
 ok(/\.size-finder-progress-seg\[data-current='true'\]::after,[\s\S]{0,80}\.size-finder-next::after\s*\{\s*display:\s*none/.test(reducedCss),
   'the progress sweep and button sheen are removed for reduced-motion users');
 ok(/\.size-finder-actions\s*\{[^}]*flex-wrap:\s*nowrap/s.test(phoneCss) &&
-   /\.size-finder-actions-result\s*\{[^}]*flex-wrap:\s*wrap/s.test(phoneCss) &&
+   /\.size-finder-actions-result\s*\{[^}]*flex-wrap:\s*nowrap/s.test(phoneCss) &&
    /\.size-finder-actions-result \.size-finder-back-result\s*\{[^}]*order:\s*1/s.test(phoneCss) &&
-   /\.size-finder-actions-result \.size-finder-guide\s*\{[^}]*flex:\s*1 1 100%/s.test(phoneCss),
-  'phones keep Back beside Next, and the result puts Back + Select size on row one and Size guide on row two');
+   /\.size-finder-actions-result \.size-finder-next\s*\{[^}]*order:\s*2/s.test(phoneCss) &&
+   /\.size-finder-actions-result \.size-finder-guide\s*\{[^}]*order:\s*3/s.test(phoneCss),
+  'phones put Back, Select size and Size guide on one row');
+ok(!/\.size-finder-actions-result \.size-finder-guide\s*\{[^}]*flex:\s*1 1 100%/s.test(phoneCss),
+  'the size guide no longer takes a full-width row on phones');
 ok(finder.includes('size-finder-actions size-finder-actions-result'),
   'the result action group is marked so phones can stack it');
 const toolMarkers = ['open' + 'code', 'chat' + 'gpt', 'clau' + 'de', 'co' + 'pilot'];
@@ -818,11 +868,17 @@ const trouserSlim = recommendSize({ ...trouserBase, fit: 'slim', garment: GARMEN
 eq(trouserSlim.target, 81, 'a slim trouser targets a 3 cm smaller waist');
 eq(trouserSlim.size, 'M', 'the slim target stays inside M');
 const trouserRelaxed = recommendSize({ ...trouserBase, fit: 'relaxed', garment: GARMENT.BOTTOM });
-eq(trouserRelaxed.target, 88, 'a relaxed trouser adds 4 cm of ease');
+eq(trouserRelaxed.target, 86, 'a relaxed trouser adds 2 cm of ease');
 eq(trouserRelaxed.size, 'L', 'the relaxed target moves up to L');
-const trouserOversized = recommendSize({ ...trouserBase, fit: 'oversized', garment: GARMENT.BOTTOM });
-eq(trouserOversized.target, 92, 'an oversized trouser adds 8 cm');
-eq(trouserOversized.size, 'XL', 'the oversized target moves up to XL');
+const trouserWide = recommendSize({ ...trouserBase, fit: 'wide', garment: GARMENT.BOTTOM });
+eq(trouserWide.fit, 'wide', 'the wide leg fit is kept in the result');
+eq(trouserWide.target, 88, 'a wide leg trouser adds 4 cm of waist ease');
+eq(trouserWide.size, 'L', 'a wide leg moves up one size, not two');
+ok(trouserWide.reason.includes('wide-leg'), 'the reason names the wide-leg fit');
+const trouserLegacy = recommendSize({ ...trouserBase, fit: 'oversized', garment: GARMENT.BOTTOM });
+eq(trouserLegacy.fit, 'wide', 'a legacy oversized trouser choice becomes wide leg');
+eq(trouserLegacy.target, trouserWide.target, 'and gets the wide-leg ease, not the oversized ease');
+eq(trouserLegacy.size, 'L', 'a legacy oversized trouser never jumps two sizes');
 
 const trouserScores = scoreSizes({ ...trouserBase, fit: 'regular', garment: GARMENT.BOTTOM });
 eq(trouserScores.garment, GARMENT.BOTTOM, 'scoring keeps the garment kind');

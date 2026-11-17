@@ -1923,8 +1923,10 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     }
 
     // Size finder windows: an inverted pair is almost always a typo, so it is
-    // blocked with a precise message instead of being silently swapped.
-    const rangeProblems = sizeRangeProblems(form.sizeRanges);
+    // blocked with a precise message instead of being silently swapped. Only
+    // the sizes still declared are checked — a window kept for a removed size
+    // has no field on screen, so it must never block the save.
+    const rangeProblems = sizeRangeProblems(form.sizeRanges, cleanSizes);
     if (rangeProblems.length > 0) {
       toast.error(`⚠️ ${rangeProblems[0]}. Check the size finder windows.`);
       return;
@@ -2463,23 +2465,26 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                       }
                       if (orphaned.length > 0) {
                         const orphanUnits = orphaned.reduce((sum, o) => sum + (Number(o.qty) || 0), 0);
+                        // Collapsed by default: one quiet line, with the full
+                        // explanation and the per-combination list behind it.
                         rows.push(
-                          <div key="__orphaned__" role="alert" style={{ padding:'10px 12px', background:'rgba(243,156,18,0.08)', border:'1px solid #f39c12', borderRadius:4, marginBottom:8 }}>
-                            <p style={{ fontSize:11, color:'#f39c12', fontWeight:600, margin:'0 0 6px' }}>
-                              ⚠ {orphaned.length} orphaned stock entr{orphaned.length === 1 ? 'y' : 'ies'} — {orphanUnits} unit{orphanUnits === 1 ? '' : 's'} that cannot be sold
-                            </p>
-                            <p style={{ fontSize:11, color:'var(--text2)', margin:'0 0 8px' }}>
-                              These size/color combinations are no longer defined on the product, so they are excluded from the
-                              stock total, from the customer storefront and from checkout (the API and the database both refuse
-                              them). Nothing is deleted and no quantity is changed — they stay here untouched until you decide.
-                              Re-adding the size or colour below makes its units sellable again.
-                            </p>
-                            <ul style={{ margin:0, paddingLeft:16, fontSize:11, color:'var(--text2)' }}>
-                              {orphaned.map(o => <li key={o.key}>{o.key}: {o.qty}</li>)}
-                            </ul>
-                            <p style={{ fontSize:11, color:'var(--text3)', margin:'8px 0 0' }}>
-                              Stock total shown here and saved on the product = declared combinations only ({totalFor(form.variantStock || {})} units).
-                            </p>
+                          <div key="__orphaned__" role="status" style={{ padding:'6px 10px', background:'rgba(243,156,18,0.06)', border:'1px solid rgba(243,156,18,0.45)', borderRadius:4, marginBottom:8 }}>
+                            <details>
+                              <summary style={{ cursor:'pointer', padding:'2px 0', fontSize:10.5, lineHeight:1.5, color:'#f39c12', fontWeight:600, letterSpacing:0.2 }}>
+                                {orphaned.length} undeclared combination{orphaned.length === 1 ? '' : 's'} · {orphanUnits} unit{orphanUnits === 1 ? '' : 's'} excluded from stock
+                              </summary>
+                              <p style={{ fontSize:10.5, lineHeight:1.5, color:'var(--text2)', margin:'6px 0' }}>
+                                These size/colour pairs are no longer declared, so they are excluded from the stock
+                                total, the storefront and checkout. Nothing is deleted and no quantity is changed —
+                                re-adding the size or colour makes the units sellable again.
+                              </p>
+                              <ul style={{ margin:'0 0 6px', paddingLeft:16, fontSize:10.5, lineHeight:1.5, color:'var(--text2)' }}>
+                                {orphaned.map(o => <li key={o.key}>{o.key}: {o.qty}</li>)}
+                              </ul>
+                              <p style={{ fontSize:10.5, lineHeight:1.5, color:'var(--text3)', margin:0 }}>
+                                Saved stock = declared combinations only ({totalFor(form.variantStock || {})} units).
+                              </p>
+                            </details>
                           </div>
                         );
                       }

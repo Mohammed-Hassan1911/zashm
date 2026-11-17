@@ -1316,9 +1316,12 @@ select option { background: var(--bg3); }
   height: 52px;
 }
 
-/* The finder keeps the floating WhatsApp / scroll-to-top actions visible, as
-   everywhere else on the site. The phone sheet reserves bottom padding so they
-   never sit on top of the last control. */
+/* While the size finder is open it owns the screen, so the WhatsApp action is
+   taken out of the way. It comes back the moment the finder closes. */
+body.size-finder-open .whatsapp-fab {
+  visibility: hidden;
+  pointer-events: none;
+}
 
 .size-guide-overlay {
   align-items: center;
@@ -3470,8 +3473,8 @@ main, [role="main"] {
   }
 
   /* A little breathing room under the last control, so the sheet never ends
-     flush against the screen edge, plus room for the floating WhatsApp and
-     scroll-to-top actions that stay visible above this sheet. */
+     flush against the screen edge, plus room for the scroll-to-top action that
+     can still sit above this sheet. */
   .size-finder-scroll {
     padding-bottom: calc(
       var(--sf-pad) + env(safe-area-inset-bottom, 0px) + 88px
@@ -3517,29 +3520,52 @@ main, [role="main"] {
     padding: 0 14px;
   }
 
-  /* Result actions: Back and Select size share the first row (Select size takes
-     the remaining width), Size guide gets its own full-width row underneath. */
+  /* Result actions: Back, Select size and Size guide share one row on every
+     phone width. The labels shrink slightly and the secondary icons drop on
+     the narrowest screens so the three controls never wrap or overflow. */
   .size-finder-actions-result {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 5px;
   }
 
   .size-finder-actions-result .size-finder-back-result {
     order: 1;
     flex: 0 0 auto;
-    padding: 0 13px;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
   }
 
   .size-finder-actions-result .size-finder-next {
     order: 2;
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
-    padding: 0 10px;
-    letter-spacing: 1px;
+    padding: 0 6px;
+    gap: 4px;
+    font-size: 10.5px;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
   }
 
   .size-finder-actions-result .size-finder-guide {
     order: 3;
-    flex: 1 1 100%;
+    flex: 0 0 auto;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 359px) {
+  /* Two icons and 20px of padding are the difference between one row and a
+     wrap at 320px, so the secondary icons step aside there. */
+  .size-finder-actions-result .size-finder-back-result svg,
+  .size-finder-actions-result .size-finder-guide svg {
+    display: none;
   }
 }
 

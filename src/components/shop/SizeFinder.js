@@ -12,12 +12,13 @@ import {
   BODY_LIMITS,
   BOTTOM_WAIST_SHAPES,
   CHEST_SHAPES,
-  FIT_OPTIONS,
   GARMENT,
   SEAT_SHAPES,
   WAIST_SHAPES,
+  fitOptionsFor,
   garmentKind,
   loadFitProfile,
+  normalizeFit,
   sanitizeBodyShape,
   saveFitProfile,
   scoreSizes,
@@ -29,6 +30,7 @@ const FIT_LABELS = {
   regular: 'Regular',
   relaxed: 'Relaxed',
   oversized: 'Oversized',
+  wide: 'Wide leg',
 };
 
 const FIT_HINTS = {
@@ -93,7 +95,7 @@ const FIT_HINTS_BOTTOM = {
   slim: 'Close to the leg',
   regular: 'Classic and easy',
   relaxed: 'Roomy through the leg',
-  oversized: 'Loose and dropped',
+  wide: 'Wide from hip to hem',
 };
 
 // How the answers bend the drawing. Width only: height comes from the numbers.
@@ -688,8 +690,12 @@ export default function SizeFinder({
   const waistChoices = garment === GARMENT.BOTTOM ? BOTTOM_WAIST_SHAPES : WAIST_SHAPES;
   const waistValue = waistChoices.includes(waist) ? waist : 'average';
   const seatValue = SEAT_SHAPES.includes(seat) ? seat : 'average';
+  // Trousers offer "wide leg" instead of "oversized". A saved profile from the
+  // other garment kind is translated, so the choice never resets on a switch.
+  const fitOptions = fitOptionsFor(garment);
+  const fitValue = normalizeFit(fit, garment);
 
-  const showRecommendation = (fitPreference = fit) => {
+  const showRecommendation = (fitPreference = fitValue) => {
     setError('');
     const next = scoreSizes({
       height,
@@ -1146,19 +1152,19 @@ export default function SizeFinder({
                             <motion.div key={`step-fit-${garment}`} className="size-finder-step" {...stepMotion}>
                               <p className="size-finder-helper">
                                 {garment === GARMENT.BOTTOM
-                                  ? 'Last one. How do you like trousers to sit — close, classic, or roomy?'
+                                  ? 'Last one. How do you like trousers to sit — close, classic, roomy, or wide?'
                                   : 'Last one. How do you like a shirt or jacket to sit on you?'}
                               </p>
 
                               <fieldset className="size-finder-fieldset">
                                 <legend className="size-finder-field-label">Fit</legend>
                                 <div className="size-finder-choices">
-                                  {FIT_OPTIONS.map((option, index) => (
+                                  {fitOptions.map((option, index) => (
                                     <Choice
                                       key={option}
                                       index={index}
                                       reduceMotion={reduceMotion}
-                                      active={fit === option}
+                                      active={fitValue === option}
                                       onClick={() => setFit(option)}
                                       title={FIT_LABELS[option]}
                                       hint={(garment === GARMENT.BOTTOM ? FIT_HINTS_BOTTOM : FIT_HINTS)[option]}

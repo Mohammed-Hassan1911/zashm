@@ -23,6 +23,32 @@ export const FIT_PROFILE_KEY = 'zashm.fitProfile.v1';
 
 export const FIT_OPTIONS = ['slim', 'regular', 'relaxed', 'oversized'];
 
+// Trousers are not "oversized". A trouser's width is a cut — wide leg — not a
+// garment size, and asking a shopper to buy an oversized waistband is wrong:
+// an oversized waistband falls down instead of draping. So bottoms offer a
+// wide leg, and the engine only adds a small waistband ease for it.
+export const FIT_OPTIONS_BOTTOM = ['slim', 'regular', 'relaxed', 'wide'];
+
+/** The fit choices offered for a garment kind. */
+export function fitOptionsFor(garment) {
+  return garment === GARMENT.BOTTOM ? FIT_OPTIONS_BOTTOM : FIT_OPTIONS;
+}
+
+/**
+ * Translate a saved or cross-garment fit into one this garment offers.
+ * A profile saved on a shirt ("oversized") becomes "wide" on a trouser, and a
+ * trouser's "wide" becomes "oversized" on a shirt, so the choice survives a
+ * switch instead of silently resetting to regular.
+ */
+export function normalizeFit(fit, garment) {
+  const isBottom = garment === GARMENT.BOTTOM;
+  const options = isBottom ? FIT_OPTIONS_BOTTOM : FIT_OPTIONS;
+  if (options.includes(fit)) return fit;
+  if (isBottom && fit === 'oversized') return 'wide';
+  if (!isBottom && fit === 'wide') return 'oversized';
+  return 'regular';
+}
+
 /** Accepted body input, in cm and kg. */
 export const BODY_LIMITS = {
   minHeight: 140,
@@ -68,18 +94,21 @@ export const FIT_OFFSET = { slim: -4, regular: 0, relaxed: 6, oversized: 12 };
 
 /**
  * Chart mode for bottoms: how far the target waist moves, in cm. A trouser
- * waistband is far less forgiving than a shirt, so the steps are smaller than
- * the chest steps — an oversized trouser falls down rather than draping.
+ * waistband is far less forgiving than a shirt, so the steps are small. A wide
+ * leg is a leg cut, not a bigger waist, so it adds less ease than the old
+ * "oversized" did — one size at most, never two.
  */
-export const FIT_WAIST_OFFSET = { slim: -3, regular: 0, relaxed: 4, oversized: 8 };
+export const FIT_WAIST_OFFSET = { slim: -3, regular: 0, relaxed: 2, wide: 4 };
 
 /**
  * Range mode: how much the requested fit shifts the *effective* weight, in kg.
- * A relaxed/oversized fit nudges the customer towards the roomier size when
- * they sit on the boundary between two sizes; slim nudges towards the closer
- * cut. Regular never changes the owner's numbers.
+ * A relaxed fit nudges the customer towards the roomier size when they sit on
+ * the boundary between two sizes; slim nudges towards the closer cut. Regular
+ * never changes the owner's numbers. Bottoms use a smaller nudge than tops,
+ * for the same reason the waist ease is small.
  */
 export const FIT_WEIGHT_NUDGE = { slim: -4, regular: 0, relaxed: 3, oversized: 6 };
+export const FIT_WEIGHT_NUDGE_BOTTOM = { slim: -4, regular: 0, relaxed: 2, wide: 4 };
 
 // ── Body shape ───────────────────────────────────────────────────────────────
 // Two extra questions the finder asks, because two shoppers with identical
@@ -293,10 +322,18 @@ export function hasOwnerRanges(sizeRanges) {
  * Human-readable problems in an owner range draft (used by the admin form).
  * An out-of-range value or an inverted min/max pair is almost always a typo,
  * so it is reported instead of being silently dropped or swapped on save.
+ *
+ * `sizes` limits the check to the sizes the product currently declares. The
+ * form keeps the window of a size that was removed (so re-adding it brings the
+ * window back), but that hidden window must never block saving: the admin
+ * cannot see the field, so the message would be unfixable.
  */
-export function sizeRangeProblems(sizeRanges) {
+export function sizeRangeProblems(sizeRanges, sizes) {
   const problems = [];
   if (!sizeRanges || typeof sizeRanges !== 'object' || Array.isArray(sizeRanges)) return problems;
+  const declared = Array.isArray(sizes)
+    ? new Set(sizes.map((size) => String(size == null ? '' : size).trim().toLowerCase()).filter(Boolean))
+    : null;
   const num = (value) => (value === null || value === undefined || value === '' ? null : Number(value));
   const fields = [
     ['minWeight', 'minimum weight', RANGE_LIMITS.minWeight, RANGE_LIMITS.maxWeight, 'kg'],
@@ -305,6 +342,7 @@ export function sizeRangeProblems(sizeRanges) {
     ['maxHeight', 'maximum height', RANGE_LIMITS.minHeight, RANGE_LIMITS.maxHeight, 'cm'],
   ];
   for (const [size, range] of Object.entries(sizeRanges)) {
+    if (declared && !declared.has(String(size).trim().toLowerCase())) continue;
     if (!range || typeof range !== 'object') continue;
 
     for (const [key, label, low, high, unit] of fields) {
@@ -378,6 +416,7 @@ const FIT_WORD = {
   regular: 'regular',
   relaxed: 'relaxed',
   oversized: 'oversized',
+  wide: 'wide-leg',
 };
 
 /** Turn a recommendation into one honest, explainable sentence. */
@@ -458,7 +497,7 @@ function axisQuality(min, max, value) {
  */
 function buildCandidates(input = {}) {
   const garment = input.garment === GARMENT.BOTTOM ? GARMENT.BOTTOM : GARMENT.TOP;
-  const fit = FIT_OPTIONS.includes(input.fit) ? input.fit : 'regular';
+  const fit = normalizeFit(input.fit, garment);
   const height = Number(input.height);
   const weight = Number(input.weight);
   const chest = estimateChest({ height, weight });
@@ -483,7 +522,8 @@ function buildCandidates(input = {}) {
   const candidates = [];
 
   // ── Mode 1: owner ranges ──────────────────────────────────────────────────
-  const effectiveWeight = weight + FIT_WEIGHT_NUDGE[fit] + shapeWeightOffset(shape, garment);
+  const fitWeightNudge = garment === GARMENT.BOTTOM ? FIT_WEIGHT_NUDGE_BOTTOM[fit] : FIT_WEIGHT_NUDGE[fit];
+  const effectiveWeight = weight + fitWeightNudge + shapeWeightOffset(shape, garment);
   for (const size of declaredSizes) {
     const range = ranges[size];
     if (!range) continue;
@@ -600,7 +640,7 @@ function chooseCandidate(candidates, mode, stockValue) {
  * @param {object} input
  * @param {number} input.height  cm
  * @param {number} input.weight  kg
- * @param {'slim'|'regular'|'relaxed'|'oversized'} [input.fit]
+ * @param {'slim'|'regular'|'relaxed'|'oversized'|'wide'} [input.fit]
  * @param {{chest?: string, waist?: string}} [input.bodyShape]
  * @param {Array<string|number>} input.sizes  sizes offered by the product
  * @param {object} [input.sizeRanges]  owner ranges, keyed by size label
@@ -707,7 +747,7 @@ function explainCandidate(candidate, ctx) {
   const fitNudge = (isBottom ? FIT_WAIST_OFFSET[ctx.fit] : FIT_OFFSET[ctx.fit]) || 0;
   const causes = [];
   if (shapeNudge) causes.push('your build');
-  if (fitNudge) causes.push(`a ${ctx.fit} fit`);
+  if (fitNudge) causes.push(`a ${FIT_WORD[ctx.fit] || ctx.fit} fit`);
   const adjusted = causes.length
     ? `, adjusted to ${ctx.target} cm for ${causes.join(' and ')}`
     : '';
@@ -787,7 +827,7 @@ export function loadFitProfile(storage) {
     return {
       height: Math.round(height),
       weight: Math.round(weight),
-      fit: FIT_OPTIONS.includes(parsed.fit) ? parsed.fit : 'regular',
+      fit: FIT_OPTIONS.includes(parsed.fit) || FIT_OPTIONS_BOTTOM.includes(parsed.fit) ? parsed.fit : 'regular',
       bodyShape: sanitizeBodyShape(parsed.bodyShape),
     };
   } catch (error) {
@@ -807,7 +847,7 @@ export function saveFitProfile(profile, storage) {
     storage.setItem(FIT_PROFILE_KEY, JSON.stringify({
       height: Math.round(height),
       weight: Math.round(weight),
-      fit: FIT_OPTIONS.includes(profile.fit) ? profile.fit : 'regular',
+      fit: FIT_OPTIONS.includes(profile.fit) || FIT_OPTIONS_BOTTOM.includes(profile.fit) ? profile.fit : 'regular',
       bodyShape: sanitizeBodyShape(profile.bodyShape),
     }));
     return true;
