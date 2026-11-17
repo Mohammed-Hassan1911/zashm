@@ -526,6 +526,8 @@ ok(/\.size-finder-gauge-size\s*\{[^}]*animation:\s*size-finder-size-glow/s.test(
 ok(/\.size-finder-gauge-star\s*\{[^}]*animation:\s*size-finder-star-twinkle/s.test(css) &&
    (finder.match(/className="size-finder-gauge-star"/g) || []).length === 3,
   'three small stars twinkle around the size');
+ok(/\.size-finder-gauge-center\s*\{[^}]*gap:\s*14px/s.test(css),
+  'the size and its score are separated instead of glued together');
 ok(css.includes('.size-finder-figure-focus') && css.includes('@keyframes size-finder-focus-breathe'),
   'the drawing rings the region the current question asks about');
 ok(finder.includes('focus={figureFocus}') &&
