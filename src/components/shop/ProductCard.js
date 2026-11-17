@@ -120,7 +120,8 @@ export default function ProductCard({ product, index = 0 }) {
         <motion.img
           src={image.src}
           alt={product?.name || 'Product'}
-          loading={index < 4 ? 'eager' : 'lazy'}
+          loading={index === 0 ? 'eager' : 'lazy'}
+          fetchPriority={index === 0 ? 'high' : 'auto'}
           decoding="async"
           onError={image.onError}
           style={{

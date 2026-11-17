@@ -495,6 +495,9 @@ console.log('\n[9] floating actions stay accessible');
   ok(/\.back-to-top svg\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px/.test(css) &&
      /\.whatsapp-fab svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px/.test(css),
     'mobile floating icons shrink proportionally');
+  ok(/data-side=\{side\}/.test(whatsapp) && /rightOverlap < leftOverlap/.test(whatsapp) &&
+     /\.whatsapp-fab\[data-side="right"\]/.test(css),
+    'mobile WhatsApp placement moves to the side with less product-card overlap');
 }
 
 // ─── [10] public SEO and empty checkout accessibility ────────────────────────
@@ -545,6 +548,12 @@ console.log('\n[10] public SEO and checkout accessibility');
   const productCard = read('src/components/shop/ProductCard.js');
   ok(/initial=\{\{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
     'product cards use a brief fade with minimal stagger on collection entry');
+  ok(/loading=\{index === 0 \? 'eager' : 'lazy'\}/.test(productCard) &&
+     /fetchPriority=\{index === 0 \? 'high' : 'auto'\}/.test(productCard),
+    'only the first collection image loads eagerly with high priority');
+  ok(!/fonts\.googleapis\.com[^\n]*rel="stylesheet"/.test(read('index.html')) &&
+     /requestAnimationFrame\(\(\) => requestAnimationFrame\(loadBrandFonts\)\)/.test(read('src/index.js')),
+    'brand fonts load after the first render instead of blocking initial paint');
 }
 
 // ─── [11] reload resilience and footer polish ──────────────────────────────
@@ -578,7 +587,7 @@ console.log('\n[11] reload resilience and footer polish');
     'footer links and contact rows zoom subtly on hover');
   ok(/\.site-footer a\[target='_blank'\]:hover[\s\S]*?transform: scale\(1\.12\)/.test(css),
     'footer social icons zoom from their centre');
-  ok(/\.site-footer \.footer-contact p:hover[\s\S]{0,200}?transform: none/.test(css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'))),
+  ok(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.site-footer \.footer-contact p:hover[\s\S]{0,200}?transform: none/.test(css),
     'footer hover zoom is disabled for reduced motion');
 }
 
