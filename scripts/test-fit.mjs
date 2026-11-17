@@ -528,6 +528,8 @@ ok(/\.size-finder-gauge-star\s*\{[^}]*animation:\s*size-finder-star-twinkle/s.te
   'three small stars twinkle around the size');
 ok(/\.size-finder-trigger-result\s*\{[^}]*gap:\s*5px/s.test(css),
   'the product-page trigger separates the size from its score');
+ok(/\.size-finder-gauge-center\s*\{[^}]*gap:\s*12px/s.test(css),
+  'the gauge separates the size from its score the same way');
 ok(css.includes('.size-finder-figure-focus') && css.includes('@keyframes size-finder-focus-breathe'),
   'the drawing rings the region the current question asks about');
 ok(finder.includes('focus={figureFocus}') &&

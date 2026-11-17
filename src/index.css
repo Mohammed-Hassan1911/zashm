@@ -3236,7 +3236,9 @@ main, [role="main"] {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  /* Same breathing room as the product-page trigger: the big size and the
+     score under it must not read as one glued block. */
+  gap: 12px;
   pointer-events: none;
 }
 /* The size itself carries the light: the letter breathes a soft gold glow and
