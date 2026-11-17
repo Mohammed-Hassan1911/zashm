@@ -557,47 +557,43 @@ const SCORE_MAX = 97;
 const SCORE_RANK_STEP = 2;
 const SCORE_DECAY = { ranges: 8, chart: 8 };
 
-/** One honest sentence per size, used under every result. */
-function rangePosition(min, max, value, unit) {
-  if (min === null && max === null) return `no ${unit} range was set`;
-  const window = formatWindow(min, max, unit);
-  const delta = windowDelta(min, max, value);
-  if (delta === 0) return `within ${window}`;
-  return `${Math.abs(delta)} ${unit} ${delta > 0 ? 'above' : 'below'} ${window}`;
-}
-
 function signedAmount(value, unit) {
   return `${value > 0 ? '+' : ''}${value} ${unit}`;
 }
 
 function explainCandidate(candidate, ctx) {
-  // Explain the actual comparison inputs so the customer can see how their fit
-  // preference and measurements affected this size's relative score.
+  // Keep the storefront explanation short while showing the actual comparison
+  // values and the distance from this size's published window.
   if (ctx.mode === 'ranges') {
     const range = candidate.range;
     const fitNudge = FIT_WEIGHT_NUDGE[ctx.fit] || 0;
     const shapeNudge = shapeWeightOffset(ctx.shape);
-    const weightDelta = windowDelta(range.minWeight, range.maxWeight, ctx.effectiveWeight);
+    const adjustments = [
+      fitNudge ? `${ctx.fit} ${signedAmount(fitNudge, 'kg')}` : '',
+      shapeNudge ? `shape ${signedAmount(shapeNudge, 'kg')}` : '',
+    ].filter(Boolean);
+    const heightWindow = formatWindow(range.minHeight, range.maxHeight, 'cm');
+    const weightWindow = formatWindow(range.minWeight, range.maxWeight, 'kg');
     const heightDelta = windowDelta(range.minHeight, range.maxHeight, ctx.height);
-    const fitText = fitNudge === 0
-      ? `Your ${ctx.fit} fit adds no weight adjustment.`
-      : `For a ${ctx.fit} fit, we shift the comparison by ${signedAmount(fitNudge, 'kg')} ${fitNudge > 0 ? 'to allow a roomier fit' : 'for a closer fit'}.`;
-    const shapeText = shapeNudge === 0
-      ? ''
-      : ` Your shape answers shift it by another ${signedAmount(shapeNudge, 'kg')}.`;
-    return `This size is listed for ${describeRange(range)}. Your height (${ctx.height} cm) is ${rangePosition(range.minHeight, range.maxHeight, ctx.height, 'cm')}. Your weight is ${ctx.weight} kg. ${fitText}${shapeText} We compare ${ctx.effectiveWeight} kg with this size's weight range: ${rangePosition(range.minWeight, range.maxWeight, ctx.effectiveWeight, 'kg')}.`;
+    const weightDelta = windowDelta(range.minWeight, range.maxWeight, ctx.effectiveWeight);
+    const position = (delta, unit) => delta === 0 ? 'in range' : `${Math.abs(delta)} ${unit} ${delta > 0 ? 'over' : 'under'}`;
+    const adjustmentText = adjustments.length ? `; ${adjustments.join(', ')}` : '';
+    return `${candidate.label}: ${ctx.height} cm (${position(heightDelta, 'cm')} ${heightWindow}), ${ctx.effectiveWeight} kg (${position(weightDelta, 'kg')} ${weightWindow}${adjustmentText}).`;
   }
 
   const [lo, hi] = candidate.chestRange;
   const shapeNudge = shapeChestOffset(ctx.shape);
   const fitNudge = FIT_OFFSET[ctx.fit] || 0;
-  const shapeText = shapeNudge === 0
-    ? ''
-    : ` Your shape answers adjust the estimate by ${signedAmount(shapeNudge, 'cm')}.`;
-  const fitText = fitNudge === 0
-    ? ` Your ${ctx.fit} fit adds no ease adjustment.`
-    : ` For a ${ctx.fit} fit, we add ${Math.abs(fitNudge)} cm of ease to the comparison.`;
-  return `This size is cut for a ${lo}–${hi} cm chest. Your height and weight give an estimated chest of ${ctx.chest} cm.${shapeText}${fitText} We compare ${ctx.target} cm with this size's chart range: ${rangePosition(lo, hi, ctx.target, 'cm')}.`;
+  const shapeText = shapeNudge
+    ? ` ${shapeNudge > 0 ? '+' : '−'} ${Math.abs(shapeNudge)} cm shape`
+    : '';
+  const fitText = fitNudge
+    ? ` ${fitNudge > 0 ? '+' : '−'} ${Math.abs(fitNudge)} cm ${ctx.fit}`
+    : '';
+  const formula = `${shapeText}${fitText}`;
+  const delta = windowDelta(lo, hi, ctx.target);
+  const position = delta === 0 ? 'in range' : `${Math.abs(delta)} cm ${delta > 0 ? 'over' : 'under'}`;
+  return `${candidate.label}: chest ${ctx.chest}${formula} = ${ctx.target} cm (${position} ${lo}–${hi}).`;
 }
 
 /**

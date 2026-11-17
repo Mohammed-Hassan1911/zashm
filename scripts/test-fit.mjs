@@ -335,7 +335,7 @@ ok(finder.includes('CHEST_WIDTH') && finder.includes('WAIST_WIDTH'),
 ok(finder.includes('MatchGauge'), 'the result renders a circular gauge');
 ok(finder.includes('We recommend size <strong>{shown.label}</strong>') && finder.includes('{shown.score}/100 match score'),
   'the result names the recommended size and its relative score');
-ok(finder.includes('not a guaranteed-fit percentage'), 'the score is not presented as a probability');
+ok(finder.includes('Fit score, not a fit guarantee.'), 'the score is clearly labelled as an estimate');
 ok(finder.includes('scoreBand(shown.score,'), 'the estimated match score also reads as a sentence');
 ok(finder.includes('Best available in this colour'),
   'a stock swap is labelled as the best available size, not a rough estimate');
@@ -350,8 +350,11 @@ ok(finder.includes('className="size-finder-restart"'), 'the final step offers a 
 ok(/\.size-finder-restart\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*5px/s.test(css),
   'Start over has a visible, polished border');
 ok(finder.includes('className="size-finder-explanation"') &&
-   finder.includes('We preferred ${entry.label}') && finder.includes('onClick={goBack}'),
+   finder.includes('${entry.label} fits better (${entry.score}/100 vs ${shown.score}/100)') &&
+   finder.includes('setResultProfile({ height, weight, chest, waist, fit: fitPreference })') && finder.includes('onClick={goBack}'),
   'the reason changes with the chosen size and Back is available at the result actions');
+ok(finder.includes('chosen (${recommended.score}/100); next closest ${closest.label} (${closest.score}/100)'),
+  'the recommendation comparison stays short and shows relative scores');
 const resultActionsStart = finder.lastIndexOf('<div className="size-finder-actions">');
 const resultActions = finder.slice(resultActionsStart, resultActionsStart + 1800);
 ok(resultActions.includes('Back') && resultActions.includes('Select size ${shown.label}') && resultActions.includes('Size guide'),
@@ -400,12 +403,17 @@ ok(/html\s*\{[^}]*scrollbar-color:\s*var\(--gold\) var\(--bg2\)/s.test(css) &&
 // On phones the result controls share the bottom action group and the
 // explanation stays inside the result panel.
 const phoneCss = css.slice(css.indexOf('@media (max-width: 640px)'));
-ok(/\.size-finder-restart\s*\{[\s\S]{0,60}justify-self:\s*end/.test(phoneCss),
-  'Start over also sits on the right on a phone');
+ok(/\.size-finder-restart\s*\{[^}]*justify-self:\s*end/s.test(css),
+  'Start over sits on the right at every screen width');
 ok(/\.size-finder-explanation\s*\{[^}]*display:\s*grid/.test(css),
   'the comparison explanation stays in the selected-size result area');
 ok(/\.size-finder-restart\s*\{[\s\S]{0,60}min-height:\s*44px/.test(css),
   'Start over has a comfortable touch target');
+ok(/\.size-finder-restart\s*\{[^}]*animation:\s*size-finder-restart-shine/.test(css) &&
+   css.includes('@keyframes size-finder-restart-shine'), 'Start over has a visible, subtle shine');
+ok(css.includes('@media (prefers-reduced-motion: reduce)') &&
+   /\.size-finder-restart\s*\{\s*animation:\s*none/s.test(css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))),
+  'the shine respects reduced-motion preferences');
 const toolMarkers = ['open' + 'code', 'chat' + 'gpt', 'clau' + 'de', 'co' + 'pilot'];
 ok(!toolMarkers.some((marker) => finder.toLowerCase().includes(marker)), 'no tooling wording ships in the finder');
 
@@ -563,7 +571,7 @@ ok(byScore[0].distance <= byScore[byScore.length - 1].distance,
 
 const exactScore = scoreSizes({ height: 182, weight: 78, sizes: ['L'], sizeRanges: OWNER_RANGES });
 eq(exactScore.sizes[0].score, 97, 'an exact window match is capped at 97 points');
-ok(exactScore.sizes[0].reason.includes('within'), 'an inside-the-window size is explained plainly');
+ok(exactScore.sizes[0].reason.includes('in range'), 'an inside-the-window size is explained plainly');
 
 const farScore = scoreSizes({ height: 160, weight: 50, sizes: ['M', 'L', 'XL'], fit: 'regular' });
 ok(farScore.sizes.find((entry) => entry.label === 'M').score > farScore.sizes.find((entry) => entry.label === 'XL').score,
@@ -587,9 +595,9 @@ const relaxedL = relaxedScored.sizes.find((entry) => entry.label === 'L');
 ok(relaxedL.score < 99, 'a size that only fits with ease is not scored as an exact match');
 ok(!relaxedL.reason.includes('inside it'),
   'the reason never claims an exact fit while the score says otherwise');
-ok(relaxedL.reason.includes('relaxed fit'), 'the reason names the fit that moved the target');
-ok(relaxedL.reason.includes('add 6 cm of ease'), 'the reason explains the ease added for the selected fit');
-ok(relaxedL.reason.includes('2 cm above 102–106 cm'), 'the reason states the exact chest-range difference');
+ok(relaxedL.reason.includes('relaxed'), 'the reason names the selected fit');
+ok(relaxedL.reason.includes('+ 6 cm relaxed'), 'the reason explains the ease added for the selected fit');
+ok(relaxedL.reason.includes('2 cm over 102–106'), 'the reason states the exact chest-range difference');
 eq(relaxedScored.sizes.find((entry) => entry.label === 'XL').score, 83,
   'an in-range chart match away from the centre stays below the ceiling');
 
@@ -599,11 +607,11 @@ const nudgedScored = scoreSizes({
   height: 180, weight: 84, sizes: ['M', 'L', 'XL'], sizeRanges: OWNER_RANGES, fit: 'relaxed',
 });
 const nudgedL = nudgedScored.sizes.find((entry) => entry.label === 'L');
-ok(nudgedL.reason.includes('compare 87 kg'), 'the range reason shows the adjusted comparison weight');
-ok(nudgedL.reason.includes('2 kg above 71–85 kg'), 'the range reason states the exact weight difference');
-ok(!nudgedL.reason.includes('within 71–85 kg'),
+ok(nudgedL.reason.includes('87 kg') && nudgedL.reason.includes('relaxed +3 kg'), 'the range reason shows the adjusted comparison weight');
+ok(nudgedL.reason.includes('2 kg over 71–85 kg'), 'the range reason states the exact weight difference');
+ok(!nudgedL.reason.includes('in range 71–85 kg'),
   'a nudged body outside the window is never described as inside');
-ok(nudgedScored.sizes.find((entry) => entry.label === 'XL').reason.includes('within 86–105 kg'),
+ok(nudgedScored.sizes.find((entry) => entry.label === 'XL').reason.includes('in range 86–105 kg'),
   'the roomier size explains that the counted weight fits it');
 
 section('22 — body shape answers');
@@ -645,6 +653,32 @@ eq(loadFitProfile(shapeStorage).bodyShape.waist, 'flatter', 'the waist answer ro
 shapeStorage.setItem('zashm.fitProfile.v1', JSON.stringify({ height: 180, weight: 78, fit: 'regular' }));
 eq(loadFitProfile(shapeStorage).bodyShape.chest, 'average',
   'a profile saved before this change still loads with neutral answers');
+
+section('23 — Jacket Boxy owner windows shared by the storefront');
+const JACKET_BOXY_RANGES = {
+  M: { minWeight: 50, maxWeight: 65, minHeight: 155, maxHeight: 160 },
+  L: { minWeight: 60, maxWeight: 70, minHeight: 160, maxHeight: 170 },
+  XL: { minWeight: 65, maxWeight: 72, minHeight: 170, maxHeight: 177 },
+  XXL: { minWeight: 76, maxWeight: 85, minHeight: 177, maxHeight: 180 },
+};
+const jacketSizes = Object.keys(JACKET_BOXY_RANGES);
+const jacketFit = (height, weight, fit = 'regular') => scoreSizes({
+  height, weight, fit, sizes: jacketSizes, sizeRanges: JACKET_BOXY_RANGES,
+});
+for (const [size, height, weight] of [
+  ['M', 158, 57], ['L', 165, 65], ['XL', 174, 69], ['XXL', 179, 80],
+]) {
+  const result = jacketFit(height, weight);
+  eq(result.recommended, size, `${height} cm / ${weight} kg → ${size} in its owner window`);
+  ok(result.sizes.every((entry) => entry.score < 100), `${size} shows relative points, never 100% certainty`);
+}
+eq(jacketFit(160, 65).recommended, 'L', 'the shared M/L boundary resolves to L');
+eq(jacketFit(170, 70).recommended, 'XL', 'the shared L/XL boundary resolves to XL');
+eq(jacketFit(177, 74).recommended, 'XXL', '177 cm just below the XXL weight window picks the nearest size');
+const jacketRelaxed = jacketFit(165, 65, 'relaxed');
+eq(jacketRelaxed.recommended, 'L', 'relaxed preference is applied before scoring');
+ok(jacketRelaxed.sizes.find((entry) => entry.label === 'L').reason.includes('relaxed +3 kg'),
+  'the result text names the 3 kg relaxed-fit adjustment');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) {

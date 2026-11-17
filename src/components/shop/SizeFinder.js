@@ -452,7 +452,7 @@ export default function SizeFinder({
     }
 
     setResult(next);
-    setResultProfile({ height, weight, chest, waist, fit });
+    setResultProfile({ height, weight, chest, waist, fit: fitPreference });
     setActiveSize(next.recommended);
     setStep(3);
     saveFitProfile({ height, weight, fit: fitPreference, bodyShape: { chest, waist } }, readStorage());
@@ -515,33 +515,22 @@ export default function SizeFinder({
 
     if (shown.label === recommended.label) {
       if (alternatives.length === 0) return 'This is the only size available for this item.';
-      const comparisons = alternatives.map((entry) => {
-        const skippedForStock = result.decision?.swappedForStock
-          && result.decision.skippedSize === entry.label;
-        let lead;
-        if (skippedForStock) {
-          lead = `${entry.label} scored ${entry.score}/100 and was the closer fit, but it is sold out in this colour. We chose available size ${recommended.label} instead. `;
-        } else if (entry.score < recommended.score) {
-          lead = `We preferred ${recommended.label} (${recommended.score}/100) over ${entry.label} (${entry.score}/100). `;
-        } else if (entry.score === recommended.score) {
-          lead = `We preferred ${recommended.label} after comparing it with ${entry.label} (${entry.score}/100). `;
-        } else {
-          lead = `${entry.label} scored ${entry.score}/100, but the fit engine selected ${recommended.label} after comparing the full size ranges. `;
-        }
-        return `${lead}${entry.reason}`;
-      }).join(' ');
-      return comparisons;
+      const closestAlternatives = [...alternatives]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2);
+      const closest = closestAlternatives[0];
+      if (!closest) return `${recommended.label} is the only size available.`;
+      const stockNote = result.decision?.swappedForStock
+        && result.decision.skippedSize === closest.label ? ' (sold out)' : '';
+      return `${recommended.label} chosen (${recommended.score}/100); next closest ${closest.label} (${closest.score}/100)${stockNote}.`;
     }
 
     const preferred = alternatives.filter((entry) =>
       entry.label === recommended.label || entry.score > shown.score
     );
     return preferred.map((entry) => {
-      const soldOut = entry.inStock === false;
-      const lead = soldOut
-        ? `${entry.label} scored ${entry.score}/100 and is a closer fit than ${shown.label}, but it is sold out in this colour. `
-        : `We preferred ${entry.label} (${entry.score}/100) over ${shown.label} (${shown.score}/100). `;
-      return `${lead}${entry.reason}`;
+      const stockNote = entry.inStock === false ? ' (sold out)' : '';
+      return `${entry.label} fits better (${entry.score}/100 vs ${shown.score}/100)${stockNote}.`;
     }).join(' ');
   }, [shown, recommended, result]);
   const profileLine = resultProfile
@@ -860,7 +849,7 @@ export default function SizeFinder({
                       </p>
                       <MatchGauge size={shown.label} score={shown.score} reduceMotion={reduceMotion} />
                       <p className="size-finder-score-note">
-                        This score compares your answers with this item’s size information. It is not a guaranteed-fit percentage.
+                        Fit score, not a fit guarantee.
                       </p>
 
                       <div className="size-finder-result-head">
