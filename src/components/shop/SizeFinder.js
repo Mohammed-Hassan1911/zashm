@@ -357,24 +357,29 @@ export default function SizeFinder({
   const dialogRef = useRef(null);
   const titleRef = useRef(null);
   const restoreFocusRef = useRef(null);
+  const backgroundScrollRef = useRef(0);
 
   const close = useCallback(() => {
     setOpen(false);
     if (typeof window !== 'undefined') {
       const node = restoreFocusRef.current;
-      window.setTimeout(() => node?.focus?.({ preventScroll: true }), 0);
+      const scrollY = backgroundScrollRef.current;
+      window.setTimeout(() => {
+        node?.focus?.({ preventScroll: true });
+        window.scrollTo(0, scrollY);
+      }, 0);
     }
   }, []);
 
-  // Lock the page behind the dialog, and let Escape close it. The floating
-  // WhatsApp and scroll-to-top actions live above this layer (z-index 30000) and
-  // are deliberately left untouched.
+  // Lock the page behind the dialog, hide WhatsApp while it is open, and let
+  // Escape close it. The page's exact scroll position is restored on exit.
   useEffect(() => {
     if (!open) return undefined;
 
-    const scrollY = window.scrollY;
+    const scrollY = backgroundScrollRef.current;
     const html = document.documentElement;
     const body = document.body;
+    const lockedWidth = html.clientWidth;
     const previous = {
       htmlOverflow: html.style.overflow,
       htmlScrollBehavior: html.style.scrollBehavior,
@@ -393,8 +398,9 @@ export default function SizeFinder({
     body.style.top = `-${scrollY}px`;
     body.style.left = '0';
     body.style.right = '0';
-    body.style.width = `${html.clientWidth}px`;
-    document.body.style.overflow = 'hidden';
+    body.style.width = `${lockedWidth}px`;
+    body.style.overflow = 'hidden';
+    body.classList.add('size-finder-open');
 
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -414,6 +420,7 @@ export default function SizeFinder({
       body.style.right = previous.bodyRight;
       body.style.width = previous.bodyWidth;
       window.scrollTo(0, scrollY);
+      body.classList.remove('size-finder-open');
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open, close]);
@@ -504,6 +511,8 @@ export default function SizeFinder({
   const band = shown
     ? scoreBand(shown.score, Boolean(result?.decision?.swappedForStock) && shown.label === result.recommended)
     : null;
+  const recommended = result?.sizes?.find((entry) => entry.label === result.recommended) || shown;
+  const otherSizes = result?.sizes?.filter((entry) => entry.label !== result.recommended) || [];
   const profileLine = resultProfile
     ? `${resultProfile.height} cm · ${resultProfile.weight} kg · ${FIT_LABELS[resultProfile.fit] || FIT_LABELS.regular}`
     : '';
@@ -525,6 +534,7 @@ export default function SizeFinder({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => {
+          backgroundScrollRef.current = window.scrollY;
           setOpen(true);
           if (hasResult) setStep(3);
           else setStep(0);
@@ -910,6 +920,32 @@ export default function SizeFinder({
                           </div>
                         )}
                       </div>
+
+                      {recommended && otherSizes.length > 0 && (
+                        <section className="size-finder-comparisons" aria-label="Why other sizes were not recommended">
+                          <h3>Why we recommended {recommended.label}</h3>
+                          {otherSizes.map((entry) => {
+                            const skippedForStock = result.decision?.swappedForStock
+                              && result.decision.skippedSize === entry.label;
+                            let comparison;
+                            if (skippedForStock) {
+                              comparison = `${entry.label} was the closest fit, but it is sold out in this colour. We recommended available size ${recommended.label} instead.`;
+                            } else if (entry.score < recommended.score) {
+                              comparison = `We preferred ${recommended.label} (${recommended.score}/100) over ${entry.label} (${entry.score}/100) because it matches your measurements more closely.`;
+                            } else if (entry.score === recommended.score) {
+                              comparison = `These sizes scored equally. We preferred ${recommended.label} after comparing the full height and weight ranges.`;
+                            } else {
+                              comparison = `${entry.label} scored ${entry.score}/100, but the fit engine recommended ${recommended.label} after comparing the full size ranges and availability.`;
+                            }
+                            return (
+                              <div className="size-finder-comparison" key={`comparison-${entry.label}`}>
+                                <p className="size-finder-comparison-title">{comparison}</p>
+                                <p className="size-finder-comparison-reason">{entry.reason}</p>
+                              </div>
+                            );
+                          })}
+                        </section>
+                      )}
 
                       <button type="button" className="size-finder-restart" onClick={startOver}>
                         Start over

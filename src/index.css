@@ -38,10 +38,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html {
+  scrollbar-color: var(--gold) var(--bg2);
+  scrollbar-width: thin;
+}
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg2); }
-::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #f0d783; }
 
 ::selection { background: rgba(201,168,76,0.3); color: var(--gold-light); }
 
@@ -1307,6 +1311,11 @@ select option { background: var(--bg3); }
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   width: 52px;
   height: 52px;
+}
+
+body.size-finder-open .whatsapp-fab {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .size-guide-overlay {
@@ -2634,6 +2643,8 @@ main, [role="main"] {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-color: var(--gold) rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
   box-sizing: border-box;
   padding: clamp(16px, 4vw, 26px);
   border: 1px solid rgba(201, 168, 76, 0.32);
@@ -2643,6 +2654,21 @@ main, [role="main"] {
     linear-gradient(165deg, #16140f 0%, #0d0d0d 46%, #0a0a0a 100%);
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.75), 0 0 34px rgba(201, 168, 76, 0.08);
   outline: none;
+}
+.size-finder-dialog::-webkit-scrollbar {
+  width: 8px;
+}
+.size-finder-dialog::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+.size-finder-dialog::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #e8c870, #a98736);
+  border: 2px solid #11100d;
+  border-radius: 999px;
+}
+.size-finder-dialog::-webkit-scrollbar-thumb:hover {
+  background: #f0d783;
 }
 
 .size-finder-dialog::before {
@@ -3141,6 +3167,42 @@ main, [role="main"] {
   font-size: 11px;
   line-height: 1.6;
   color: var(--gold);
+}
+
+.size-finder-comparisons {
+  display: grid;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 1px solid rgba(201, 168, 76, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.size-finder-comparisons h3,
+.size-finder-comparison p {
+  margin: 0;
+}
+.size-finder-comparisons h3 {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.size-finder-comparison {
+  display: grid;
+  gap: 4px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.size-finder-comparison-title {
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.size-finder-comparison-reason {
+  color: var(--text2);
+  font-size: 11px;
+  line-height: 1.7;
 }
 
 .size-finder-chips {

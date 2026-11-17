@@ -347,12 +347,16 @@ ok(finder.includes('aria-label="Estimated match score for every size, out of 100
 ok(finder.includes('className="size-finder-restart"'), 'the final step offers a restart control');
 ok(/\.size-finder-restart\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*5px/s.test(css),
   'Start over has a visible, polished border');
+ok(finder.includes('className="size-finder-comparisons"') && finder.includes('{entry.reason}') &&
+   finder.includes('We preferred ${recommended.label}'),
+  'the final result explains why each other size ranked lower');
 ok(finder.includes('role="dialog"') && finder.includes('aria-modal="true"'),
   'the flow is a modal dialog');
 ok(finder.includes("event.key === 'Escape'"), 'Escape closes the dialog');
-ok(finder.includes("document.body.style.overflow = 'hidden'"), 'the page behind the dialog is locked');
+ok(finder.includes("body.style.overflow = 'hidden'"), 'the page behind the dialog is locked');
 ok(finder.includes("html.style.overflow = 'hidden'") && finder.includes("body.style.position = 'fixed'") &&
-   finder.includes('window.scrollTo(0, scrollY)'),
+   finder.includes('window.scrollTo(0, scrollY)') && finder.includes("body.classList.add('size-finder-open')") &&
+   finder.includes("body.classList.remove('size-finder-open')"),
   'opening the finder freezes the page and closing it restores the exact scroll position');
 ok(/\.size-finder-dialog\s*\{[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s.test(css) &&
    /\.size-finder-overlay\s*\{[^}]*overscroll-behavior:\s*none;/s.test(css),
@@ -374,6 +378,14 @@ ok(css.includes('@media (max-width: 640px)') && css.includes('align-items: flex-
   'phones get a bottom sheet');
 ok(css.includes('100dvh'), 'the dialog fits the visible viewport on mobile browsers');
 ok(css.includes('env(safe-area-inset-bottom'), 'the sheet clears the phone safe area');
+ok(/body\.size-finder-open \.whatsapp-fab\s*\{[^}]*visibility:\s*hidden/.test(css),
+  'WhatsApp is hidden only while the size finder is open');
+ok(/\.size-finder-dialog::-webkit-scrollbar-thumb\s*\{[^}]*linear-gradient\(180deg, #e8c870, #a98736\)/.test(css) &&
+   /\.size-finder-dialog\s*\{[^}]*scrollbar-color:\s*var\(--gold\)/s.test(css),
+  'the finder scrollbar is gold on standard and WebKit browsers');
+ok(/html\s*\{[^}]*scrollbar-color:\s*var\(--gold\) var\(--bg2\)/s.test(css) &&
+   /::-webkit-scrollbar-thumb\s*\{[^}]*background:\s*var\(--gold\)/.test(css),
+  'the site-wide scrollbar is gold outside the finder too');
 
 // The floating WhatsApp action is fixed to the bottom-left and must stay
 // visible, so on a phone the sheet's last two controls live on the right.
