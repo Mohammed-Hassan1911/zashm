@@ -489,11 +489,13 @@ console.log('\n[9] floating actions stay accessible');
   ok(/\.back-to-top\s*\{[^}]*width:\s*46px;[^}]*height:\s*46px/.test(floatingBlock) &&
      /\.whatsapp-fab\s*\{[^}]*width:\s*52px;[^}]*height:\s*52px/.test(floatingBlock),
     'desktop floating button sizes are unchanged');
-  ok(/@media \(max-width: 768px\)[\s\S]*?\.back-to-top\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css) &&
-     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(css),
-    'mobile floating buttons retain 44px touch targets');
-  ok(/\.back-to-top svg\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px/.test(css) &&
-     /\.whatsapp-fab svg\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px/.test(css),
+  ok(/@media \(max-width: 768px\)[\s\S]*?\.back-to-top\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*4px solid transparent;[^}]*background-clip:\s*padding-box/.test(css) &&
+     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*4px solid transparent;[^}]*background-clip:\s*padding-box/.test(css),
+    'mobile floating buttons keep a 44px box with a 4px transparent border, so the painted disc is 36px');
+  ok(!/\.back-to-top::after,\s*\.whatsapp-fab::after/.test(css),
+    'the tap target comes from the button box itself, not a pseudo-element ring');
+  ok(/\.back-to-top svg\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px/.test(css) &&
+     /\.whatsapp-fab svg\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px/.test(css),
     'mobile floating icons shrink proportionally');
   ok(!/data-side|setSide|leftOverlap|rightOverlap/.test(whatsapp) &&
      !/\.whatsapp-fab\[data-side="right"\]/.test(css) &&
@@ -595,7 +597,7 @@ console.log('\n[11] reload resilience and footer polish');
   ok(!/footer-bottom|footer-copy|footer-top/.test(app) &&
      !/\.footer-bottom|\.footer-copy|\.footer-top/.test(css),
     'the footer ends on its last column: no copyright bar and no duplicate back-to-top');
-  ok(/\.site-footer \{[\s\S]{0,700}?padding: 64px 0 88px;/.test(css),
+  ok(/\.site-footer \{[\s\S]{0,700}?padding: 48px 0 88px;/.test(css),
     'the footer closes with a tight 88px that still clears the floating actions');
   ok(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.site-footer\.footer-animate \.footer-reveal,[\s\S]{0,160}?opacity: 1;[\s\S]{0,80}?transform: none/.test(css),
     'the footer reveal is cancelled for reduced motion');
@@ -631,8 +633,12 @@ console.log('\n[11] reload resilience and footer polish');
   const phoneBlock = css.slice(css.indexOf('@media (max-width: 768px) {', css.indexOf('@media (max-width: 1023px) {')));
   ok(/\.footer-brand,\s*\.footer-contact-col \{ grid-column: 1 \/ -1; \}/.test(phoneBlock),
     'only on a phone do the brand and contact take the full width');
-  ok(/\.footer-grid \{\s*grid-template-columns: minmax\(0, 0\.8fr\) minmax\(0, 1\.2fr\);/.test(phoneBlock),
-    'the two phone columns are uneven so "Shipping & Returns" never wraps');
+  ok(/\.footer-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/.test(phoneBlock),
+    'the phone footer is a single column');
+  ok(/\.footer-col--quick \{ display: none; \}/.test(phoneBlock),
+    'Quick Links is dropped on a phone because the dock already carries Home/Shop/Wishlist');
+  ok(!/\.footer-col--care \{[\s\S]{0,200}?grid-template-columns:/.test(phoneBlock),
+    'Customer Care stays one column on a phone, so all three links read as one balanced list');
   ok(/bottom: calc\(50% - 10px\)/.test(css),
     'the footer hover underline is pinned to the text line, not the 44px tap box');
   ok(app.includes("el.classList.add('footer-animate')") &&

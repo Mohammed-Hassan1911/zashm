@@ -841,8 +841,8 @@ try {
       // the stylesheet that now owns them.
       assert.ok(/\.mobile-nav-item\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px/.test(css),
         'mobile nav items are at least 44px');
-      assert.ok(/\.mobile-nav-label\s*\{[^}]*font-size:\s*10px;[^}]*font-weight:\s*600/.test(css),
-        'mobile nav labels are 10px, not 9px');
+      assert.ok(/\.mobile-nav-label\s*\{[^}]*font-size:\s*9px;[^}]*font-weight:\s*500/.test(css),
+        'mobile nav labels are 9px and lighter, so they read as a caption');
       assert.ok(/mobile-nav--keyboard-open/.test(nav),
         'the keyboard-open state still hides the bottom nav');
       assert.ok(/padding:\s*12,\s*\n?\s*minHeight:\s*44/.test(header),
@@ -886,8 +886,10 @@ try {
         'the wishlist heart is always visible, not hover-only');
       assert.ok(/\.product-card-image:hover \.product-card-action-view/.test(css),
         'the quick-view eye still appears on hover/focus on pointer devices');
-      assert.ok(!/\.zashm-header-utilities\s*\{\s*display:\s*none/.test(css),
-        'the header wishlist/bag are no longer hidden on phones');
+      assert.ok(/\{!isMobile && \(\s*<div className="zashm-header-utilities">/.test(header),
+        'on a phone the header renders only the search icon, at the far right');
+      assert.ok(/useState\(\(\) => \(\s*typeof window !== 'undefined' && window\.innerWidth <= 768\s*\)\)/.test(header),
+        'the phone layout is known on the first render, so the header icons never flash before they are removed');
       assert.ok(/\.product-collection-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/.test(css)
         && /@media \(max-width: 768px\)\s*\{\s*\.product-collection-grid\s*\{[^}]*repeat\(2, minmax\(0, 1fr\)\)/.test(css),
         'collections are four-up on desktop and two-up on phones');

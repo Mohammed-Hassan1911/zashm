@@ -210,8 +210,8 @@ export default function ShopPage() {
 
   return (
     <div
+      className="shop-page"
       style={{
-        paddingTop: 90,
         minHeight: '100vh',
         color: 'var(--text)'
       }}

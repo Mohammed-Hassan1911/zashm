@@ -83,6 +83,10 @@ body::before {
     /* base wash: warm where the light lands, cold in the shadow */
     linear-gradient(172deg, #15110c 0%, #0d0b0a 42%, #06060a 100%);
   animation: ambient-drift 72s ease-in-out infinite alternate;
+  /* The wall is rastered once and then only translated. Scaling it would force
+     the eight stacked gradients to be re-rastered on every frame, which is the
+     one thing that makes an always-on backdrop expensive on a phone. */
+  will-change: transform;
 }
 
 /* Fluted panelling: vertical hairlines only, faded away from the edges. */
@@ -134,8 +138,8 @@ body::after {
 }
 
 @keyframes ambient-drift {
-  from { transform: translate3d(-1.4%, -0.8%, 0) scale(1.02); }
-  to { transform: translate3d(1.4%, 0.8%, 0) scale(1.07); }
+  from { transform: translate3d(-1.4%, -0.8%, 0); }
+  to { transform: translate3d(1.4%, 0.8%, 0); }
 }
 
 @keyframes ambient-sheen {
@@ -767,11 +771,11 @@ select option { background: var(--bg3); }
      same room rather than a separate black slab. */
   background: linear-gradient(180deg, #13100c 0%, #0c0b0a 46%, #070708 100%);
   border-top: 1px solid var(--border);
-  /* The footer now ends on its last column: no closing bar and no dead space.
-     The bottom padding is still sized to clear the two fixed floating actions
-     (24px offset + 52px button), so nothing ever sits under them. */
-  padding: 64px 0 88px;
-  margin-top: 80px;
+  /* The footer ends on its last column: no closing bar and no dead space. The
+     88px floor is the clearance the floating actions need; the opening is kept
+     tighter so the block does not eat a screen on its own. */
+  padding: 48px 0 88px;
+  margin-top: 56px;
 }
 
 .site-footer::before {
@@ -810,7 +814,7 @@ select option { background: var(--bg3); }
 .footer-grid {
   display: grid;
   grid-template-columns: 1.6fr 1fr 1.15fr 1.2fr;
-  gap: 56px 48px;
+  gap: 40px 44px;
   align-items: start;
 }
 
@@ -820,11 +824,11 @@ select option { background: var(--bg3); }
 .footer-wordmark {
   width: fit-content;
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 23px;
   font-weight: 600;
-  letter-spacing: 6px;
+  letter-spacing: 5.5px;
   line-height: 1;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   cursor: pointer;
   user-select: none;
   outline: none;
@@ -834,10 +838,10 @@ select option { background: var(--bg3); }
   display: flex;
   gap: 9px;
   max-width: 300px;
-  margin: 0 0 22px;
+  margin: 0 0 16px;
   color: var(--text2);
-  font-size: 13px;
-  line-height: 1.75;
+  font-size: 12.5px;
+  line-height: 1.7;
 }
 .footer-blurb svg {
   flex-shrink: 0;
@@ -856,13 +860,13 @@ select option { background: var(--bg3); }
   gap: 9px;
   width: fit-content;
   max-width: 100%;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   padding: 0;
   border: 0;
   background: none;
   color: var(--text2);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.4;
   text-align: left;
   cursor: pointer;
@@ -915,7 +919,7 @@ select option { background: var(--bg3); }
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .footer-social a[target='_blank'] {
   width: 38px;
@@ -1000,7 +1004,7 @@ select option { background: var(--bg3); }
 @media (max-width: 1023px) {
   .footer-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 40px 36px;
+    gap: 32px 28px;
   }
   .footer-blurb { max-width: 420px; }
   /* Tablets are touched too: every link and contact row keeps a 44px target,
@@ -1011,25 +1015,27 @@ select option { background: var(--bg3); }
 }
 
 @media (max-width: 768px) {
-  .site-footer { padding-top: 48px; }
+  .site-footer { padding-top: 32px; }
   .footer-shell { padding: 0 20px; }
-  /* The two link columns are deliberately uneven: "Shipping & Returns" is the
-     longest label in the footer, so Customer Care gets the extra width and no
-     label has to wrap on a 320px phone. */
+  /* Home, Shop and Wishlist already sit in the dock and the header, so the
+     Quick Links column is dropped on a phone rather than repeating them. */
+  .footer-col--quick { display: none; }
   .footer-grid {
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-    gap: 28px 20px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
   }
   /* On a phone the brand and the contact block need the full width: the blurb
      is a whole sentence and the email alone is 188px. */
   .footer-brand,
   .footer-contact-col { grid-column: 1 / -1; }
-  .footer-wordmark { font-size: 24px; letter-spacing: 5px; margin-bottom: 14px; }
+  /* The three Customer Care links stay a single column, so the block reads as
+     one balanced list: three equal 44px rows, none of them orphaned. */
+  .footer-wordmark { font-size: 21px; letter-spacing: 5px; margin-bottom: 12px; }
   .footer-blurb {
     max-width: none;
-    margin-bottom: 16px;
-    font-size: 12.5px;
-    line-height: 1.7;
+    margin-bottom: 12px;
+    font-size: 12px;
+    line-height: 1.65;
   }
   .footer-link { min-height: 44px; margin-bottom: 0; }
   .footer-contact { gap: 0; }
@@ -1037,7 +1043,7 @@ select option { background: var(--bg3); }
 }
 
 @media (max-width: 420px) {
-  .footer-grid { gap: 24px 16px; }
+  .footer-grid { gap: 16px; }
 }
 .app-startup-screen {
   min-height: 100vh;
@@ -1395,7 +1401,7 @@ select option { background: var(--bg3); }
    lifts above it instead of hiding behind the glass. */
 @media (max-width: 768px) {
   .hero-scroll-cue-wrap {
-    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -1506,8 +1512,8 @@ select option { background: var(--bg3); }
 }
 
 /* A pool of warm light behind the monogram, so the gold Z sits in its own
-   glow instead of floating on the header. It breathes slowly — the light
-   settles and swells rather than blinking. */
+   glow instead of floating on the header. It is a still pool: the mark is
+   polished, not blinking. */
 .zashm-header-logo::before {
   content: '';
   position: absolute;
@@ -1522,16 +1528,15 @@ select option { background: var(--bg3); }
   );
   filter: blur(6px);
   opacity: 0.7;
-  animation: logo-halo-breathe 7.5s ease-in-out infinite;
   transition: opacity 0.35s ease, transform 0.35s ease;
   pointer-events: none;
 }
 
-/* The light that actually moves: one narrow specular band crossing the metal
-   of the Z, then a long rest before it passes again. The monogram is used as
-   its own mask, so the highlight exists only on the glyph — never as a
-   rectangle over the header — and the mark reads as polished gold catching a
-   passing light instead of a ring spinning around it. */
+/* The gloss on the metal: one narrow specular band resting on the left of the
+   glyph, where the room's key light falls. It is static — a polished surface
+   catching the light, not a highlight travelling across it. The monogram is
+   used as its own mask, so the gloss exists only on the Z and never as a
+   rectangle over the header. */
 .zashm-header-logo::after {
   content: '';
   position: absolute;
@@ -1545,7 +1550,7 @@ select option { background: var(--bg3); }
     transparent 56%
   );
   background-size: 300% 100%;
-  background-position: 84% 0;
+  background-position: 58% 0;
   background-repeat: no-repeat;
   -webkit-mask-image: url('/zashm-z-monogram.webp');
   mask-image: url('/zashm-z-monogram.webp');
@@ -1555,8 +1560,7 @@ select option { background: var(--bg3); }
   mask-position: center;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  opacity: 0.85;
-  animation: logo-glyph-sheen 6.4s cubic-bezier(0.4, 0, 0.3, 1) infinite;
+  opacity: 0.38;
   pointer-events: none;
 }
 
@@ -1569,11 +1573,10 @@ select option { background: var(--bg3); }
   transition: filter 0.35s ease;
 }
 
-/* Hover: the halo stops breathing and simply opens up, so the mark answers
-   the pointer without a second, competing animation. */
+/* Hover: the still pool simply opens up, so the mark answers the pointer
+   without a second, competing animation. */
 .zashm-header-logo:hover::before,
 .zashm-header-logo:focus-visible::before {
-  animation: none;
   opacity: 1;
   transform: scale(1.12);
 }
@@ -1585,23 +1588,13 @@ select option { background: var(--bg3); }
 
 .zashm-header-logo:hover::after,
 .zashm-header-logo:focus-visible::after {
-  opacity: 1;
+  opacity: 0.62;
 }
 
 .zashm-header-logo:focus-visible {
   outline: 2px solid var(--gold-light);
   outline-offset: 4px;
   border-radius: 50%;
-}
-
-@keyframes logo-halo-breathe {
-  0%, 100% { opacity: 0.55; transform: scale(0.96); }
-  50% { opacity: 0.9; transform: scale(1.06); }
-}
-
-@keyframes logo-glyph-sheen {
-  0%, 46% { background-position: 84% 0; }
-  70%, 100% { background-position: 16% 0; }
 }
 
 .zashm-header-nav {
@@ -1718,11 +1711,11 @@ select option { background: var(--bg3); }
 }
 
 .page-skeleton-shop {
-  padding-top: 90px;
+  padding-top: 0;
 }
 
 .page-skeleton-shop-header {
-  padding: clamp(30px, 5.4vw, 56px) 20px clamp(24px, 4vw, 40px);
+  padding: calc(70px + clamp(56px, 8.4vw, 104px)) 20px clamp(48px, 6.6vw, 80px);
   border-bottom: 1px solid var(--border);
   text-align: center;
 }
@@ -1730,7 +1723,7 @@ select option { background: var(--bg3); }
 /* Same phone rhythm as .shop-hero, so the real header does not shift by even
    a few pixels when the chunk arrives. */
 @media (max-width: 768px) {
-  .page-skeleton-shop-header { padding: 26px 16px 22px; }
+  .page-skeleton-shop-header { padding: calc(60px + 48px) 16px 42px; }
 }
 
 .page-skeleton-shop-toolbar {
@@ -1830,7 +1823,6 @@ select option { background: var(--bg3); }
 }
 
 @media (max-width: 380px) {
-  .page-skeleton-shop,
   .page-skeleton-product {
     padding-top: 76px;
   }
@@ -1891,12 +1883,10 @@ select option { background: var(--bg3); }
     display: none !important;
   }
 
-  /* The wishlist and bag stay in the header on phones as well: the heart was
-     reported missing once it was dropped here, and the 44px targets fit next
-     to the logo and search at 320px. The bottom navigation keeps its larger
-     labels; the header pair is the quick-access duplicate. */
+  /* On a phone the header carries the logo and one search icon, pinned to the
+     far right; Wishlist and Bag live in the dock, which is always in reach and
+     has the room for a readable label and a badge. */
   .zashm-header-actions { gap: 2px; }
-  .zashm-header-utilities { gap: 2px; }
 }
 
 @media (max-width: 768px) {
@@ -2084,45 +2074,48 @@ select option { background: var(--bg3); }
 }
 
 /* ─── MOBILE BOTTOM NAVIGATION ───────────────────────────────────────────────
-   A floating, centred dock rather than an edge-to-edge bar: one capsule of
-   liquid glass hovering above the page, the way iOS floating controls do. The
-   wrapper only positions it (and is pointer-transparent), so the capsule can be
-   narrower than the viewport; the glass lives on the inner pill. A single
-   gold-tinted plate glides between the four items, and a press squishes the
-   dock slightly so touch feels physical. Hidden above 768px, where the header
-   navigation takes over. */
+   A small floating dock: one quiet capsule of smoked glass, centred above the
+   page. The wrapper only positions it (and is pointer-transparent), so the
+   capsule is narrower than the viewport. The gold plate is a single element
+   that follows a finger swiping across the dock and settles under the item it
+   was left nearest to; tapping still works exactly as before. Hidden above
+   768px, where the header navigation takes over. */
 .mobile-nav {
   display: none;
   pointer-events: none;
 }
 
-/* The capsule itself: warm smoked glass. A translucent charcoal body, a heavy
-   backdrop blur so the page genuinely refracts through it, a specular crown and
-   a dark inner floor. */
+/* The capsule itself: restrained smoked glass. A softer blur, a thinner rim
+   and a much shorter shadow than a full-width bar, so it floats without
+   shouting. */
 .mobile-nav-inner {
   position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
-  width: min(100%, 340px);
+  width: min(100%, 280px);
   margin: 0 auto;
-  padding: 6px;
+  padding: 3px;
   box-sizing: border-box;
   border-radius: 999px;
   pointer-events: auto;
+  /* Vertical scrolling stays with the page; horizontal swipes are the dock's. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
   background:
-    linear-gradient(180deg, rgba(52, 44, 33, 0.58) 0%, rgba(26, 22, 17, 0.66) 46%, rgba(13, 12, 11, 0.8) 100%);
-  border: 1px solid rgba(255, 240, 205, 0.14);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  backdrop-filter: blur(30px) saturate(180%);
+    linear-gradient(180deg, rgba(38, 34, 29, 0.6) 0%, rgba(18, 16, 14, 0.72) 100%);
+  border: 1px solid rgba(255, 240, 205, 0.1);
+  /* A 12px blur is visually indistinguishable from 20px at this size, but it
+     is a good deal cheaper to recompute while the page scrolls underneath. */
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
   box-shadow:
-    0 20px 44px rgba(0, 0, 0, 0.62),
-    0 4px 14px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 250, 234, 0.26),
-    inset 0 -10px 18px rgba(0, 0, 0, 0.28);
+    0 10px 26px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 250, 234, 0.16);
 }
 
-/* The gloss: a soft band of light lying across the top half of the glass. */
+/* The gloss: a faint band of light on the crown, nothing more. */
 .mobile-nav-inner::before {
   content: '';
   position: absolute;
@@ -2131,27 +2124,25 @@ select option { background: var(--bg3); }
   border-radius: inherit;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(255, 255, 255, 0.05) 26%,
-    rgba(255, 255, 255, 0) 52%
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 34%,
+    rgba(255, 255, 255, 0) 56%
   );
   pointer-events: none;
 }
 
-/* A gold hairline along the crown, brightest in the middle and gone at both
-   shoulders — the same drawn-light motif as the footer and the collection
-   header. */
+/* A quiet gold hairline along the crown, gone at both shoulders. */
 .mobile-nav-inner::after {
   content: '';
   position: absolute;
-  inset: 0 14% auto;
+  inset: 0 18% auto;
   height: 1px;
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(232, 200, 112, 0.55) 22%,
-    rgba(255, 236, 190, 0.8) 50%,
-    rgba(232, 200, 112, 0.55) 78%,
+    rgba(232, 200, 112, 0.34) 24%,
+    rgba(255, 236, 190, 0.5) 50%,
+    rgba(232, 200, 112, 0.34) 76%,
     transparent
   );
   pointer-events: none;
@@ -2165,10 +2156,10 @@ select option { background: var(--bg3); }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   min-width: 44px;
   min-height: 44px;
-  padding: 8px 6px 7px;
+  padding: 4px 4px 3px;
   border: 0;
   border-radius: 999px;
   background: none;
@@ -2181,23 +2172,19 @@ select option { background: var(--bg3); }
 .mobile-nav-item.is-active { color: var(--gold-light); }
 
 /* The travelling plate: a lens of gold-tinted glass that settles under the
-   active item. Framer's shared layout glides it between items instead of
-   blinking it on and off. */
+   active item. It is positioned from the live item boxes (see MobileNav), so
+   it can also follow a finger across the dock before snapping into place. */
 .mobile-nav-plate {
   position: absolute;
-  inset: 3px;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
   z-index: 0;
+  width: 0;
   border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(255, 247, 224, 0.22) 0%, rgba(232, 200, 112, 0.14) 46%, rgba(201, 168, 76, 0.07) 100%);
-  border: 1px solid rgba(255, 236, 190, 0.3);
-  -webkit-backdrop-filter: blur(8px) saturate(160%);
-  backdrop-filter: blur(8px) saturate(160%);
-  box-shadow:
-    0 6px 16px rgba(0, 0, 0, 0.38),
-    0 0 20px rgba(201, 168, 76, 0.18),
-    inset 0 1px 0 rgba(255, 252, 240, 0.42),
-    inset 0 -6px 12px rgba(201, 168, 76, 0.06);
+  background: linear-gradient(180deg, rgba(255, 247, 224, 0.12) 0%, rgba(232, 200, 112, 0.07) 100%);
+  border: 1px solid rgba(255, 236, 190, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 252, 240, 0.22);
   pointer-events: none;
 }
 
@@ -2216,8 +2203,8 @@ select option { background: var(--bg3); }
 .mobile-nav-label {
   position: relative;
   z-index: 1;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 500;
   letter-spacing: 0.8px;
   text-transform: uppercase;
 }
@@ -2438,28 +2425,71 @@ body.size-finder-open .whatsapp-fab {
 
   .mobile-nav { display: block; }
   .mobile-nav.mobile-nav--keyboard-open { display: none; }
-  /* Keep the floating actions clear of the floating dock. The dock sits about
-     70px tall including its safe-area padding, so the buttons start above it. */
+  /* Keep the floating actions clear of the floating dock. The dock is about
+     64px tall including its bottom padding, so the buttons start just above it.
+     On a phone the discs look smaller - 36px of paint - while the button's own
+     box stays 44px: the 4px between the box edge and the painted disc is a
+     transparent border, and background-clip keeps the gradient inside it. A tap
+     anywhere in the 44px box is a tap on the button, so the touch target is
+     still the full 44px. */
   .back-to-top {
     right: calc(16px + env(safe-area-inset-right, 0px));
-    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     width: 44px;
     height: 44px;
+    border: 4px solid transparent;
+    background-clip: padding-box;
+    box-shadow:
+      0 8px 20px rgba(0, 0, 0, 0.45),
+      inset 0 0 0 1px rgba(232, 200, 112, 0.45),
+      0 0 18px rgba(201, 168, 76, 0.26),
+      inset 0 1px 0 rgba(255, 252, 240, 0.55),
+      inset 0 -2px 6px rgba(122, 92, 32, 0.45);
+  }
+  .back-to-top:hover,
+  .back-to-top:focus-visible {
+    box-shadow:
+      0 10px 24px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(240, 212, 146, 0.7),
+      0 0 24px rgba(201, 168, 76, 0.45),
+      inset 0 1px 0 rgba(255, 252, 240, 0.7),
+      inset 0 -2px 6px rgba(122, 92, 32, 0.4);
   }
   .whatsapp-fab {
     left: calc(16px + env(safe-area-inset-left, 0px));
-    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     right: auto;
     width: 44px;
     height: 44px;
+    border: 4px solid transparent;
+    border-color: transparent;
+    background-clip: padding-box;
+    box-shadow:
+      0 8px 22px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(201, 168, 76, 0.42),
+      0 0 18px rgba(201, 168, 76, 0.18),
+      inset 0 1px 0 rgba(255, 242, 205, 0.16);
+  }
+  .whatsapp-fab:hover,
+  .whatsapp-fab:focus-visible {
+    border-color: transparent;
+    box-shadow:
+      0 10px 24px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(240, 212, 146, 0.9),
+      0 0 24px rgba(201, 168, 76, 0.4),
+      inset 0 1px 0 rgba(255, 250, 235, 0.55);
+  }
+  /* The halo hugs the smaller disc instead of the larger box. */
+  .whatsapp-fab::before {
+    inset: -2px;
   }
   .back-to-top svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
   .whatsapp-fab svg {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
   }
 
   footer.site-footer {
@@ -2913,12 +2943,20 @@ main, [role="main"] {
    gold rules, a large serif title lit by a soft pool of gold, and a quiet
    counted meta line under a hairline. The title is deliberately several times
    the size of both lines so it never competes with them - on a phone too. */
+/* The page does not offset itself. The hero's own top padding absorbs the
+   fixed header (70px, 60px on a phone), so the lit glow behind the title runs
+   all the way to the top edge and there is no dark band between the header and
+   the collection plate. */
+.shop-page {
+  padding-top: 0;
+}
+
 .shop-hero {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   text-align: center;
-  padding: clamp(30px, 5.4vw, 56px) 20px clamp(24px, 4vw, 40px);
+  padding: calc(70px + clamp(56px, 8.4vw, 104px)) 20px clamp(48px, 6.6vw, 80px);
   border-bottom: 1px solid var(--border);
 }
 
@@ -2967,18 +3005,18 @@ main, [role="main"] {
 .shop-hero-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin: 0;
   color: var(--gold-light);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 4.2px;
+  letter-spacing: 5px;
   text-transform: uppercase;
 }
 .shop-hero-eyebrow::before,
 .shop-hero-eyebrow::after {
   content: '';
-  width: 26px;
+  width: 34px;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.75));
 }
@@ -2987,11 +3025,11 @@ main, [role="main"] {
 }
 
 .shop-hero-title {
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   font-family: var(--font-display);
   /* One continuous scale from a 320px phone to a 1440px desk: no jump at the
      breakpoint, and always several times the eyebrow and the count. */
-  font-size: clamp(36px, 6.2vw, 68px);
+  font-size: clamp(46px, 8vw, 92px);
   font-weight: 400;
   line-height: 1.05;
   letter-spacing: 0.5px;
@@ -3005,9 +3043,9 @@ main, [role="main"] {
 
 .shop-hero-rule {
   display: block;
-  width: 44px;
+  width: 64px;
   height: 1px;
-  margin: 16px auto 12px;
+  margin: 20px auto 16px;
   transform-origin: center;
   background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
@@ -3015,14 +3053,14 @@ main, [role="main"] {
 .shop-hero-count {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   margin: 0;
   /* One step lighter than --text3: the count sits in the lit part of the
      header, where the quieter tone would fall under 4.5:1. */
   color: #b6aea1;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 2.8px;
+  letter-spacing: 3.2px;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -3037,29 +3075,30 @@ main, [role="main"] {
 
 @media (max-width: 768px) {
   .shop-hero {
-    padding: 26px 16px 22px;
+    padding: calc(60px + 48px) 16px 42px;
   }
   .shop-hero-eyebrow {
-    gap: 9px;
-    font-size: 9px;
-    letter-spacing: 3.4px;
+    gap: 10px;
+    font-size: 10px;
+    letter-spacing: 4px;
   }
   .shop-hero-eyebrow::before,
   .shop-hero-eyebrow::after {
-    width: 18px;
+    width: 22px;
   }
   .shop-hero-title {
-    margin-top: 8px;
+    margin-top: 10px;
+    font-size: clamp(42px, 12vw, 58px);
     line-height: 1.07;
   }
   .shop-hero-rule {
-    width: 34px;
-    margin: 12px auto 10px;
+    width: 46px;
+    margin: 15px auto 13px;
   }
   .shop-hero-count {
-    gap: 7px;
-    font-size: 9.5px;
-    letter-spacing: 2.2px;
+    gap: 8px;
+    font-size: 10.5px;
+    letter-spacing: 2.6px;
   }
 }
 
@@ -3585,15 +3624,8 @@ main, [role="main"] {
   .hero-brand-word,
   .hero-brand-letter,
   .hero-brand-letter-sparkle,
-  .hero-brand-sparkle,
-  .zashm-header-logo::before,
-  .zashm-header-logo::after {
+  .hero-brand-sparkle {
     animation: none;
-  }
-
-  .zashm-header-logo::before {
-    opacity: 0.7;
-    transform: none;
   }
 
   .hero-scroll-cue-line::after {
@@ -3765,7 +3797,7 @@ main, [role="main"] {
   letter-spacing: 3px;
   text-transform: uppercase;
   color: var(--gold);
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   font-weight: 600;
 }
 /* A short gold rule under each heading, drawn from the left when the column
@@ -3795,7 +3827,7 @@ main, [role="main"] {
   .footer-col-title {
     font-size: 13px;
     letter-spacing: 2.4px;
-    margin-bottom: 18px;
+    margin-bottom: 14px;
   }
 }
 /* Large screens only: give the three footer headings more presence. */
@@ -3803,14 +3835,14 @@ main, [role="main"] {
   .footer-col-title {
     font-size: 14px;
     letter-spacing: 3.2px;
-    margin-bottom: 22px;
+    margin-bottom: 18px;
   }
 }
 @media (max-width: 768px) {
   .footer-col-title {
     font-size: 12.5px;
     letter-spacing: 1.8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .footer-col-title::after {
     width: 16px;

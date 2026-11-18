@@ -523,7 +523,7 @@ function Footer({ setModal }) {
             </div>
           </div>
 
-          <div className="footer-col footer-reveal" style={{ '--footer-delay': '70ms' }}>
+          <div className="footer-col footer-col--quick footer-reveal" style={{ '--footer-delay': '70ms' }}>
             <h2 className="footer-col-title">{'Quick Links'}</h2>
             {FOOTER_QUICK_LINKS.map(([label, page, Icon]) => (
               <button key={label} type="button" className="footer-link" onClick={() => setPage(page)}>
@@ -533,7 +533,7 @@ function Footer({ setModal }) {
             ))}
           </div>
 
-          <div className="footer-col footer-reveal" style={{ '--footer-delay': '140ms' }}>
+          <div className="footer-col footer-col--care footer-reveal" style={{ '--footer-delay': '140ms' }}>
             <h2 className="footer-col-title">{'Customer Care'}</h2>
             <button type="button" className="footer-link footer-track" onClick={() => setPage('track')}>
               <Search size={13} aria-hidden="true" />

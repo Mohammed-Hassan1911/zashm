@@ -15,7 +15,9 @@ export default function Header() {
 
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (
+    typeof window !== 'undefined' && window.innerWidth <= 768
+  ));
 
   // SAFE COUNT
   const cartCount = (cart || []).reduce(
@@ -171,48 +173,50 @@ export default function Header() {
               whileHover={{ scale: 1.1 }}
               aria-label="Search products"
             >
-              <Search size={isMobile ? 18 : 20} />
+              <Search size={20} />
             </motion.button>
 
-            <div className="zashm-header-utilities">
-              {/* WISHLIST */}
-              <motion.button
-                onClick={() => setPage('wishlist')}
-                style={iconButtonStyle}
-                whileHover={{ scale: 1.1 }}
-                aria-label={wishlist?.length > 0
-                  ? `Wishlist, ${wishlist.length} item${wishlist.length === 1 ? '' : 's'}`
-                  : 'Wishlist'}
-              >
-                <span style={iconWrapStyle}>
-                  <Heart size={isMobile ? 18 : 20} />
-                  {(wishlist?.length > 0) && (
-                    <span style={badgeStyle} aria-hidden="true">
-                      {wishlist.length}
-                    </span>
-                  )}
-                </span>
-              </motion.button>
+            {!isMobile && (
+              <div className="zashm-header-utilities">
+                {/* WISHLIST */}
+                <motion.button
+                  onClick={() => setPage('wishlist')}
+                  style={iconButtonStyle}
+                  whileHover={{ scale: 1.1 }}
+                  aria-label={wishlist?.length > 0
+                    ? `Wishlist, ${wishlist.length} item${wishlist.length === 1 ? '' : 's'}`
+                    : 'Wishlist'}
+                >
+                  <span style={iconWrapStyle}>
+                    <Heart size={20} />
+                    {(wishlist?.length > 0) && (
+                      <span style={badgeStyle} aria-hidden="true">
+                        {wishlist.length}
+                      </span>
+                    )}
+                  </span>
+                </motion.button>
 
-              {/* BAG */}
-              <motion.button
-                onClick={() => setCartOpen(true)}
-                style={iconButtonStyle}
-                whileHover={{ scale: 1.1 }}
-                aria-label={cartCount > 0
-                  ? `Shopping bag, ${cartCount} item${cartCount === 1 ? '' : 's'}`
-                  : 'Shopping bag'}
-              >
-                <span style={iconWrapStyle}>
-                  <ShoppingBag size={isMobile ? 18 : 20} />
-                  {cartCount > 0 && (
-                    <span style={badgeStyle} aria-hidden="true">
-                      {cartCount}
-                    </span>
-                  )}
-                </span>
-              </motion.button>
-            </div>
+                {/* BAG */}
+                <motion.button
+                  onClick={() => setCartOpen(true)}
+                  style={iconButtonStyle}
+                  whileHover={{ scale: 1.1 }}
+                  aria-label={cartCount > 0
+                    ? `Shopping bag, ${cartCount} item${cartCount === 1 ? '' : 's'}`
+                    : 'Shopping bag'}
+                >
+                  <span style={iconWrapStyle}>
+                    <ShoppingBag size={20} />
+                    {cartCount > 0 && (
+                      <span style={badgeStyle} aria-hidden="true">
+                        {cartCount}
+                      </span>
+                    )}
+                  </span>
+                </motion.button>
+              </div>
+            )}
 
           </div>
         </div>
