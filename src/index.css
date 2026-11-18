@@ -469,8 +469,16 @@ select option { background: var(--bg3); }
   transform: scale(1.12);
 }
 
+/* Phone and email are two separate contact lines, not one block of text: they
+   take the same 12px rhythm as the Customer Care links. The old 2.2
+   line-height padded each row but left no space between them. */
+.site-footer .footer-contact {
+  display: grid;
+  gap: 12px;
+}
 .site-footer .footer-contact p {
   width: fit-content;
+  line-height: 1.2;
 }
 
 .app-startup-screen {
@@ -4036,6 +4044,16 @@ main, [role="main"] {
   .site-footer button {
     min-height: 44px;
     margin-bottom: 0 !important;
+  }
+
+  /* On phones the Customer Care links are 44px tap targets stacked with no
+     gap. The phone and email take the same rhythm, so both columns read as
+     one list instead of two different densities. */
+  .site-footer .footer-contact {
+    gap: 0;
+  }
+  .site-footer .footer-contact p {
+    min-height: 44px;
   }
   .gold-btn { font-size: 12px !important; }
 

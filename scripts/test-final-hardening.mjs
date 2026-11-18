@@ -592,6 +592,18 @@ console.log('\n[11] reload resilience and footer polish');
     'footer social icons zoom from their centre');
   ok(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.site-footer \.footer-contact p:hover[\s\S]{0,200}?transform: none/.test(css),
     'footer hover zoom is disabled for reduced motion');
+
+  // Phone and email read as two rows with the same rhythm as Customer Care:
+  // a 12px gap on desktop and 44px tap rows (no gap) on phones.
+  ok(/\.site-footer \.footer-contact \{\s*display: grid;\s*gap: 12px;\s*\}/.test(css) &&
+     /\.site-footer \.footer-contact p \{\s*width: fit-content;\s*line-height: 1\.2;\s*\}/.test(css),
+    'the footer contact lines are a 12px grid, not one 2.2 line-height block');
+  ok(!/lineHeight: 2\.2/.test(app),
+    'the footer contact block no longer pads rows with an inline line-height');
+  const phoneFooter = css.slice(css.indexOf('/* Footer links: tall enough to tap'));
+  ok(/\.site-footer \.footer-contact \{\s*gap: 0;\s*\}/.test(phoneFooter) &&
+     /\.site-footer \.footer-contact p \{\s*min-height: 44px;\s*\}/.test(phoneFooter),
+    'on phones the contact rows match the 44px Customer Care tap rhythm');
 }
 
 // ─── [12] header/nav badges + governorate suggestions ──────────────────────
