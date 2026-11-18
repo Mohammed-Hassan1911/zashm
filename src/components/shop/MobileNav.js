@@ -106,49 +106,45 @@ export default function MobileNav() {
       initial={{ y: 80 }}
       animate={{ y: 0 }}
       transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+      className={`mobile-nav${keyboardOpen ? ' mobile-nav--keyboard-open' : ''}`}
       style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 900,
-        background: 'rgba(17,17,17,0.96)', backdropFilter: 'blur(20px)',
-        borderTop: '1px solid var(--border)',
         width: '100%',
         maxWidth: '100vw',
         boxSizing: 'border-box',
         padding: '8px max(0px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(0px, env(safe-area-inset-left, 0px))',
       }}
-      className={keyboardOpen ? 'mobile-nav mobile-nav--keyboard-open' : 'mobile-nav'}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+      <div className="mobile-nav-inner">
         {items.map(({ icon: Icon, label, page, action, badge }) => {
           const active = currentPage === page;
           return (
             <motion.button
               key={label}
+              type="button"
               onClick={action || (() => setPage(page))}
               aria-label={badge > 0 ? `${label}, ${badge} item${badge === 1 ? '' : 's'}` : label}
               aria-current={active ? 'page' : undefined}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, minWidth: 44, minHeight: 44, padding: '6px 14px', background: 'none', border: 'none', cursor: 'pointer', position: 'relative', color: active ? 'var(--gold)' : 'var(--text3)' }}
-              whileTap={{ scale: 0.9 }}
+              className={`mobile-nav-item${active ? ' is-active' : ''}`}
+              whileTap={{ scale: 0.92 }}
             >
-              <div style={{ position: 'relative', display: 'flex', lineHeight: 0 }}>
-                <Icon size={20} />
-                {badge > 0 && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      position: 'absolute', top: -7, right: -7, minWidth: 15, height: 15,
-                      padding: '0 3px', borderRadius: '999px', background: 'var(--gold)',
-                      color: 'var(--bg)', fontSize: 9, fontWeight: 700, lineHeight: 1,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      border: '1.5px solid #111',
-                    }}
-                  >{badge}</span>
-                )}
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase' }}>{label}</span>
+              {/* One gold-tinted plate is shared between the four items, so it
+                  slides to the current route instead of blinking on and off. */}
               {active && (
-                <motion.div layoutId="mobile-nav-indicator"
-                  style={{ position: 'absolute', bottom: -8, width: 4, height: 4, borderRadius: '50%', background: 'var(--gold)' }} />
+                <motion.span
+                  layoutId="mobile-nav-plate"
+                  className="mobile-nav-plate"
+                  aria-hidden="true"
+                  transition={{ type: 'spring', stiffness: 420, damping: 40, mass: 0.9 }}
+                />
               )}
+              <span className="mobile-nav-icon">
+                <Icon size={20} aria-hidden="true" />
+                {badge > 0 && (
+                  <span className="mobile-nav-badge" aria-hidden="true">{badge}</span>
+                )}
+              </span>
+              <span className="mobile-nav-label">{label}</span>
             </motion.button>
           );
         })}

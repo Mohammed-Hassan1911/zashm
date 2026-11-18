@@ -217,51 +217,45 @@ export default function ShopPage() {
       }}
     >
       {/* HEADER */}
-      <div
-        style={{
-          textAlign: 'center',
-          padding: '40px 24px 32px',
-          borderBottom: '1px solid var(--border)'
-        }}
-      >
+      <header className="shop-hero">
+        <span className="shop-hero-glow" aria-hidden="true" />
         <motion.p
-          initial={{ opacity: 0, y: 8 }}
+          className="shop-hero-eyebrow"
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          style={{
-            fontSize: 10,
-            letterSpacing: 4,
-            color: 'var(--gold)',
-            textTransform: 'uppercase'
-          }}
+          transition={{ duration: 0.5 }}
         >
           Our Collection
         </motion.p>
 
         <motion.h1
-          initial={{ opacity: 0, y: 8 }}
+          className="shop-hero-title"
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(32px, 5vw, 64px)',
-            fontWeight: 400,
-            margin: '12px 0'
-          }}
+          transition={{ duration: 0.6, delay: 0.06 }}
         >
           {activeCategory}
         </motion.h1>
 
+        <motion.span
+          className="shop-hero-rule"
+          aria-hidden="true"
+          initial={{ scaleX: 0, opacity: 0 }}
+          animate={{ scaleX: 1, opacity: 1 }}
+          transition={{ duration: 0.7, delay: 0.18 }}
+        />
+
         <motion.p
-          style={{
-            color: 'var(--text3)',
-            fontSize: 12,
-            marginTop: 8,
-            letterSpacing: 1
-          }}
+          className="shop-hero-count"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.24 }}
         >
+          <span className="shop-hero-count-dot" aria-hidden="true" />
           {filtered.length}{' '}
-          {filtered.length === 1 ? 'PIECE' : 'PIECES'} AVAILABLE
+          {filtered.length === 1 ? 'Piece' : 'Pieces'} Available
         </motion.p>
-      </div>
+      </header>
 
       <div
         style={{

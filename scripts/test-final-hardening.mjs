@@ -672,11 +672,15 @@ console.log('\n[12] badge proximity and governorate copy');
   ok(/cartCount === 1 \? '' : 's'/.test(header),
     'the bag button pluralises its announced count');
 
-  ok(/top: -7, right: -7, minWidth: 15, height: 15/.test(mobileNav),
+  // The badge geometry moved from inline styles into .mobile-nav-badge when the
+  // bar was restyled, so the guarantee is asserted on the stylesheet that now
+  // owns it: still pinned to the 20px glyph, still a 15px disc.
+  const navCss = read('src/index.css');
+  ok(/\.mobile-nav-badge \{[^}]*top: -7px;[^}]*right: -7px;[^}]*min-width: 15px;[^}]*height: 15px;/.test(navCss),
     'the bottom-nav badge sits at the upper-right corner of the glyph too');
   ok(/aria-label=\{badge > 0 \?/.test(mobileNav),
     'bottom-nav buttons announce their badge count');
-  ok(/<span\s+aria-hidden="true"/.test(mobileNav),
+  ok(/<span[^>]*className="mobile-nav-badge"[^>]*aria-hidden="true"/.test(mobileNav),
     'the decorative sole badge number is hidden from screen readers');
 
   ok(!/<span lang="ar" dir="rtl">\{GOVERNORATE_AR\[city\]\}<\/span>/.test(cartPage),

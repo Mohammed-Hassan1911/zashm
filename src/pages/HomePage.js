@@ -35,11 +35,16 @@ export default function HomePage() {
     <div style={{ paddingTop: 0 }}>
       {/* ───── HERO — Old Money Menswear Editorial ───── */}
       <section ref={heroRef} className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {/* Black luxury backdrop — soft gold glow */}
+        {/* The hero does not paint its own base colour: the ambient wall behind
+            the whole app shows through, so the home page opens on the same lit
+            room as every other route. Only the gold glow and the vignette are
+            drawn here, both transparent. */}
         <motion.div data-decor="true" style={{ position: 'absolute', inset: 0, y }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #0a0a0a 0%, #14110a 48%, #0a0a0a 100%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse clamp(40%, 62vw, 80%) clamp(35%, 52vh, 70%) at 50% 44%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 38%, transparent 72%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 34%, rgba(0,0,0,0.72) 100%)' }} />
+          {/* clamp()/min() are not valid inside a radial-gradient size (Chromium
+              drops the whole layer), so the glow is sized in percentages of the
+              hero box — which is already viewport-width and viewport-height. */}
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 38%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,0.4) 100%)' }} />
         </motion.div>
 
         {/* Twinkling gold dust — subtle luxury sparkle */}

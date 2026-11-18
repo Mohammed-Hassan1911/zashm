@@ -87,15 +87,16 @@ export default function CartDrawer() {
               bottom: 0, 
               width: '100%',        // 🎯 أول تعديل: يأخذ 100% من عرض الشاشة على الموبايل عشان ما يخرجش برة
               maxWidth: 420,        // 🎯 ثاني تعديل: يثبت عند 420px كحد أقصى على الشاشات الكبيرة (الكمبيوتر)
-              background: 'var(--bg2)', 
-              borderLeft: '1px solid var(--border)', 
+              background: 'linear-gradient(180deg, #16120d 0%, #0c0b0a 58%, #080808 100%)', 
+              borderLeft: '1px solid rgba(201,168,76,0.18)', 
+              boxShadow: '-24px 0 60px rgba(0,0,0,0.55)',
               zIndex: 2001, 
               display: 'flex', 
               flexDirection: 'column' 
             }}
           >
             {/* Header */}
-            <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '24px', borderBottom: '1px solid rgba(201,168,76,0.14)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <ShoppingBag size={20} color="var(--gold)" />
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>Shopping Bag</span>

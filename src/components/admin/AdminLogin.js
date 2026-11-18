@@ -84,14 +84,19 @@ export default function AdminLogin({ onSuccess }) {
   };
 
   return (
-    <div className="admin-login" style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
-      {/* Background */}
-      <div data-decor="true" style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: 'radial-gradient(ellipse clamp(30%, 60vw, 80%) clamp(40%, 70vh, 90%) at 20% 50%, rgba(201,168,76,0.04) 0%, transparent 60%), radial-gradient(ellipse clamp(25%, 50vw, 70%) clamp(30%, 60vh, 80%) at 80% 20%, rgba(201,168,76,0.03) 0%, transparent 50%)' }} />
-      {[...Array(4)].map((_, i) => (
+    <div className="admin-login">
+      {/* The login screen lives in the same lit room as the storefront: a warm
+          key light from the upper left, a cooler rim from the upper right, and
+          a soft pool where the card sits. Percentage sizes only — clamp() and
+          min() are invalid inside a radial-gradient size and silently drop the
+          whole layer in Chromium. */}
+      <div data-decor="true" className="admin-login-backdrop" />
+      {[...Array(6)].map((_, i) => (
         <motion.div data-decor="true" key={i}
-          style={{ position: 'absolute', width: 1, height: 1, borderRadius: '50%', background: 'var(--gold)', opacity: 0.15, left: `${20 + i * 22}%`, top: `${15 + i * 18}%` }}
-          animate={{ scale: [1, 80, 1], opacity: [0.15, 0, 0.15] }}
-          transition={{ duration: 8 + i * 2, repeat: Infinity, delay: i * 1.5 }}
+          className="admin-login-mote"
+          style={{ left: `${14 + i * 15}%`, top: `${12 + ((i * 23) % 70)}%` }}
+          animate={{ opacity: [0, 0.5, 0], y: [0, -14, 0] }}
+          transition={{ duration: 9 + i * 2, repeat: Infinity, delay: i * 1.4, ease: 'easeInOut' }}
         />
       ))}
 
@@ -99,21 +104,21 @@ export default function AdminLogin({ onSuccess }) {
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        style={{ width: '100%', maxWidth: 420, position: 'relative' }}
+        className="admin-login-shell"
       >
         {/* Card */}
-        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '40px 36px', boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
+        <div className="admin-login-card">
           {/* Logo */}
-          <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <div className="admin-login-head">
             <motion.div
-              style={{ width: 56, height: 56, background: 'linear-gradient(135deg, var(--gold-dark), var(--gold))', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}
-              animate={{ boxShadow: ['0 0 0 0 rgba(201,168,76,0.4)', '0 0 0 12px rgba(201,168,76,0)', '0 0 0 0 rgba(201,168,76,0)'] }}
-              transition={{ duration: 2, repeat: Infinity }}
+              className="admin-login-seal"
+              animate={{ boxShadow: ['0 0 0 0 rgba(201,168,76,0.35)', '0 0 0 14px rgba(201,168,76,0)', '0 0 0 0 rgba(201,168,76,0)'] }}
+              transition={{ duration: 2.6, repeat: Infinity }}
             >
-              <Shield size={24} color="var(--bg)" />
+              <Shield size={24} color="#0d0b08" aria-hidden="true" />
             </motion.div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 500, letterSpacing: 4, marginBottom: 6 }} className="shimmer-text">ZASHM</h1>
-            <p style={{ color: 'var(--text3)', fontSize: 12, letterSpacing: 2, textTransform: 'uppercase' }}>Admin Panel</p>
+            <h1 className="admin-login-wordmark lit-wordmark">ZASHM</h1>
+            <p className="admin-login-subtitle">Admin Panel</p>
           </div>
 
           {/* Error */}

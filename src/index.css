@@ -5,12 +5,12 @@
   --brand-gold: #a89568;
   --brand-gold-light: #b6a579;
   --brand-gold-dark: #8f7b50;
-  --bg: #0a0a0a;
-  --bg2: #111111;
-  --bg3: #1a1a1a;
-  --bg4: #222222;
-  --surface: #161616;
-  --border: #2a2a2a;
+  --bg: #070707;
+  --bg2: #0d0d0d;
+  --bg3: #151515;
+  --bg4: #1c1c1c;
+  --surface: #121212;
+  --border: #262626;
   --border-gold: rgba(201,168,76,0.3);
   --text: #f5f0e8;
   --text1: #f5f0e8;
@@ -36,6 +36,111 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  /* Own stacking context so the ambient layer below can sit at z-index -1:
+     behind every route's content, in front of the flat page colour. */
+  isolation: isolate;
+}
+
+/* ─── Ambient backdrop ───────────────────────────────────────────────────────
+   One lit room behind every route, built from four fixed layers:
+
+     1. body::before        the wall — a warm key light from the upper left, a
+                            cooler rim light upper right, a gold bounce off the
+                            floor, and a cold steel/violet counter-light in the
+                            shadow side. That cold-warm split is what makes the
+                            gold read as light instead of brown paint. A deep
+                            vignette and a warm-to-cold wash finish it.
+     2. .app-shell::before  fluted wall panelling: 1px hairlines every 120px,
+                            masked away from the edges so it is a suggestion,
+                            never a grid you notice.
+     3. .app-shell::after   a wide sheen that crosses the wall over a minute,
+                            like light moving through a gallery.
+     4. body::after         film grain on top, so the gradients never band.
+
+   Everything is pure CSS: no image request, no JS, no repaint (every motion is
+   a transform on an already-composited layer), and every layer is
+   pointer-events: none. The admin opts out with its own opaque surface. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -6%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    /* key light, upper left — the brightest thing on the page */
+    radial-gradient(46% 42% at 3% -14%, rgba(238, 194, 104, 0.27), transparent 62%),
+    /* the hot core of that light */
+    radial-gradient(18% 16% at 8% -10%, rgba(255, 228, 166, 0.13), transparent 70%),
+    /* rim light, upper right */
+    radial-gradient(36% 32% at 95% -2%, rgba(216, 178, 98, 0.19), transparent 66%),
+    /* gold bounce off the floor */
+    radial-gradient(76% 50% at 50% 122%, rgba(208, 166, 86, 0.17), transparent 70%),
+    /* cold counter-light in the shadow side */
+    radial-gradient(50% 44% at -6% 90%, rgba(60, 106, 130, 0.15), transparent 72%),
+    radial-gradient(36% 32% at 104% 72%, rgba(90, 74, 128, 0.12), transparent 74%),
+    /* vignette */
+    radial-gradient(126% 116% at 50% 38%, transparent 24%, rgba(0, 0, 0, 0.54) 76%, rgba(0, 0, 0, 0.78) 100%),
+    /* base wash: warm where the light lands, cold in the shadow */
+    linear-gradient(172deg, #15110c 0%, #0d0b0a 42%, #06060a 100%);
+  animation: ambient-drift 72s ease-in-out infinite alternate;
+}
+
+/* Fluted panelling: vertical hairlines only, faded away from the edges. */
+.app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255, 245, 224, 0.055) 0 1px, transparent 1px 120px);
+  -webkit-mask-image: radial-gradient(130% 92% at 50% 14%, #000 0%, rgba(0, 0, 0, 0.4) 54%, transparent 88%);
+  mask-image: radial-gradient(130% 92% at 50% 14%, #000 0%, rgba(0, 0, 0, 0.4) 54%, transparent 88%);
+}
+
+/* The travelling sheen. */
+.app-shell::after {
+  content: '';
+  position: fixed;
+  top: -30%;
+  left: -40%;
+  width: 180%;
+  height: 160%;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 241, 210, 0.03) 42%,
+    rgba(255, 250, 232, 0.085) 50%,
+    rgba(255, 241, 210, 0.03) 58%,
+    transparent 70%
+  );
+  animation: ambient-sheen 54s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Film grain: a 180px tiling SVG noise, faint enough to read as texture on a
+   retina screen and to stop the big gradients banding. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+@keyframes ambient-drift {
+  from { transform: translate3d(-1.4%, -0.8%, 0) scale(1.02); }
+  to { transform: translate3d(1.4%, 0.8%, 0) scale(1.07); }
+}
+
+@keyframes ambient-sheen {
+  from { transform: translate3d(-16%, -3%, 0) rotate(0.01deg); }
+  to { transform: translate3d(16%, 3%, 0) rotate(0.01deg); }
 }
 
 html {
@@ -49,10 +154,175 @@ html {
 
 ::selection { background: rgba(201,168,76,0.3); color: var(--gold-light); }
 
+/* ─── Admin: the same room, quieter ─────────────────────────────────────────
+   The dashboard and the login screen are data surfaces, so they get a calmer
+   version of the storefront's light: the same warm-to-cool wash and key light,
+   but no drifting sheen and no grain. Every admin surface reads its colour
+   from these tokens, so retinting the whole console is one block instead of a
+   thousand inline styles. Contrast is preserved: --text3 is 5.4:1 on
+   --surface, --text2 is 6.6:1. */
+.admin-container,
+.admin-login {
+  --bg: #090807;
+  --bg2: #100e0b;
+  --bg3: #171310;
+  --bg4: #1f1913;
+  --surface: #15110d;
+  --border: #2a241c;
+  --border-gold: rgba(201, 168, 76, 0.28);
+  --text: #f6f1e7;
+  --text1: #f6f1e7;
+  --text2: #a89e8e;
+  --text3: #948b7d;
+}
+
 .admin-container {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  background:
+    radial-gradient(58% 40% at 4% -8%, rgba(232, 200, 112, 0.08), transparent 62%),
+    radial-gradient(44% 38% at 96% 2%, rgba(216, 178, 98, 0.055), transparent 68%),
+    radial-gradient(70% 44% at 50% 118%, rgba(208, 166, 86, 0.05), transparent 74%),
+    linear-gradient(172deg, #120f0b 0%, #0a0908 46%, #07070a 100%);
+}
+
+/* ─── Admin login ─────────────────────────────────────────────────────────── */
+.admin-login {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  /* flex-start + an auto margin on the shell centres the card when it fits and
+     lets the page scroll to the top of it when a phone keyboard shrinks the
+     viewport. Plain `align-items: center` would clip the card's top. */
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background:
+    radial-gradient(52% 46% at 16% 8%, rgba(238, 194, 104, 0.13), transparent 64%),
+    radial-gradient(34% 30% at 12% 4%, rgba(255, 228, 166, 0.08), transparent 70%),
+    radial-gradient(42% 38% at 88% 0%, rgba(216, 178, 98, 0.1), transparent 68%),
+    radial-gradient(66% 44% at 50% 112%, rgba(208, 166, 86, 0.08), transparent 72%),
+    radial-gradient(46% 40% at 0% 96%, rgba(60, 106, 130, 0.1), transparent 74%),
+    linear-gradient(172deg, #16120e 0%, #0c0b09 46%, #060609 100%);
+}
+
+/* Fluted wall panelling, the same motif as the storefront, faded at the edges. */
+.admin-login-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(90deg, rgba(255, 245, 224, 0.05) 0 1px, transparent 1px 120px);
+  -webkit-mask-image: radial-gradient(130% 92% at 50% 14%, #000 0%, rgba(0, 0, 0, 0.35) 54%, transparent 88%);
+  mask-image: radial-gradient(130% 92% at 50% 14%, #000 0%, rgba(0, 0, 0, 0.35) 54%, transparent 88%);
+}
+
+/* Drifting motes of light, never a hard shape. */
+.admin-login-mote {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #f6e2a8;
+  box-shadow: 0 0 10px 3px rgba(232, 200, 112, 0.4);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.admin-login-shell {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  /* Auto margins centre the card inside the flex-start container, and resolve
+     to 0 when the card is taller than the viewport, so a phone keyboard can
+     still scroll to its top edge instead of clipping it. */
+  margin-block: auto;
+}
+
+/* Lit glass, the same language as the cart drawer and the toasts. */
+.admin-login-card {
+  position: relative;
+  border-radius: 14px;
+  padding: 40px 36px;
+  background: linear-gradient(180deg, rgba(30, 24, 18, 0.9) 0%, rgba(13, 11, 10, 0.95) 58%, rgba(9, 8, 7, 0.97) 100%);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 242, 205, 0.1);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* A gold hairline along the top edge, brightest in the middle — the footer's
+   motif, reused so the card reads as part of the same frame. */
+.admin-login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(90deg, transparent, rgba(232, 200, 112, 0.6) 30%, rgba(255, 244, 214, 0.8) 50%, rgba(232, 200, 112, 0.6) 70%, transparent);
+  pointer-events: none;
+}
+
+.admin-login-head {
+  text-align: center;
+  margin-bottom: 34px;
+}
+
+/* The seal: a minted disc with a warm crown and a deep base, matching the
+   scroll-to-top button. */
+.admin-login-seal {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #f4dc9c 0%, #dcbc63 42%, #b08c3c 100%);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(240, 212, 146, 0.5),
+    0 0 26px rgba(201, 168, 76, 0.3),
+    inset 0 1px 0 rgba(255, 252, 240, 0.6),
+    inset 0 -2px 6px rgba(122, 92, 32, 0.4);
+}
+
+.admin-login-wordmark {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  margin-bottom: 6px;
+}
+
+.admin-login-subtitle {
+  color: var(--text3);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* The shared "lit letters" treatment for the two admin wordmarks: light falls
+   from above onto the glyph, with a warm bloom underneath. */
+.lit-wordmark {
+  background-image: linear-gradient(180deg, #fff8e2 0%, #f0d492 30%, #c9a84c 66%, #8f7230 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  text-shadow:
+    0 0 1px rgba(255, 246, 216, 0.4),
+    0 0 16px rgba(201, 168, 76, 0.34);
+}
+
+@media (max-width: 480px) {
+  .admin-login-card { padding: 30px 22px; border-radius: 12px; }
+  .admin-login-wordmark { font-size: 25px; letter-spacing: 3px; }
 }
 
 a { color: inherit; text-decoration: none; }
@@ -382,11 +652,6 @@ select option { background: var(--bg3); }
 /* Footer brand: a seamless gold sweep. The gradient tile repeats every
    160px and the animation shifts exactly one tile, so the glint never pauses
    or jumps back to a dark gap at the loop boundary. */
-@keyframes footer-brand-shine {
-  from { background-position: 0 0; }
-  to { background-position: 160px 0; }
-}
-
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
@@ -397,28 +662,83 @@ select option { background: var(--bg3); }
   50% { box-shadow: 0 0 0 12px rgba(201,168,76,0); }
 }
 
-.shimmer-text {
-  background: linear-gradient(110deg, var(--brand-gold-dark), var(--brand-gold-light) 52%, var(--brand-gold-dark));
+/* ─── Footer wordmark: letters lit from above ────────────────────────────────
+   Each letter carries its own light: a bright crown, a deep gold base, a warm
+   bloom, and a specular band that runs *down* the glyph. The band is a white-hot
+   core with gold shoulders, and the halo swells while it passes, so the letter
+   looks struck by light rather than repainted. Bands are offset per letter, so
+   the light travels Z → M instead of sweeping the whole word at once. That
+   vertical, letter-by-letter fall is deliberately not the home page's
+   horizontal shimmer. */
+.footer-wordmark-letter {
+  position: relative;
+  display: inline-block;
+  background-image:
+    /* the specular band: gold shoulders around a white core */
+    linear-gradient(
+      180deg,
+      rgba(255, 240, 200, 0) 0%,
+      rgba(255, 240, 200, 0) 38%,
+      rgba(255, 228, 170, 0.52) 46%,
+      rgba(255, 255, 250, 0.98) 50%,
+      rgba(255, 228, 170, 0.52) 54%,
+      rgba(255, 240, 200, 0) 62%,
+      rgba(255, 240, 200, 0) 100%
+    ),
+    /* the lit face */
+    linear-gradient(
+      180deg,
+      #fff8e2 0%,
+      #f3d99b 24%,
+      #dcbc63 52%,
+      #b08c3c 78%,
+      #7d6329 100%
+    );
+  background-size: 100% 260%, 100% 100%;
+  background-position: 50% 92%, 50% 0;
+  background-repeat: no-repeat, no-repeat;
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  text-shadow:
+    0 0 1px rgba(255, 246, 216, 0.5),
+    0 0 6px rgba(255, 240, 200, 0.34),
+    0 0 18px rgba(201, 168, 76, 0.46),
+    0 0 40px rgba(201, 168, 76, 0.22),
+    0 2px 0 rgba(74, 54, 18, 0.45);
+  animation: footer-letter-light 4s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  animation-delay: calc(var(--letter-i) * 0.2s);
 }
 
-/* Footer ZASHM wordmark: brighter glass-like gradient that keeps sweeping
-   without a visible stop. */
-.site-footer .shimmer-text {
-  background-image: linear-gradient(
-    110deg,
-    #8a6d2f 0px,
-    #d4af37 55px,
-    #fff4cf 80px,
-    #d4af37 105px,
-    #8a6d2f 160px
-  );
-  background-size: 160px 100%;
-  background-repeat: repeat;
-  animation: footer-brand-shine 3.2s linear infinite;
-  filter: drop-shadow(0 0 7px rgba(201, 168, 76, 0.32));
+@keyframes footer-letter-light {
+  0%, 5% {
+    background-position: 50% 92%, 50% 0;
+    text-shadow:
+      0 0 1px rgba(255, 246, 216, 0.5),
+      0 0 6px rgba(255, 240, 200, 0.34),
+      0 0 18px rgba(201, 168, 76, 0.46),
+      0 0 40px rgba(201, 168, 76, 0.22),
+      0 2px 0 rgba(74, 54, 18, 0.45);
+  }
+  30% {
+    background-position: 50% 50%, 50% 0;
+    text-shadow:
+      0 0 2px rgba(255, 250, 232, 0.7),
+      0 0 10px rgba(255, 244, 208, 0.6),
+      0 0 26px rgba(232, 200, 112, 0.62),
+      0 0 54px rgba(201, 168, 76, 0.34),
+      0 2px 0 rgba(74, 54, 18, 0.45);
+  }
+  56%, 100% {
+    background-position: 50% 8%, 50% 0;
+    text-shadow:
+      0 0 1px rgba(255, 246, 216, 0.5),
+      0 0 6px rgba(255, 240, 200, 0.34),
+      0 0 18px rgba(201, 168, 76, 0.46),
+      0 0 40px rgba(201, 168, 76, 0.22),
+      0 2px 0 rgba(74, 54, 18, 0.45);
+  }
 }
 
 /* ─── Footer frame ───────────────────────────────────────────────────────────
@@ -429,7 +749,10 @@ select option { background: var(--bg3); }
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: var(--bg2);
+  /* Warm at the top where the wall's light lands, cool and deep at the base -
+     the same wash as the ambient layer, so the footer reads as the end of the
+     same room rather than a separate black slab. */
+  background: linear-gradient(180deg, #13100c 0%, #0c0b0a 46%, #070708 100%);
   border-top: 1px solid var(--border);
   /* The footer now ends on its last column: no closing bar and no dead space.
      The bottom padding is still sized to clear the two fixed floating actions
@@ -881,7 +1204,7 @@ select option { background: var(--bg3); }
   /* 2. تصغير العناوين الضخمة في الموبايل عشان متعملش زحمة. A clamp keeps the
         28px phone minimum but lets the title grow again on a 768px tablet,
         where a fixed 28px looked like a phone heading on a big screen. */
-  h1:not(.hero-brand):not(.product-title), [style*="font-size: 40"], [style*="font-size:40"], [style*="font-size: 48"], [style*="font-size:48"] {
+  h1:not(.hero-brand):not(.product-title):not(.shop-hero-title), [style*="font-size: 40"], [style*="font-size:40"], [style*="font-size: 48"], [style*="font-size:48"] {
     font-size: clamp(28px, 5.6vw, 36px) !important;
     letter-spacing: 1px !important;
     margin-bottom: 24px !important;
@@ -953,7 +1276,7 @@ select option { background: var(--bg3); }
   color: transparent;
   animation: hero-brand-shimmer 7s ease-in-out infinite, hero-brand-letter-glint 5s ease-in-out infinite;
   animation-delay: 0s, calc(var(--letter-index) * 0.32s);
-  filter: drop-shadow(0 4px 10px rgba(143, 123, 80, 0.08));
+  filter: drop-shadow(0 0 16px rgba(232, 200, 112, 0.3)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.34));
 }
 
 .hero-brand-letter-sparkle {
@@ -972,9 +1295,11 @@ select option { background: var(--bg3); }
 }
 
 @keyframes hero-brand-letter-glint {
-  0%, 74%, 100% { filter: brightness(1); }
-  82% { filter: brightness(1.8) drop-shadow(0 0 8px rgba(255, 239, 177, 0.9)); }
-  90% { filter: brightness(1.2) drop-shadow(0 0 3px rgba(255, 239, 177, 0.5)); }
+  /* The bloom is carried through the glint so the letters never lose their
+     halo when the animation owns the filter property. */
+  0%, 74%, 100% { filter: brightness(1) drop-shadow(0 0 16px rgba(232, 200, 112, 0.3)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.34)); }
+  82% { filter: brightness(1.8) drop-shadow(0 0 26px rgba(255, 239, 177, 0.8)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.3)); }
+  90% { filter: brightness(1.2) drop-shadow(0 0 12px rgba(255, 239, 177, 0.5)) drop-shadow(0 8px 22px rgba(0, 0, 0, 0.32)); }
 }
 
 .hero-brand-sparkle {
@@ -1077,11 +1402,62 @@ select option { background: var(--bg3); }
 }
 
 .zashm-header-logo {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   width: clamp(38px, 4vw, 58px);
   aspect-ratio: 260 / 250;
+  isolation: isolate;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A pool of warm light behind the monogram, so the gold Z sits in its own
+   glow instead of floating on the header. */
+.zashm-header-logo::before {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 46%,
+    rgba(240, 208, 132, 0.34) 0%,
+    rgba(201, 168, 76, 0.14) 42%,
+    rgba(201, 168, 76, 0) 72%
+  );
+  filter: blur(5px);
+  opacity: 0.75;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+
+/* A single hairline arc, like a lens ring catching the light. It turns very
+   slowly, so the mark never looks static but never draws the eye either. */
+.zashm-header-logo::after {
+  content: '';
+  position: absolute;
+  inset: -3%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(232, 200, 112, 0) 0deg,
+    rgba(240, 208, 132, 0.7) 38deg,
+    rgba(201, 168, 76, 0.18) 96deg,
+    rgba(232, 200, 112, 0) 140deg,
+    rgba(232, 200, 112, 0) 220deg,
+    rgba(201, 168, 76, 0.42) 268deg,
+    rgba(232, 200, 112, 0) 320deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.4px), #000 calc(100% - 1.2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 1.4px), #000 calc(100% - 1.2px));
+  opacity: 0.85;
+  animation: logo-arc-turn 22s linear infinite;
+  pointer-events: none;
 }
 
 .zashm-header-logo img {
@@ -1089,6 +1465,35 @@ select option { background: var(--bg3); }
   width: 100%;
   height: 100%;
   object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(201, 168, 76, 0.3));
+  transition: filter 0.35s ease;
+}
+
+.zashm-header-logo:hover::before,
+.zashm-header-logo:focus-visible::before {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.zashm-header-logo:hover img,
+.zashm-header-logo:focus-visible img {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(232, 200, 112, 0.6));
+}
+
+.zashm-header-logo:hover::after,
+.zashm-header-logo:focus-visible::after {
+  opacity: 1;
+}
+
+.zashm-header-logo:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 4px;
+  border-radius: 50%;
+}
+
+@keyframes logo-arc-turn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .zashm-header-nav {
@@ -1148,7 +1553,8 @@ select option { background: var(--bg3); }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  /* No opaque fill: the ambient wall is already painted by the body, so the
+     placeholder does not flash a flat black sheet before the hero arrives. */
 }
 
 /* ── Route skeletons (/shop, /product) ──────────────────────────────────────
@@ -1186,9 +1592,15 @@ select option { background: var(--bg3); }
 }
 
 .page-skeleton-shop-header {
-  padding: 40px 24px 32px;
+  padding: clamp(30px, 5.4vw, 56px) 20px clamp(24px, 4vw, 40px);
   border-bottom: 1px solid var(--border);
   text-align: center;
+}
+
+/* Same phone rhythm as .shop-hero, so the real header does not shift by even
+   a few pixels when the chunk arrives. */
+@media (max-width: 768px) {
+  .page-skeleton-shop-header { padding: 26px 16px 22px; }
 }
 
 .page-skeleton-shop-toolbar {
@@ -1466,7 +1878,111 @@ select option { background: var(--bg3); }
   }
 }
 
-.mobile-nav { display: none; }
+/* ─── MOBILE BOTTOM NAVIGATION ───────────────────────────────────────────────
+   Same lit-glass language as the header and the ambient wall: a warm charcoal
+   pane with a gold hairline along its top edge (the footer's motif), and a
+   single gold-tinted plate that slides between the four items. Hidden above
+   768px, where the header navigation takes over. */
+.mobile-nav {
+  display: none;
+  background:
+    linear-gradient(180deg, rgba(34, 28, 21, 0.88) 0%, rgba(16, 14, 12, 0.95) 58%, rgba(10, 10, 10, 0.97) 100%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+  box-shadow: 0 -20px 44px rgba(0, 0, 0, 0.55);
+}
+
+/* The gold hairline, brightest in the middle and gone at both ends. */
+.mobile-nav::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(232, 200, 112, 0.42) 16%,
+    rgba(232, 200, 112, 0.7) 50%,
+    rgba(232, 200, 112, 0.42) 84%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.mobile-nav-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.mobile-nav-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 14px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--text3);
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.25s ease;
+}
+
+.mobile-nav-item.is-active { color: var(--gold-light); }
+
+.mobile-nav-plate {
+  position: absolute;
+  inset: 1px 3px;
+  z-index: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(201, 168, 76, 0.16) 0%, rgba(201, 168, 76, 0.05) 100%);
+  border: 1px solid rgba(201, 168, 76, 0.24);
+  box-shadow: 0 6px 18px rgba(201, 168, 76, 0.14), inset 0 1px 0 rgba(255, 242, 205, 0.16);
+  pointer-events: none;
+}
+
+.mobile-nav-icon {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  line-height: 0;
+}
+
+.mobile-nav-label {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+/* A minted badge: the dark ring is a box-shadow so it still reads on the
+   gold plate and on the plain pane alike. */
+.mobile-nav-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e8c870, #c9a84c);
+  color: #0b0a09;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px #12100d, 0 2px 8px rgba(201, 168, 76, 0.45);
+}
 
 /* ─── FLOATING ACTIONS ────────────────────────────────────────────────────────
    WhatsApp stays visible; scroll-to-top appears after scrolling down. The
@@ -1537,6 +2053,34 @@ select option { background: var(--bg3); }
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   width: 46px;
   height: 46px;
+  border-radius: 50%;
+  /* A minted disc: warm highlight at the crown, deep gold at the base. */
+  background: linear-gradient(168deg, #f0d492 0%, #d9b95e 44%, #b08c3c 100%);
+  color: #14110c;
+  border: none;
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(232, 200, 112, 0.45),
+    0 0 26px rgba(201, 168, 76, 0.32),
+    inset 0 1px 0 rgba(255, 252, 240, 0.55),
+    inset 0 -2px 6px rgba(122, 92, 32, 0.45);
+  transition: box-shadow 0.28s ease, filter 0.28s ease;
+}
+
+.back-to-top:hover,
+.back-to-top:focus-visible {
+  filter: brightness(1.08);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(240, 212, 146, 0.7),
+    0 0 36px rgba(201, 168, 76, 0.5),
+    inset 0 1px 0 rgba(255, 252, 240, 0.7),
+    inset 0 -2px 6px rgba(122, 92, 32, 0.4);
+}
+
+.back-to-top:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 3px;
 }
 
 .whatsapp-fab {
@@ -1544,6 +2088,45 @@ select option { background: var(--bg3); }
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   width: 52px;
   height: 52px;
+  border-radius: 50%;
+  /* Dark glass with a warm gold core, so it reads on the lit wall and on a
+     product photo alike. */
+  background:
+    radial-gradient(120% 120% at 30% 16%, rgba(201, 168, 76, 0.24), transparent 62%),
+    linear-gradient(165deg, rgba(40, 34, 24, 0.96) 0%, rgba(14, 13, 12, 0.98) 72%);
+  color: var(--gold-light);
+  border: 1px solid rgba(201, 168, 76, 0.42);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.55),
+    0 0 26px rgba(201, 168, 76, 0.2),
+    inset 0 1px 0 rgba(255, 242, 205, 0.16);
+  transition: color 0.28s ease, border-color 0.28s ease, background 0.28s ease, box-shadow 0.28s ease;
+}
+
+/* A fine outer halo, so the button sits in its own pool of light. */
+.whatsapp-fab::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(201, 168, 76, 0.14);
+  pointer-events: none;
+}
+
+.whatsapp-fab:hover,
+.whatsapp-fab:focus-visible {
+  color: #0d0c0b;
+  border-color: rgba(240, 212, 146, 0.9);
+  background: linear-gradient(165deg, #f0d492 0%, #c9a84c 56%, #a8863a 100%);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.5),
+    0 0 34px rgba(201, 168, 76, 0.45),
+    inset 0 1px 0 rgba(255, 250, 235, 0.55);
+}
+
+.whatsapp-fab:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 4px;
 }
 
 /* While the size finder is open it owns the screen, so the WhatsApp action is
@@ -2065,6 +2648,196 @@ main, [role="main"] {
   }
 }
 
+/* ─── Collection header (shop) ──────────────────────────────────────────────
+   Three tiers, one clear hierarchy: a small tracked eyebrow flanked by drawn
+   gold rules, a large serif title lit by a soft pool of gold, and a quiet
+   counted meta line under a hairline. The title is deliberately several times
+   the size of both lines so it never competes with them - on a phone too. */
+.shop-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  text-align: center;
+  padding: clamp(30px, 5.4vw, 56px) 20px clamp(24px, 4vw, 40px);
+  border-bottom: 1px solid var(--border);
+}
+
+/* A short gold seam centred on the hero's bottom edge, so the header ends on a
+   drawn line rather than a full-width rule. */
+.shop-hero::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  width: min(320px, 62%);
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.6), transparent);
+  pointer-events: none;
+}
+
+/* The lit wall behind the title. */
+.shop-hero-glow {
+  position: absolute;
+  left: 50%;
+  top: -46%;
+  z-index: -1;
+  width: min(820px, 126%);
+  aspect-ratio: 2 / 1;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(214, 178, 96, 0.18), rgba(201, 168, 76, 0.055) 56%, transparent 100%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+/* A soft shaft of gallery light falling on the title. */
+.shop-hero-glow::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 46%;
+  height: 150%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(255, 236, 190, 0.1), rgba(255, 236, 190, 0.03) 62%, transparent 100%);
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  filter: blur(10px);
+}
+
+.shop-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--gold-light);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 4.2px;
+  text-transform: uppercase;
+}
+.shop-hero-eyebrow::before,
+.shop-hero-eyebrow::after {
+  content: '';
+  width: 26px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.75));
+}
+.shop-hero-eyebrow::after {
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.75), transparent);
+}
+
+.shop-hero-title {
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  /* One continuous scale from a 320px phone to a 1440px desk: no jump at the
+     breakpoint, and always several times the eyebrow and the count. */
+  font-size: clamp(36px, 6.2vw, 68px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.5px;
+  text-wrap: balance;
+  color: var(--text);
+  background: linear-gradient(180deg, #fffaf0 0%, #f4e9d1 54%, #d8c8a1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.shop-hero-rule {
+  display: block;
+  width: 44px;
+  height: 1px;
+  margin: 16px auto 12px;
+  transform-origin: center;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+
+.shop-hero-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  /* One step lighter than --text3: the count sits in the lit part of the
+     header, where the quieter tone would fall under 4.5:1. */
+  color: #b6aea1;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.shop-hero-count-dot {
+  width: 4px;
+  height: 4px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(201, 168, 76, 0.85);
+}
+
+@media (max-width: 768px) {
+  .shop-hero {
+    padding: 26px 16px 22px;
+  }
+  .shop-hero-eyebrow {
+    gap: 9px;
+    font-size: 9px;
+    letter-spacing: 3.4px;
+  }
+  .shop-hero-eyebrow::before,
+  .shop-hero-eyebrow::after {
+    width: 18px;
+  }
+  .shop-hero-title {
+    margin-top: 8px;
+    line-height: 1.07;
+  }
+  .shop-hero-rule {
+    width: 34px;
+    margin: 12px auto 10px;
+  }
+  .shop-hero-count {
+    gap: 7px;
+    font-size: 9.5px;
+    letter-spacing: 2.2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  .app-shell::after {
+    animation: none;
+  }
+}
+
+/* Windows high contrast / forced colours drop the gradient fill, which would
+   leave transparent text. Fall back to plain text there. */
+@media (forced-colors: active) {
+  .shop-hero-title {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: CanvasText;
+  }
+
+  /* Gradient-clipped text has no fill of its own, so every lit wordmark falls
+     back to the system text colour instead of vanishing. */
+  .hero-brand-letter,
+  .footer-wordmark-letter,
+  .lit-wordmark {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: CanvasText;
+    text-shadow: none;
+  }
+
+  .zashm-header-logo::before,
+  .zashm-header-logo::after,
+  .admin-login-mote,
+  .admin-login-backdrop {
+    display: none;
+  }
+}
+
 /* Product page: small-screen layout fixes */
 .product-page,
 .product-page-container,
@@ -2431,19 +3204,19 @@ main, [role="main"] {
   max-height: 100%;
   box-sizing: border-box;
   padding: clamp(10px, 3vw, 14px) clamp(12px, 3.5vw, 18px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 240, 200, 0.1);
   border-inline-start: 3px solid rgba(255, 255, 255, 0.24);
-  border-radius: 8px;
-  background: rgba(20, 23, 28, 0.97);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(36, 30, 24, 0.94) 0%, rgba(16, 14, 13, 0.97) 100%);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 240, 200, 0.08);
   color: var(--text);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   pointer-events: auto;
 }
 
 .zashm-toast--success {
-  border-inline-start-color: #d4af37;
+  border-inline-start-color: var(--gold-light);
 }
 
 .zashm-toast--error {
@@ -2460,7 +3233,7 @@ main, [role="main"] {
 
 .zashm-toast--neutral {
   border-inline-start-color: #8a8f98;
-  background: rgba(32, 35, 40, 0.97);
+  background: linear-gradient(180deg, rgba(40, 39, 37, 0.94) 0%, rgba(20, 19, 18, 0.97) 100%);
 }
 
 .zashm-toast-icon {
@@ -2551,7 +3324,8 @@ main, [role="main"] {
   .hero-brand-word,
   .hero-brand-letter,
   .hero-brand-letter-sparkle,
-  .hero-brand-sparkle {
+  .hero-brand-sparkle,
+  .zashm-header-logo::after {
     animation: none;
   }
 
@@ -2565,12 +3339,9 @@ main, [role="main"] {
     transform: none;
   }
 
-  .site-footer .shimmer-text {
+  .footer-wordmark-letter {
     animation: none;
-  }
-
-  .site-footer .shimmer-text {
-    filter: none;
+    background-position: 50% 92%, 50% 0;
   }
 
   .site-footer a,

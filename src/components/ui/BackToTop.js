@@ -38,17 +38,9 @@ export function BackToTop() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
           transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
-          whileHover={!reduceMotion ? { scale: 1.1, boxShadow: '0 6px 30px rgba(201,168,76,0.6)' } : undefined}
+          whileHover={!reduceMotion ? { scale: 1.1 } : undefined}
           whileTap={!reduceMotion ? { scale: 0.9 } : undefined}
           className="back-to-top"
-          style={{
-            borderRadius: '50%',
-            background: 'var(--gold)',
-            color: 'var(--bg)',
-            border: 'none',
-            padding: 0,
-            boxShadow: '0 4px 20px rgba(201,168,76,0.4)',
-          }}
         ><ArrowUp size={18} aria-hidden="true" /></motion.button>
       )}
     </AnimatePresence>,

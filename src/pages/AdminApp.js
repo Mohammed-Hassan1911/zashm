@@ -204,9 +204,9 @@ export default function AdminApp() {
   }, [canReadReviews, adminPage]);
 
   if (authLoading) return (
-    <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--bg)' }}>
+    <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'linear-gradient(172deg, #120f0b 0%, #0a0908 46%, #07070a 100%)' }}>
       <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}
-        style={{ width:32, height:32, border:'2px solid var(--border)', borderTopColor:'var(--gold)', borderRadius:'50%' }} />
+        style={{ width:32, height:32, border:'2px solid rgba(201,168,76,0.24)', borderTopColor:'var(--gold)', borderRadius:'50%' }} />
     </div>
   );
 
@@ -228,7 +228,7 @@ export default function AdminApp() {
             <span style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:700, color:'var(--bg)' }}>Z</span>
           </div>
           {(!collapsed || isMobile) && <div>
-            <span style={{ fontFamily:'var(--font-display)', fontSize:17, fontWeight:600, letterSpacing:3 }} className="shimmer-text">ZASHM</span>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:17, fontWeight:600, letterSpacing:3 }} className="lit-wordmark">ZASHM</span>
             <p style={{ fontSize:9, color:'var(--text3)', letterSpacing:1, textTransform:'uppercase' }}>Admin Console</p>
           </div>}
         </div>
@@ -285,11 +285,11 @@ export default function AdminApp() {
   );
 
   return (
-    <div className="admin-container" style={{ display:'flex', minHeight:0, background:'var(--bg)', flexDirection: 'row' }}>
+    <div className="admin-container" style={{ display:'flex', minHeight:0, flexDirection: 'row' }}>
       <motion.aside
         animate={{ width: collapsed ? 64 : 230 }}
         className="hidden-mobile"
-        style={{ background:'var(--bg2)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', position:'sticky', top:0, height:'100vh', overflow:'hidden', flexShrink:0 }}
+        style={{ background:'linear-gradient(180deg, #14110d 0%, #0e0c09 58%, #0a0908 100%)', borderRight:'1px solid rgba(201,168,76,0.14)', display:'flex', flexDirection:'column', position:'sticky', top:0, height:'100vh', overflow:'hidden', flexShrink:0 }}
       >
         <SidebarContent isMobile={false} />
       </motion.aside>
@@ -304,7 +304,7 @@ export default function AdminApp() {
             <motion.div
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
               transition={{ type:'spring', damping:25, stiffness:200 }}
-              style={{ position:'fixed', left:0, top:0, bottom:0, width:260, background:'var(--bg2)', zIndex:3000, borderRight:'1px solid var(--border)', boxShadow:'10px 0 30px rgba(0,0,0,0.5)' }}
+              style={{ position:'fixed', left:0, top:0, bottom:0, width:260, background:'linear-gradient(180deg, #14110d 0%, #0e0c09 58%, #0a0908 100%)', zIndex:3000, borderRight:'1px solid rgba(201,168,76,0.16)', boxShadow:'14px 0 40px rgba(0,0,0,0.55)' }}
             >
               <SidebarContent isMobile={true} />
             </motion.div>
@@ -313,7 +313,7 @@ export default function AdminApp() {
       </AnimatePresence>
 
       <main className="admin-main" style={{ flex:1, overflow:'hidden', minWidth:0, minHeight:0, display:'flex', flexDirection:'column' }}>
-        <div className="admin-topbar" style={{ position:'sticky', top:0, zIndex:100, background:'rgba(10,10,10,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid var(--border)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div className="admin-topbar" style={{ position:'sticky', top:0, zIndex:100, background:'rgba(18,15,11,0.88)', backdropFilter:'blur(18px) saturate(140%)', WebkitBackdropFilter:'blur(18px) saturate(140%)', borderBottom:'1px solid rgba(201,168,76,0.16)', boxShadow:'0 10px 28px rgba(0,0,0,0.35)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <button
               className="show-mobile-flex" onClick={() => setMobileMenuOpen(true)}

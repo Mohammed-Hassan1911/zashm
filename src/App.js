@@ -245,7 +245,7 @@ function AppInner() {
 
   return (
     <MotionConfig reducedMotion="user">
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+    <div className="app-shell" style={{ minHeight: '100vh' }}>
       <Toaster />
       <OrderNotification />
 
@@ -499,11 +499,19 @@ function Footer({ setModal }) {
 
           <div className="footer-brand footer-reveal" style={{ '--footer-delay': '0ms' }}>
             <div
-              className="footer-wordmark shimmer-text"
+              className="footer-wordmark"
               onClick={handleFooterLogoClick}
               role="presentation"
             >
-              ZASHM
+              {'ZASHM'.split('').map((letter, index) => (
+                <span
+                  key={`${letter}-${index}`}
+                  className="footer-wordmark-letter"
+                  style={{ '--letter-i': index }}
+                >
+                  {letter}
+                </span>
+              ))}
             </div>
             <p className="footer-blurb">
               <Gem size={14} aria-hidden="true" />

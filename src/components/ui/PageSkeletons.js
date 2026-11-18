@@ -9,9 +9,10 @@ export function ShopPageSkeleton() {
   return (
     <div className="page-skeleton page-skeleton-shop" role="status" aria-label="Loading the collection">
       <div className="page-skeleton-shop-header">
-        <span className="page-skeleton-line" style={{ width: 120, height: 10, margin: '0 auto 18px' }} />
-        <span className="page-skeleton-line" style={{ width: 'min(520px, 70%)', height: 'clamp(32px, 5vw, 64px)', margin: '0 auto 14px' }} />
-        <span className="page-skeleton-line" style={{ width: 140, height: 10, margin: '0 auto' }} />
+        <span className="page-skeleton-line" style={{ width: 130, height: 9, margin: '0 auto 12px' }} />
+        <span className="page-skeleton-line" style={{ width: 'min(520px, 74%)', height: 'clamp(36px, 6.2vw, 68px)', margin: '0 auto 16px' }} />
+        <span className="page-skeleton-line" style={{ width: 44, height: 1, margin: '0 auto 12px' }} />
+        <span className="page-skeleton-line" style={{ width: 150, height: 10, margin: '0 auto' }} />
       </div>
       <div className="page-skeleton-shop-toolbar" aria-hidden="true">
         <span className="page-skeleton-pill" />

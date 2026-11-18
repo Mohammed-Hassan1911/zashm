@@ -836,8 +836,15 @@ try {
       assert.ok(!/width:\s*34,\s*height:\s*34/.test(cart), 'cart quantity buttons are no longer 34px');
       assert.ok(/width:\s*44,\s*height:\s*44/.test(cart), 'cart quantity buttons are 44px');
       assert.ok(/width:\s*44,\s*height:\s*44/.test(drawer), 'drawer close/qty buttons are 44px');
-      assert.ok(/minWidth:\s*44,\s*minHeight:\s*44/.test(nav), 'mobile nav items are at least 44px');
-      assert.ok(/fontSize:\s*10,\s*fontWeight:\s*600/.test(nav), 'mobile nav labels are 10px, not 9px');
+      // The nav's tap targets and label size moved from inline styles into
+      // .mobile-nav-item / .mobile-nav-label, so the guarantee is asserted on
+      // the stylesheet that now owns them.
+      assert.ok(/\.mobile-nav-item\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px/.test(css),
+        'mobile nav items are at least 44px');
+      assert.ok(/\.mobile-nav-label\s*\{[^}]*font-size:\s*10px;[^}]*font-weight:\s*600/.test(css),
+        'mobile nav labels are 10px, not 9px');
+      assert.ok(/mobile-nav--keyboard-open/.test(nav),
+        'the keyboard-open state still hides the bottom nav');
       assert.ok(/padding:\s*12,\s*\n?\s*minHeight:\s*44/.test(header),
         'the header search field is 44px tall');
     });
