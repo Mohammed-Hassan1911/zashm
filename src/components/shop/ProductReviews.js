@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ImagePlus, MessageSquare, Send, Star, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { prepareImage } from '../../lib/imagePrep';
+import PhotoLightbox from '../ui/PhotoLightbox';
 import StarRating from './StarRating';
 
 // A phone photo is shrunk on the device before it is sent: the server caps the
@@ -98,6 +99,9 @@ export default function ProductReviews({ product }) {
   const [formError, setFormError] = useState('');
   const [errorField, setErrorField] = useState(null);
   const [sent, setSent] = useState(false);
+  // A customer photo opened full size, with the thumbnail it came from so focus
+  // can go back there when the visitor closes it.
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
 
   const formRef = useRef(null);
   const nameRef = useRef(null);
@@ -674,12 +678,17 @@ export default function ProductReviews({ product }) {
                 {review.comment}
               </p>
               {review.photoUrl && (
-                <a
-                  href={review.photoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  className="review-photo-thumb"
+                  aria-haspopup="dialog"
                   aria-label={`Open the photo attached by ${review.name}`}
-                  style={{ display: 'inline-block', marginTop: 10, lineHeight: 0 }}
+                  onClick={(event) => setLightboxPhoto({
+                    src: review.photoUrl,
+                    alt: `Photo attached by ${review.name}`,
+                    caption: [review.name, formatDate(review.createdAt)].filter(Boolean).join(' · '),
+                    returnTo: event.currentTarget,
+                  })}
                 >
                   <img
                     src={review.photoUrl}
@@ -688,7 +697,7 @@ export default function ProductReviews({ product }) {
                     decoding="async"
                     style={{ width: 96, height: 120, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)' }}
                   />
-                </a>
+                </button>
               )}
             </article>
           ))}
@@ -699,6 +708,8 @@ export default function ProductReviews({ product }) {
           )}
         </div>
       )}
+
+      <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />
     </section>
   );
 }

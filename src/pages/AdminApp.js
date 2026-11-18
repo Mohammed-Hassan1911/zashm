@@ -27,6 +27,7 @@ import DateField from '../components/admin/DateField';
 import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUploader';
 import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
+import PhotoLightbox from '../components/ui/PhotoLightbox';
 import { api, deleteStorageFile } from '../lib/api';
 import { formatDateLabel, inclusiveDays } from '../lib/calendar';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, Legend } from 'recharts';
@@ -3109,6 +3110,9 @@ function ReviewsPanel({ canEdit, onCountsChange }) {
   const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0, total: 0 });
   const [busyId, setBusyId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  // A customer photo opened full size, with the thumbnail it came from so focus
+  // returns there when the moderator closes it.
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
 
   const load = useCallback(async (nextStatus) => {
     setLoading(true);
@@ -3289,12 +3293,17 @@ function ReviewsPanel({ canEdit, onCountsChange }) {
                     {review.comment}
                   </p>
                   {review.photoUrl && (
-                    <a
-                      href={review.photoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      className="review-photo-thumb"
+                      aria-haspopup="dialog"
                       aria-label={`Open the photo attached by ${review.name}`}
-                      style={{ display: 'inline-block', marginTop: 10, lineHeight: 0 }}
+                      onClick={(event) => setLightboxPhoto({
+                        src: review.photoUrl,
+                        alt: `Photo attached by ${review.name}`,
+                        caption: [review.name, review.productName || `Product #${review.productId}`].filter(Boolean).join(' · '),
+                        returnTo: event.currentTarget,
+                      })}
                     >
                       <img
                         src={review.photoUrl}
@@ -3303,7 +3312,7 @@ function ReviewsPanel({ canEdit, onCountsChange }) {
                         decoding="async"
                         style={{ width: 72, height: 90, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg3)' }}
                       />
-                    </a>
+                    </button>
                   )}
                   <p style={{ fontSize: 10, color: 'var(--text3)', margin: '6px 0 0' }}>
                     Submitted {review.createdAt ? new Date(review.createdAt).toLocaleString('en-GB') : '—'}
@@ -3349,6 +3358,8 @@ function ReviewsPanel({ canEdit, onCountsChange }) {
           ))}
         </div>
       )}
+
+      <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />
     </div>
   );
 }

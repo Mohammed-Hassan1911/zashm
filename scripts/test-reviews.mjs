@@ -601,6 +601,12 @@ console.log('\n[8] static wiring');
   ok(reviewsUi.includes('photoSaved === false'),
     'a lost photo is reported without hiding the saved review');
   ok(adminUi.includes('review.photoUrl'), 'the moderator sees the attached photo');
+  ok(adminUi.includes("from '../components/ui/PhotoLightbox'"),
+    'the moderation list opens photos in the same in-app viewer');
+  ok(/aria-label=\{`Open the photo attached by \$\{review\.name\}`\}[\s\S]{0,400}setLightboxPhoto\(\{/.test(adminUi),
+    'the moderator photo is a button that opens the viewer, not a new tab');
+  ok(/<PhotoLightbox photo=\{lightboxPhoto\} onClose=\{\(\) => setLightboxPhoto\(null\)\} \/>/.test(adminUi),
+    'the moderation viewer is mounted and can be closed');
 
   ok(imagePrep.includes('export async function prepareImage'),
     'the shared image pipeline exposes prepareImage');
@@ -634,6 +640,39 @@ console.log('\n[8] static wiring');
   ok(/\.review-photo-icon,[\s\S]{0,40}\.review-photo-preview \{\s*animation: none/.test(motionCss) &&
      /\.review-photo-drop\.is-busy::before \{\s*animation: none/.test(motionCss),
     'every new animation is disabled in the shared reduced-motion block');
+
+  // ── review photos open in place and close cleanly ──
+  const lightboxUi = read('src/components/ui/PhotoLightbox.js');
+  ok(reviewsUi.includes("from '../ui/PhotoLightbox'"),
+    'the review list renders the in-app photo viewer');
+  ok(!/href=\{review\.photoUrl\}/.test(reviewsUi) && !/target="_blank"/.test(reviewsUi),
+    'a review photo no longer leaves the site in a new tab');
+  ok(reviewsUi.includes('className="review-photo-thumb"') &&
+     reviewsUi.includes('aria-haspopup="dialog"') &&
+     reviewsUi.includes('returnTo: event.currentTarget'),
+    'the thumbnail is a button that opens the viewer and remembers itself');
+  ok(lightboxUi.includes("event.key === 'Escape'") &&
+     /if \(event\.key === 'Escape'\)[\s\S]{0,80}onCloseRef\.current\(\)/.test(lightboxUi),
+    'Escape closes the photo');
+  ok(/event\.target === event\.currentTarget/.test(lightboxUi),
+    'a tap outside the photo closes it');
+  ok(/html\.style\.overflow = 'hidden'/.test(lightboxUi) &&
+     /body\.style\.overflow = 'hidden'/.test(lightboxUi) &&
+     /body\.style\.overflow = previous\.bodyOverflow/.test(lightboxUi) &&
+     /window\.scrollTo\(0, scrollY\)/.test(lightboxUi),
+    'the page behind is locked while the photo is open and restored after');
+  ok(lightboxUi.includes('opener.focus({ preventScroll: true })'),
+    'focus returns to the thumbnail that opened the photo');
+  ok(lightboxUi.includes('createPortal') && lightboxUi.includes('aria-modal="true"'),
+    'the viewer is a real modal layered over the page');
+  ok(/\.photo-lightbox \{[\s\S]{0,220}z-index: 12000/.test(css),
+    'the photo stage sits above the page content');
+  ok(/\.photo-lightbox-close \{[\s\S]{0,260}width: 44px;\s*height: 44px/.test(css),
+    'the close button is a 44px target');
+  ok(/\.photo-lightbox-img \{[\s\S]{0,260}max-height: calc\(100dvh - 128px\)/.test(css),
+    'the photo always fits inside the viewport');
+  ok(/\.photo-lightbox,\s*\.review-photo-thumb img \{\s*animation: none/.test(motionCss),
+    'the photo viewer animation respects reduced motion');
 }
 
 // ─── Summary ────────────────────────────────────────────────────────────────
