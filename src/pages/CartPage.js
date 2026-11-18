@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, CreditCard, PackageSearch, Headset } from 'lucide-react';
+import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, CreditCard, PackageSearch, Headset, ArrowLeft } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import StockFeedback from '../components/shop/StockFeedback';
@@ -87,7 +87,7 @@ function CityAutocomplete({ value, onChange, onSelect, error, id = 'governorate'
         <div style={{
           position: 'absolute', [dropUp ? 'bottom' : 'top']: '100%', left: 0, right: 0,
           marginTop: dropUp ? 0 : 4, marginBottom: dropUp ? 4 : 0, zIndex: 50,
-          background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 4,
+          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.012) 100%), rgba(18, 17, 15, 0.92)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: 8,
           maxHeight: 180, overflowY: 'auto', boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
         }}>
           {suggestions.map(city => (
@@ -258,129 +258,205 @@ export function CartPage() {
     }
   };
 
+  const bagCount = safeCart.reduce((sum, item) => sum + (item?.qty || 0), 0);
+
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }} className="cart-page">
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(24px, 5vw, 40px) clamp(16px, 4vw, 24px)' }}>
-        <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
-          style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(26px, 7vw, 40px)', fontWeight: 400, letterSpacing: 'clamp(1px, 0.5vw, 2px)', marginBottom: 'clamp(20px, 5vw, 40px)' }}>Shopping Bag</motion.h1>
+      <div className="bag-shell">
+        <motion.header
+          className="bag-head"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <p className="bag-eyebrow">{'Your selection'}</p>
+          <h1 className="bag-title">{'Shopping Bag'}</h1>
+          <p className="bag-sub">
+            {safeCart.length === 0
+              ? 'A quiet wardrobe starts with one piece.'
+              : `${bagCount} ${bagCount === 1 ? 'piece' : 'pieces'} selected`}
+          </p>
+        </motion.header>
 
         {safeCart.length === 0 ? (
-          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '80px 0' }}>
-            <ShoppingBag size={80} color="var(--border)" style={{ margin: '0 auto 24px', display: 'block' }} />
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(20px, 5.5vw, 28px)', marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</p>
-            <p style={{ color: 'var(--text3)', marginBottom: 32 }}>Explore our collection to find your next luxury piece</p>
-            <button className="gold-btn" onClick={() => setPage('shop')}>Explore Collection</button>
+          <motion.div className="bag-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <span className="bag-empty-icon" aria-hidden="true">
+              <ShoppingBag size={30} strokeWidth={1.2} />
+            </span>
+            <p className="bag-empty-title">{'Your bag is empty'}</p>
+            <p className="bag-empty-copy">{'Explore the collection to find your next piece.'}</p>
+            <button className="gold-btn" onClick={() => setPage('shop')}>{'Explore Collection'}</button>
           </motion.div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 'clamp(20px, 5vw, 40px)' }} className="cart-grid">
-            <div>
-              <AnimatePresence>
+          <div className="cart-grid bag-grid">
+            <div className="bag-lines">
+              <div className="bag-lines-head">
+                <span>{'Pieces'}</span>
+                <span>{bagCount} {bagCount === 1 ? 'item' : 'items'}</span>
+              </div>
+
+              <AnimatePresence initial={false}>
                 {safeCart.map(item => (
-                  <motion.div key={item?.key} layout initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0, height:0, overflow:'hidden' }}
-                    style={{ display: 'flex', gap: 'clamp(12px, 3vw, 20px)', padding: 'clamp(14px, 3.5vw, 20px) 0', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ position:'relative' }}>
-                      <SafeImage src={item?.product?.images?.[0]} fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'} alt={item?.product?.name ?? 'Product'}
-                        style={{ width: 'clamp(74px, 22vw, 110px)', aspectRatio: '3 / 4', height: 'auto', objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} loading="lazy" />
+                  <motion.article
+                    key={item?.key}
+                    layout
+                    className="bag-line"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  >
+                    <div className="bag-line-media">
+                      <SafeImage
+                        src={item?.product?.images?.[0]}
+                        fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'}
+                        alt={item?.product?.name ?? 'Product'}
+                        loading="lazy"
+                      />
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ color: 'var(--text3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>{item?.product?.category ?? 'General'}</p>
-                      <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(15px, 4.3vw, 19px)', fontWeight: 500, marginBottom: 5 }}>{item?.product?.name ?? 'Unknown Product'}</p>
-                      <p style={{ color: 'var(--text2)', fontSize: 'clamp(10px, 3vw, 11px)', marginBottom: 12 }}>Size: {item?.size ?? 'N/A'} · Color: {item?.color ?? 'N/A'}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2 }}>
-                          <button onClick={() => (item?.qty ?? 0) > 1 ? changeQty(item, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
+
+                    <div className="bag-line-body">
+                      <div className="bag-line-head">
+                        <div className="bag-line-copy">
+                          <p className="bag-line-cat">{item?.product?.category ?? 'General'}</p>
+                          <p className="bag-line-name">{item?.product?.name ?? 'Unknown Product'}</p>
+                          <p className="bag-line-variant">
+                            <span>{'Size'} {item?.size ?? 'N/A'}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{item?.color ?? 'N/A'}</span>
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => removeFromCart(item?.key)}
+                          type="button"
+                          className="bag-remove"
+                          aria-label={`Remove ${item?.product?.name || 'item'} from bag`}
+                        >
+                          <Trash2 size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+
+                      <div className="bag-line-foot">
+                        <div className="bag-qty">
+                          <button
+                            onClick={() => (item?.qty ?? 0) > 1 ? changeQty(item, (item?.qty ?? 0) - 1) : removeFromCart(item?.key)}
                             type="button"
                             aria-label={`Decrease quantity of ${item?.product?.name || 'item'}`}
-                            style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
+                            style={{ width: 44, height: 44 }}
+                          >
                             <Minus size={12} aria-hidden="true" />
                           </button>
-                          <span style={{ padding: '0 8px', fontSize: 13, minWidth: 26, textAlign: 'center' }}>{item?.qty ?? 0}</span>
-                          <button onClick={() => changeQty(item, (item?.qty ?? 0) + 1)}
+                          <span aria-live="polite">{item?.qty ?? 0}</span>
+                          <button
+                            onClick={() => changeQty(item, (item?.qty ?? 0) + 1)}
                             type="button"
                             aria-label={`Increase quantity of ${item?.product?.name || 'item'}`}
-                            style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: 'var(--text2)', cursor: 'pointer' }}>
+                            style={{ width: 44, height: 44 }}
+                          >
                             <Plus size={12} aria-hidden="true" />
                           </button>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ color: '#b9a06c', fontSize: 15, fontWeight: 600 }}>EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}</span>
-                          <button onClick={() => removeFromCart(item?.key)}
-                            type="button"
-                            aria-label={`Remove ${item?.product?.name || 'item'} from bag`}
-                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', width: 44, height: 44, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
-                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}><Trash2 size={15} aria-hidden="true" /></button>
-                        </div>
+                        <span className="bag-line-price">
+                          EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}
+                        </span>
                       </div>
+
                       <LineStockIssue issue={issueByKey.get(item?.key)} onRemove={() => removeFromCart(item?.key)} />
                     </div>
-                  </motion.div>
+                  </motion.article>
                 ))}
               </AnimatePresence>
+
+              <button type="button" className="bag-continue" onClick={() => setPage('shop')}>
+                <ArrowLeft size={14} aria-hidden="true" />
+                {'Continue shopping'}
+              </button>
             </div>
 
-            <div>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: 24, position: 'sticky', top: 100 }}>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(17px, 4.6vw, 20px)', marginBottom: 20 }}>Order Summary</h3>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>Subtotal</span>
-                  <span style={{ fontSize: 13 }}>EGP {subtotal.toLocaleString()}</span>
+            <aside className="bag-summary" aria-label="Order summary">
+              <div className="bag-summary-head">
+                <h2 className="bag-summary-title">{'Order Summary'}</h2>
+                <span className="bag-summary-rule" aria-hidden="true" />
+              </div>
+
+              <div className="bag-totals">
+                <div className="bag-total-row">
+                  <span>{'Subtotal'}</span>
+                  <span>EGP {subtotal.toLocaleString()}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>
-                    Discount{appliedDiscount ? ` (${appliedDiscount.code})` : ''}
-                  </span>
-                  <span style={{ fontSize: 13, color: discountAmount > 0 ? '#27ae60' : 'var(--text3)' }}>
+                <div className="bag-total-row">
+                  <span>Discount{appliedDiscount ? ` (${appliedDiscount.code})` : ''}</span>
+                  <span className={discountAmount > 0 ? 'is-discount' : 'is-muted'}>
                     {discountAmount > 0 ? `-EGP ${discountAmount.toLocaleString()}` : 'EGP 0'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>Shipping</span>
-                  <span style={{ color: 'var(--text3)', fontSize: 13 }}>Calculated at next step</span>
+                <div className="bag-total-row">
+                  <span>{'Shipping'}</span>
+                  <span className="is-muted">{'Calculated at next step'}</span>
                 </div>
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 18 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 600 }}>Total</span>
-                    <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 'clamp(18px, 5vw, 22px)', fontWeight: 600 }}>EGP {total.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {!appliedDiscount ? (
-                  <div>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: couponError ? 6 : 14 }}>
-                      <div style={{ position:'relative', flex:1 }}>
-                        <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
-                        <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
-                          onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
-                          onFocus={warmCouponEndpoint}
-                          disabled={couponApplying}
-                          placeholder="Discount code" style={{ width:'100%', paddingLeft:28, minHeight: 44, borderColor: couponError ? 'var(--red)' : undefined }} />
-                      </div>
-                      <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                        style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, minHeight: 44, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
-                        {couponApplying ? 'Checking…' : 'Apply'}
-                      </button>
-                    </div>
-                    {couponError && (
-                      <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:12 }}>
-                        <AlertCircle size={12} color="var(--red)" />
-                        <p style={{ color: 'var(--red)', fontSize: 11 }}>{couponError}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
-                    <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                    <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, minHeight: 44, padding: '0 8px' }}>Remove</button>
-                  </div>
-                )}
-
-                <button className="gold-btn" style={{ width: '100%', marginBottom: 10 }} onClick={() => setPage('checkout')}>
-                  Proceed to Checkout
-                </button>
-                <button className="outline-btn" style={{ width: '100%' }} onClick={() => setPage('shop')}>Continue Shopping</button>
               </div>
-            </div>
+
+              {!appliedDiscount ? (
+                <div className="bag-coupon">
+                  <label className="bag-coupon-label" htmlFor="bag-coupon">{'Discount code'}</label>
+                  <div className="bag-coupon-row">
+                    <div className="bag-coupon-field">
+                      <Tag size={12} aria-hidden="true" />
+                      <input
+                        id="bag-coupon"
+                        value={coupon}
+                        onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
+                        onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                        onFocus={warmCouponEndpoint}
+                        disabled={couponApplying}
+                        placeholder="Promo code"
+                        style={{ borderColor: couponError ? 'var(--red)' : undefined }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponApplying}
+                      aria-busy={couponApplying}
+                      className="bag-coupon-apply"
+                      style={{ minWidth: 96 }}
+                    >
+                      {couponApplying ? 'Checking…' : 'Apply'}
+                    </button>
+                  </div>
+                  {couponError && (
+                    <div className="bag-coupon-error" role="alert">
+                      <AlertCircle size={12} aria-hidden="true" />
+                      <p>{couponError}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bag-coupon-applied">
+                  <span>
+                    <Check size={13} aria-hidden="true" />
+                    {appliedDiscount.code}
+                  </span>
+                  <button type="button" onClick={removeAppliedDiscount}>{'Remove'}</button>
+                </div>
+              )}
+
+              <div className="bag-grand-total">
+                <span>{'Total'}</span>
+                <span className="bag-grand-value">EGP {total.toLocaleString()}</span>
+              </div>
+
+              <button className="gold-btn bag-checkout-btn" onClick={() => setPage('checkout')}>
+                {'Proceed to Checkout'}
+              </button>
+              <button className="outline-btn bag-shop-btn" onClick={() => setPage('shop')}>
+                {'Continue Shopping'}
+              </button>
+
+              <div className="bag-trust">
+                <span><Truck size={14} aria-hidden="true" />{'Delivery across Egypt'}</span>
+                <span><Banknote size={14} aria-hidden="true" />{'Cash on delivery'}</span>
+              </div>
+            </aside>
           </div>
         )}
       </div>
@@ -661,6 +737,7 @@ export function CheckoutPage() {
       gap: 8,
       flex: '1 1 150px',
       minWidth: 0,
+      minHeight: 44,
       padding: '12px 12px',
       borderRadius: 50,
       border: '1px solid rgba(201,176,108,0.38)',
@@ -709,6 +786,40 @@ export function CheckoutPage() {
       color: 'inherit',
     };
 
+    // The invoice is dated from the stored order, never from "now": a refresh
+    // of this page must not move the issue date forward.
+    const placedAt = success.placedAt || success.timestamps?.created || success.date || '';
+    const placedDate = (() => {
+      const d = placedAt ? new Date(placedAt) : new Date();
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    })();
+    const invoiceItems = Array.isArray(success.items) ? success.items : [];
+    const invoiceCount = invoiceItems.reduce((n, item) => n + (Number(item.qty) || 0), 0);
+
+    const copyOrderId = async () => {
+      try {
+        await navigator.clipboard.writeText(success.id);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (error) {
+        const textArea = document.createElement('textarea');
+        textArea.value = success.id;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+
+        try {
+          document.execCommand('copy');
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } finally {
+          document.body.removeChild(textArea);
+        }
+      }
+    };
+
   return (
     <div
       className="order-confirmation-page"
@@ -751,325 +862,264 @@ export function CheckoutPage() {
           </motion.div>
         )}
       </AnimatePresence>
-      
-      <motion.div
-        className="order-confirmation-card"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45 }}
-        style={{
-          boxSizing: 'border-box',
-          textAlign: 'center',
-          padding: '30px 28px 26px',
-          background: 'linear-gradient(145deg, #151515 0%, #0e0e0e 72%)',
-          border: '1px solid rgba(201,168,76,0.28)',
-          borderRadius: 16,
-          maxWidth: 620,
-          width: '100%',
-          margin: '0 auto',
-          boxShadow: '0 22px 70px rgba(0,0,0,0.5), 0 0 45px rgba(201,168,76,0.06)',
-          color: '#f5f0e8',
-        }}
-      >
-        {/* Success icon */}
-        <motion.div
-          className="order-confirmation-icon"
-          initial={{ scale: 0.85, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          style={{
-            width: 60,
-            height: 60,
-            display: 'grid',
-            placeItems: 'center',
-            margin: '0 auto 14px',
-            borderRadius: '50%',
-            background: 'rgba(201,168,76,0.09)',
-            border: '1px solid rgba(201,168,76,0.35)',
-            boxShadow: '0 0 28px rgba(201,168,76,0.11)',
-          }}
-        >
-          <CheckCircle
-            size={30}
-            color="#d5b65d"
-            strokeWidth={1.6}
-          />
-        </motion.div>
 
-        <div style={{ marginBottom: 18 }}>
-          <p style={{ color: '#c9a84c', fontSize: 9, fontWeight: 700, letterSpacing: 3, marginBottom: 6 }}>
-            ORDER CONFIRMED
-          </p>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 4.2vw, 30px)', fontWeight: 500, lineHeight: 1.2, margin: '0 0 6px', color: '#f5f0e8' }}>
-            Thank you for your order
-          </h1>
-          {success.pending && (
-            <p style={{ color: '#aaa398', fontSize: 11, lineHeight: 1.6, margin: '8px auto 0', maxWidth: 420 }}>
-              هنكلمك على رقمك لتأكيد تفاصيل الأوردر قبل الشحن.
-              <span style={{ display: 'block', color: '#8f897e', fontSize: 10 }}>
-                We&apos;ll contact you to confirm your order before shipping.
-              </span>
-            </p>
-          )}
-        </div>
-
-        {/* Order reference */}
-        <div
-          className="order-confirmation-reference"
+      <div className="order-receipt">
+        <motion.article
+          className="order-confirmation-card"
+          data-invoice="true"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           style={{
             boxSizing: 'border-box',
-            background: 'linear-gradient(110deg, #211d12, #17150f)',
-            border: '1px solid rgba(201,168,76,0.26)',
-            borderRadius: 10,
-            padding: '14px 16px',
-            marginBottom: 12,
+            textAlign: 'center',
+            padding: '34px 26px 22px',
+            background: 'linear-gradient(160deg, #17150f 0%, #100f0d 46%, #0b0b0b 100%)',
+            border: '1px solid rgba(201,168,76,0.30)',
             width: '100%',
-            textAlign: 'left',
+            color: '#f5f0e8',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          <div
-            style={{
-              color: '#c9aa50',
-              fontSize: 9,
-              marginBottom: 5,
-              textAlign: 'left',
-              letterSpacing: 1.5,
-              lineHeight: 1.6,
-            }}
-          >
-            <div
-              style={{
-                direction: 'ltr',
-                letterSpacing: 0,
-              }}
+          {/* One slow specular pass over the paper, then nothing. It is a
+              transform on a single element, so it costs the compositor one layer
+              and never repaints the invoice text underneath. */}
+          <span className="order-invoice-sheen" aria-hidden="true" />
+
+          <header className="order-invoice-head">
+            <div className="order-invoice-brand">
+              <span className="order-invoice-wordmark" aria-hidden="true">
+                {'ZASHM'.split('').map((letter, index) => (
+                  <span key={`${letter}-${index}`} style={{ '--letter-index': index }}>{letter}</span>
+                ))}
+              </span>
+              <span className="order-invoice-brand-sub">Luxury Menswear · Egypt</span>
+            </div>
+            <div className="order-invoice-stamp">
+              <span className="order-invoice-stamp-label">{'Invoice'}</span>
+              <span className="order-invoice-stamp-id">{success.id}</span>
+            </div>
+          </header>
+
+          <div className="order-invoice-perf" aria-hidden="true" />
+
+          <div className="order-invoice-status">
+            <motion.div
+              className="order-invoice-seal"
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              aria-hidden="true"
             >
-              ORDER ID
+              <CheckCircle size={22} color="#0b0b0b" strokeWidth={2.2} />
+            </motion.div>
+
+            <div className="order-invoice-status-copy">
+              <p className="order-invoice-eyebrow">{'Order confirmed'}</p>
+              <h1 className="order-invoice-title">{'Thank you for your order'}</h1>
+
+              {/* Five gold stars: the receipt opens on a rating, not a tick. */}
+              <div className="order-invoice-stars" aria-hidden="true">
+                {[0, 1, 2, 3, 4].map((index) => (
+                  <motion.span
+                    key={index}
+                    className="order-invoice-star"
+                    style={{ '--star-index': index }}
+                    initial={{ opacity: 0, scale: 0.5, y: 6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ delay: 0.16 + index * 0.08, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    ★
+                  </motion.span>
+                ))}
+              </div>
             </div>
           </div>
 
+          {success.pending && (
+            <p className="order-invoice-pending">
+              هنكلمك على رقمك لتأكيد تفاصيل الأوردر قبل الشحن.
+              <span>We&apos;ll contact you to confirm your order before shipping.</span>
+            </p>
+          )}
+
+          <dl className="order-invoice-meta">
+            <div>
+              <dt>{'Issued'}</dt>
+              <dd>{placedDate || '—'}</dd>
+            </div>
+            <div>
+              <dt>{'Items'}</dt>
+              <dd>{invoiceCount}</dd>
+            </div>
+            <div>
+              <dt>{'Payment'}</dt>
+              <dd>{'Cash on delivery'}</dd>
+            </div>
+            <div>
+              <dt>{'Delivery'}</dt>
+              <dd>{success.city || 'Egypt'}</dd>
+            </div>
+          </dl>
+
+          <div className="order-confirmation-summary">
+            <div className="order-invoice-summary-head">
+              <span>{'Reference'}</span>
+              <span className="order-invoice-ref">
+                {success.id}
+                <button
+                  type="button"
+                  onClick={copyOrderId}
+                  aria-label="Copy order reference"
+                  title="Copy Order ID"
+                  className="order-invoice-copy"
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+              </span>
+            </div>
+
+            <ul className="order-invoice-lines">
+              {invoiceItems.map((item, index) => (
+                <li
+                  key={`${item.productId || item.name}-${index}`}
+                  style={{ '--row-index': index }}
+                >
+                  <div className="order-invoice-line-copy">
+                    <p className="order-invoice-line-name">{item.name}</p>
+                    <p className="order-invoice-line-meta">
+                      {[item.size, item.color, `Qty ${item.qty}`].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <span className="order-invoice-line-price">EGP {Number(item.price || 0).toLocaleString()}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="order-invoice-totals">
+              <div>
+                <span>{'Subtotal'}</span>
+                <span>EGP {Number(success.subtotal || 0).toLocaleString()}</span>
+              </div>
+              {Number(success.discount || 0) > 0 && (
+                <div className="is-credit">
+                  <span>{'Discount'}</span>
+                  <span>− EGP {Number(success.discount).toLocaleString()}</span>
+                </div>
+              )}
+              {Number(success.shippingCost || 0) > 0 && (
+                <div>
+                  <span>{'Shipping'}</span>
+                  <span>EGP {Number(success.shippingCost).toLocaleString()}</span>
+                </div>
+              )}
+              <div className="order-invoice-total-row">
+                <span>{'Total paid on delivery'}</span>
+                <strong>EGP {Number(success.total || 0).toLocaleString()}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Uniform actions */}
           <div
+            data-order-actions="true"
+            className="order-confirmation-actions"
             style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
               flexWrap: 'wrap',
+              justifyContent: 'center',
+              alignItems: 'stretch',
+              gap: 8,
+              width: '100%',
               direction: 'ltr',
             }}
           >
-            <span
-              style={{
-                color: '#e4c66d',
-                fontSize: 'clamp(14px, 3vw, 17px)',
-                fontWeight: 700,
-                letterSpacing: 1.5,
-                fontFamily: 'monospace',
-                overflowWrap: 'anywhere',
-                lineHeight: 1.6,
-              }}
-            >
-              {success.id}
-            </span>
+            {!success.pending && (
+              <button
+                type="button"
+                className="order-confirmation-primary"
+                onClick={() => {
+                  const url = success.tracking_url || '/track';
 
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(success.id);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                } catch (error) {
-                  const textArea = document.createElement('textarea');
-                  textArea.value = success.id;
-                  textArea.style.position = 'fixed';
-                  textArea.style.opacity = '0';
-                  document.body.appendChild(textArea);
-                  textArea.select();
-
-                  try {
-                    document.execCommand('copy');
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  } finally {
-                    document.body.removeChild(textArea);
-                  }
-                }
-              }}
-              aria-label="Copy order reference"
-              title="Copy Order ID"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#e4c66d',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 4,
-                borderRadius: 5,
-                transition: 'color 0.25s ease, transform 0.25s ease',
-                flexShrink: 0,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#f0d78b';
-                e.currentTarget.style.transform = 'scale(1.1)';
-              }}
-              onMouseLeave={(e) => {
-              e.currentTarget.style.color = '#e4c66d';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.outline = '2px solid #c9aa50';
-                e.currentTarget.style.outlineOffset = '3px';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.outline = 'none';
-              }}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+                  clearOrderConfirmation();
+                  window.location.assign(url);
+                }}
+                style={orderActionStyle}
+                {...orderActionHover}
               >
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            </button>
-          </div>
-        </div>
+                <PackageSearch
+                  size={15}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                  style={orderActionIcon}
+                />
+                <span>TRACK YOUR ORDER</span>
+              </button>
+            )}
 
-        <div className="order-confirmation-summary" style={{ textAlign: 'left', background: '#101010', border: '1px solid #292720', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
-          <h3 style={{ color: '#f0ece4', fontSize: 12, fontWeight: 600, margin: '0 0 10px' }}>
-            Order summary
-          </h3>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {(Array.isArray(success.items) ? success.items : []).map((item, index) => (
-              <div key={`${item.productId || item.name}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ color: '#e5e0d7', fontSize: 11, margin: 0, overflowWrap: 'anywhere' }}>{item.name}</p>
-                  <p style={{ color: '#8f897e', fontSize: 9, margin: '2px 0 0' }}>{[item.size, item.color, `Qty ${item.qty}`].filter(Boolean).join(' · ')}</p>
-                </div>
-                <span style={{ color: '#d1b363', fontSize: 11, whiteSpace: 'nowrap' }}>EGP {Number(item.price || 0).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ height: 1, background: '#292720', margin: '10px 0 9px' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
-            <span>Subtotal</span>
-            <span>EGP {Number(success.subtotal || 0).toLocaleString()}</span>
-          </div>
-          {Number(success.discount || 0) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#9fbd91', fontSize: 10 }}>
-              <span>Discount</span>
-              <span>− EGP {Number(success.discount).toLocaleString()}</span>
-            </div>
-          )}
-          {Number(success.shippingCost || 0) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
-              <span>Shipping</span>
-              <span>EGP {Number(success.shippingCost).toLocaleString()}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6, color: '#aaa398', fontSize: 10 }}>
-            <span><Truck size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Delivery</span>
-            <span>{success.city || 'Egypt'}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8, color: '#aaa398', fontSize: 10 }}>
-            <span><Banknote size={13} style={{ verticalAlign: 'middle', marginInlineEnd: 5, color: '#c9a84c' }} />Payment</span>
-            <span style={{ textAlign: 'right', lineHeight: 1.4 }}>Cash on delivery</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, borderTop: '1px solid #292720', paddingTop: 10 }}>
-            <span style={{ color: '#e5e0d7', fontSize: 11, fontWeight: 600 }}>Order total</span>
-            <strong style={{ color: '#e4c66d', fontFamily: 'var(--font-display)', fontSize: 18 }}>EGP {Number(success.total || 0).toLocaleString()}</strong>
-          </div>
-        </div>
-
-        {/* Uniform actions */}
-        <div
-          data-order-actions="true"
-          className="order-confirmation-actions"
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            alignItems: 'stretch',
-            gap: 8,
-            width: '100%',
-            direction: 'ltr',
-          }}
-        >
-          {!success.pending && (
-            <button
-              type="button"
-              className="order-confirmation-primary"
-              onClick={() => {
-                const url = success.tracking_url || '/track';
-
-                clearOrderConfirmation();
-                window.location.assign(url);
-              }}
+            <a
+              className="order-confirmation-secondary"
+              href={
+                'https://wa.me/201013380313?text=' +
+                encodeURIComponent(
+                  'Hello ZASHM, I would like to ask about my order with reference number: ' +
+                    success.id
+                )
+              }
+              target="_blank"
+              rel="noopener noreferrer"
               style={orderActionStyle}
               {...orderActionHover}
             >
-              <PackageSearch
+              <Headset
                 size={15}
                 strokeWidth={1.8}
                 aria-hidden="true"
                 style={orderActionIcon}
               />
-              <span>TRACK YOUR ORDER</span>
+              <span>CONTACT SUPPORT</span>
+            </a>
+
+            <button
+              type="button"
+              className="order-confirmation-continue"
+              onClick={() => {
+                clearOrderConfirmation();
+                setPage('home');
+              }}
+              style={orderActionStyle}
+              {...orderActionHover}
+            >
+              <ShoppingBag
+                size={15}
+                strokeWidth={1.8}
+                aria-hidden="true"
+                style={orderActionIcon}
+              />
+              <span>CONTINUE SHOPPING</span>
             </button>
-          )}
+          </div>
 
-          <a
-            className="order-confirmation-secondary"
-            href={
-              'https://wa.me/201013380313?text=' +
-              encodeURIComponent(
-                'Hello ZASHM, I would like to ask about my order with reference number: ' +
-                  success.id
-              )
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            style={orderActionStyle}
-            {...orderActionHover}
-          >
-            <Headset
-              size={15}
-              strokeWidth={1.8}
-              aria-hidden="true"
-              style={orderActionIcon}
-            />
-            <span>CONTACT SUPPORT</span>
-          </a>
-
-          <button
-            type="button"
-            className="order-confirmation-continue"
-            onClick={() => {
-              clearOrderConfirmation();
-              setPage('home');
-            }}
-            style={orderActionStyle}
-            {...orderActionHover}
-          >
-            <ShoppingBag
-              size={15}
-              strokeWidth={1.8}
-              aria-hidden="true"
-              style={orderActionIcon}
-            />
-            <span>CONTINUE SHOPPING</span>
-          </button>
-        </div>
-      </motion.div>
+          <p className="order-invoice-foot">
+            <Truck size={13} aria-hidden="true" />
+            {'Our team will call before delivery.'}
+          </p>
+        </motion.article>
+      </div>
     </div>
   );
 }
@@ -1082,7 +1132,7 @@ export function CheckoutPage() {
               A server-side rejection still needs its reason visible here. */}
           <StockFeedback notice={stockNotice} errors={stockErrors} title={orderOutage ? 'Couldn’t place the order:' : undefined} />
           <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px', display: 'block' }} />
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--text2)' }}>Your bag is empty</h1>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, marginBottom: 8, color: 'var(--gold-1)' }}>Your bag is empty</h1>
           <p style={{ color: 'var(--text3)', fontSize: 13, marginBottom: 24 }}>
             Add a piece to your bag before checking out.
           </p>
@@ -1092,11 +1142,20 @@ export function CheckoutPage() {
     );
   }
 
+  const blocked = Boolean(liveIssues && liveIssues.some(i => i.blocking));
+  const placing = submitting || isPlacingOrder.current;
+
   return (
     <div style={{ paddingTop: 90, minHeight: '80vh' }}>
-      <div style={{ maxWidth: 940, margin: '0 auto', padding: '40px 24px' }}>
-        <motion.h1 initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
-          style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, letterSpacing: 2, marginBottom: 40 }}>{'Checkout'}</motion.h1>
+      <div className="checkout-shell">
+        <motion.header
+          className="checkout-head"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h1 className="checkout-title">{'Checkout'}</h1>
+        </motion.header>
 
         <StockFeedback notice={stockNotice} errors={stockErrors} title={orderOutage ? 'Couldn’t place the order:' : undefined} />
         {orderOutage && (
@@ -1118,349 +1177,331 @@ export function CheckoutPage() {
         )}
         <LiveStockBanner issues={liveIssues} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 40 }} className="checkout-grid">
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 28 }}>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 22 }}>{'Delivery Information'}</h3>
-            
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
-              gap: 14, 
-              marginBottom: 14 
-            }}>
+        <div className="checkout-grid">
+          {/* ── Left column: the details the shopper types ── */}
+          <section className="checkout-form-card" aria-labelledby="checkout-delivery-title">
+            <div className="checkout-card-head">
+              <span className="checkout-step" aria-hidden="true"><Truck size={15} strokeWidth={1.6} /></span>
               <div>
-                <label htmlFor="checkout-name" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Full Name *'}</label>
-                <input 
+                <h2 id="checkout-delivery-title" className="checkout-card-title">{'Delivery details'}</h2>
+              </div>
+            </div>
+
+            <div className="checkout-field-row">
+              <div className="checkout-field">
+                <label htmlFor="checkout-name" className="checkout-label">{'Full Name *'}</label>
+                <input
                   id="checkout-name"
                   name="name"
-                  type="text" 
+                  type="text"
                   autoComplete="name"
-                  value={form.name ?? ''} 
-                  onChange={e => update('name', e.target.value)} 
+                  value={form.name ?? ''}
+                  onChange={e => update('name', e.target.value)}
                   placeholder="Mohammed Hassan"
                   aria-invalid={errors.name ? 'true' : undefined}
                   aria-describedby={errors.name ? 'checkout-name-error' : undefined}
-                  style={{ width:'100%', borderColor: errors.name ? 'var(--red)' : undefined }} 
+                  style={{ borderColor: errors.name ? 'var(--red)' : undefined }}
                 />
-                {errors.name && <p id="checkout-name-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.name}</p>}
+                {errors.name && <p id="checkout-name-error" role="alert" className="checkout-error">{errors.name}</p>}
               </div>
-              <div>
-                <label htmlFor="checkout-phone" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Phone Number *'}</label>
-                <input 
+
+              <div className="checkout-field">
+                <label htmlFor="checkout-phone" className="checkout-label">{'Phone Number *'}</label>
+                <input
                   id="checkout-phone"
                   name="phone"
-                  type="tel" 
+                  type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  value={form.phone ?? ''} 
-                  onChange={e => update('phone', e.target.value)} 
+                  value={form.phone ?? ''}
+                  onChange={e => update('phone', e.target.value)}
                   placeholder="01XXXXXXXXX"
                   aria-invalid={errors.phone ? 'true' : undefined}
                   aria-describedby={errors.phone ? 'checkout-phone-error' : undefined}
-                  style={{ width:'100%', borderColor: errors.phone ? 'var(--red)' : undefined }} 
+                  style={{ borderColor: errors.phone ? 'var(--red)' : undefined }}
                 />
-                {errors.phone && <p id="checkout-phone-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.phone}</p>}
+                {errors.phone && <p id="checkout-phone-error" role="alert" className="checkout-error">{errors.phone}</p>}
               </div>
             </div>
 
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', 
-              gap: 14, 
-              marginBottom: 14,
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <label htmlFor="checkout-phone-alt" style={{ 
-                  display:'flex', 
-                  alignItems: 'center',
-                  fontSize:10, 
-                  letterSpacing:1.5, 
-                  color:'var(--text3)', 
-                  marginBottom:6, 
-                  textTransform:'uppercase',
-                  minHeight: 30 
-                }}>
-                  {'Alternative Phone (Optional)'}
-                </label>
-                <input 
+            <div className="checkout-field-row">
+              <div className="checkout-field">
+                <label htmlFor="checkout-phone-alt" className="checkout-label">{'Alternative phone'}</label>
+                <input
                   id="checkout-phone-alt"
                   name="phoneAlt"
-                  type="tel" 
+                  type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  value={form.phoneAlt ?? ''} 
-                  onChange={e => update('phoneAlt', e.target.value)} 
+                  value={form.phoneAlt ?? ''}
+                  onChange={e => update('phoneAlt', e.target.value)}
                   placeholder="01XXXXXXXXX"
                   aria-invalid={errors.phoneAlt ? 'true' : undefined}
                   aria-describedby={errors.phoneAlt ? 'checkout-phone-alt-error' : undefined}
-                  style={{ width:'100%', borderColor: errors.phoneAlt ? 'var(--red)' : undefined }} 
+                  style={{ borderColor: errors.phoneAlt ? 'var(--red)' : undefined }}
                 />
-                {errors.phoneAlt && <p id="checkout-phone-alt-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.phoneAlt}</p>}
+                {errors.phoneAlt && <p id="checkout-phone-alt-error" role="alert" className="checkout-error">{errors.phoneAlt}</p>}
               </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <label htmlFor="checkout-email" style={{ 
-                  display:'flex', 
-                  alignItems: 'center',
-                  fontSize:10, 
-                  letterSpacing:1.5, 
-                  color:'var(--text3)', 
-                  marginBottom:6, 
-                  textTransform:'uppercase',
-                  minHeight: 30 
-                }}>
-                  {'Email Address (Optional)'}
-                </label>
-                <input 
+
+              <div className="checkout-field">
+                <label htmlFor="checkout-email" className="checkout-label">{'Email address'}</label>
+                <input
                   id="checkout-email"
                   name="email"
-                  value={form.email ?? ''} 
-                  onChange={e => update('email', e.target.value)} 
-                  placeholder="your@email.com" 
+                  type="email"
+                  autoComplete="email"
+                  value={form.email ?? ''}
+                  onChange={e => update('email', e.target.value)}
+                  placeholder="your@email.com"
                   aria-invalid={errors.email ? 'true' : undefined}
                   aria-describedby={errors.email ? 'checkout-email-error' : undefined}
-                  style={{ width:'100%', borderColor: errors.email ? 'var(--red)' : undefined }} 
-                  type="email" 
-                  autoComplete="email"
+                  style={{ borderColor: errors.email ? 'var(--red)' : undefined }}
                 />
-                {errors.email && <p id="checkout-email-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.email}</p>}
+                {errors.email && <p id="checkout-email-error" role="alert" className="checkout-error">{errors.email}</p>}
               </div>
             </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <label htmlFor="checkout-address" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Street Address *'}</label>
-              <input 
+            <div className="checkout-field">
+              <label htmlFor="checkout-address" className="checkout-label">{'Street Address *'}</label>
+              <input
                 id="checkout-address"
                 name="address"
-                value={form.address ?? ''} 
-                onChange={e => update('address', e.target.value)} 
+                value={form.address ?? ''}
+                onChange={e => update('address', e.target.value)}
                 placeholder="District / neighborhood, street, building, floor or apartment..."
                 autoComplete="street-address"
                 aria-invalid={errors.address ? 'true' : undefined}
                 aria-describedby={errors.address ? 'checkout-address-error' : undefined}
-                style={{ width:'100%', borderColor: errors.address ? 'var(--red)' : undefined }} 
+                style={{ borderColor: errors.address ? 'var(--red)' : undefined }}
               />
-              {errors.address && <p id="checkout-address-error" role="alert" style={{ color:'var(--red)', fontSize:10, marginTop:3 }}>{errors.address}</p>}
+              {errors.address && <p id="checkout-address-error" role="alert" className="checkout-error">{errors.address}</p>}
             </div>
 
-            <div className="checkout-location-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
-              <div>
-                <label htmlFor="checkout-governorate" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Governorate *'}</label>
-                <CityAutocomplete
-                  id="checkout-governorate"
-                  value={form.city}
-                  onChange={v => update('city', v)}
-                  onSelect={v => update('city', v)}
-                  error={errors.city}
-                  describedBy={errors.city ? 'checkout-governorate-error' : undefined}
-                />
-                <p id="checkout-governorate-error" role={errors.city ? 'alert' : undefined} style={{ color:'var(--red)', fontSize:10, marginTop:3, minHeight:13 }}>{errors.city || ''}</p>
-              </div>
+            <div className="checkout-field">
+              <label htmlFor="checkout-governorate" className="checkout-label">{'Governorate *'}</label>
+              <CityAutocomplete
+                id="checkout-governorate"
+                value={form.city}
+                onChange={v => update('city', v)}
+                onSelect={v => update('city', v)}
+                error={errors.city}
+                describedBy={errors.city ? 'checkout-governorate-error' : undefined}
+              />
+              <p id="checkout-governorate-error" role={errors.city ? 'alert' : undefined} className="checkout-error checkout-error--slot">{errors.city || ''}</p>
             </div>
 
-            <div>
-              <label htmlFor="checkout-notes" style={{ display:'block', fontSize:10, letterSpacing:1.5, color:'var(--text3)', marginBottom:6, textTransform:'uppercase' }}>{'Order Notes (OPTIONAL)'}</label>
-              <textarea 
+            <div className="checkout-field">
+              <label htmlFor="checkout-notes" className="checkout-label">{'Order notes'}</label>
+              <textarea
                 id="checkout-notes"
                 name="notes"
-                value={form.notes ?? ''} 
-                onChange={e => update('notes', e.target.value)} 
+                value={form.notes ?? ''}
+                onChange={e => update('notes', e.target.value)}
                 rows={3}
-                placeholder="Special requests, preferred delivery time..." 
-                style={{ width:'100%', resize:'vertical' }} 
+                placeholder="Special requests, preferred delivery time..."
+                style={{ width: '100%', resize: 'vertical' }}
               />
             </div>
-          </div>
+          </section>
 
-          <div>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 22, position:'sticky', top:100 }}>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 18, marginBottom: 16 }}>{'Order Summary'}</h3>
-              <div style={{ maxHeight: 240, overflowY: 'auto', marginBottom: 14 }}>
-                {safeCart.map(i => (
-                  <div key={i?.key} style={{ display: 'flex', gap:10, justifyContent: 'space-between', marginBottom: 10, alignItems:'flex-start', width: '100%' }}>
-                    <div style={{ display:'flex', gap:8 }}>
-                      <SafeImage src={i?.product?.images?.[0]} fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="50"%3E%3Crect fill="%23222" width="40" height="50"/%3E%3C/svg%3E'} alt="" style={{ width:40, height:50, objectFit:'cover', borderRadius:2, flexShrink:0 }} loading="lazy" />
-                      <div>
-                        <p style={{ fontSize:11, fontWeight:500, lineHeight:1.3 }}>{i?.product?.name ?? 'Unknown Product'}</p>
-                        <p style={{ fontSize:10, color:'var(--text3)' }}>{i?.size ?? 'N/A'}/{i?.color ?? 'N/A'} ×{i?.qty ?? 0}</p>
-                      </div>
-                    </div>
-                    <span style={{ fontSize:12, fontWeight:600, color:'var(--gold)', whiteSpace:'nowrap', marginLeft: 'auto', textAlign: 'right' }}>
-                      EGP {(effectivePrice(i?.product) * (i?.qty ?? 0)).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
+          {/* ── Right column: pieces, discount code and the money ── */}
+          <aside className="checkout-side" aria-label="Order summary">
+            <section className="checkout-card checkout-side-items" aria-labelledby="checkout-items-title">
+              <div className="checkout-card-head checkout-card-head--tight">
+                <span className="checkout-step" aria-hidden="true"><ShoppingBag size={15} strokeWidth={1.6} /></span>
+                <h2 id="checkout-items-title" className="checkout-card-title">{'Your pieces'}</h2>
               </div>
+              <ul className="checkout-item-list">
+                {safeCart.map(item => (
+                  <li key={item?.key}>
+                    <SafeImage
+                      src={item?.product?.images?.[0]}
+                      fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="50"%3E%3Crect fill="%23222" width="40" height="50"/%3E%3C/svg%3E'}
+                      alt=""
+                      style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                      loading="lazy"
+                    />
+                    <div className="checkout-item-copy">
+                      <p className="checkout-item-name">{item?.product?.name ?? 'Unknown Product'}</p>
+                      <p className="checkout-item-meta">{item?.size ?? 'N/A'} / {item?.color ?? 'N/A'} × {item?.qty ?? 0}</p>
+                    </div>
+                    <span className="checkout-item-price">
+                      EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
+            {/* Discount + money travel together: on a phone they are the right
+                column beside the form, so they must share one grid cell. On a
+                desktop the wrapper is display:contents and they stay two cards
+                in the summary column. */}
+            <div className="checkout-money">
+            <section className="checkout-card checkout-side-coupon" aria-labelledby="checkout-coupon-title">
+              <h2 id="checkout-coupon-title" className="checkout-mini-title">{'Discount code'}</h2>
               {!appliedDiscount ? (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: couponError ? 6 : 0 }}>
-                    <div style={{ position:'relative', flex:1 }}>
-                      <Tag size={12} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
-                      <input value={coupon} onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
+                <>
+                  <div className="checkout-coupon-row">
+                    <div className="checkout-coupon-field">
+                      <Tag size={12} aria-hidden="true" />
+                      <input
+                        value={coupon}
+                        onChange={e => { setCoupon(e.target.value); setCouponError(''); }}
                         onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
                         onFocus={warmCouponEndpoint}
                         disabled={couponApplying}
-                        placeholder={'Discount code'} style={{ width:'100%', paddingLeft:28, minHeight: 44, borderColor: couponError ? 'var(--red)' : undefined }} />
+                        placeholder={'Promo code'}
+                        aria-label="Discount code"
+                        aria-invalid={couponError ? 'true' : undefined}
+                        style={{ borderColor: couponError ? 'var(--red)' : undefined }}
+                      />
                     </div>
-                    <button onClick={handleApplyCoupon} disabled={couponApplying} aria-busy={couponApplying}
-                      style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', padding: '10px 14px', borderRadius: 4, cursor: couponApplying ? 'default' : 'pointer', fontSize: 12, whiteSpace: 'nowrap', minWidth: 96, minHeight: 44, boxSizing: 'border-box', opacity: couponApplying ? 0.75 : 1 }}>
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponApplying}
+                      aria-busy={couponApplying}
+                      className="checkout-coupon-apply"
+                      style={{ minWidth: 72 }}
+                    >
                       {couponApplying ? 'Checking…' : 'Apply'}
                     </button>
                   </div>
                   {couponError && (
-                    <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:6 }}>
-                      <AlertCircle size={12} color="var(--red)" />
-                      <p style={{ color: 'var(--red)', fontSize: 11 }}>{couponError}</p>
+                    <div className="checkout-coupon-error" role="alert">
+                      <AlertCircle size={12} aria-hidden="true" />
+                      <p>{couponError}</p>
                     </div>
                   )}
-                </div>
+                </>
               ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 12px', background: 'rgba(39,174,96,0.08)', borderRadius: 4, border: '1px solid rgba(39,174,96,0.3)' }}>
-                  <span style={{ color: '#27ae60', fontSize: 12 }}><Check size={12} style={{ display:'inline', marginRight:5 }} />{appliedDiscount.code}</span>
-                  <button type="button" onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, minHeight: 44, padding: '0 8px' }}>{'Remove'}</button>
+                <div className="checkout-coupon-applied">
+                  <span>
+                    <Check size={13} aria-hidden="true" />
+                    {appliedDiscount.code}
+                  </span>
+                  <button type="button" onClick={removeAppliedDiscount}>{'Remove'}</button>
                 </div>
               )}
+            </section>
 
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>Subtotal</span>
-                  <span style={{ fontSize: 13 }}>EGP {(subtotal ?? 0).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>
-                    Discount{appliedDiscount ? ` (${appliedDiscount.code})` : ''}
-                  </span>
-                  <span style={{ fontSize: 13, color: (discountAmount ?? 0) > 0 ? '#27ae60' : 'var(--text3)' }}>
-                    {(discountAmount ?? 0) > 0 ? `-EGP ${(discountAmount ?? 0).toLocaleString()}` : 'EGP 0'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>Shipping</span>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>
-                    {shippingCost === 0 ? 'Select City' : `EGP ${shippingCost}`}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, marginBottom: 4, borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
-                  <span style={{ fontSize:13 }}>Total</span>
-                  <span style={{ color: 'var(--gold)', fontFamily: 'var(--font-display)', fontSize: 20 }}>EGP {(finalTotal ?? 0).toLocaleString()}</span>
-                </div>
+            <section className="checkout-card checkout-side-totals" aria-label="Order total">
+              <div className="checkout-total-row">
+                <span>{'Subtotal'}</span>
+                <span>EGP {(subtotal ?? 0).toLocaleString()}</span>
               </div>
+              <div className="checkout-total-row">
+                <span>
+                  Discount{appliedDiscount ? ` (${appliedDiscount.code})` : ''}
+                </span>
+                <span className={(discountAmount ?? 0) > 0 ? 'is-credit' : 'is-muted'}>
+                  {(discountAmount ?? 0) > 0 ? `-EGP ${(discountAmount ?? 0).toLocaleString()}` : 'EGP 0'}
+                </span>
+              </div>
+              <div className="checkout-total-row">
+                <span>{'Shipping'}</span>
+                <span className={shippingCost === 0 ? 'is-muted' : undefined}>
+                  {shippingCost === 0 ? 'Select city' : `EGP ${shippingCost}`}
+                </span>
+              </div>
+              <div className="checkout-grand-row">
+                <span>{'Total'}</span>
+                <strong>EGP {(finalTotal ?? 0).toLocaleString()}</strong>
+              </div>
+            </section>
+            </div>
 
+            <section className="checkout-card checkout-side-payment" aria-labelledby="checkout-payment-title">
+              <h2 id="checkout-payment-title" className="checkout-mini-title">{'Payment method'}</h2>
               {/* Payment method selector. COD is the only live option today;
                   card payments are shown as "Coming soon" so the shopper sees
                   the roadmap without being able to select them. */}
               <div
                 role="radiogroup"
                 aria-label="Payment method"
-                style={{
-                  marginTop: 12,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8
-                }}
+                className="checkout-payment-options"
               >
                 {/* Cash on Delivery — live */}
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 12,
-                    padding: '12px 14px',
-                    borderRadius: 6,
-                    border: '1px solid var(--border-gold)',
-                    background: 'rgba(201,168,76,0.07)',
-                    cursor: 'pointer'
-                  }}
-                >
+                <label className="checkout-payment-option is-live">
                   <input
                     type="radio"
                     name="payment-method"
                     value="cod"
                     defaultChecked
-                    style={{ marginTop: 3, accentColor: 'var(--gold)', flexShrink: 0 }}
+                    style={{ marginTop: 9, accentColor: 'var(--gold)', flexShrink: 0 }}
                   />
-                  <Banknote size={18} color="var(--gold)" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span className="checkout-payment-icon" aria-hidden="true">
+                    <Banknote size={17} color="var(--gold)" />
+                  </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4 }}>
+                    <div className="checkout-payment-head">
+                      <span className="checkout-payment-name">
                         Cash on Delivery
                       </span>
-                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--gold)', padding: '2px 6px', borderRadius: 3, border: '1px solid var(--border-gold)', background: 'rgba(201,168,76,0.12)' }}>
+                      <span className="checkout-payment-badge is-live">
                         Available
                       </span>
                     </div>
-                    <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, margin: '3px 0 0' }}>
-                      Pay in cash when your order arrives. No prepayment required.
+                    <p className="checkout-payment-copy">
+                      Pay in cash when it arrives.
                     </p>
                   </div>
                 </label>
 
                 {/* Card payments — coming soon */}
-                <div
-                  aria-disabled="true"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 12,
-                    padding: '12px 14px',
-                    borderRadius: 6,
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg3)',
-                    opacity: 0.55,
-                    cursor: 'not-allowed'
-                  }}
-                >
+                <div className="checkout-payment-option is-soon" aria-disabled="true">
                   <input
                     type="radio"
                     name="payment-method"
                     value="card"
                     disabled
-                    style={{ marginTop: 3, flexShrink: 0 }}
+                    style={{ marginTop: 9, flexShrink: 0 }}
                   />
-                  <CreditCard size={18} color="var(--text3)" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span className="checkout-payment-icon" aria-hidden="true">
+                    <CreditCard size={17} color="var(--text3)" />
+                  </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', lineHeight: 1.4 }}>
+                    <div className="checkout-payment-head">
+                      <span className="checkout-payment-name">
                         Credit / Debit Card
                       </span>
-                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--text3)', padding: '2px 6px', borderRadius: 3, border: '1px solid var(--border)', background: 'var(--bg2)' }}>
+                      <span className="checkout-payment-badge is-soon">
                         Coming soon
                       </span>
                     </div>
-                    <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, margin: '3px 0 0' }}>
-                      Visa, Mastercard and local cards — available in a future update.
+                    <p className="checkout-payment-copy">
+                      In a future update.
                     </p>
                   </div>
                 </div>
               </div>
+            </section>
 
-              <motion.button 
-                className="gold-btn" 
-                style={{ width: '100%', marginTop: 16, opacity: (submitting || isPlacingOrder.current || (liveIssues && liveIssues.some(i => i.blocking))) ? 0.5 : 1 }}
-                onClick={handleOrder} 
-                disabled={submitting || isPlacingOrder.current || (liveIssues && liveIssues.some(i => i.blocking))} 
+            <div className="checkout-side-submit">
+              <motion.button
+                className="gold-btn checkout-place-order"
+                style={{ opacity: placing ? 0.7 : 1 }}
+                onClick={handleOrder}
+                disabled={placing || blocked}
                 whileTap={{ scale: 0.98 }}
               >
-                {(submitting || isPlacingOrder.current) ? (
-                  <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                    <motion.div animate={{ rotate:360 }} transition={{ duration:1, repeat:Infinity, ease:'linear' }}
-                      style={{ width:14, height:14, border:'2px solid var(--bg)', borderTopColor:'transparent', borderRadius:'50%' }} />
-                    <div style={{ textAlign: 'center', lineHeight: 1.2 }}>
-                      <div>Placing Order…</div>
-                    </div>
+                {placing ? (
+                  <span className="checkout-placing">
+                    <motion.span
+                      className="checkout-spinner"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      aria-hidden="true"
+                    />
+                    <span>Placing Order…</span>
                   </span>
                 ) : (
-                    <div style={{ textAlign: 'center', lineHeight: 1.2 }}>
-                      <div>PLACE ORDER</div>
-                    </div>
-                  )}
+                  <span>PLACE ORDER</span>
+                )}
               </motion.button>
-              {/* The exchange window is promised once, on the product page.
-                  Repeating it under the CTA made checkout read as a wall of
-                  caveats at the moment the shopper is trying to pay. */}
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>

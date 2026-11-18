@@ -19,22 +19,23 @@ const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/sv
 // Shared pill used by "Size Guide" and the selected-size readout, so both keep
 // exactly the same border, radius, background and height at every breakpoint.
 const sizePillStyle = {
-  color: 'var(--gold)',
-  fontSize: 12,
+  color: 'var(--gold-light)',
+  fontSize: 11,
   fontWeight: 600,
-  background: 'rgba(201,168,76,0.10)',
-  border: '1px solid var(--border-gold, rgba(201,168,76,0.5))',
+  background: 'linear-gradient(180deg, rgba(201,168,76,0.14), rgba(201,168,76,0.05))',
+  border: '1px solid rgba(201,168,76,0.38)',
   borderRadius: 999,
-  letterSpacing: 1,
+  letterSpacing: 1.4,
   whiteSpace: 'nowrap',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: 6,
-  padding: '7px 14px',
+  gap: 7,
+  padding: '8px 15px',
   minHeight: 44,
   textTransform: 'uppercase',
   lineHeight: 1,
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
   transition: 'background 0.2s, border-color 0.2s',
 };
 
@@ -250,13 +251,13 @@ export default function ProductPage() {
       <div className="product-page-container" style={{ maxWidth: 1300, margin: '0 auto', padding: 'clamp(16px, 4vw, 40px) clamp(12px, 4vw, 24px)', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
         {/* Breadcrumb — the single back affordance on this page. Each link keeps a
             44px-tall hit area without adding the extra row the old Back button used. */}
-        <motion.nav aria-label="Breadcrumb" style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', minWidth: 0 }}
+        <motion.nav aria-label="Breadcrumb" className="product-breadcrumb"
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-          <button type="button" onClick={() => setPage('home')} className="product-breadcrumb-link" style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 6px', minWidth: 44, minHeight: 44 }}>Home</button>
-          <span aria-hidden="true" style={{ color: 'var(--text3)' }}>/</span>
-          <button type="button" onClick={() => setPage('shop')} className="product-breadcrumb-link" style={{ color: 'var(--text3)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 6px', minWidth: 44, minHeight: 44 }}>Shop</button>
-          <span aria-hidden="true" style={{ color: 'var(--text3)' }}>/</span>
-          <span aria-current="page" style={{ color: 'var(--text2)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{p.name}</span>
+          <button type="button" onClick={() => setPage('home')} className="product-breadcrumb-link" style={{ minWidth: 44, minHeight: 44 }}>Home</button>
+          <ChevronRight size={12} className="product-breadcrumb-sep" aria-hidden="true" />
+          <button type="button" onClick={() => setPage('shop')} className="product-breadcrumb-link" style={{ minWidth: 44, minHeight: 44 }}>Shop</button>
+          <ChevronRight size={12} className="product-breadcrumb-sep" aria-hidden="true" />
+          <span aria-current="page" className="product-breadcrumb-current">{p.name}</span>
         </motion.nav>
 
         <div
@@ -279,11 +280,11 @@ export default function ProductPage() {
               </div>
             )}
             <div
-              className="product-card-image"
+              className="product-card-image product-gallery-main"
               onPointerDown={handleImagePointerDown}
               onPointerUp={handleImagePointerUp}
               onPointerCancel={() => { imageSwipeStartRef.current = null; }}
-              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 2, cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
@@ -315,27 +316,28 @@ export default function ProductPage() {
                   <button onClick={() => changeImage(-1)}
                     type="button"
                     aria-label="Previous image"
-                    style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(10,10,10,0.62)', border: '1px solid rgba(255,255,255,0.14)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}>
+                    style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(12,11,9,0.68)', border: '1px solid rgba(232,200,112,0.4)', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2, WebkitTapHighlightColor: 'transparent', backdropFilter: 'blur(8px)' }}>
                     <ChevronLeft size={18} aria-hidden="true" />
                   </button>
                   <button onClick={() => changeImage(1)}
                     type="button"
                     aria-label="Next image"
-                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(10,10,10,0.62)', border: '1px solid rgba(255,255,255,0.14)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}>
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(12,11,9,0.68)', border: '1px solid rgba(232,200,112,0.4)', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2, WebkitTapHighlightColor: 'transparent', backdropFilter: 'blur(8px)' }}>
                     <ChevronRight size={18} aria-hidden="true" />
                   </button>
-                  <span aria-hidden="true" className="product-image-counter" style={{ position: 'absolute', right: 10, bottom: 10, padding: '4px 9px', borderRadius: 999, background: 'rgba(10,10,10,0.72)', border: '1px solid rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.92)', fontSize: 11, fontWeight: 600, letterSpacing: 0.5, lineHeight: 1.4 }}>
+                  <span aria-hidden="true" className="product-image-counter" style={{ position: 'absolute', right: 12, bottom: 12, padding: '4px 10px', borderRadius: 999, background: 'rgba(12,11,9,0.74)', border: '1px solid rgba(232,200,112,0.34)', color: 'var(--gold-light)', fontSize: 10.5, fontWeight: 600, letterSpacing: 0.8, lineHeight: 1.4, zIndex: 2, backdropFilter: 'blur(8px)' }}>
                     {imgIdx + 1} / {productImages.length}
                   </span>
                 </>
               )}
             </div>
-            <div className="product-thumbs" style={{ display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto', paddingBottom: 2 }}>
+            <div className="product-thumbs" style={{ display: 'flex', gap: 10, marginTop: 12, overflowX: 'auto', paddingBottom: 2 }}>
               {productImages.length > 1 && productImages.map((img, i) => (
                 <motion.button key={i} type="button" onClick={() => setImgIdx(i)}
                   aria-label={`View image ${i + 1} of ${productImages.length}`}
                   aria-current={imgIdx === i ? 'true' : undefined}
-                  style={{ width: 64, height: 80, flex: '0 0 auto', padding: 0, background: 'none', cursor: 'pointer', borderRadius: 1, overflow: 'hidden', border: `2px solid ${imgIdx === i ? 'var(--gold)' : 'transparent'}`, transition: 'border-color 0.2s' }}
+                  className={`product-thumb${imgIdx === i ? ' is-active' : ''}`}
+                  style={{ flex: '0 0 auto', padding: 0, cursor: 'pointer' }}
                   whileHover={{ scale: 1.04 }}>
                   <SafeImage src={img} alt="" fallback={FALLBACK_IMG} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </motion.button>
@@ -380,11 +382,13 @@ export default function ProductPage() {
                   return (
                     <button key={c} onClick={() => { setSelColor(c); setQty(1); }}
                       type="button"
+                      className="product-color-option"
+                      data-selected={isSelected ? 'true' : 'false'}
+                      data-oos={isColorOOS ? 'true' : 'false'}
                       aria-pressed={isSelected}
                       aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
-                      title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}
-                      style={{ width:44, height:44, borderRadius:'50%', display:'inline-flex', alignItems:'center', justifyContent:'center', border:`2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`, background:'transparent', cursor:'pointer', transition:'border-color 0.2s, opacity 0.2s', opacity:isColorOOS ? 0.45 : 1, boxShadow:isSelected ? '0 0 0 2px rgba(201,168,76,0.2)' : 'none' }}>
-                      <span aria-hidden="true" style={{ width:28, height:28, borderRadius:'50%', background:getColorSwatch(c), border:'1px solid rgba(255,255,255,0.35)', display:'block' }} />
+                      title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}>
+                      <span className="product-color-swatch" aria-hidden="true" style={{ background:getColorSwatch(c) }} />
                     </button>
                   );
                 })}
@@ -393,7 +397,7 @@ export default function ProductPage() {
 
             {/* Sizes */}
 <div className="product-detail-block product-block" style={{ '--pp-i': 3 }}>
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+  <div className="product-size-head">
     <span
       data-size-value="true"
       aria-label={selSize ? `Selected size: ${selSize}` : 'Selected size: none'}
@@ -404,21 +408,20 @@ export default function ProductPage() {
         {selSize || '—'}
       </span>
     </span>
-    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-      <button 
-        data-size-guide="true"
-        onClick={() => setSizeGuideOpen(true)}
-        type="button"
-        style={{ ...sizePillStyle, cursor: 'pointer' }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.20)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.10)'; }}
-      >
-        <Ruler size={14} aria-hidden="true" />
-        Size Guide
-      </button>
-    </div>
+    <button 
+      data-size-guide="true"
+      onClick={() => setSizeGuideOpen(true)}
+      type="button"
+      className="product-size-guide-btn"
+      style={{ ...sizePillStyle, cursor: 'pointer' }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(180deg, rgba(201,168,76,0.24), rgba(201,168,76,0.09))'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(180deg, rgba(201,168,76,0.14), rgba(201,168,76,0.05))'; }}
+    >
+      <Ruler size={14} aria-hidden="true" />
+      Size Guide
+    </button>
   </div>
-  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+  <div className="product-size-row">
     {(p.sizes || []).map(s => {
       // تحويل الطرفين لنصوص لضمان دقة المقارنة والاختيار
       const isSelected = String(selSize) === String(s);
@@ -433,13 +436,6 @@ export default function ProductPage() {
           onClick={() => { setSelSize(s); setQty(1); }}
           aria-pressed={isSelected}
           aria-label={`Size ${s}${isSizeOOSWithSelectedColor ? ' (out of stock in the selected color)' : ''}`}
-          style={{ 
-            width: 48, height: 48, borderRadius: 2, fontSize: 12, fontWeight: 600, 
-            border: `2px solid ${isSelected ? 'var(--gold)' : 'var(--border)'}`, 
-            background: isSelected ? 'rgba(201,168,76,0.1)' : 'transparent', 
-            color: isSelected ? 'var(--gold)' : isSizeOOSWithSelectedColor ? 'var(--text3)' : 'var(--text2)', 
-            cursor: 'pointer',
-          }}
           // ترك الأنميشن بالكامل لـ Framer Motion لمنع أي تعليق فلاشي
           animate={{ borderColor: isSelected ? 'var(--gold)' : 'var(--border)' }}
           transition={{ duration: 0.1 }}
@@ -468,52 +464,42 @@ export default function ProductPage() {
             {/* Qty + Add */}
             <div
               className="product-buy-row product-detail-block"
-              style={{
-                '--pp-i': 4,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 8,
-                marginBottom: 16,
-                minWidth: 0,
-              }}
+              style={{ '--pp-i': 4 }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2, opacity: isOutOfStock ? 0.5 : 1, pointerEvents: isOutOfStock ? 'none' : 'auto' }}>
+              <div className="product-qty" style={{ opacity: isOutOfStock ? 0.5 : 1, pointerEvents: isOutOfStock ? 'none' : 'auto' }}>
                 <button onClick={() => setQty(Math.max(1, qty - 1))}
                   type="button" aria-label="Decrease quantity"
-                  style={{ width: 44, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>−</button>
-                <span style={{ width: 40, textAlign: 'center', fontSize: 14, fontWeight: 600 }}>{qty}</span>
+                  className="product-qty-btn">−</button>
+                <span className="product-qty-value">{qty}</span>
                 <button onClick={() => setQty(Math.min(currentVariantStock, qty + 1))}
                   type="button" aria-label="Increase quantity"
-                  style={{ width: 44, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>+</button>
+                  className="product-qty-btn">+</button>
               </div>
               
               <motion.button 
                 className="gold-btn add-to-bag-btn" 
                 style={{ 
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  whiteSpace: 'nowrap',
-                  minHeight: 52,
-                  background: isOutOfStock ? '#2a2a2a' : 'var(--gold)',
-                  color: isOutOfStock ? '#9a9488' : 'var(--bg)',
-                  borderColor: isOutOfStock ? '#444' : 'var(--gold)',
-                  cursor: isOutOfStock ? 'not-allowed' : 'pointer'
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  whiteSpace: 'nowrap'
                 }}
                 onClick={handleAddToCart} 
                 disabled={isOutOfStock}
                 whileTap={isOutOfStock ? {} : { scale: 0.98 }}
               >
-                <ShoppingBag size={16} /> {isOutOfStock ? 'OUT OF STOCK' : 'ADD TO BAG'}
+                <ShoppingBag size={20} strokeWidth={1.8} aria-hidden="true" />
+                <span className="add-to-bag-label">{isOutOfStock ? 'OUT OF STOCK' : 'ADD TO BAG'}</span>
               </motion.button>
 
               <motion.button
                 aria-label={isWished ? 'Remove from wishlist' : 'Add to wishlist'}
                 aria-pressed={isWished}
+                className="product-wish-btn"
+                data-wished={isWished ? 'true' : 'false'}
                 onClick={() => {
                   toggleWishlist(p.id);
                   toast(isWished ? 'Removed from wishlist' : 'Added to wishlist', isWished ? 'error' : 'success');
                 }}
-                style={{ width: 52, height: 52, borderRadius: 2, border: `2px solid ${isWished ? '#e74c3c' : 'var(--border)'}`, background: 'transparent', color: isWished ? '#e74c3c' : 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.95 }}>
                 <Heart size={18} fill={isWished ? '#e74c3c' : 'none'} />
               </motion.button>
             </div>
@@ -537,26 +523,26 @@ export default function ProductPage() {
             {/* Features */}
             <div className="product-perks product-detail-block" style={{ '--pp-i': 6 }}>
               <div className="product-perk">
-                <Truck size={16} aria-hidden="true" />
-                <div>
+                <span className="product-perk-icon" aria-hidden="true"><Truck size={16} /></span>
+                <div className="product-perk-body">
                   <strong>Standard Shipping</strong>
-                  Delivery within 4-8 business days across Egypt.
+                  <span className="product-perk-copy">Delivery within 4-8 business days across Egypt.</span>
                 </div>
               </div>
 
               <div className="product-perk">
-                <RotateCcw size={16} aria-hidden="true" />
-                <div>
+                <span className="product-perk-icon" aria-hidden="true"><RotateCcw size={16} /></span>
+                <div className="product-perk-body">
                   <strong>7-Day Exchanges &amp; Returns</strong>
-                  Exchange or return within 7 days of delivery. Items must be unworn, in their original condition and packaging, with all tags attached.
+                  <span className="product-perk-copy">Exchange or return within 7 days of delivery. Items must be unworn, in their original condition and packaging, with all tags attached.</span>
                 </div>
               </div>
 
               <div className="product-perk">
-                <Shield size={16} aria-hidden="true" />
-                <div>
+                <span className="product-perk-icon" aria-hidden="true"><Shield size={16} /></span>
+                <div className="product-perk-body">
                   <strong>Inspect Before You Pay</strong>
-                  You have the full right to check and inspect fabric quality upon delivery before paying the courier.
+                  <span className="product-perk-copy">You have the full right to check and inspect fabric quality upon delivery before paying the courier.</span>
                 </div>
               </div>
             </div>
@@ -571,8 +557,6 @@ export default function ProductPage() {
                   display: 'flex',
                   flexWrap: 'wrap',
                   gap: 0,
-                  borderBottom: '1px solid var(--border)',
-                  marginBottom: 16,
                 }}
               >
                 {availableTabs.map(t => (
@@ -730,81 +714,58 @@ export default function ProductPage() {
       {/* ─── 2. مودال دليل المقاسات ─── */}
       <AnimatePresence>
         {sizeGuideOpen && (
-          <div className="size-guide-overlay" style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(8px)',
-            display: 'flex', justifyContent: 'center',
-            zIndex: 9999, padding: 20, overflowY: 'auto'
-          }} onClick={() => setSizeGuideOpen(false)}>
+          <div className="size-guide-overlay" onClick={() => setSizeGuideOpen(false)}>
             
             <motion.div 
               role="dialog"
               aria-modal="true"
               aria-labelledby="size-guide-title"
-              initial={{ opacity: 0, scale: 0.95, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 30 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, scale: 0.96, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 24 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               className="size-guide-modal"
-              style={{
-                background: '#111111',
-                border: '1px solid var(--gold, #c9a84c)',
-                borderRadius: 4,
-                width: '100%',
-                maxWidth: 650,
-                maxHeight: 'calc(100dvh - 24px)',
-                overflowY: 'auto',
-                padding: 'clamp(18px, 5vw, 40px) clamp(12px, 4vw, 32px)',
-                position: 'relative',
-                boxSizing: 'border-box',
-                boxShadow: '0 25px 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,168,76,0.1)'
-              }} onClick={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
               <button className="size-guide-close" onClick={() => setSizeGuideOpen(false)}
                 ref={sizeGuideCloseRef}
                 type="button"
                 aria-label="Close size guide"
-                style={{ position: 'absolute', top: 20, right: 20, background: 'none', border: 'none', color: '#888', cursor: 'pointer', zIndex: 10 }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--gold, #c9a84c)'}
-                onMouseLeave={e => e.currentTarget.style.color = '#888'}
               >
-                <X size={20} aria-hidden="true" />
+                <X size={18} aria-hidden="true" />
               </button>
 
-              <h3 id="size-guide-title" style={{ fontFamily: 'var(--font-display, serif)', fontSize: 24, color: 'white', fontWeight: 400, letterSpacing: 2, marginBottom: 8, textAlign: 'center' }}>
-                SIZE GUIDE
-              </h3>
-              <p style={{ color: 'var(--text3, #888)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 24, textAlign: 'center' }}>
-                {(p.category ?? 'Standard')} Measurements
-              </p>
+              <header className="size-guide-head">
+                <span className="size-guide-eyebrow">
+                  <span className="size-guide-eyebrow-rule" aria-hidden="true" />
+                </span>
+                <h3 id="size-guide-title" className="size-guide-title">
+                  Size Guide
+                </h3>
+                <p className="size-guide-sub">
+                  {(p.category ?? 'Standard')} Measurements
+                </p>
+              </header>
 
               {(p.sizeGuide || p.sizeguide || p.size_guide) ? (
-                <div className="size-guide-image-frame" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', maxHeight: '60vh', overflowY: 'auto', borderRadius: 2, background: '#0a0a0a', padding: 12, border: '1px solid rgba(255,255,255,0.03)' }}>
+                <div className="size-guide-image-frame">
                   <SafeImage
                     src={p.sizeGuide || p.sizeguide || p.size_guide}
                     alt={`Size Guide Chart for ${p.name}`}
                     fallback={FALLBACK_IMG}
                     className="size-guide-image"
-                    style={{ width: '100%', height: 'auto', maxHeight: '50vh', objectFit: 'contain' }}
                   />
                 </div>
               ) : (
                 <>
-                  <div style={{ overflowX: 'auto', marginBottom: 32 }}>
-                    <table style={{
-                      width: '100%',
-                      minWidth: 440,
-                      borderCollapse: 'collapse',
-                      fontSize: 13,
-                      textAlign: 'center',
-                      color: 'var(--text2, #ccc)',
-                    }}>
+                  <div className="size-guide-table-wrap">
+                    <table className="size-guide-table">
                       {garmentKind({ category: p.category, name: p.name }) === GARMENT.BOTTOM ? (
                         <>
                           <thead>
-                            <tr style={{ borderBottom: '1px solid var(--gold, #c9a84c)', color: 'var(--gold, #c9a84c)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Size</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Waist</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Hips</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Length</th>
+                            <tr>
+                              <th>Size</th>
+                              <th>Waist</th>
+                              <th>Hips</th>
+                              <th>Length</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -813,12 +774,12 @@ export default function ProductPage() {
                               { s: 'M', w: '81-85 cm', h: '97-101 cm', l: '104 cm' },
                               { s: 'L', w: '86-90 cm', h: '102-106 cm', l: '106 cm' },
                               { s: 'XL', w: '91-95 cm', h: '107-111 cm', l: '108 cm' }
-                            ].map((row, idx) => (
-                              <tr key={row.s} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent' }}>
-                                <td style={{ padding: '14px 8px', fontWeight: 600, color: 'white' }}>{row.s}</td>
-                                <td style={{ padding: '14px 8px' }}>{row.w}</td>
-                                <td style={{ padding: '14px 8px' }}>{row.h}</td>
-                                <td style={{ padding: '14px 8px' }}>{row.l}</td>
+                            ].map((row) => (
+                              <tr key={row.s}>
+                                <td>{row.s}</td>
+                                <td>{row.w}</td>
+                                <td>{row.h}</td>
+                                <td>{row.l}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -826,11 +787,11 @@ export default function ProductPage() {
                       ) : (
                         <>
                           <thead>
-                            <tr style={{ borderBottom: '1px solid var(--gold, #c9a84c)', color: 'var(--gold, #c9a84c)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Size</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Chest</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Shoulder</th>
-                              <th style={{ padding: '12px 8px', fontWeight: 500 }}>Length</th>
+                            <tr>
+                              <th>Size</th>
+                              <th>Chest</th>
+                              <th>Shoulder</th>
+                              <th>Length</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -839,12 +800,12 @@ export default function ProductPage() {
                               { s: 'M', c: '97-101 cm', sh: '46 cm', l: '70 cm' },
                               { s: 'L', c: '102-106 cm', sh: '48 cm', l: '72 cm' },
                               { s: 'XL', c: '107-111 cm', sh: '50 cm', l: '74 cm' }
-                            ].map((row, idx) => (
-                              <tr key={row.s} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent' }}>
-                                <td style={{ padding: '14px 8px', fontWeight: 600, color: 'white' }}>{row.s}</td>
-                                <td style={{ padding: '14px 8px' }}>{row.c}</td>
-                                <td style={{ padding: '14px 8px' }}>{row.sh}</td>
-                                <td style={{ padding: '14px 8px' }}>{row.l}</td>
+                            ].map((row) => (
+                              <tr key={row.s}>
+                                <td>{row.s}</td>
+                                <td>{row.c}</td>
+                                <td>{row.sh}</td>
+                                <td>{row.l}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -853,8 +814,9 @@ export default function ProductPage() {
                     </table>
                   </div>
 
-                  <p style={{ color: 'var(--text3, #888)', fontSize: 11, fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center', marginBottom: 0 }}>
-                    * Note: Measurements may vary by 1-2 cm depending on the luxury cut and style.
+                  <p className="size-guide-note">
+                    <Ruler size={13} aria-hidden="true" />
+                    <span>* Note: Measurements may vary by 1-2 cm depending on the luxury cut and style.</span>
                   </p>
                 </>
               )}

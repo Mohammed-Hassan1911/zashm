@@ -26,6 +26,11 @@ function normalizeConfirmation(order) {
     shippingCost: toAmount(order.shippingCost),
     city: typeof order.city === 'string' ? order.city : '',
     tracking_url: typeof order.tracking_url === 'string' ? order.tracking_url : '',
+    // The invoice is dated from the order, not from the moment the page is
+    // opened again, so a refresh never moves the issue date forward.
+    placedAt: typeof order.placedAt === 'string'
+      ? order.placedAt
+      : (typeof order.timestamps?.created === 'string' ? order.timestamps.created : ''),
     // A pending order (database unreachable) has no stored row and no tracking
     // link; the confirmation screen must keep saying so after a refresh.
     pending: order.pending === true,

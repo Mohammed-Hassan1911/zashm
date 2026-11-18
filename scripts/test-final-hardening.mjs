@@ -522,8 +522,11 @@ console.log('\n[10] public SEO and checkout accessibility');
     'order confirmation layout adapts to mobile screens');
   ok(!/تم تسجيل طلبك بنجاح/.test(cartPage) && !/WHAT HAPPENS NEXT/.test(cartPage),
     'order confirmation drops the repeated received-order copy');
+  // The window only has to span the continue button's own attributes and the
+  // icon inside it, so it is generous rather than exact: re-indenting the
+  // button must not be able to break this assertion.
   ok((cartPage.match(/style=\{orderActionStyle\}/g) || []).length === 3 &&
-     /className="order-confirmation-continue"[\s\S]{0,400}?CONTINUE SHOPPING/.test(cartPage),
+     /className="order-confirmation-continue"[\s\S]{0,700}?CONTINUE SHOPPING/.test(cartPage),
     'track, support and continue actions share one identical style');
   const trackPage = read('src/pages/TrackOrder.js');
   ok(/className="track-shipping-grid"/.test(trackPage) &&
@@ -552,8 +555,8 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok(/initial=\{index === 0 \? false : \{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
     'the LCP product card appears immediately while later cards use a brief fade');
   ok(/loading=\{index === 0 \? 'eager' : 'lazy'\}/.test(productCard) &&
-     /fetchPriority=\{index === 0 \? 'high' : 'auto'\}/.test(productCard),
-    'only the first collection image loads eagerly with high priority');
+     /fetchpriority=\{index === 0 \? 'high' : 'auto'\}/.test(productCard),
+    'only the first collection image loads eagerly with high priority (lowercase attribute avoids the React 18 warning)');
   ok(!/fonts\.googleapis\.com[^\n]*rel="stylesheet"/.test(read('index.html')) &&
      /requestAnimationFrame\(\(\) => requestAnimationFrame\(loadBrandFonts\)\)/.test(read('src/index.js')),
     'brand fonts load after the first render instead of blocking initial paint');
@@ -616,17 +619,22 @@ console.log('\n[11] reload resilience and footer polish');
      /\.site-footer \.footer-contact-row \{\s*min-height: 44px;\s*\}/.test(phoneFooter),
     'on phones the contact rows match the 44px Customer Care tap rhythm');
 
-  // The footer is a real frame: four columns on desktop, a balanced 2×2 on
-  // tablet (brand | links, care | contact, in DOM order), and full-width
-  // brand/contact only once the screen is phone-width.
-  ok(/\.footer-grid \{[\s\S]{0,140}?grid-template-columns: 1\.6fr 1fr 1\.15fr 1\.2fr/.test(css),
-    'the footer is four columns on desktop');
+  // The footer is a real frame: three columns on desktop (brand, Customer Care,
+  // Contact), brand across the first tablet row with the two lists beneath it,
+  // and full-width blocks only once the screen is phone-width.
+  ok(/\.footer-grid \{[\s\S]{0,140}?grid-template-columns: 1\.6fr 1\.15fr 1\.2fr/.test(css),
+    'the footer is three columns on desktop after Quick Links was removed');
+  ok(!/Quick Links/.test(app) && !/FOOTER_QUICK_LINKS/.test(app),
+    'the footer no longer renders a Quick Links column');
   const tabletBlock = css.slice(css.indexOf('@media (max-width: 1023px) {'));
   const tabletFooter = tabletBlock.slice(0, tabletBlock.indexOf('@media (max-width: 768px)'));
   ok(/\.footer-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/.test(tabletFooter),
     'the footer collapses to two columns on tablet');
-  ok(!/grid-column: 1 \/ -1/.test(tabletFooter),
-    'no footer block spans the full row on tablet, so no column is orphaned');
+  ok(/\.footer-brand \{ grid-column: 1 \/ -1; \}/.test(tabletFooter),
+    'the brand takes the first tablet row so the two remaining columns share the second');
+  ok(!/\.footer-col--care \{[^}]*grid-column: 1 \/ -1/.test(tabletFooter) &&
+     !/\.footer-contact-col \{[^}]*grid-column: 1 \/ -1/.test(tabletFooter),
+    'neither list spans the full row on tablet, so no column is orphaned');
   ok(/\.footer-link \{ min-height: 44px; margin-bottom: 0; \}/.test(tabletFooter) &&
      /\.footer-contact-row \{ min-height: 44px; \}/.test(tabletFooter),
     'tablet links and contact rows keep the 44px touch target');
@@ -635,8 +643,8 @@ console.log('\n[11] reload resilience and footer polish');
     'only on a phone do the brand and contact take the full width');
   ok(/\.footer-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/.test(phoneBlock),
     'the phone footer is a single column');
-  ok(/\.footer-col--quick \{ display: none; \}/.test(phoneBlock),
-    'Quick Links is dropped on a phone because the dock already carries Home/Shop/Wishlist');
+  ok(!/\.footer-col--quick/.test(css),
+    'the removed Quick Links column leaves no dead CSS behind');
   ok(!/\.footer-col--care \{[\s\S]{0,200}?grid-template-columns:/.test(phoneBlock),
     'Customer Care stays one column on a phone, so all three links read as one balanced list');
   ok(/bottom: calc\(50% - 10px\)/.test(css),
@@ -817,7 +825,7 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
   ok(/aria-label="ZASHM on Instagram"/.test(app) && /aria-label="ZASHM on Facebook"/.test(app),
     'footer social icon links expose an accessible name');
   ok(!/<h4 style=\{titleStyle\}>/.test(app) &&
-     (app.match(/<h2 className="footer-col-title">/g) || []).length === 3,
+     (app.match(/<h2 className="footer-col-title">/g) || []).length === 2,
     'footer section titles use h2 so the heading order never skips a level');
 
   ok(/export function setSiteJsonLd\(\)/.test(seo) &&

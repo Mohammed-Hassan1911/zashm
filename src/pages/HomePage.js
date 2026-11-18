@@ -1,8 +1,14 @@
-import React, { useEffect, useRef } from 'react';
-import { motion, useScroll, useTransform, useInView } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import React, { useRef } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { ChevronDown, Truck, Banknote, Gem } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
+
+const HOUSE_PROMISES = [
+  { Icon: Truck, title: 'Delivery across Egypt', copy: 'Every governorate, straight to your door.' },
+  { Icon: Banknote, title: 'Cash on delivery', copy: 'Inspect the piece before you pay.' },
+  { Icon: Gem, title: '7-day exchanges', copy: 'Unworn, with tags and original packaging.' },
+];
 
 export default function HomePage() {
   const { products, productsLoadStatus, refreshProducts, setPage } = useStore();
@@ -43,18 +49,31 @@ export default function HomePage() {
           {/* clamp()/min() are not valid inside a radial-gradient size (Chromium
               drops the whole layer), so the glow is sized in percentages of the
               hero box — which is already viewport-width and viewport-height. */}
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.05) 38%, transparent 72%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,0.4) 100%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.055) 38%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,0.42) 100%)' }} />
         </motion.div>
 
-        {/* Twinkling gold dust — subtle luxury sparkle */}
+        {/* Twinkling gold dust — subtle luxury sparkle. Plain divs with a CSS
+            keyframe: 28 Framer Motion nodes each wrote an inline style on every
+            frame, which is 28 style recalcs the compositor never needed. */}
         {[...Array(28)].map((_, i) => {
           const size = 1 + (i % 3) * 0.7;
           return (
-            <motion.div data-decor="true" key={i}
-              style={{ position: 'absolute', width: `clamp(1px, ${size}px, 2px)`, height: `clamp(1px, ${size}px, 2px)`, borderRadius: '50%', background: 'var(--gold)', boxShadow: '0 0 4px rgba(201,168,76,0.75)', left: `${(i * 37) % 100}%`, top: `${(i * 53) % 100}%`, zIndex: 2, maxWidth: '2px', maxHeight: '2px' }}
-              animate={{ opacity: [0.1, 0.85, 0.1], scale: [0.8, 1.15, 0.8] }}
-              transition={{ duration: 3 + (i % 5), repeat: Infinity, delay: (i % 7) * 0.45, ease: 'easeInOut' }}
+            <div
+              data-decor="true"
+              key={i}
+              className="hero-dust"
+              aria-hidden="true"
+              style={{
+                width: `clamp(1px, ${size}px, 2px)`,
+                height: `clamp(1px, ${size}px, 2px)`,
+                left: `${(i * 37) % 100}%`,
+                top: `${(i * 53) % 100}%`,
+                maxWidth: '2px',
+                maxHeight: '2px',
+                animationDuration: `${3 + (i % 5)}s`,
+                animationDelay: `${(i % 7) * 0.45}s`,
+              }}
             />
           );
         })}
@@ -63,6 +82,7 @@ export default function HomePage() {
         <motion.div style={{ position: 'relative', textAlign: 'center', zIndex: 10, opacity, padding: '0 24px' }} className="hero-content">
           {/* The wordmark below is decorative art; this is the real page heading. */}
           <h1 className="sr-only">ZASHM — Luxury Menswear</h1>
+
           <motion.div
             className="hero-brand"
             aria-hidden="true"
@@ -75,6 +95,7 @@ export default function HomePage() {
                   <span
                     className="hero-brand-letter"
                     key={`${letter}-${index}`}
+                    data-letter={letter}
                     style={{ '--letter-index': index }}
                   >
                     {letter}
@@ -93,23 +114,22 @@ export default function HomePage() {
           <motion.p
             className="hero-tagline"
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-            style={{ fontSize: 'clamp(9px, 1.4vw, 11px)', letterSpacing: 'clamp(2px, 0.7vw, 8px)', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 'clamp(14px, 3vw, 24px)', fontWeight: 500 }}
+            style={{ fontSize: 'clamp(9px, 1.4vw, 11px)', letterSpacing: 'clamp(2px, 0.7vw, 8px)', textTransform: 'uppercase', marginBottom: 'clamp(14px, 3vw, 24px)', fontWeight: 500 }}
           >EST. 2026 · EGYPT</motion.p>
 
           <motion.p
             className="hero-brand-subtitle"
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-            style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(17px, 2.4vw, 28px)', color: 'var(--gold)', fontStyle: 'italic', fontWeight: 400, letterSpacing: 'clamp(1.5px, 0.3vw, 4px)', marginBottom: 'clamp(22px, 3.5vw, 34px)', textShadow: '0 2px 20px rgba(201,168,76,0.18)' }}
+            style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(17px, 2.4vw, 28px)', fontStyle: 'italic', fontWeight: 400, letterSpacing: 'clamp(1.5px, 0.3vw, 4px)', marginBottom: 'clamp(22px, 3.5vw, 34px)' }}
           >Luxury Menswear</motion.p>
 
           <motion.div
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26, duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-            style={{ display: 'flex', justifyContent: 'center' }}
+            className="hero-actions"
           >
-            <button 
-              className="gold-btn" 
+            <button
+              className="gold-btn home-glass-btn"
               onClick={() => setPage('shop')}
-              style={{ padding: 'clamp(12px, 2vw, 14px) clamp(24px, 6vw, 42px)', fontSize: 'clamp(10px, 1.8vw, 12px)', letterSpacing: 2 }}
             >
               Explore Collection
             </button>
@@ -126,6 +146,28 @@ export default function HomePage() {
             <span className="hero-scroll-cue-line" aria-hidden="true" />
             <ChevronDown size={18} aria-hidden="true" />
           </button>
+        </div>
+      </section>
+
+      {/* ───── THE HOUSE PROMISE ───── */}
+      <section className="home-promises" aria-label="The ZASHM promise">
+        <div className="home-promises-inner">
+          {HOUSE_PROMISES.map(({ Icon, title, copy }, index) => (
+            <motion.div
+              className="home-promise"
+              key={title}
+              initial={{ opacity: 0, y: 14 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.4 }}
+              transition={{ duration: 0.5, delay: index * 0.08 }}
+            >
+              <span className="home-promise-icon" aria-hidden="true"><Icon size={17} strokeWidth={1.5} /></span>
+              <div>
+                <p className="home-promise-title">{title}</p>
+                <p className="home-promise-copy">{copy}</p>
+              </div>
+            </motion.div>
+          ))}
         </div>
       </section>
 
@@ -178,21 +220,21 @@ export default function HomePage() {
 
       {/* ───── FEATURED ───── */}
       {featured.length > 0 && (
-        <section style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
-          <SectionHeader title="Featured Pieces" />
+        <section className="home-collection" style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
+          <SectionHeader eyebrow="Selected" title="Featured Pieces" count={featured.length} />
           <div className="product-collection-grid" style={{ marginTop: 'clamp(28px, 5vw, 56px)' }}>
             {featured.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 48 }}>
-            <button className="outline-btn" onClick={() => setPage('shop')}>View Full Collection</button>
+            <button className="outline-btn home-glass-btn" onClick={() => setPage('shop')}>View Full Collection</button>
           </div>
         </section>
       )}
 
       {/* ───── NEW ARRIVALS ───── */}
       {newArrivals.length > 0 && (
-        <section style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
-          <SectionHeader title="New Arrivals" />
+        <section id="home-new-arrivals" className="home-collection" style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
+          <SectionHeader eyebrow="Just in" title="New Arrivals" count={newArrivals.length} />
           <div className="product-collection-grid" style={{ marginTop: 'clamp(28px, 5vw, 56px)' }}>
             {newArrivals.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
@@ -201,13 +243,13 @@ export default function HomePage() {
 
       {/* ───── THE COLLECTION (remaining pieces, or the fallback) ───── */}
       {fallbackProducts.length > 0 && (
-        <section style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
-          <SectionHeader title="The Collection" />
+        <section id="home-collection" className="home-collection" style={{ padding: 'clamp(44px, 8vw, 60px) clamp(16px, 4vw, 24px) clamp(64px, 12vw, 100px)', maxWidth: 1400, margin: '0 auto' }}>
+          <SectionHeader eyebrow="The edit" title="The Collection" count={fallbackProducts.length} />
           <div className="product-collection-grid" style={{ marginTop: 'clamp(28px, 5vw, 56px)' }}>
             {fallbackProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
           </div>
           <div style={{ textAlign: 'center', marginTop: 48 }}>
-            <button className="outline-btn" onClick={() => setPage('shop')}>View Full Collection</button>
+            <button className="outline-btn home-glass-btn" onClick={() => setPage('shop')}>View Full Collection</button>
           </div>
         </section>
       )}
@@ -216,7 +258,7 @@ export default function HomePage() {
   );
 }
 
-function SectionHeader({ title }) {
+function SectionHeader({ eyebrow, title, count }) {
   return (
     <motion.div
       className="section-head"
@@ -225,8 +267,14 @@ function SectionHeader({ title }) {
       viewport={{ once: true }}
       transition={{ duration: 0.6 }}
     >
+      {eyebrow && <p className="section-head-eyebrow">{eyebrow}</p>}
       <h2 className="section-head-title">{title}</h2>
       <span className="section-head-ornament" aria-hidden="true" />
+      {typeof count === 'number' && count > 0 && (
+        <p className="section-head-count" aria-hidden="true">
+          {String(count).padStart(2, '0')} pieces
+        </p>
+      )}
     </motion.div>
   );
 }

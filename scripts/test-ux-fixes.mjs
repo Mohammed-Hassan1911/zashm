@@ -597,7 +597,7 @@ try {
       assert.ok(totalAt >= 0 && codAt > totalAt && placeAt > codAt,
         'payment selector must sit after the total and before PLACE ORDER');
       assert.ok(/Cash on Delivery/.test(cart), 'English COD label is present');
-      assert.ok(/Pay in cash when your order arrives/.test(cart), 'payment-on-arrival explanation is present');
+      assert.ok(/Pay in cash when it arrives\./.test(cart), 'payment-on-arrival explanation is present');
       assert.ok(/Coming soon/.test(cart), 'card option is advertised as coming soon');
     });
 
@@ -796,9 +796,9 @@ try {
       assert.ok(product.includes("whiteSpace: 'nowrap'"), 'the label cannot wrap');
       assert.ok(/@media \(max-width: 768px\)[\s\S]{0,600}\.product-buy-row\s*\{[\s\S]{0,200}display:\s*grid/.test(css),
         'the buy row becomes a grid on phones');
-      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,300}grid-column:\s*1 \/ -1[\s\S]{0,300}min-height:\s*52px/.test(css),
-        'the CTA spans the full row with a 52px target');
-      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,400}font-size:\s*12\.5px/.test(css),
+      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,300}grid-column:\s*1 \/ -1[\s\S]{0,300}min-height:\s*50px/.test(css),
+        'the CTA spans the full row with a 50px target');
+      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,400}font-size:\s*11\.5px/.test(css),
         'the label stays readable instead of shrinking to 10px');
       assert.ok(!product.includes('product-sticky-buy'), 'no sticky buy bar duplicates the CTA on scroll');
       assert.ok(!css.includes('.product-sticky-buy'), 'no sticky buy styles remain');
@@ -855,16 +855,12 @@ try {
       assert.ok(/fontSize:\s*16,\s*\n?\s*outline:\s*'none'/.test(shop), 'price inputs are 16px (no iOS zoom)');
     });
 
-    await step('product cards keep a 44px hit area and readable badges', () => {
-      assert.ok(/\.product-card-actions button\s*\{[^}]*width:\s*40px[^}]*height:\s*40px/.test(css),
-        'the phone heart clears the 40px WCAG AAA target');
-      assert.ok(/\.product-card-actions button::after\s*\{[^}]*inset:\s*-3px/.test(css),
-        'a 3px bleed expands the hit area to 46px');
-      assert.ok(/@media \(max-width: 768px\) \{\s*\.product-card-labels \.label-badge \{\s*font-size:\s*clamp\(8px, 2\.2cqw, 9\.5px\)/.test(css)
+    await step('product cards keep a clean photo and readable badges', () => {
+      assert.ok(/@media \(max-width: 768px\) \{\s*\.product-card-labels \.label-badge \{\s*font-size:\s*clamp\(8px, 2\.1cqw, 9px\)/.test(css)
         && /\.product-card-image\s*\{[^}]*container-type:\s*inline-size/.test(css),
         'card labels shrink on phones and small screens while staying readable');
-      assert.ok(/\.product-card-labels\s*\{[^}]*top:\s*0;[^}]*left:\s*0;/.test(css),
-        'the card label is flush with the top-left corner of the image');
+      assert.ok(/\.product-card-labels\s*\{[^}]*top:\s*0;[^}]*left:\s*0;[^}]*padding:\s*0;/.test(css),
+        'the card label is welded into the top-left corner of the image');
       assert.ok(!/\.product-page-label\s*\{[^}]*left:\s*50%/.test(css),
         'the product page label stays on the top-left image edge too');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*text-align:\s*center/.test(css),
@@ -875,17 +871,19 @@ try {
         'the label box animates in and keeps a soft glow');
       assert.ok(/@media \(prefers-reduced-motion: reduce\)[\s\S]{0,220}\.product-card-labels \.label-badge\s*\{[^}]*animation:\s*none/.test(css),
         'the label animation is disabled for reduced-motion users');
-      assert.ok(/className="product-card-image"[\s\S]{0,1200}className="product-card-labels"/.test(card),
+      assert.ok(/className="product-card-image"[\s\S]{0,1600}className="product-card-labels"/.test(card),
         'every card cover carries the label box on the image');
-      assert.ok(/className="product-card-labels product-page-label"[\s\S]{0,400}?className="product-card-image"/.test(product),
+      assert.ok(/className="product-card-labels product-page-label"[\s\S]{0,400}?className="product-card-image\b/.test(product),
         'the product page label sits in its own row above the photo, never over it');
       assert.ok(/\.product-page-label\s*\{[\s\S]{0,140}?position: static/.test(css),
         'the product page label is in flow, so the badge cannot cover the image');
       assert.ok(/fontSize:\s*10,[\s\S]{0,120}whiteSpace:\s*'nowrap'/.test(card), 'the discount badge is 10px');
-      assert.ok(/\.product-card-actions\s*\{\s*opacity:\s*1;/.test(css),
-        'the wishlist heart is always visible, not hover-only');
-      assert.ok(/\.product-card-image:hover \.product-card-action-view/.test(css),
-        'the quick-view eye still appears on hover/focus on pointer devices');
+      assert.ok(!/product-card-action/.test(card) && !/product-card-action/.test(css),
+        'the photo carries no overlay buttons: no eye, no heart');
+      assert.ok(/product-wish-btn/.test(product) && /toggleWishlist\(p\.id\)/.test(product),
+        'saving a piece still lives on the product page');
+      assert.ok(!/toggleWishlist/.test(card),
+        'the card never writes to the wishlist itself');
       assert.ok(/\{!isMobile && \(\s*<div className="zashm-header-utilities">/.test(header),
         'on a phone the header renders only the search icon, at the far right');
       assert.ok(/useState\(\(\) => \(\s*typeof window !== 'undefined' && window\.innerWidth <= 768\s*\)\)/.test(header),
@@ -902,17 +900,15 @@ try {
         'framer-motion animations honour prefers-reduced-motion');
     });
 
-    await step('removing a wishlist item is red from both the card and the page', () => {
-      assert.ok(/isWished\s*\?\s*'error'\s*:\s*'success'/.test(card),
-        'the product card reports a removal as an error toast');
+    await step('removing a wishlist item is red on the product page', () => {
       assert.ok(/isWished\s*\?\s*'error'\s*:\s*'success'/.test(product),
         'the product page reports a removal as an error toast');
-      assert.ok(!/'info'/.test(card) && !/'info'/.test(product),
-        'neither heart uses the blue info toast any more');
-      assert.ok(/toggleWishlist\(product\.id\)[\s\S]{0,220}isWished \? 'error' : 'success'/.test(card),
-        'the colour follows the removal in the card, not the addition');
+      assert.ok(!/'info'/.test(product),
+        'the heart does not use the blue info toast any more');
       assert.ok(/toggleWishlist\(p\.id\)[\s\S]{0,220}isWished \? 'error' : 'success'/.test(product),
-        'the colour follows the removal on the product page, not the addition');
+        'the colour follows the removal, not the addition');
+      assert.ok(!/isWished/.test(card),
+        'the card no longer owns a wishlist control');
     });
 
     await step('the home page shows every product once, whatever its label', () => {

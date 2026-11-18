@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, Eye } from 'lucide-react';
 import { useStore } from '../../store';
-import { toast } from '../ui/BackToTop';
 import { availableStock, discountPercent, effectivePrice } from '../../lib/pricing';
 import StarRating from './StarRating';
 import { useImageFallback } from '../ui/SafeImage';
@@ -19,16 +17,12 @@ const FALLBACK_IMAGE =
 
 export default function ProductCard({ product, index = 0 }) {
   const {
-    toggleWishlist,
-    wishlist,
     setPage,
     setSelectedProduct,
     addRecentlyViewed,
   } = useStore();
 
   const [imgIdx, setImgIdx] = useState(0);
-
-  const isWished = (wishlist || []).includes(product?.id);
 
   // variantStock هو المصدر الأساسي للتوفر عند وجود المتغيرات، ويُحسب فقط من
   // المفاتيح المطابقة للمقاسات والألوان المعرفة (مخزون اليتيم لا يظهر للعميل).
@@ -122,7 +116,7 @@ export default function ProductCard({ product, index = 0 }) {
           src={image.src}
           alt={product?.name || 'Product'}
           loading={index === 0 ? 'eager' : 'lazy'}
-          fetchPriority={index === 0 ? 'high' : 'auto'}
+          fetchpriority={index === 0 ? 'high' : 'auto'}
           decoding="async"
           onError={image.onError}
           style={{
@@ -138,8 +132,10 @@ export default function ProductCard({ product, index = 0 }) {
           transition={{ duration: 0.35 }}
         />
 
-        {/* Labels sit on the photo (top-centre) so they never reserve vertical
-            space above the image and stay centred at every size. */}
+        {/* Labels sit on the photo, welded into its top-left corner, so they
+            never reserve vertical space above the image. The photo carries no
+            other control: the whole card opens the product, and the wishlist
+            lives on the product page. */}
         {(product?.label || isSoldOut) && (
           <div className="product-card-labels" aria-label="Product label and status">
             {product?.label && (
@@ -152,112 +148,20 @@ export default function ProductCard({ product, index = 0 }) {
             )}
           </div>
         )}
-
-        {/* ACTION BUTTONS */}
-        <div
-          className="product-card-actions"
-          style={{
-            position: 'absolute',
-            top: 'clamp(6px, 2vw, 12px)',
-            right: 'clamp(6px, 2vw, 12px)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 7,
-          }}
-        >
-          <motion.button
-            type="button"
-            className="product-card-action-heart"
-            aria-label={
-              isWished ? 'Remove from wishlist' : 'Add to wishlist'
-            }
-            aria-pressed={isWished}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (product?.id) {
-                toggleWishlist(product.id);
-                toast(
-                  isWished
-                    ? 'Removed from wishlist'
-                    : 'Added to wishlist',
-                  isWished ? 'error' : 'success'
-                );
-              }
-            }}
-            whileTap={{ scale: 0.92 }}
-            style={{
-              width: 44,
-              height: 44,
-              minWidth: 44,
-              minHeight: 44,
-              padding: 0,
-              borderRadius: '50%',
-              background: 'rgba(10,10,10,0.86)',
-              border: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            <Heart
-              size={15}
-              fill={isWished ? '#e74c3c' : 'none'}
-              color={isWished ? '#e74c3c' : 'white'}
-            />
-          </motion.button>
-
-          <motion.button
-            type="button"
-            className="product-card-action-view"
-            aria-label="View product details"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleView();
-            }}
-            whileTap={{ scale: 0.92 }}
-            style={{
-              width: 44,
-              height: 44,
-              minWidth: 44,
-              minHeight: 44,
-              padding: 0,
-              borderRadius: '50%',
-              background: 'rgba(10,10,10,0.86)',
-              border: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            <Eye size={15} color="white" />
-          </motion.button>
-        </div>
       </div>
 
       {/* PRODUCT INFORMATION */}
       <div
         className="product-card-info"
         style={{
-          padding: 'clamp(10px, 2.5vw, 14px) 4px',
+          padding: 'clamp(12px, 2.8vw, 16px) clamp(12px, 2.8vw, 16px) clamp(14px, 3vw, 18px)',
           opacity: isSoldOut ? 0.65 : 1,
           width: '100%',
           minWidth: 0,
           boxSizing: 'border-box',
         }}
       >
-        <p
-          style={{
-            fontSize: 10,
-            lineHeight: 1.5,
-            color: 'var(--text3)',
-            margin: '0 0 5px',
-            overflowWrap: 'anywhere',
-          }}
-        >
+        <p className="product-card-category">
           {product?.category || 'General'}
         </p>
 
@@ -265,8 +169,8 @@ export default function ProductCard({ product, index = 0 }) {
           className="product-card-name"
           title={product?.name || ''}
           style={{
-            fontSize: 'clamp(13px, 3.5vw, 16px)',
-            lineHeight: 1.5,
+            fontSize: 'clamp(15px, 3.4vw, 18px)',
+            lineHeight: 1.28,
             fontWeight: 500,
             textDecoration: isSoldOut ? 'line-through' : 'none',
             margin: 0,
@@ -281,10 +185,10 @@ export default function ProductCard({ product, index = 0 }) {
 
         <div
           className="product-card-rating"
-          style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 7 }}
         >
           <StarRating rating={Number(product?.rating) || 0} size={12} />
-          <span style={{ fontSize: 10, color: 'var(--text3)' }}>
+          <span className="product-card-reviews">
             {Number(product?.reviews) > 0 ? `(${Number(product.reviews)})` : 'No reviews'}
           </span>
         </div>
@@ -295,15 +199,16 @@ export default function ProductCard({ product, index = 0 }) {
             display: 'flex',
             alignItems: 'baseline',
             flexWrap: 'wrap',
-            gap: 6,
-            marginTop: 7,
+            gap: 7,
+            marginTop: 8,
             minWidth: 0,
           }}
         >
           <span
+            className="product-card-price-now"
             style={{
               color: isSoldOut ? 'var(--text3)' : 'var(--gold)',
-              fontSize: 'clamp(12px, 3.4vw, 15px)',
+              fontSize: 'clamp(14px, 3.4vw, 16px)',
               fontWeight: 500,
               overflowWrap: 'anywhere',
               maxWidth: '100%',
@@ -314,10 +219,9 @@ export default function ProductCard({ product, index = 0 }) {
 
           {discount !== null && discount > 0 && (
             <span
+              className="product-card-price-was"
               style={{
-                color: 'var(--text2)',
                 fontSize: 'clamp(10px, 2.8vw, 12px)',
-                textDecoration: 'line-through',
                 overflowWrap: 'anywhere',
               }}
             >
@@ -327,15 +231,10 @@ export default function ProductCard({ product, index = 0 }) {
 
           {discount !== null && discount > 0 && !isSoldOut && (
             <span
+              className="product-card-discount"
               style={{
-                padding: '3px 6px',
-                borderRadius: 2,
-                background: 'rgba(192,57,43,0.14)',
-                border: '1px solid rgba(192,57,43,0.55)',
                 color: 'var(--red-light)',
                 fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: 0.5,
                 whiteSpace: 'nowrap',
               }}
             >

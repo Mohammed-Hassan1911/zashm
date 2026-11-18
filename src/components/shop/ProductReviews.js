@@ -12,9 +12,9 @@ const PHOTO_MAX_FILE = 12 * 1024 * 1024;
 const inputStyle = {
   width: '100%',
   boxSizing: 'border-box',
-  borderRadius: 4,
+  borderRadius: 8,
   color: 'var(--text)',
-  padding: '10px 12px',
+  padding: '12px 14px',
   outline: 'none',
 };
 
@@ -85,10 +85,12 @@ export default function ProductReviews({ product }) {
       : { average: Number(product && product.rating) || 0, count: Number(product && product.reviews) || 0 }
   ));
   const [reviews, setReviews] = useState(() => (initialCache ? initialCache.reviews : []));
-  // The photo picker only appears once the server can actually store a photo
-  // (the optional `photoPath` column is in place), so a deploy that lands
-  // before the SQL migration simply shows the form it shows today.
-  const [photosEnabled, setPhotosEnabled] = useState(() => Boolean(initialCache && initialCache.photosEnabled));
+  // The photo picker is part of the form. It only disappears when the server
+  // says outright that it cannot store a photo (`photosEnabled: false`, i.e.
+  // the optional `photoPath` column is missing). A failed or slow reviews
+  // request must never hide it — that used to make the field vanish for
+  // shoppers on a flaky connection.
+  const [photosEnabled, setPhotosEnabled] = useState(() => !initialCache || initialCache.photosEnabled !== false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [photoSaved, setPhotoSaved] = useState(null);
@@ -128,7 +130,9 @@ export default function ProductReviews({ product }) {
         count: Number(payload && payload.summary && payload.summary.count) || 0,
       };
       const nextReviews = Array.isArray(payload && payload.reviews) ? payload.reviews : [];
-      const nextPhotosEnabled = Boolean(payload && payload.photosEnabled);
+      // Only an explicit `false` hides the photo picker; a payload without the
+      // flag (older deploy, partial response) keeps it visible.
+      const nextPhotosEnabled = !payload || payload.photosEnabled !== false;
       setSummary(nextSummary);
       setReviews(nextReviews);
       setPhotosEnabled(nextPhotosEnabled);
@@ -147,7 +151,7 @@ export default function ProductReviews({ product }) {
     if (cached) {
       setSummary(cached.summary);
       setReviews(cached.reviews);
-      setPhotosEnabled(Boolean(cached.photosEnabled));
+      setPhotosEnabled(cached.photosEnabled !== false);
       setLoading(false);
     } else {
       setSummary({
@@ -155,7 +159,7 @@ export default function ProductReviews({ product }) {
         count: Number(product && product.reviews) || 0,
       });
       setReviews([]);
-      setPhotosEnabled(false);
+      setPhotosEnabled(true);
       setLoading(true);
     }
     setLoadError('');
@@ -324,390 +328,358 @@ export default function ProductReviews({ product }) {
     }
   };
 
-  const heading = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-      <MessageSquare size={18} color="var(--gold)" aria-hidden="true" />
-      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 400, letterSpacing: 1, margin: 0 }}>
-        Customer Reviews
-      </h2>
-    </div>
-  );
-
   return (
     <section
       aria-labelledby="product-reviews-title"
       data-product-reviews="true"
-      style={{
-        marginTop: 64,
-        paddingTop: 32,
-        borderTop: '1px solid var(--border)',
-      }}
+      className="product-reviews"
     >
-      <div id="product-reviews-title">{heading}</div>
-
-      {/* Summary */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 34, lineHeight: 1, color: 'var(--gold)' }}>
-            {summary.count > 0 ? summary.average.toFixed(1) : '0.0'}
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <StarRating rating={summary.average} size={16} />
-            <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-              {summary.count > 0
-                ? `${summary.count} review${summary.count === 1 ? '' : 's'}`
-                : 'No reviews yet'}
+      <div className="reviews-shell">
+        <header className="reviews-head">
+          <div className="reviews-heading">
+            <span className="reviews-heading-icon" aria-hidden="true">
+              <MessageSquare size={17} />
             </span>
+            <h2 id="product-reviews-title" className="reviews-title">Customer Reviews</h2>
           </div>
-        </div>
 
-        {!formOpen && (
-          <button
-            type="button"
-            onClick={() => { setFormOpen(true); setSent(false); setFormError(''); setErrorField(null); }}
-            style={{
-              marginLeft: 'auto',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              padding: '9px 16px',
-              minHeight: 44,
-              background: 'transparent',
-              color: 'var(--gold)',
-              border: '1px solid var(--border-gold, rgba(201,168,76,0.5))',
-              borderRadius: 4,
-              cursor: 'pointer',
-              fontSize: 12,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-            }}
-          >
-            <Star size={13} /> Write a review
-          </button>
-        )}
-      </div>
+          <div className="reviews-summary">
+            <span className="reviews-score">
+              {summary.count > 0 ? summary.average.toFixed(1) : '0.0'}
+            </span>
+            <div className="reviews-summary-meta">
+              <StarRating rating={summary.average} size={15} />
+              <span className="reviews-count">
+                {summary.count > 0
+                  ? `${summary.count} review${summary.count === 1 ? '' : 's'}`
+                  : 'No reviews yet'}
+              </span>
+            </div>
+          </div>
 
-      {/* Form */}
-      {formOpen && (
-        <form
-          onSubmit={submit}
-          noValidate
-          className="review-form"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 18, marginBottom: 24 }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <strong style={{ fontSize: 13, letterSpacing: 0.5 }}>Share your opinion</strong>
+          {!formOpen && (
             <button
               type="button"
-              aria-label="Close review form"
-              onClick={() => { setFormOpen(false); setFormError(''); setErrorField(null); setSent(false); }}
-              style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 0, width: 44, height: 44, margin: -10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              className="reviews-write-btn"
+              onClick={() => { setFormOpen(true); setSent(false); setFormError(''); setErrorField(null); }}
             >
-              <X size={16} />
+              <Star size={13} aria-hidden="true" /> Write a review
             </button>
-          </div>
-
-          {sent && (
-            <div ref={successRef} style={{ marginBottom: 14 }}>
-              <p role="status" style={{ background: 'rgba(39,174,96,0.10)', border: '1px solid rgba(39,174,96,0.35)', color: '#8fe0b0', borderRadius: 4, padding: '10px 12px', fontSize: 12, margin: 0 }}>
-                Thanks! Your review was received and will appear here once approved.
-              </p>
-              {photoSaved === false && (
-                <p role="status" style={{ background: 'rgba(243,156,18,0.10)', border: '1px solid rgba(243,156,18,0.35)', color: '#f0c274', borderRadius: 4, padding: '10px 12px', fontSize: 12, margin: '8px 0 0' }}>
-                  Your review was saved, but the photo could not be uploaded. You can add it later.
-                </p>
-              )}
-            </div>
           )}
+        </header>
 
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div className="review-field">
-              <label htmlFor="review-name">Your name</label>
-              <input
-                id="review-name"
-                ref={nameRef}
-                type="text"
-                className={`review-input${errorField === 'name' ? ' is-invalid' : ''}`}
-                value={form.name}
-                onChange={(e) => update('name', e.target.value)}
-                maxLength={40}
-                autoComplete="name"
-                style={inputStyle}
-              />
-              {errorField === 'name' && formError && (
-                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
-              )}
+        {/* Form */}
+        {formOpen && (
+          <form onSubmit={submit} noValidate className="review-form">
+            <div className="review-form-head">
+              <strong className="review-form-title">Share your opinion</strong>
+              <button
+                type="button"
+                aria-label="Close review form"
+                className="review-form-close"
+                onClick={() => { setFormOpen(false); setFormError(''); setErrorField(null); setSent(false); }}
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div className="review-field">
-              <label htmlFor="review-phone">Phone (optional)</label>
-              <input
-                id="review-phone"
-                ref={phoneRef}
-                type="tel"
-                className={`review-input${errorField === 'phone' ? ' is-invalid' : ''}`}
-                value={form.phone}
-                onChange={(e) => update('phone', e.target.value)}
-                maxLength={30}
-                autoComplete="tel"
-                placeholder="For follow-up only — not shown publicly"
-                style={inputStyle}
-              />
-              {errorField === 'phone' && formError && (
-                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
-              )}
-            </div>
-            <div ref={ratingRef} className="review-field" role="radiogroup" aria-label="Your rating" style={{ borderColor: errorField === 'rating' ? '#e74c3c' : undefined, borderRadius: 4, padding: errorField === 'rating' ? 4 : 0, border: errorField === 'rating' ? '1px solid #e74c3c' : 'none' }}>
-              <span className="review-field-label">Your rating</span>
-              <div style={{ display: 'flex', gap: 4 }} onMouseLeave={() => setHoverStar(0)}>
-                {[1, 2, 3, 4, 5].map((star) => {
-                  const active = star <= (hoverStar || form.rating);
-                  return (
-                    <button
-                      key={star}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.rating === star}
-                      aria-label={`${star} star${star === 1 ? '' : 's'}`}
-                      onClick={() => update('rating', star)}
-                      onMouseEnter={() => setHoverStar(star)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: 44, height: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 0 }}
-                    >
-                      <Star
-                        size={24}
-                        aria-hidden="true"
-                        color={active ? 'var(--gold)' : 'var(--text3)'}
-                        fill={active ? 'var(--gold)' : 'none'}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-              {errorField === 'rating' && formError && (
-                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
-              )}
-            </div>
-
-            <div className="review-field">
-              <label htmlFor="review-comment">Your review</label>
-              <textarea
-                id="review-comment"
-                ref={commentRef}
-                className={`review-input${errorField === 'comment' ? ' is-invalid' : ''}`}
-                value={form.comment}
-                onChange={(e) => update('comment', e.target.value)}
-                maxLength={600}
-                rows={4}
-                placeholder="How is the fabric, the fit and the finishing?"
-                style={{ ...inputStyle, resize: 'vertical', minHeight: 90, fontFamily: 'inherit' }}
-              />
-              {errorField === 'comment' && formError && (
-                <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{formError}</p>
-              )}
-              <span style={{ display: 'block', textAlign: 'right', fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
-                {form.comment.length}/600
-              </span>
-            </div>
-
-            {/* Optional photo, shaped like every other field but inviting:
-                a full-width dropzone that accepts a click, a drag or a drop.
-                The file is resized in the browser and only its path is stored. */}
-            {photosEnabled && (
-              <div className="review-field review-photo">
-                <span className="review-field-label" id="review-photo-label">
-                  Photo of the piece <span style={{ color: 'var(--text3)' }}>· optional</span>
-                </span>
-                <p className="review-photo-lede" id="review-photo-lede">
-                  Upload the product exactly as it arrived — worn by you, or laid flat. Real photos help the next
-                  customer judge the fabric, the colour and the fit before they order.
+            {sent && (
+              <div ref={successRef} className="review-success">
+                <p role="status" className="review-note is-success">
+                  Thanks! Your review was received and will appear here once approved.
                 </p>
-                <input
-                  ref={photoInputRef}
-                  id="review-photo"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={pickPhoto}
-                  style={{ display: 'none' }}
-                  tabIndex={-1}
-                  aria-hidden="true"
-                />
+                {photoSaved === false && (
+                  <p role="status" className="review-note is-warn">
+                    Your review was saved, but the photo could not be uploaded. You can add it later.
+                  </p>
+                )}
+              </div>
+            )}
 
-                {form.photo ? (
-                  <div className="review-photo-preview">
-                    <img src={form.photo} alt="Preview of the photo you chose" />
-                    <div className="review-photo-preview-bar">
-                      <span className="review-photo-ready">
-                        <Check size={13} aria-hidden="true" />
-                        {photoBusy ? 'Preparing…' : 'Ready to upload'}
-                        <span>· about {dataUrlKb(form.photo)} KB</span>
-                      </span>
-                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button type="button" className="review-photo-btn" onClick={openPhotoPicker} disabled={photoBusy}>
-                          <ImagePlus size={12} aria-hidden="true" /> Change photo
-                        </button>
-                        <button type="button" className="review-photo-btn is-quiet" onClick={removePhoto} disabled={photoBusy}>
-                          <X size={12} aria-hidden="true" /> Remove
-                        </button>
+            <div className="review-grid">
+              <div className="review-field review-field--half">
+                <label htmlFor="review-name">Your name</label>
+                <input
+                  id="review-name"
+                  ref={nameRef}
+                  type="text"
+                  className={`review-input${errorField === 'name' ? ' is-invalid' : ''}`}
+                  value={form.name}
+                  onChange={(e) => update('name', e.target.value)}
+                  maxLength={40}
+                  autoComplete="name"
+                  style={inputStyle}
+                />
+                {errorField === 'name' && formError && (
+                  <p role="alert" className="review-error">{formError}</p>
+                )}
+              </div>
+
+              <div className="review-field review-field--half">
+                <label htmlFor="review-phone">Phone (optional)</label>
+                <input
+                  id="review-phone"
+                  ref={phoneRef}
+                  type="tel"
+                  className={`review-input${errorField === 'phone' ? ' is-invalid' : ''}`}
+                  value={form.phone}
+                  onChange={(e) => update('phone', e.target.value)}
+                  maxLength={30}
+                  autoComplete="tel"
+                  placeholder="For follow-up only — not shown publicly"
+                  style={inputStyle}
+                />
+                {errorField === 'phone' && formError && (
+                  <p role="alert" className="review-error">{formError}</p>
+                )}
+              </div>
+
+              <div
+                ref={ratingRef}
+                className={`review-field review-rating-field${errorField === 'rating' ? ' is-invalid' : ''}`}
+                role="radiogroup"
+                aria-label="Your rating"
+              >
+                <span className="review-field-label">Your rating</span>
+                <div className="review-rating" onMouseLeave={() => setHoverStar(0)}>
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const active = star <= (hoverStar || form.rating);
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.rating === star}
+                        aria-label={`${star} star${star === 1 ? '' : 's'}`}
+                        className="review-star"
+                        onClick={() => update('rating', star)}
+                        onMouseEnter={() => setHoverStar(star)}
+                      >
+                        <Star
+                          size={24}
+                          aria-hidden="true"
+                          color={active ? 'var(--gold)' : 'var(--text3)'}
+                          fill={active ? 'var(--gold)' : 'none'}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                {errorField === 'rating' && formError && (
+                  <p role="alert" className="review-error">{formError}</p>
+                )}
+              </div>
+
+              <div className="review-field">
+                <label htmlFor="review-comment">Your review</label>
+                <textarea
+                  id="review-comment"
+                  ref={commentRef}
+                  className={`review-input${errorField === 'comment' ? ' is-invalid' : ''}`}
+                  value={form.comment}
+                  onChange={(e) => update('comment', e.target.value)}
+                  maxLength={600}
+                  rows={4}
+                  placeholder="How is the fabric, the fit and the finishing?"
+                  style={{ ...inputStyle, resize: 'vertical', minHeight: 104, fontFamily: 'inherit', lineHeight: 1.7 }}
+                />
+                {errorField === 'comment' && formError && (
+                  <p role="alert" className="review-error">{formError}</p>
+                )}
+                <span className="review-counter">{form.comment.length}/600</span>
+              </div>
+
+              {/* Optional photo, shaped like every other field but inviting:
+                  a full-width dropzone that accepts a click, a drag or a drop.
+                  The file is resized in the browser and only its path is stored. */}
+              {photosEnabled && (
+                <div className="review-field review-photo">
+                  <span className="review-field-label" id="review-photo-label">
+                    Photo of the piece <span className="review-field-optional">· optional</span>
+                  </span>
+                  <p className="review-photo-lede" id="review-photo-lede">
+                    Upload the product exactly as it arrived — worn by you, or laid flat. Real photos help the next
+                    customer judge the fabric, the colour and the fit before they order.
+                  </p>
+                  <input
+                    ref={photoInputRef}
+                    id="review-photo"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={pickPhoto}
+                    style={{ display: 'none' }}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
+
+                  {form.photo ? (
+                    <div className="review-photo-preview">
+                      <img src={form.photo} alt="Preview of the photo you chose" />
+                      <div className="review-photo-preview-bar">
+                        <span className="review-photo-ready">
+                          <Check size={13} aria-hidden="true" />
+                          {photoBusy ? 'Preparing…' : 'Ready to upload'}
+                          <span>· about {dataUrlKb(form.photo)} KB</span>
+                        </span>
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button type="button" className="review-photo-btn" onClick={openPhotoPicker} disabled={photoBusy}>
+                            <ImagePlus size={12} aria-hidden="true" /> Change photo
+                          </button>
+                          <button type="button" className="review-photo-btn is-quiet" onClick={removePhoto} disabled={photoBusy}>
+                            <X size={12} aria-hidden="true" /> Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`review-photo-drop${dragActive ? ' is-drag' : ''}${photoBusy ? ' is-busy' : ''}`}
+                      onClick={openPhotoPicker}
+                      onDragEnter={onPhotoDragOver}
+                      onDragOver={onPhotoDragOver}
+                      onDragLeave={onPhotoDragLeave}
+                      onDrop={onPhotoDrop}
+                      disabled={photoBusy}
+                      aria-busy={photoBusy ? 'true' : 'false'}
+                      aria-labelledby="review-photo-label review-photo-title"
+                      aria-describedby="review-photo-lede review-photo-meta"
+                    >
+                      <span className="review-photo-icon" aria-hidden="true">
+                        <ImagePlus size={20} />
+                      </span>
+                      <span className="review-photo-title" id="review-photo-title">
+                        {photoBusy ? 'Preparing your photo…' : dragActive ? 'Drop it here' : 'Add a real photo'}
+                      </span>
+                      <span className="review-photo-cta">
+                        {photoBusy ? 'Optimising for upload' : 'Choose a photo'}
+                      </span>
+                      <span className="review-photo-drop-hint">or drag and drop it here</span>
+                    </button>
+                  )}
+
+                  <span className="review-photo-meta" id="review-photo-meta">
+                    JPEG, PNG or WebP · up to 12MB · resized on your device · shown publicly once the review is approved.
+                  </span>
+                  {photoError && (
+                    <p role="alert" className="review-error">{photoError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Honeypot: hidden from people, tempting for bots. */}
+              <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
+                <label htmlFor="review-website">Website</label>
+                <input
+                  id="review-website"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={form.website}
+                  onChange={(e) => update('website', e.target.value)}
+                />
+              </div>
+
+              {formError && !errorField && (
+                <p role="alert" className="review-error">{formError}</p>
+              )}
+
+              <div className="review-actions">
+                <button
+                  type="submit"
+                  className="review-submit"
+                  disabled={sending}
+                >
+                  <Send size={13} aria-hidden="true" /> {sending ? 'Sending…' : 'Submit review'}
+                </button>
+                <span className="review-actions-note">
+                  Reviews are published after a quick check.
+                </span>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* List */}
+        {loading && (
+          <p className="reviews-state">Loading reviews…</p>
+        )}
+
+        {!loading && loadError && (
+          <div className="reviews-state is-error">
+            <p role="alert">{loadError}</p>
+            <button
+              type="button"
+              className="reviews-retry"
+              onClick={() => load()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !loadError && reviews.length === 0 && (
+          <div className="reviews-empty">
+            <span className="reviews-empty-icon" aria-hidden="true">
+              <MessageSquare size={19} />
+            </span>
+            <p>No reviews yet — be the first to share your thoughts.</p>
+          </div>
+        )}
+
+        {!loading && !loadError && reviews.length > 0 && (
+          <div className="reviews-list">
+            {reviews.map((review) => (
+              <article key={review.id} className="review-card">
+                <div className="review-card-head">
+                  <span className="review-card-avatar" aria-hidden="true">
+                    {String(review.name || '?').trim().charAt(0).toUpperCase()}
+                  </span>
+                  <div className="review-card-meta">
+                    <strong className="review-card-name">{review.name}</strong>
+                    <StarRating rating={review.rating} size={12} />
                   </div>
-                ) : (
+                  {formatDate(review.createdAt) && (
+                    <span className="review-card-date">
+                      {formatDate(review.createdAt)}
+                    </span>
+                  )}
+                </div>
+                <p className="review-card-body">
+                  {review.comment}
+                </p>
+                {review.photoUrl && (
                   <button
                     type="button"
-                    className={`review-photo-drop${dragActive ? ' is-drag' : ''}${photoBusy ? ' is-busy' : ''}`}
-                    onClick={openPhotoPicker}
-                    onDragEnter={onPhotoDragOver}
-                    onDragOver={onPhotoDragOver}
-                    onDragLeave={onPhotoDragLeave}
-                    onDrop={onPhotoDrop}
-                    disabled={photoBusy}
-                    aria-busy={photoBusy ? 'true' : 'false'}
-                    aria-labelledby="review-photo-label review-photo-title"
-                    aria-describedby="review-photo-lede review-photo-meta"
+                    className="review-photo-thumb"
+                    aria-haspopup="dialog"
+                    aria-label={`Open the photo attached by ${review.name}`}
+                    onClick={(event) => setLightboxPhoto({
+                      src: review.photoUrl,
+                      alt: `Photo attached by ${review.name}`,
+                      caption: [review.name, formatDate(review.createdAt)].filter(Boolean).join(' · '),
+                      returnTo: event.currentTarget,
+                    })}
                   >
-                    <span className="review-photo-icon" aria-hidden="true">
-                      <ImagePlus size={20} />
-                    </span>
-                    <span className="review-photo-title" id="review-photo-title">
-                      {photoBusy ? 'Preparing your photo…' : dragActive ? 'Drop it here' : 'Add a real photo'}
-                    </span>
-                    <span className="review-photo-cta">
-                      {photoBusy ? 'Optimising for upload' : 'Choose a photo'}
-                    </span>
-                    <span className="review-photo-drop-hint">or drag and drop it here</span>
+                    <img
+                      src={review.photoUrl}
+                      alt={`Photo attached by ${review.name}`}
+                      loading="lazy"
+                      decoding="async"
+                      style={{ width: 96, height: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)' }}
+                    />
                   </button>
                 )}
-
-                <span className="review-photo-meta" id="review-photo-meta">
-                  JPEG, PNG or WebP · up to 12MB · resized on your device · shown publicly once the review is approved.
-                </span>
-                {photoError && (
-                  <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: '6px 0 0' }}>{photoError}</p>
-                )}
-              </div>
-            )}
-
-            {/* Honeypot: hidden from people, tempting for bots. */}
-            <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, overflow: 'hidden' }}>
-              <label htmlFor="review-website">Website</label>
-              <input
-                id="review-website"
-                type="text"
-                tabIndex={-1}
-                autoComplete="off"
-                value={form.website}
-                onChange={(e) => update('website', e.target.value)}
-              />
-            </div>
-
-            {formError && !errorField && (
-              <p role="alert" style={{ color: '#e74c3c', fontSize: 12, margin: 0 }}>{formError}</p>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <button
-                type="submit"
-                disabled={sending}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '10px 18px',
-                  minHeight: 44,
-                  background: sending ? '#8a7430' : 'var(--gold)',
-                  color: 'var(--bg)',
-                  border: '1px solid var(--gold)',
-                  borderRadius: 4,
-                  cursor: sending ? 'wait' : 'pointer',
-                  fontSize: 12,
-                  letterSpacing: 1,
-                  textTransform: 'uppercase',
-                }}
-              >
-                <Send size={13} /> {sending ? 'Sending…' : 'Submit review'}
-              </button>
-              <span style={{ fontSize: 10, color: 'var(--text3)' }}>
-                Reviews are published after a quick check.
-              </span>
-            </div>
-          </div>
-        </form>
-      )}
-
-      {/* List */}
-      {loading && (
-        <p style={{ fontSize: 12, color: 'var(--text3)' }}>Loading reviews…</p>
-      )}
-
-      {!loading && loadError && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <p style={{ fontSize: 12, color: '#e74c3c', margin: 0 }}>{loadError}</p>
-          <button
-            type="button"
-            onClick={() => load()}
-            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text2)', padding: '5px 10px', fontSize: 11, cursor: 'pointer' }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {!loading && !loadError && reviews.length === 0 && (
-        <p style={{ fontSize: 12, color: 'var(--text3)', margin: 0 }}>
-          No reviews yet — be the first to share your thoughts.
-        </p>
-      )}
-
-      {!loading && !loadError && reviews.length > 0 && (
-        <div style={{ display: 'grid', gap: 14 }}>
-          {reviews.map((review) => (
-            <article
-              key={review.id}
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 14 }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                <strong style={{ fontSize: 13 }}>{review.name}</strong>
-                <StarRating rating={review.rating} size={12} />
-                {formatDate(review.createdAt) && (
-                  <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text3)' }}>
-                    {formatDate(review.createdAt)}
-                  </span>
-                )}
-              </div>
-              <p style={{ fontSize: 12.5, lineHeight: 1.7, color: 'var(--text2)', margin: 0, overflowWrap: 'anywhere' }}>
-                {review.comment}
+              </article>
+            ))}
+            {summary.count > reviews.length && (
+              <p className="reviews-more">
+                Showing the latest {reviews.length} of {summary.count} reviews.
               </p>
-              {review.photoUrl && (
-                <button
-                  type="button"
-                  className="review-photo-thumb"
-                  aria-haspopup="dialog"
-                  aria-label={`Open the photo attached by ${review.name}`}
-                  onClick={(event) => setLightboxPhoto({
-                    src: review.photoUrl,
-                    alt: `Photo attached by ${review.name}`,
-                    caption: [review.name, formatDate(review.createdAt)].filter(Boolean).join(' · '),
-                    returnTo: event.currentTarget,
-                  })}
-                >
-                  <img
-                    src={review.photoUrl}
-                    alt={`Photo attached by ${review.name}`}
-                    loading="lazy"
-                    decoding="async"
-                    style={{ width: 96, height: 120, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg2)' }}
-                  />
-                </button>
-              )}
-            </article>
-          ))}
-          {summary.count > reviews.length && (
-            <p style={{ fontSize: 10.5, color: 'var(--text3)', margin: 0 }}>
-              Showing the latest {reviews.length} of {summary.count} reviews.
-            </p>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
 
       <PhotoLightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />
     </section>

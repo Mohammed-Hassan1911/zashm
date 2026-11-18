@@ -7,6 +7,7 @@ export default function Header() {
   const {
     cart = [],
     wishlist = [],
+    currentPage,
     setPage,
     setCartOpen,
     searchQuery,
@@ -104,11 +105,17 @@ export default function Header() {
           right: 0,
           zIndex: 1000,
           background: scrolled ? 'rgba(21,18,14,0.76)' : 'transparent',
-          backdropFilter: scrolled ? 'blur(22px) saturate(140%)' : 'none',
-          WebkitBackdropFilter: scrolled ? 'blur(22px) saturate(140%)' : 'none',
+          /* Phones get a lighter blur: the header sits over the hero and over
+             scrolling product grids, and a 22px blur of a moving page is one
+             of the most expensive things a mobile GPU can be asked for. */
+          backdropFilter: scrolled ? (isMobile ? 'blur(10px) saturate(130%)' : 'blur(22px) saturate(140%)') : 'none',
+          WebkitBackdropFilter: scrolled ? (isMobile ? 'blur(10px) saturate(130%)' : 'blur(22px) saturate(140%)') : 'none',
           borderBottom: scrolled ? '1px solid rgba(201,168,76,0.16)' : '1px solid transparent',
           boxShadow: scrolled ? '0 10px 30px rgba(0,0,0,0.42)' : 'none',
-          transition: 'all 0.4s ease',
+          /* Not `all`: that would tween the backdrop-filter radius from 0 to
+             22px on every scroll direction change, which re-blurs the whole
+             header band each frame for 400ms. */
+          transition: 'background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
           padding: isMobile ? '0 16px' : '0 24px',
         }}
       >
@@ -142,13 +149,15 @@ export default function Header() {
                   <motion.button
                     key={item.name}
                     onClick={() => setPage(item.page)}
+                    className={currentPage === item.page ? 'is-active' : undefined}
+                    aria-current={currentPage === item.page ? 'page' : undefined}
                     style={{
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
                       fontWeight: 600,
                       textTransform: 'uppercase',
-                      color: 'var(--text2)',
+                      color: currentPage === item.page ? 'var(--gold)' : 'var(--text2)',
                     }}
                     whileHover={{ color: 'var(--gold)' }}
                   >
@@ -247,10 +256,12 @@ export default function Header() {
                     width: '100%',
                     padding: 12,
                     minHeight: 44,
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg3)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.012) 100%), rgba(18, 17, 15, 0.72)',
                     color: 'var(--text)',
-                    borderRadius: 4,
+                    borderRadius: 8,
+                    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.07)',
+                    outline: 'none',
                     fontSize: 16,
                   }}
                 />

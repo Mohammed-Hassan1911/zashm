@@ -16,7 +16,7 @@ export default function NotFoundPage() {
         gap: 12,
       }}
     >
-      <p style={{ color: 'var(--gold)', letterSpacing: 4, fontSize: 12, textTransform: 'uppercase' }}>
+      <p style={{ color: 'var(--gold-3)', letterSpacing: 4, fontSize: 12, textTransform: 'uppercase' }}>
         Error 404
       </p>
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 6vw, 56px)', margin: 0 }}>

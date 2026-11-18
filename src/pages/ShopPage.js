@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { SlidersHorizontal, RotateCcw, ChevronDown } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import { effectivePrice } from '../lib/pricing';
@@ -182,29 +182,33 @@ export default function ShopPage() {
     width: '100%',
     marginTop: 8,
     padding: '12px 14px',
-    background: 'var(--bg3)',
-    border: '1px solid var(--border)',
-    borderRadius: 4,
+    background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.012) 100%), rgba(18, 17, 15, 0.72)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 8,
+    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.07)',
     color: 'var(--text)',
     fontSize: 16,
     outline: 'none'
   };
 
   const filterButtonStyle = (selected) => ({
-    padding: '10px 15px',
     minHeight: 44,
     fontSize: 11,
     fontWeight: 600,
-    letterSpacing: 1,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
+    padding: '10px 18px',
     border: selected
-      ? '1px solid var(--gold)'
-      : '1px solid var(--border)',
-    background: selected ? 'var(--gold)' : 'transparent',
-    color: selected ? 'var(--bg)' : 'var(--text2)',
+      ? '1px solid rgba(255, 240, 202, 0.3)'
+      : '1px solid rgba(255, 255, 255, 0.11)',
+    background: selected
+      ? 'linear-gradient(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%)'
+      : 'linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01))',
+    color: selected ? '#14110b' : 'var(--text2)',
     cursor: 'pointer',
-    borderRadius: 3,
-    transition: 'background 0.2s ease, color 0.2s ease',
+    borderRadius: 2,
+    boxShadow: selected ? 'inset 0 1px 0 rgba(255, 255, 255, 0.22)' : 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+    transition: 'background 0.22s ease, color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease',
     whiteSpace: 'nowrap'
   });
 
@@ -266,13 +270,18 @@ export default function ShopPage() {
       >
         {/* MAIN FILTER BAR */}
         <div
+          className="shop-toolbar"
           style={{
             display: 'flex',
-            gap: 12,
+            gap: 10,
             flexWrap: 'wrap',
             alignItems: 'center',
-            padding: '24px 0',
-            borderBottom: '1px solid var(--border)'
+            padding: 14,
+            margin: '8px 0 26px',
+            border: '1px solid rgba(255, 255, 255, 0.09)',
+            borderRadius: 14,
+            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.008))',
+            boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 34px rgba(0, 0, 0, 0.18)'
           }}
         >
           {/* CATEGORIES */}
@@ -281,7 +290,8 @@ export default function ShopPage() {
               display: 'flex',
               gap: 8,
               flexWrap: 'wrap',
-              flex: '1 1 300px'
+              flex: '1 1 300px',
+              minWidth: 0
             }}
           >
             {categories.map((category) => {
@@ -307,22 +317,32 @@ export default function ShopPage() {
             type="button"
             aria-expanded={filterOpen}
             onClick={() => setFilterOpen((open) => !open)}
+            className="shop-filter-toggle"
+            data-open={filterOpen ? 'true' : 'false'}
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              padding: '11px 15px',
+              padding: '10px 18px',
               minHeight: 44,
-              background: filterOpen ? 'var(--gold)' : 'var(--bg3)',
-              border: '1px solid var(--border)',
-              color: filterOpen ? 'var(--bg)' : 'var(--text2)',
+              background: filterOpen
+                ? 'linear-gradient(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%)'
+                : 'linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01))',
+              border: filterOpen
+                ? '1px solid rgba(255, 240, 202, 0.3)'
+                : '1px solid rgba(255, 255, 255, 0.11)',
+              color: filterOpen ? '#14110b' : 'var(--text2)',
               fontSize: 11,
               fontWeight: 600,
-              letterSpacing: 1,
+              letterSpacing: 1.4,
+              textTransform: 'uppercase',
               cursor: 'pointer',
-              borderRadius: 3,
-              whiteSpace: 'nowrap'
+              borderRadius: 2,
+              whiteSpace: 'nowrap',
+              boxShadow: filterOpen
+                ? 'inset 0 1px 0 rgba(255, 255, 255, 0.22)'
+                : 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
             }}
           >
             <SlidersHorizontal size={14} />
@@ -330,28 +350,38 @@ export default function ShopPage() {
           </button>
 
           {/* SORT */}
-          <select
-            aria-label="Sort products"
-            value={sort}
-            onChange={(event) => setSort(event.target.value)}
-            style={{
-              padding: '11px 12px',
-              minHeight: 44,
-              background: 'var(--bg3)',
-              border: '1px solid var(--border)',
-              color: 'var(--text2)',
-              fontSize: 11,
-              borderRadius: 3,
-              cursor: 'pointer',
-              maxWidth: '100%'
-            }}
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <div className="shop-sort-wrap">
+            <select
+              aria-label="Sort products"
+              className="shop-sort"
+              value={sort}
+              onChange={(event) => setSort(event.target.value)}
+              style={{
+                minHeight: 44,
+                background: 'var(--bg3)',
+                padding: '10px 38px 10px 16px',
+                border: '1px solid rgba(255, 255, 255, 0.11)',
+                color: 'var(--text2)',
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: 0.8,
+                borderRadius: 8,
+                cursor: 'pointer',
+                maxWidth: '100%',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none',
+                backgroundImage: 'linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.012) 100%)'
+              }}
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="shop-sort-chevron" size={14} aria-hidden="true" />
+          </div>
         </div>
 
         {/* FILTER PANEL */}
@@ -359,9 +389,15 @@ export default function ShopPage() {
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
+            className="shop-filter-panel"
             style={{
-              padding: '24px 0',
-              borderBottom: '1px solid var(--border)'
+              padding: '22px clamp(16px, 2.4vw, 24px)',
+              margin: '0 0 26px',
+              border: '1px solid rgba(255, 255, 255, 0.09)',
+              borderRadius: 14,
+              background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.006))',
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+              overflow: 'hidden'
             }}
           >
             {/* PANEL HEADER */}
@@ -379,7 +415,7 @@ export default function ShopPage() {
                 <p
                   style={{
                     margin: 0,
-                    color: 'var(--gold)',
+                    color: 'var(--gold-3)',
                     fontSize: 9,
                     letterSpacing: 3,
                     textTransform: 'uppercase'
@@ -393,7 +429,8 @@ export default function ShopPage() {
                     margin: '8px 0 0',
                     fontFamily: 'var(--font-display)',
                     fontSize: 24,
-                    fontWeight: 400
+                    fontWeight: 400,
+                    color: 'var(--gold-1)'
                   }}
                 >
                   Shop Filters
@@ -432,7 +469,7 @@ export default function ShopPage() {
                   fontWeight: 600,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
-                  color: 'var(--text2)'
+                  color: 'var(--gold-2)'
                 }}
               >
                 Shop by Label
@@ -473,7 +510,7 @@ export default function ShopPage() {
                   fontWeight: 600,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
-                  color: 'var(--text2)'
+                  color: 'var(--gold-2)'
                 }}
               >
                 Price Range

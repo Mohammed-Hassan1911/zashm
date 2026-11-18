@@ -11,9 +11,6 @@ import {
   FileText,
   Phone,
   Mail,
-  Home,
-  ShoppingBag,
-  Heart,
   Gem,
   Search,
   X
@@ -107,6 +104,22 @@ function AppInner() {
     }
     // Site identity is global; mount it once and leave it in place across routes.
     setSiteJsonLd();
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    // Pause every CSS animation while the tab is in the background. Browsers
+    // throttle rAF but keep compositing CSS animations off-screen on mobile,
+    // which is what warms the phone up behind a notification shade.
+    const sync = () => {
+      document.body.classList.toggle('is-page-hidden', document.hidden === true);
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      document.removeEventListener('visibilitychange', sync);
+      document.body.classList.remove('is-page-hidden');
+    };
   }, []);
 
   useEffect(() => {
@@ -438,12 +451,6 @@ function InfoModal({ type, onClose }) {
 }
 
 /* ================= FOOTER COMPONENT ================= */
-const FOOTER_QUICK_LINKS = [
-  ['Home', 'home', Home],
-  ['Shop', 'shop', ShoppingBag],
-  ['Wishlist', 'wishlist', Heart],
-];
-
 const FOOTER_CARE_LINKS = [
   ['Shipping & Returns', 'shipping-returns', Truck],
   ['Privacy Policy', 'privacy', FileText],
@@ -507,7 +514,8 @@ function Footer({ setModal }) {
                 <span
                   key={`${letter}-${index}`}
                   className="footer-wordmark-letter"
-                  style={{ '--letter-i': index }}
+                  data-letter={letter}
+                  style={{ '--letter-i': index, '--letter-index': index }}
                 >
                   {letter}
                 </span>
@@ -523,17 +531,7 @@ function Footer({ setModal }) {
             </div>
           </div>
 
-          <div className="footer-col footer-col--quick footer-reveal" style={{ '--footer-delay': '70ms' }}>
-            <h2 className="footer-col-title">{'Quick Links'}</h2>
-            {FOOTER_QUICK_LINKS.map(([label, page, Icon]) => (
-              <button key={label} type="button" className="footer-link" onClick={() => setPage(page)}>
-                <Icon size={13} aria-hidden="true" />
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="footer-col footer-col--care footer-reveal" style={{ '--footer-delay': '140ms' }}>
+          <div className="footer-col footer-col--care footer-reveal" style={{ '--footer-delay': '70ms' }}>
             <h2 className="footer-col-title">{'Customer Care'}</h2>
             <button type="button" className="footer-link footer-track" onClick={() => setPage('track')}>
               <Search size={13} aria-hidden="true" />
@@ -547,7 +545,7 @@ function Footer({ setModal }) {
             ))}
           </div>
 
-          <div className="footer-col footer-contact-col footer-reveal" style={{ '--footer-delay': '210ms' }}>
+          <div className="footer-col footer-contact-col footer-reveal" style={{ '--footer-delay': '140ms' }}>
             <h2 className="footer-col-title">{'Contact'}</h2>
             <div className="footer-contact">
               <a className="footer-contact-row" href="tel:+201013380313">

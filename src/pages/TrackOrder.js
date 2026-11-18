@@ -110,7 +110,7 @@ export default function TrackOrder() {
     }}>
       {/* ─── الهيدر والبحث ─── */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <h1 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 28, color: 'var(--gold)', marginBottom: 8, letterSpacing: 1 }}>
+        <h1 style={{ fontFamily: 'var(--font-display, serif)', fontSize: 28, color: 'var(--gold-1)', marginBottom: 8, letterSpacing: 1 }}>
           Track Your Order
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>
@@ -129,9 +129,10 @@ export default function TrackOrder() {
               style={{
                 width: '100%',
                 padding: '12px 14px 12px 40px',
-                background: 'var(--bg2)',
-                border: '1px solid var(--border)',
+                background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.012) 100%), rgba(18, 17, 15, 0.72)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
                 borderRadius: 8,
+                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.07)',
                 color: 'var(--text1)',
                 fontSize: 16,
                 outline: 'none'

@@ -80,6 +80,7 @@ export default function CartDrawer() {
             tabIndex={-1}
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="cart-drawer"
             style={{ 
               position: 'fixed', 
               right: 0, 
@@ -87,39 +88,45 @@ export default function CartDrawer() {
               bottom: 0, 
               width: '100%',        // 🎯 أول تعديل: يأخذ 100% من عرض الشاشة على الموبايل عشان ما يخرجش برة
               maxWidth: 420,        // 🎯 ثاني تعديل: يثبت عند 420px كحد أقصى على الشاشات الكبيرة (الكمبيوتر)
-              background: 'linear-gradient(180deg, #16120d 0%, #0c0b0a 58%, #080808 100%)', 
-              borderLeft: '1px solid rgba(201,168,76,0.18)', 
-              boxShadow: '-24px 0 60px rgba(0,0,0,0.55)',
               zIndex: 2001, 
               display: 'flex', 
               flexDirection: 'column' 
             }}
           >
             {/* Header */}
-            <div style={{ padding: '24px', borderBottom: '1px solid rgba(201,168,76,0.14)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <ShoppingBag size={20} color="var(--gold)" />
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>Shopping Bag</span>
-                <span style={{ background: 'var(--gold)', color: 'var(--bg)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+            <div className="cart-drawer-head">
+              <div className="cart-drawer-heading">
+                <span className="cart-drawer-head-icon" aria-hidden="true">
+                  <ShoppingBag size={19} />
+                </span>
+                <span className="cart-drawer-title">Shopping Bag</span>
+                <span className="cart-drawer-count">
                   {cart.reduce((s, i) => s + (i.qty ?? 0), 0)}
                 </span>
               </div>
-              <button onClick={() => setCartOpen(false)} aria-label="Close shopping bag" style={{ color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', width: 44, height: 44, margin: -10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                onMouseEnter={e => e.target.style.color = 'var(--gold)'}
-                onMouseLeave={e => e.target.style.color = 'var(--text2)'}><X size={20} aria-hidden="true" /></button>
+              <button
+                onClick={() => setCartOpen(false)}
+                aria-label="Close shopping bag"
+                className="cart-drawer-close"
+                style={{ width: 44, height: 44 }}
+              >
+                <X size={19} aria-hidden="true" />
+              </button>
             </div>
 
             {/* Items */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+            <div className="cart-drawer-body">
               {cart.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                  style={{ textAlign: 'center', padding: '80px 0' }}
+                  className="cart-drawer-empty"
                 >
-                  <ShoppingBag size={64} color="var(--border)" style={{ margin: '0 auto 20px' }} />
-                  <p style={{ color: 'var(--text3)', fontSize: 14, marginBottom: 8 }}>Your bag is empty</p>
-                  <p style={{ color: 'var(--text3)', fontSize: 12 }}>Add some luxury pieces to get started</p>
-                  <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => { setCartOpen(false); setPage('shop'); }}>
+                  <span className="cart-drawer-empty-icon" aria-hidden="true">
+                    <ShoppingBag size={30} />
+                  </span>
+                  <p className="cart-drawer-empty-title">Your bag is empty</p>
+                  <p className="cart-drawer-empty-copy">Add some luxury pieces to get started</p>
+                  <button className="gold-btn cart-drawer-empty-cta" onClick={() => { setCartOpen(false); setPage('shop'); }}>
                     Explore Collection
                   </button>
                 </motion.div>
@@ -132,46 +139,46 @@ export default function CartDrawer() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -20, height: 0, marginBottom: 0 }}
-                      style={{ display: 'flex', gap: 14, marginBottom: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 2, alignItems: 'center' }}
+                      className="cart-drawer-item"
                     >
-                      <SafeImage src={item.product?.images && item.product.images[0]} fallback={FALLBACK_IMG} alt={item.product?.name || 'Product'}
-                        style={{ width: 80, height: 100, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} />
-                      
+                      <div className="cart-drawer-thumb">
+                        <SafeImage src={item.product?.images && item.product.images[0]} fallback={FALLBACK_IMG} alt={item.product?.name || 'Product'}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      </div>
+
                       {/* تفاصيل المنتج مع حماية المساحة المتاحة */}
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: 100, justifyContent: 'space-between' }}>
-                        <div>
-                          <p style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 500, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.product?.name || 'Product'}</p>
-                          <p style={{ color: 'var(--text2)', fontSize: 11, marginBottom: 4 }}>Size: {item.size} · Color: {item.color}</p>
-                          <p style={{ color: 'var(--gold)', fontSize: 14, fontWeight: 600, margin: 0 }}>
+                      <div className="cart-drawer-info">
+                        <div className="cart-drawer-info-top">
+                          <p className="cart-drawer-name">{item.product?.name || 'Product'}</p>
+                          <p className="cart-drawer-meta">Size: {item.size} · Color: {item.color}</p>
+                          <p className="cart-drawer-price">
                             EGP {(effectivePrice(item.product) * (item.qty ?? 0)).toLocaleString()}
                           </p>
                         </div>
-                        
+
                         {/* 🎯 السطر السفلي: توزيع ذكي يمنع التقاطع نهائياً */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 8, marginTop: 'auto' }}>
-                          
+                        <div className="cart-drawer-controls">
+
                           {/* كاونتر الكمية */}
-                          <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 2, background: 'rgba(0,0,0,0.1)', flexShrink: 0 }}>
+                          <div className="cart-drawer-qty">
                             <button onClick={() => item.qty > 1 ? changeQty(item, item.qty - 1) : removeFromCart(item.key)}
                               type="button" aria-label={`Decrease quantity of ${item.product?.name || 'item'}`}
-                              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Minus size={12} aria-hidden="true" />
+                              className="cart-drawer-qty-btn" style={{ width: 44, height: 44 }}>
+                              <Minus size={13} aria-hidden="true" />
                             </button>
-                            <span style={{ fontSize: 12, minWidth: 22, textAlign: 'center', color: 'var(--text)' }}>{item.qty}</span>
+                            <span className="cart-drawer-qty-value">{item.qty}</span>
                             <button onClick={() => changeQty(item, item.qty + 1)}
                               type="button" aria-label={`Increase quantity of ${item.product?.name || 'item'}`}
-                              style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                              <Plus size={12} aria-hidden="true" />
+                              className="cart-drawer-qty-btn" style={{ width: 44, height: 44 }}>
+                              <Plus size={13} aria-hidden="true" />
                             </button>
                           </div>
 
                           {/* زر الحذف مستقل وفي أقصى اليمين */}
                           <button onClick={() => removeFromCart(item.key)}
                             type="button" aria-label={`Remove ${item.product?.name || 'item'} from bag`}
-                            style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', width: 44, height: 44, padding: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
-                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}>
-                            <Trash2 size={14} aria-hidden="true" />
+                            className="cart-drawer-remove" style={{ width: 44, height: 44 }}>
+                            <Trash2 size={15} aria-hidden="true" />
                           </button>
 
                         </div>
@@ -184,22 +191,22 @@ export default function CartDrawer() {
 
             {/* Footer */}
             {cart.length > 0 && (
-              <div style={{ padding: 24, borderTop: '1px solid var(--border)' }}>
+              <div className="cart-drawer-foot">
                 {appliedDiscount && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 12px', background: 'rgba(201,168,76,0.08)', border: '1px solid var(--border-gold)', borderRadius: 2 }}>
-                    <span style={{ color: 'var(--gold)', fontSize: 12 }}>🎉 {appliedDiscount.code} applied</span>
-                    <button onClick={removeAppliedDiscount} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Remove</button>
+                  <div className="cart-drawer-discount">
+                    <span>🎉 {appliedDiscount.code} applied</span>
+                    <button onClick={removeAppliedDiscount}>Remove</button>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <span style={{ color: 'var(--text2)', fontSize: 13 }}>Total</span>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--gold)' }}>EGP {total.toLocaleString()}</span>
+                <div className="cart-drawer-total">
+                  <span className="cart-drawer-total-label">Total</span>
+                  <span className="cart-drawer-total-value">EGP {total.toLocaleString()}</span>
                 </div>
-                <button className="gold-btn" style={{ width: '100%', marginBottom: 10 }}
+                <button className="gold-btn cart-drawer-checkout"
                   onClick={() => { setCartOpen(false); setPage('checkout'); }}>
                   Proceed to Checkout
                 </button>
-                <button className="outline-btn" style={{ width: '100%' }}
+                <button className="outline-btn cart-drawer-view"
                   onClick={() => { setCartOpen(false); setPage('cart'); }}>
                   View Full Cart
                 </button>

@@ -32,6 +32,7 @@ const order = {
   shippingCost: 50,
   city: 'Cairo',
   tracking_url: '/track?order=ZSH-123',
+  timestamps: { created: '2026-11-18T10:00:00.000Z' },
   items: [{ productId: 7, name: 'Jacket', size: 'M', color: 'Black', qty: 1, price: 1500 }],
 };
 
@@ -41,6 +42,8 @@ ok(!stored.includes('Private Customer') && !stored.includes('01012345678') && !s
   'customer contact details are excluded from session storage');
 ok(readOrderConfirmation()?.id === 'ZSH-123' && readOrderConfirmation()?.items[0]?.name === 'Jacket',
   'saved confirmation can be restored after a page reload');
+ok(readOrderConfirmation()?.placedAt === '2026-11-18T10:00:00.000Z',
+  'the invoice keeps the order date after a reload instead of dating it today');
 clearOrderConfirmation();
 ok(readOrderConfirmation() === null, 'confirmation is cleared when the customer leaves the confirmation page');
 values.set('zashm_order_confirmation', '{invalid');
