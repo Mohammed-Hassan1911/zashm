@@ -16,6 +16,7 @@ import {
   Heart,
   Gem,
   Search, 
+  ArrowUp,
   X
 } from 'lucide-react';
 
@@ -438,11 +439,23 @@ function InfoModal({ type, onClose }) {
 }
 
 /* ================= FOOTER COMPONENT ================= */
+const FOOTER_QUICK_LINKS = [
+  ['Home', 'home', Home],
+  ['Shop', 'shop', ShoppingBag],
+  ['Wishlist', 'wishlist', Heart],
+];
+
+const FOOTER_CARE_LINKS = [
+  ['Shipping & Returns', 'shipping-returns', Truck],
+  ['Privacy Policy', 'privacy', FileText],
+];
+
 function Footer({ setModal }) {
   const { setPage } = useStore();
 
   const [clickCount, setClickCount] = useState(0);
   const timerRef = useRef(null);
+  const footerRef = useRef(null);
 
   const handleFooterLogoClick = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -461,120 +474,107 @@ function Footer({ setModal }) {
     }, 1500);
   };
 
+  // The columns rise in once, the first time the footer is reached. The class
+  // that hides them is only added from JS, so a failed script (or reduced
+  // motion) leaves every line visible instead of blanking the footer.
+  useEffect(() => {
+    const el = footerRef.current;
+    if (!el || typeof IntersectionObserver !== 'function') return undefined;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+
+    el.classList.add('footer-animate');
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        el.classList.add('footer-revealed');
+        observer.disconnect();
+      }
+    }, { threshold: 0.12 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const backToTop = () => {
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+  };
+
+  const year = new Date().getFullYear();
+
   return (
-    <footer className="site-footer" style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '60px 0 40px', marginTop: 80 }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 48 }}>
-          
-          <div>
-            <div 
-              className="shimmer-text" 
+    <footer className="site-footer" ref={footerRef}>
+      <div className="footer-shell">
+        <div className="footer-grid">
+
+          <div className="footer-brand footer-reveal" style={{ '--footer-delay': '0ms' }}>
+            <div
+              className="footer-wordmark shimmer-text"
               onClick={handleFooterLogoClick}
-              style={{ 
-                fontFamily: 'var(--font-display)', 
-                fontSize: 24, 
-                fontWeight: 600, 
-                letterSpacing: 6, 
-                marginBottom: 20, 
-                lineHeight: 1, 
-                cursor: 'pointer',
-                userSelect: 'none', 
-                outline: 'none'
-              }}
+              role="presentation"
             >
               ZASHM
             </div>
-            <p style={{ display: 'flex', gap: 8, color: 'var(--text2)', fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>
-              <Gem size={14} style={{ color: 'var(--gold)', flexShrink: 0, marginTop: 3 }} />
+            <p className="footer-blurb">
+              <Gem size={14} aria-hidden="true" />
               <span>{'Luxury fashion crafted with elegance and precision for the modern gentleman.'}</span>
             </p>
-            <div className="footer-social" style={{ display: 'flex', flexDirection: 'row', gap: 0, alignItems: 'center', flexWrap: 'nowrap' }}>
-              <a href="https://www.instagram.com/zashm_brand?obrf=MWh1NHhqMWQ4MTRycg%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" aria-label="ZASHM on Instagram" style={{ color: 'var(--gold)' }}><Instagram size={18} /></a>
-              <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" aria-label="ZASHM on Facebook" style={{ color: 'var(--gold)' }}><Facebook size={18} /></a>
+            <div className="footer-social">
+              <a href="https://www.instagram.com/zashm_brand?obrf=MWh1NHhqMWQ4MTRycg%3D%3D&utm_source=qr" target="_blank" rel="noreferrer" aria-label="ZASHM on Instagram"><Instagram size={18} aria-hidden="true" /></a>
+              <a href="https://facebook.com/zashm" target="_blank" rel="noreferrer" aria-label="ZASHM on Facebook"><Facebook size={18} aria-hidden="true" /></a>
             </div>
           </div>
 
-          <div>
+          <div className="footer-col footer-reveal" style={{ '--footer-delay': '70ms' }}>
             <h2 className="footer-col-title">{'Quick Links'}</h2>
-            {[
-              ['Home', 'home', Home],
-              ['Shop', 'shop', ShoppingBag],
-              ['Wishlist', 'wishlist', Heart]
-            ].map(([label, page, Icon]) => (
-              <button key={label} onClick={() => setPage(page)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon size={13} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+            {FOOTER_QUICK_LINKS.map(([label, page, Icon]) => (
+              <button key={label} type="button" className="footer-link" onClick={() => setPage(page)}>
+                <Icon size={13} aria-hidden="true" />
                 {label}
               </button>
             ))}
           </div>
 
-          <div>
-  <h2 className="footer-col-title">{'Customer Care'}</h2>
-  
-  {/* 🎯 تحويل الـ button إلى motion.button لإضافة الأنيميشن الذكي */}
-  <motion.button 
-    onClick={() => setPage('track')} 
-    style={{ 
-      ...linkStyle, 
-      display: 'inline-flex', // استخدام inline-flex لضمان حركة الـ Scale من المنتصف بشكل صحيح
-      alignItems: 'center', 
-      gap: 8, 
-      color: 'var(--text2)', // 🌟 تم تعديله للأبيض (أو رمادي الفوتر الطبيعي) ليتناسق مع الباقيين
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer'
-    }}
-    // ✨ أنيميشن النبض الهادئ لجذب الانتباه تلقائياً
-    animate={{ 
-      scale: [1, 1.03, 1],
-      opacity: [0.8, 1, 0.8]
-    }}
-    // ✨ وميض وإضاءة ذهبية فخمة جداً لما العميل يمرر الماوس عليه (Hover)
-    whileHover={{
-      scale: 1.05,
-      color: 'var(--gold)',
-      textShadow: '0px 0px 8px var(--gold)'
-    }}
-    transition={{ 
-      duration: 3,         // حركة التنفس هادية وبطيئة على مدار 3 ثوانٍ لتليق ببراند فاخر
-      repeat: Infinity,    // تكرار لانهائي
-      ease: "easeInOut"
-    }}
-  >
-    <Search size={13} style={{ opacity: 0.9, color: 'var(--gold)' }} />
-    {'Track Your Order'}
-  </motion.button>
+          <div className="footer-col footer-reveal" style={{ '--footer-delay': '140ms' }}>
+            <h2 className="footer-col-title">{'Customer Care'}</h2>
+            <button type="button" className="footer-link footer-track" onClick={() => setPage('track')}>
+              <Search size={13} aria-hidden="true" />
+              {'Track Your Order'}
+            </button>
+            {FOOTER_CARE_LINKS.map(([label, id, Icon]) => (
+              <button key={label} type="button" className="footer-link" onClick={() => setModal(id)}>
+                <Icon size={13} aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
 
-  {[
-    ['Shipping & Returns', 'shipping-returns', Truck],
-    ['Privacy Policy', 'privacy', FileText]
-  ].map(([label, id, Icon]) => (
-    <button key={label} onClick={() => setModal(id)} style={{ ...linkStyle, display: 'flex', alignItems: 'center', gap: 8 }}>
-      <Icon size={13} style={{ opacity: 0.8, color: 'var(--gold)' }} />
-      {label}
-    </button>
-  ))}
-</div>
-
-          <div>
+          <div className="footer-col footer-contact-col footer-reveal" style={{ '--footer-delay': '210ms' }}>
             <h2 className="footer-col-title">{'Contact'}</h2>
-            <div className="footer-contact" style={{ color: 'var(--text2)', fontSize: 13 }}>
-              <p style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Phone size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+            <div className="footer-contact">
+              <a className="footer-contact-row" href="tel:+201013380313">
+                <Phone size={14} aria-hidden="true" />
                 <span dir="ltr">01013380313</span>
-              </p>
-              <p style={{ display: 'flex', alignItems: 'center', gap: 8, wordBreak: 'break-all' }}>
-                <Mail size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+              </a>
+              <a className="footer-contact-row" href="mailto:zashmbrand@gmail.com">
+                <Mail size={14} aria-hidden="true" />
                 <span>zashmbrand@gmail.com</span>
-              </p>
+              </a>
             </div>
           </div>
 
         </div>
 
+        <div className="footer-bottom footer-reveal" style={{ '--footer-delay': '280ms' }}>
+          <p className="footer-copy">
+            {'© '}
+            <span className="footer-glow-number">{year}</span>
+            {' ZASHM — All rights reserved.'}
+          </p>
+          <button type="button" className="footer-top" onClick={backToTop}>
+            {'Back to top'}
+            <ArrowUp size={14} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </footer>
   );
 }
-
-const linkStyle = { display: 'block', marginBottom: 12, color: 'var(--text2)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' };

@@ -585,25 +585,62 @@ console.log('\n[11] reload resilience and footer polish');
   ok(/app-startup-stall/.test(app) && /window\.location\.reload\(\)/.test(app.slice(app.indexOf('function AppStartupScreen'), app.indexOf('/* ================= MODAL COMPONENT'))),
     'a stalled startup screen offers a manual reload instead of staying black');
 
-  ok(/\.site-footer a:hover[\s\S]*?transform: scale\(1\.045\)/.test(css) &&
-     /\.site-footer \.footer-contact p:hover[\s\S]*?transform: scale\(1\.03\)/.test(css),
-    'footer links and contact rows zoom subtly on hover');
-  ok(/\.site-footer a\[target='_blank'\]:hover[\s\S]*?transform: scale\(1\.12\)/.test(css),
-    'footer social icons zoom from their centre');
-  ok(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.site-footer \.footer-contact p:hover[\s\S]{0,200}?transform: none/.test(css),
-    'footer hover zoom is disabled for reduced motion');
+  ok(/\.footer-link::after\s*\{[\s\S]*?transform: scaleX\(0\)/.test(css) &&
+     /\.footer-link:hover::after[\s\S]{0,80}transform: scaleX\(1\)/.test(css) &&
+     /\.footer-link:hover svg\s*\{\s*transform: translateX\(2px\)/.test(css),
+    'footer links draw a gold underline and nudge their icon instead of zooming');
+  ok(/\.footer-social a\[target='_blank'\]\s*\{[^}]*border-radius: 50%/.test(css) &&
+     /\.footer-social a\[target='_blank'\]:hover\s*\{[^}]*transform: translateY\(-2px\)/.test(css),
+    'the footer social icons are gold rings that lift on hover');
+  ok(/\.footer-top:hover svg\s*\{\s*transform: translateY\(-3px\)/.test(css),
+    'the footer back-to-top arrow lifts on hover');
+  ok(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.site-footer\.footer-animate \.footer-reveal,[\s\S]{0,160}?opacity: 1;[\s\S]{0,80}?transform: none/.test(css),
+    'the footer reveal is cancelled for reduced motion');
 
   // Phone and email read as two rows with the same rhythm as Customer Care:
   // a 12px gap on desktop and 44px tap rows (no gap) on phones.
-  ok(/\.site-footer \.footer-contact \{\s*display: grid;\s*gap: 12px;\s*\}/.test(css) &&
-     /\.site-footer \.footer-contact p \{\s*width: fit-content;\s*line-height: 1\.2;\s*\}/.test(css),
+  ok(/\.footer-contact \{\s*display: grid;\s*gap: 12px;/.test(css) &&
+     /\.footer-contact-row \{[\s\S]{0,200}?line-height: 1\.4;/.test(css),
     'the footer contact lines are a 12px grid, not one 2.2 line-height block');
   ok(!/lineHeight: 2\.2/.test(app),
     'the footer contact block no longer pads rows with an inline line-height');
+  ok(app.includes('href="tel:+201013380313"') && app.includes('href="mailto:zashmbrand@gmail.com"'),
+    'the footer phone and email are tappable links');
   const phoneFooter = css.slice(css.indexOf('/* Footer links: tall enough to tap'));
   ok(/\.site-footer \.footer-contact \{\s*gap: 0;\s*\}/.test(phoneFooter) &&
-     /\.site-footer \.footer-contact p \{\s*min-height: 44px;\s*\}/.test(phoneFooter),
+     /\.site-footer \.footer-contact-row \{\s*min-height: 44px;\s*\}/.test(phoneFooter),
     'on phones the contact rows match the 44px Customer Care tap rhythm');
+
+  // The footer is a real frame: four columns on desktop, a balanced 2×2 on
+  // tablet (brand | links, care | contact, in DOM order), and full-width
+  // brand/contact only once the screen is phone-width.
+  ok(/\.footer-grid \{[\s\S]{0,140}?grid-template-columns: 1\.6fr 1fr 1\.15fr 1\.2fr/.test(css),
+    'the footer is four columns on desktop');
+  const tabletBlock = css.slice(css.indexOf('@media (max-width: 1023px) {'));
+  const tabletFooter = tabletBlock.slice(0, tabletBlock.indexOf('@media (max-width: 768px)'));
+  ok(/\.footer-grid \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/.test(tabletFooter),
+    'the footer collapses to two columns on tablet');
+  ok(!/grid-column: 1 \/ -1/.test(tabletFooter),
+    'no footer block spans the full row on tablet, so no column is orphaned');
+  ok(/\.footer-link \{ min-height: 44px; margin-bottom: 0; \}/.test(tabletFooter) &&
+     /\.footer-contact-row \{ min-height: 44px; \}/.test(tabletFooter),
+    'tablet links and contact rows keep the 44px touch target');
+  const phoneBlock = css.slice(css.indexOf('@media (max-width: 768px) {', css.indexOf('@media (max-width: 1023px) {')));
+  ok(/\.footer-brand,\s*\.footer-contact-col \{ grid-column: 1 \/ -1; \}/.test(phoneBlock),
+    'only on a phone do the brand and contact take the full width');
+  ok(/\.footer-grid \{\s*grid-template-columns: minmax\(0, 0\.8fr\) minmax\(0, 1\.2fr\);/.test(phoneBlock),
+    'the two phone columns are uneven so "Shipping & Returns" never wraps');
+  ok(/bottom: calc\(50% - 10px\)/.test(css),
+    'the footer hover underline is pinned to the text line, not the 44px tap box');
+  ok(app.includes('className="footer-bottom footer-reveal"') &&
+     app.includes('All rights reserved') &&
+     app.includes('Back to top') &&
+     app.includes('window.scrollTo({ top: 0'),
+    'the footer closes with a copyright line and a working back-to-top action');
+  ok(app.includes("el.classList.add('footer-animate')") &&
+     app.includes("el.classList.add('footer-revealed')") &&
+     app.includes("matchMedia('(prefers-reduced-motion: reduce)')"),
+    'the footer columns rise in once, and never when motion is reduced');
 }
 
 // ─── [12] header/nav badges + governorate suggestions ──────────────────────
@@ -794,10 +831,12 @@ console.log('\n[15] footer headings scale on large screens and the VIP message r
   const largeBlock = largeIdx === -1 ? '' : css.slice(largeIdx, largeIdx + 260);
   ok(largeIdx !== -1 && /\.footer-col-title\s*\{[^}]*font-size:\s*14px/.test(largeBlock),
     'footer headings grow to 14px on large screens only');
-  ok(/@media \(max-width: 768px\)[\s\S]*?\.footer-col-title\s*\{[\s\S]*?font-size:\s*17px/.test(css),
-    'the mobile heading size is unchanged');
-  ok(/@media \(max-width: 420px\)[\s\S]*?\.footer-col-title\s*\{[\s\S]*?font-size:\s*15px/.test(css),
-    'the very-small heading size is unchanged');
+  ok(/@media \(min-width: 769px\) and \(max-width: 1023px\) \{\s*\.footer-col-title \{\s*font-size: 13px;/.test(css),
+    'tablet headings stay at 13px instead of falling back to the 11px base');
+  ok(/@media \(max-width: 768px\)[\s\S]*?\.footer-col-title\s*\{[\s\S]*?font-size:\s*12\.5px/.test(css),
+    'the mobile heading shrinks to fit the two-column footer');
+  ok(/@media \(max-width: 420px\)[\s\S]*?\.footer-col-title\s*\{[\s\S]*?font-size:\s*12px/.test(css),
+    'the very-small heading shrinks once more without dropping below 12px');
 
   const admin = read('src/pages/AdminApp.js');
   const vipMessage = (admin.match(/encodeURIComponent\('(شكرًا[^']*)'\)/) || [])[1] || '';
