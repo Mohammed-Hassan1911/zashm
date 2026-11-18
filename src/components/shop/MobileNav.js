@@ -103,16 +103,21 @@ export default function MobileNav() {
 
   return createPortal(
     <motion.nav
-      initial={{ y: 80 }}
-      animate={{ y: 0 }}
-      transition={{ delay: 0.5, type: 'spring', stiffness: 200 }}
+      initial={{ y: 90, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay: 0.35, type: 'spring', stiffness: 190, damping: 24, mass: 1.05 }}
+      whileTap={{ scale: 0.985, transition: { type: 'spring', stiffness: 520, damping: 32 } }}
       className={`mobile-nav${keyboardOpen ? ' mobile-nav--keyboard-open' : ''}`}
       style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 900,
         width: '100%',
         maxWidth: '100vw',
         boxSizing: 'border-box',
-        padding: '8px max(0px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(0px, env(safe-area-inset-left, 0px))',
+        // The wrapper spans the viewport but paints nothing; the glass capsule
+        // inside is centred and narrower. Horizontal padding keeps it clear of
+        // the screen edges, and the bottom padding lifts it off the safe area.
+        padding:
+          '0 max(14px, calc(env(safe-area-inset-right, 0px) + 14px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, calc(env(safe-area-inset-left, 0px) + 14px))',
       }}
     >
       <div className="mobile-nav-inner">
@@ -126,16 +131,17 @@ export default function MobileNav() {
               aria-label={badge > 0 ? `${label}, ${badge} item${badge === 1 ? '' : 's'}` : label}
               aria-current={active ? 'page' : undefined}
               className={`mobile-nav-item${active ? ' is-active' : ''}`}
-              whileTap={{ scale: 0.92 }}
+              whileTap={{ scale: 0.9, y: 1 }}
+              transition={{ type: 'spring', stiffness: 520, damping: 30 }}
             >
               {/* One gold-tinted plate is shared between the four items, so it
-                  slides to the current route instead of blinking on and off. */}
+                  glides to the current route instead of blinking on and off. */}
               {active && (
                 <motion.span
                   layoutId="mobile-nav-plate"
                   className="mobile-nav-plate"
                   aria-hidden="true"
-                  transition={{ type: 'spring', stiffness: 420, damping: 40, mass: 0.9 }}
+                  transition={{ type: 'spring', stiffness: 470, damping: 34, mass: 0.85 }}
                 />
               )}
               <span className="mobile-nav-icon">

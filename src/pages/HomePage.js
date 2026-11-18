@@ -116,14 +116,16 @@ export default function HomePage() {
           </motion.div>
         </motion.div>
 
-        <div style={{ position: 'absolute', bottom: 32, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 5, pointerEvents: 'none' }}>
-          <motion.button
+        <div className="hero-scroll-cue-wrap">
+          <button
             type="button"
             aria-label="Scroll to the collection"
-            animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}
+            className="hero-scroll-cue"
             onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
-            style={{ color: 'rgba(255,255,255,0.4)', cursor: 'pointer', background: 'none', border: 'none', padding: 8, minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto' }}
-          ><ChevronDown size={24} aria-hidden="true" /></motion.button>
+          >
+            <span className="hero-scroll-cue-line" aria-hidden="true" />
+            <ChevronDown size={18} aria-hidden="true" />
+          </button>
         </div>
       </section>
 
@@ -216,10 +218,15 @@ export default function HomePage() {
 
 function SectionHeader({ title }) {
   return (
-    <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}
-      style={{ textAlign: 'center' }}>
-      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4vw, 46px)', fontWeight: 400, letterSpacing: 1.5 }}>{title}</h2>
-      <div style={{ width: 40, height: 1, background: 'var(--gold)', margin: '20px auto 0' }} />
+    <motion.div
+      className="section-head"
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6 }}
+    >
+      <h2 className="section-head-title">{title}</h2>
+      <span className="section-head-ornament" aria-hidden="true" />
     </motion.div>
   );
 }

@@ -466,6 +466,19 @@ select option { background: var(--bg3); }
   container-type: inline-size;
 }
 
+/* A hairline of light inside the top of every photo, so the frame catches the
+   gallery light and the card reads as a framed print rather than a flat
+   rectangle. Pointer-transparent and above the image, below the labels. */
+.product-card-image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 1px solid rgba(255, 248, 230, 0.06);
+  border-top-color: rgba(255, 248, 230, 0.13);
+  pointer-events: none;
+}
+
 .product-card-labels {
   position: absolute;
   /* Flush with the top-left corner of the photo itself: the label reads as
@@ -1363,6 +1376,82 @@ select option { background: var(--bg3); }
   margin: 0 auto;
 }
 
+/* ─── Hero scroll cue ───────────────────────────────────────────────────────
+   A hairline dropping from the CTA with a single gold bead running down it
+   toward a small chevron. It reads as a drawn mark rather than a bouncing
+   icon, and it is the same gold used by the section ornaments. */
+.hero-scroll-cue-wrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 32px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* On a phone the floating dock owns the bottom of the screen, so the cue
+   lifts above it instead of hiding behind the glass. */
+@media (max-width: 768px) {
+  .hero-scroll-cue-wrap {
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.hero-scroll-cue {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 8px;
+  background: none;
+  border: 0;
+  color: rgba(232, 200, 112, 0.5);
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.3s ease;
+}
+
+.hero-scroll-cue:hover,
+.hero-scroll-cue:focus-visible {
+  color: var(--gold-light);
+}
+
+.hero-scroll-cue-line {
+  position: relative;
+  display: block;
+  width: 1px;
+  height: 26px;
+  overflow: hidden;
+  background: linear-gradient(180deg, transparent, rgba(232, 200, 112, 0.45));
+}
+
+.hero-scroll-cue-line::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -6px;
+  width: 3px;
+  height: 6px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: var(--gold-light);
+  box-shadow: 0 0 8px rgba(232, 200, 112, 0.9);
+  animation: hero-cue-bead 2.4s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+@keyframes hero-cue-bead {
+  0% { top: -6px; opacity: 0; }
+  18% { opacity: 1; }
+  78% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
 @media (max-width: 768px) {
   .hero-brand {
     font-size: clamp(62px, 18vw, 96px) !important;
@@ -1417,46 +1506,57 @@ select option { background: var(--bg3); }
 }
 
 /* A pool of warm light behind the monogram, so the gold Z sits in its own
-   glow instead of floating on the header. */
+   glow instead of floating on the header. It breathes slowly — the light
+   settles and swells rather than blinking. */
 .zashm-header-logo::before {
   content: '';
   position: absolute;
-  inset: -22%;
+  inset: -26%;
   z-index: -1;
   border-radius: 50%;
   background: radial-gradient(
     circle at 50% 46%,
-    rgba(240, 208, 132, 0.34) 0%,
-    rgba(201, 168, 76, 0.14) 42%,
-    rgba(201, 168, 76, 0) 72%
+    rgba(240, 208, 132, 0.3) 0%,
+    rgba(201, 168, 76, 0.12) 44%,
+    rgba(201, 168, 76, 0) 74%
   );
-  filter: blur(5px);
-  opacity: 0.75;
+  filter: blur(6px);
+  opacity: 0.7;
+  animation: logo-halo-breathe 7.5s ease-in-out infinite;
   transition: opacity 0.35s ease, transform 0.35s ease;
   pointer-events: none;
 }
 
-/* A single hairline arc, like a lens ring catching the light. It turns very
-   slowly, so the mark never looks static but never draws the eye either. */
+/* The light that actually moves: one narrow specular band crossing the metal
+   of the Z, then a long rest before it passes again. The monogram is used as
+   its own mask, so the highlight exists only on the glyph — never as a
+   rectangle over the header — and the mark reads as polished gold catching a
+   passing light instead of a ring spinning around it. */
 .zashm-header-logo::after {
   content: '';
   position: absolute;
-  inset: -3%;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 0deg,
-    rgba(232, 200, 112, 0) 0deg,
-    rgba(240, 208, 132, 0.7) 38deg,
-    rgba(201, 168, 76, 0.18) 96deg,
-    rgba(232, 200, 112, 0) 140deg,
-    rgba(232, 200, 112, 0) 220deg,
-    rgba(201, 168, 76, 0.42) 268deg,
-    rgba(232, 200, 112, 0) 320deg
+  inset: 0;
+  background-image: linear-gradient(
+    104deg,
+    transparent 44%,
+    rgba(255, 248, 226, 0.55) 47.5%,
+    rgba(255, 255, 255, 0.96) 50%,
+    rgba(255, 248, 226, 0.55) 52.5%,
+    transparent 56%
   );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.4px), #000 calc(100% - 1.2px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 1.4px), #000 calc(100% - 1.2px));
+  background-size: 300% 100%;
+  background-position: 84% 0;
+  background-repeat: no-repeat;
+  -webkit-mask-image: url('/zashm-z-monogram.webp');
+  mask-image: url('/zashm-z-monogram.webp');
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
   opacity: 0.85;
-  animation: logo-arc-turn 22s linear infinite;
+  animation: logo-glyph-sheen 6.4s cubic-bezier(0.4, 0, 0.3, 1) infinite;
   pointer-events: none;
 }
 
@@ -1469,10 +1569,13 @@ select option { background: var(--bg3); }
   transition: filter 0.35s ease;
 }
 
+/* Hover: the halo stops breathing and simply opens up, so the mark answers
+   the pointer without a second, competing animation. */
 .zashm-header-logo:hover::before,
 .zashm-header-logo:focus-visible::before {
+  animation: none;
   opacity: 1;
-  transform: scale(1.1);
+  transform: scale(1.12);
 }
 
 .zashm-header-logo:hover img,
@@ -1491,9 +1594,14 @@ select option { background: var(--bg3); }
   border-radius: 50%;
 }
 
-@keyframes logo-arc-turn {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+@keyframes logo-halo-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+
+@keyframes logo-glyph-sheen {
+  0%, 46% { background-position: 84% 0; }
+  70%, 100% { background-position: 16% 0; }
 }
 
 .zashm-header-nav {
@@ -1507,11 +1615,33 @@ select option { background: var(--bg3); }
 }
 
 .zashm-header-nav button {
+  position: relative;
   min-width: 92px;
   padding: 12px 10px;
   font-size: clamp(14px, 1.15vw, 16px);
   letter-spacing: clamp(1.6px, 0.24vw, 3px);
   white-space: nowrap;
+}
+
+/* A drawn seam grows out of the centre of each link on hover/focus — the same
+   gold hairline used under the collection titles, so the header and the page
+   speak the same language. */
+.zashm-header-nav button::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 0;
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--gold-light), transparent);
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.zashm-header-nav button:hover::after,
+.zashm-header-nav button:focus-visible::after {
+  width: 62%;
 }
 
 .zashm-header-actions {
@@ -1822,6 +1952,81 @@ select option { background: var(--bg3); }
   .product-card-action-view { display: none !important; }
 }
 
+/* ─── Collection section headings (home) ────────────────────────────────────
+   Every home row shares one editorial heading: a serif title filled with the
+   same warm gradient as the collection header, and a drawn ornament beneath it
+   — a hairline that fades at both ends around a small gold diamond. It
+   replaces the bare 40px rule, so each section opens like a title plate rather
+   than a label. */
+.section-head { position: relative; isolation: isolate; text-align: center; }
+
+/* A warm pool of light behind each title, so the heading sits in the same lit
+   room as the rest of the page instead of on a flat band. */
+.section-head::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: min(560px, 92%);
+  height: 190%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(201, 168, 76, 0.11), rgba(201, 168, 76, 0.03) 62%, transparent 100%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.section-head-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 46px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  background: linear-gradient(180deg, #fffaf0 0%, #f2e7ce 56%, #d9c9a3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.section-head-ornament {
+  position: relative;
+  display: block;
+  width: 128px;
+  height: 9px;
+  margin: 18px auto 0;
+}
+
+.section-head-ornament::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  transform: translateY(-50%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(201, 168, 76, 0.55) 28%,
+    rgba(201, 168, 76, 0.55) 72%,
+    transparent
+  );
+}
+
+.section-head-ornament::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: linear-gradient(180deg, #f2dfa4, #c9a84c);
+  box-shadow: 0 0 10px rgba(201, 168, 76, 0.7);
+}
+
 /* ─── PRODUCT COLLECTIONS ─────────────────────────────────────────────────────
    One grid for every storefront collection (shop, home sections, wishlist and
    related pieces): 4-up desktop, 3-up small laptop/tablet, 2-up on phones. The
@@ -1879,55 +2084,94 @@ select option { background: var(--bg3); }
 }
 
 /* ─── MOBILE BOTTOM NAVIGATION ───────────────────────────────────────────────
-   Same lit-glass language as the header and the ambient wall: a warm charcoal
-   pane with a gold hairline along its top edge (the footer's motif), and a
-   single gold-tinted plate that slides between the four items. Hidden above
-   768px, where the header navigation takes over. */
+   A floating, centred dock rather than an edge-to-edge bar: one capsule of
+   liquid glass hovering above the page, the way iOS floating controls do. The
+   wrapper only positions it (and is pointer-transparent), so the capsule can be
+   narrower than the viewport; the glass lives on the inner pill. A single
+   gold-tinted plate glides between the four items, and a press squishes the
+   dock slightly so touch feels physical. Hidden above 768px, where the header
+   navigation takes over. */
 .mobile-nav {
   display: none;
-  background:
-    linear-gradient(180deg, rgba(34, 28, 21, 0.88) 0%, rgba(16, 14, 12, 0.95) 58%, rgba(10, 10, 10, 0.97) 100%);
-  -webkit-backdrop-filter: blur(26px) saturate(150%);
-  backdrop-filter: blur(26px) saturate(150%);
-  box-shadow: 0 -20px 44px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
 }
 
-/* The gold hairline, brightest in the middle and gone at both ends. */
-.mobile-nav::before {
+/* The capsule itself: warm smoked glass. A translucent charcoal body, a heavy
+   backdrop blur so the page genuinely refracts through it, a specular crown and
+   a dark inner floor. */
+.mobile-nav-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: min(100%, 340px);
+  margin: 0 auto;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  pointer-events: auto;
+  background:
+    linear-gradient(180deg, rgba(52, 44, 33, 0.58) 0%, rgba(26, 22, 17, 0.66) 46%, rgba(13, 12, 11, 0.8) 100%);
+  border: 1px solid rgba(255, 240, 205, 0.14);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow:
+    0 20px 44px rgba(0, 0, 0, 0.62),
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 250, 234, 0.26),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.28);
+}
+
+/* The gloss: a soft band of light lying across the top half of the glass. */
+.mobile-nav-inner::before {
   content: '';
   position: absolute;
-  inset: 0 0 auto;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.05) 26%,
+    rgba(255, 255, 255, 0) 52%
+  );
+  pointer-events: none;
+}
+
+/* A gold hairline along the crown, brightest in the middle and gone at both
+   shoulders — the same drawn-light motif as the footer and the collection
+   header. */
+.mobile-nav-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0 14% auto;
   height: 1px;
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(232, 200, 112, 0.42) 16%,
-    rgba(232, 200, 112, 0.7) 50%,
-    rgba(232, 200, 112, 0.42) 84%,
+    rgba(232, 200, 112, 0.55) 22%,
+    rgba(255, 236, 190, 0.8) 50%,
+    rgba(232, 200, 112, 0.55) 78%,
     transparent
   );
   pointer-events: none;
 }
 
-.mobile-nav-inner {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-}
-
 .mobile-nav-item {
   position: relative;
+  z-index: 1;
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   min-width: 44px;
   min-height: 44px;
-  padding: 6px 14px;
-  background: none;
+  padding: 8px 6px 7px;
   border: 0;
+  border-radius: 999px;
+  background: none;
   cursor: pointer;
   color: var(--text3);
   -webkit-tap-highlight-color: transparent;
@@ -1936,14 +2180,24 @@ select option { background: var(--bg3); }
 
 .mobile-nav-item.is-active { color: var(--gold-light); }
 
+/* The travelling plate: a lens of gold-tinted glass that settles under the
+   active item. Framer's shared layout glides it between items instead of
+   blinking it on and off. */
 .mobile-nav-plate {
   position: absolute;
-  inset: 1px 3px;
+  inset: 3px;
   z-index: 0;
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(201, 168, 76, 0.16) 0%, rgba(201, 168, 76, 0.05) 100%);
-  border: 1px solid rgba(201, 168, 76, 0.24);
-  box-shadow: 0 6px 18px rgba(201, 168, 76, 0.14), inset 0 1px 0 rgba(255, 242, 205, 0.16);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 224, 0.22) 0%, rgba(232, 200, 112, 0.14) 46%, rgba(201, 168, 76, 0.07) 100%);
+  border: 1px solid rgba(255, 236, 190, 0.3);
+  -webkit-backdrop-filter: blur(8px) saturate(160%);
+  backdrop-filter: blur(8px) saturate(160%);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.38),
+    0 0 20px rgba(201, 168, 76, 0.18),
+    inset 0 1px 0 rgba(255, 252, 240, 0.42),
+    inset 0 -6px 12px rgba(201, 168, 76, 0.06);
   pointer-events: none;
 }
 
@@ -1952,6 +2206,11 @@ select option { background: var(--bg3); }
   z-index: 1;
   display: flex;
   line-height: 0;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mobile-nav-item.is-active .mobile-nav-icon {
+  transform: translateY(-1px);
 }
 
 .mobile-nav-label {
@@ -2179,16 +2438,17 @@ body.size-finder-open .whatsapp-fab {
 
   .mobile-nav { display: block; }
   .mobile-nav.mobile-nav--keyboard-open { display: none; }
-  /* Keep the floating actions clear of the bottom navigation bar. */
+  /* Keep the floating actions clear of the floating dock. The dock sits about
+     70px tall including its safe-area padding, so the buttons start above it. */
   .back-to-top {
     right: calc(16px + env(safe-area-inset-right, 0px));
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
     width: 44px;
     height: 44px;
   }
   .whatsapp-fab {
     left: calc(16px + env(safe-area-inset-left, 0px));
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
     right: auto;
     width: 44px;
     height: 44px;
@@ -2813,7 +3073,8 @@ main, [role="main"] {
 /* Windows high contrast / forced colours drop the gradient fill, which would
    leave transparent text. Fall back to plain text there. */
 @media (forced-colors: active) {
-  .shop-hero-title {
+  .shop-hero-title,
+  .section-head-title {
     background: none;
     -webkit-text-fill-color: currentColor;
     color: CanvasText;
@@ -3325,12 +3586,25 @@ main, [role="main"] {
   .hero-brand-letter,
   .hero-brand-letter-sparkle,
   .hero-brand-sparkle,
+  .zashm-header-logo::before,
   .zashm-header-logo::after {
     animation: none;
   }
 
+  .zashm-header-logo::before {
+    opacity: 0.7;
+    transform: none;
+  }
+
+  .hero-scroll-cue-line::after {
+    animation: none;
+    opacity: 1;
+    top: 40%;
+  }
+
   .outline-btn,
-  .outline-btn::before {
+  .outline-btn::before,
+  .zashm-header-nav button::after {
     transition-duration: 0.01ms !important;
   }
 
