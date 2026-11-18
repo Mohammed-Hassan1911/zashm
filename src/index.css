@@ -4958,6 +4958,21 @@ main, [role="main"] {
   .outline-btn.home-glass-btn:hover,
   .gold-btn.home-glass-btn:focus-visible,
   .outline-btn.home-glass-btn:focus-visible { transform: none; }
+
+  /* The loops the phone block already removes; a desktop visitor who asked
+     the device to calm down gets the same static room. */
+  .site-footer::before,
+  .footer-track svg,
+  .product-stock[data-tone='ok']::before,
+  .size-finder-restart {
+    animation: none;
+  }
+
+  /* The product label keeps its one-shot entrance (instantly) but never
+     pulses its box-shadow. */
+  .product-card-labels .label-badge {
+    animation: zashm-label-in 0.01ms linear both;
+  }
 }
 
 /* Footer social links: always one row, icons adjacent. The 44px tap target is
@@ -7490,9 +7505,8 @@ main, [role="main"] {
 
 /* ════════════════════════════════════════════════════════════════════════════
    STOREFRONT REDESIGN — bag, checkout, invoice, home sections
-   Everything below is additive. Existing rules keep their meaning; the only
-   older declarations touched are the ones that forced a single checkout column
-   on phones, which the new split deliberately replaces.
+   Everything below is additive. Existing rules keep their meaning; checkout
+   keeps its original single-column phone stack, restyled but not rearranged.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* ─── HOME: hero kicker, actions, promise strip, manifesto, closing ───────── */
@@ -8533,16 +8547,25 @@ main, [role="main"] {
 
 .checkout-card { padding: 18px; }
 
-.checkout-side {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+/* One summary card, exactly where the original checkout put it. It holds the
+   pieces, the discount, the running total, payment and the CTA in that order,
+   and it sticks beside the form while the shopper scrolls the fields. */
+.checkout-summary {
+  padding: 18px;
   min-width: 0;
 }
 
-/* Desktop: the wrapper is invisible so the discount and totals stay two
-   sibling cards in the summary column. Phones regroup them (see below). */
-.checkout-money { display: contents; }
+@media (min-width: 769px) {
+  .checkout-summary { position: sticky; top: 100px; }
+}
+
+/* Hairline-separated blocks inside the single summary card. The pieces list is
+   the only block without a rule: it follows the card heading directly. */
+.checkout-summary-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
 
 .checkout-card-head {
   display: flex;
@@ -8634,10 +8657,10 @@ main, [role="main"] {
 
 .checkout-error--slot { min-height: 13px; }
 
-/* "Your pieces" is the one summary card the shopper recognises from the bag,
+/* The summary is the one checkout surface the shopper recognises from the bag,
    so its shell carries the gold: a warm smoked-glass wash and a brighter
    hairline, with the list itself left quiet. */
-.checkout-side-items {
+.checkout-summary {
   border-color: rgba(201, 168, 76, 0.36);
   background:
     linear-gradient(165deg, rgba(201, 168, 76, 0.12) 0%, rgba(201, 168, 76, 0.035) 46%, rgba(12, 11, 10, 0.72) 100%),
@@ -8647,7 +8670,7 @@ main, [role="main"] {
     inset 0 1px 0 rgba(255, 244, 214, 0.1);
 }
 
-.checkout-side-items .checkout-card-title { color: var(--gold-2); }
+.checkout-summary .checkout-card-title { color: var(--gold-2); }
 
 .checkout-item-list {
   list-style: none;
@@ -8949,6 +8972,7 @@ main, [role="main"] {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 16px;
 }
 
 /* The purchase CTA is the same metal bar as every other primary action, only
@@ -8978,49 +9002,33 @@ main, [role="main"] {
   border-radius: 50%;
 }
 
-/* Phones: the split the owner asked for. The form keeps the left column and
-   the discount code sits on the right, with the running total directly under
-   it. Pieces, payment and the CTA then span the full width below. `display:
-   contents` promotes the side cards into the same grid so the two columns can
-   interleave without duplicating markup. */
+/* Phones: the original single column, restored. The form comes first and the
+   whole Order Summary card follows it in its own order — pieces, discount,
+   total, payment, CTA — so nothing is interleaved beside the form. */
 @media (max-width: 768px) {
   .checkout-shell {
     padding: 18px 12px calc(64px + env(safe-area-inset-bottom, 0px));
   }
 
   .checkout-grid {
-    grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr);
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
     align-items: start;
   }
 
-  .checkout-side { display: contents; }
-
   .checkout-form-card {
-    grid-column: 1;
-    grid-row: 1;
     padding: 14px 12px;
   }
 
-  /* One cell for the discount card and the running total, so they stack snugly
-     beside the (much taller) form instead of leaving a hole between them. */
-  .checkout-money {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    grid-column: 2;
-    grid-row: 1;
-    min-width: 0;
+  .checkout-summary {
+    position: static;
+    padding: 14px 12px;
   }
 
-  .checkout-side-coupon,
-  .checkout-side-totals {
-    padding: 12px 10px;
+  .checkout-summary-block {
+    margin-top: 12px;
+    padding-top: 12px;
   }
-
-  .checkout-side-items { grid-column: 1 / -1; grid-row: 2; }
-  .checkout-side-payment { grid-column: 1 / -1; grid-row: 3; }
-  .checkout-side-submit { grid-column: 1 / -1; grid-row: 4; }
 
   .checkout-card-head { gap: 10px; margin-bottom: 12px; }
 
@@ -9041,31 +9049,23 @@ main, [role="main"] {
 
   .checkout-field { margin-bottom: 12px; }
 
-  .checkout-coupon-row { flex-direction: column; gap: 8px; }
-  .checkout-coupon-apply { width: 100%; }
-
   .checkout-total-row {
-    font-size: 11px;
+    font-size: 11.5px;
     padding: 4px 0;
     gap: 6px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.45;
   }
 
-  .checkout-grand-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-  }
-
-  .checkout-grand-row strong { font-size: 19px; }
+  .checkout-grand-row strong { font-size: 19px; font-variant-numeric: tabular-nums; }
 
   .checkout-item-list { max-height: none; }
 
   .checkout-payment-option { padding: 10px; gap: 8px; }
 
   /* ── Phone type scale ──────────────────────────────────────────────────────
-     The two-column split halves the money column, so its type was tuned for
-     reading at ~95px wide: one notch up from the desktop sizes where the text
-     is still legible, and tabular figures so amounts never dance between rows.
+     The summary card now has the full phone width, so its type keeps the
+     desktop sizes; tabular figures stop amounts from dancing between rows.
      Field labels keep their tracking but gain a little height so the small caps
      are not the smallest thing on the screen. */
   .checkout-title { font-size: clamp(27px, 8vw, 34px); }
@@ -9092,31 +9092,11 @@ main, [role="main"] {
 
   .checkout-item-price { font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
-  .checkout-total-row {
-    font-size: 11.5px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.45;
-  }
-
-  .checkout-grand-row strong { font-size: 18px; font-variant-numeric: tabular-nums; }
-
   .checkout-payment-name { font-size: 13px; }
 
   .checkout-payment-copy { font-size: 11px; line-height: 1.55; }
 
   .checkout-payment-badge { font-size: 9.5px; letter-spacing: 0.8px; }
-
-  /* The coupon button now fills the narrow money column instead of keeping a
-     desktop min-width that would push it past the card edge. */
-  .checkout-coupon-apply {
-    min-width: 0;
-    min-height: 44px;
-    padding: 0 10px;
-    font-size: 11px;
-    letter-spacing: 1px;
-  }
-
-  .checkout-coupon-row { gap: 6px; }
 
   .checkout-place-order {
     /* The phone type is set by the `.gold-btn` rule; only the tap target and
@@ -9126,34 +9106,10 @@ main, [role="main"] {
   }
 }
 
-/* The narrowest phones leave the money column ~98px. The decorative ticket icon
-   in the discount field would eat a fifth of that, so it steps aside and the
-   field keeps the room for a real code. Declared after the base
-   `.checkout-coupon-field input` padding so it actually wins. */
+/* The narrowest phones still have room for the ticket icon in the discount
+   field now that the summary card spans the full width. */
 @media (max-width: 360px) {
-  .checkout-side-coupon,
-  .checkout-side-totals { padding: 10px 8px; }
-
-  .checkout-coupon-field svg { display: none; }
-
-  .checkout-coupon-field input { padding-left: 10px; }
-}
-
-/* A 320px phone leaves the money column ~95px wide. Side-by-side label and
-   amount no longer fit, and letting the amount wrap broke "EGP 1,760" across
-   two lines mid-number. Stack them instead: label above, amount below. */
-@media (max-width: 340px) {
-  .checkout-total-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-    padding: 3px 0;
-  }
-
-  .checkout-total-row > span:last-child {
-    color: var(--text);
-    font-weight: 600;
-  }
+  .checkout-summary { padding: 12px 10px; }
 }
 
 /* ─── ORDER CONFIRMATION AS AN INVOICE ─────────────────────────────────────── */
@@ -9612,3 +9568,137 @@ body.is-page-hidden *::after {
    with no colour of its own still lands in the metal instead of white. */
 :where(h1) { color: var(--gold-1); }
 :where(h2, h3, h4) { color: var(--gold-2); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LOW-POWER MODE — phones and tablets
+   ════════════════════════════════════════════════════════════════════════════
+   Everything above is designed to look alive on a desk. On a phone that same
+   motion is paid for in battery. Measured on a 375×812 emulation with nobody
+   touching the screen, the home page held 63 running animations and spent 8%
+   of every idle second on the main thread (498 ms of work in 6 s), almost all
+   of it style recalculation and paint from loops that never end:
+
+     · the ambient wall and its travelling sheen (two full-viewport layers)
+     · the footer wordmark and hairline, which animate `background-position`
+       on background-clipped gradients — a text re-raster every frame
+     · the hero wordmark's shimmer (same problem, ×5 letters)
+     · 28 hero dust motes + 10 letter glints, each promoted to its own layer
+     · the product-card label's infinite box-shadow pulse
+     · the scroll-cue bead, which animates `top` (layout, not compositing)
+
+   None of that is visible as "motion" at a glance — it is texture. On touch
+   sizes we keep the exact same composition, gold and gradients, frozen at
+   their most flattering frame, and spend no frames per second on it. Desktop
+   is untouched. */
+@media (max-width: 1023px) {
+  /* 1 ── The ambient room: one static paint instead of a permanent loop.
+     `will-change` is released too, otherwise the browser keeps a full-screen
+     compositor layer alive for an animation that no longer exists. */
+  body::before {
+    animation: none;
+    will-change: auto;
+  }
+
+  .app-shell::after {
+    display: none;
+  }
+
+  /* 2 ── Gold that must not repaint: `background-position` on a
+     background-clipped glyph forces the browser to re-rasterise the text on
+     every tick. Freeze at the middle of the gradient, which is the frame the
+     eye reads as "struck metal". */
+  .hero-brand-letter {
+    animation: none;
+    background-position: 50% 0;
+  }
+
+  .footer-wordmark-letter {
+    animation: none;
+    background-position: 50% 0;
+  }
+
+  .site-footer::before {
+    animation: none;
+  }
+
+  /* 3 ── Decorative light. Kept, but steady: no per-letter layers, no dust
+     motes twinkling on 28 separate compositor layers. */
+  .hero-brand-lockup::before,
+  .footer-wordmark::before,
+  .hero-brand-letter-sparkle,
+  .hero-brand-sparkle {
+    animation: none;
+  }
+
+  .hero-brand-letter::after,
+  .footer-wordmark-letter::after {
+    animation: none;
+    opacity: 0.32;
+    will-change: auto;
+  }
+
+  .hero-dust {
+    animation: none;
+    opacity: 0.34;
+  }
+
+  .hero-scroll-cue-line::after {
+    animation: none;
+    top: 40%;
+    opacity: 1;
+  }
+
+  .footer-track svg {
+    animation: none;
+  }
+
+  /* 4 ── The product-card label keeps its one-shot entrance (it runs once and
+     stops) but loses the endless box-shadow pulse, which repaints the badge
+     and the photo behind it for as long as the card is on screen. */
+  .product-card-labels .label-badge {
+    animation: zashm-label-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .product-stock[data-tone='ok']::before {
+    animation: none;
+  }
+
+  /* 5 ── Loops that live inside overlays. They are only on screen while a
+     dialog is open, but a dialog is exactly when the phone is already busy
+     compositing a scrim. */
+  .review-photo-icon {
+    animation: none;
+  }
+
+  .size-finder-progress-seg[data-current='true']::after,
+  .size-finder-figure-focus,
+  .size-finder-gauge-size,
+  .size-finder-gauge-star,
+  .size-finder-restart {
+    animation: none;
+  }
+
+  .order-invoice-wordmark span,
+  .order-invoice-star,
+  .order-invoice-seal::after {
+    animation: none;
+  }
+
+  /* 6 ── Backdrop blur. On a phone the blur radius is paid twice: once to
+     sample a backdrop that is moving under the element, and again for every
+     frame of that movement. The label badge and the mobile dock sit over
+     photos and scrolling grids, so they get a solid glass fill instead —
+     visually the same on an OLED panel, and free to scroll. */
+  .label-badge,
+  .product-card-labels .label-badge,
+  .product-card-label-row .label-badge {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .mobile-nav-inner {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: linear-gradient(180deg, rgba(32, 28, 24, 0.94) 0%, rgba(14, 13, 12, 0.96) 100%);
+  }
+}

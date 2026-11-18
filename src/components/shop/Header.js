@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, Heart, Search } from 'lucide-react';
 import { useStore } from '../../store';
@@ -19,6 +19,13 @@ export default function Header() {
   const [isMobile, setIsMobile] = useState(() => (
     typeof window !== 'undefined' && window.innerWidth <= 768
   ));
+  /* Matches the CSS low-power breakpoint (see the end of index.css). The
+     header is styled inline, so the blur decision has to live here. */
+  const [lowPower, setLowPower] = useState(() => (
+    typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 1023px)').matches
+  ));
+  const scrolledRef = useRef(false);
 
   // SAFE COUNT
   const cartCount = (cart || []).reduce(
@@ -27,14 +34,26 @@ export default function Header() {
   );
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 40);
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    
+    // Only touch state when the boolean actually flips. A scroll event fires
+    // dozens of times a second and every one of them used to call setState,
+    // scheduling a React update for a value that had not changed.
+    const handleScroll = () => {
+      const next = window.scrollY > 40;
+      if (scrolledRef.current !== next) {
+        scrolledRef.current = next;
+        setScrolled(next);
+      }
+    };
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+      setLowPower(window.matchMedia('(max-width: 1023px)').matches);
+    };
+
     // التشغيل المبدئي
     handleScroll();
     handleResize();
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('scroll', handleScroll);
@@ -104,12 +123,13 @@ export default function Header() {
           left: 0,
           right: 0,
           zIndex: 1000,
-          background: scrolled ? 'rgba(21,18,14,0.76)' : 'transparent',
-          /* Phones get a lighter blur: the header sits over the hero and over
-             scrolling product grids, and a 22px blur of a moving page is one
-             of the most expensive things a mobile GPU can be asked for. */
-          backdropFilter: scrolled ? (isMobile ? 'blur(10px) saturate(130%)' : 'blur(22px) saturate(140%)') : 'none',
-          WebkitBackdropFilter: scrolled ? (isMobile ? 'blur(10px) saturate(130%)' : 'blur(22px) saturate(140%)') : 'none',
+          background: scrolled ? (lowPower ? 'rgba(18,15,12,0.94)' : 'rgba(21,18,14,0.76)') : 'transparent',
+          /* Phones and tablets get no blur at all. A 10px blur still samples
+             the whole header band on every frame of a scroll, and on a phone
+             that is one of the most expensive things the GPU can be asked for.
+             A near-opaque glass fill reads the same on an OLED panel. */
+          backdropFilter: scrolled && !lowPower ? 'blur(22px) saturate(140%)' : 'none',
+          WebkitBackdropFilter: scrolled && !lowPower ? 'blur(22px) saturate(140%)' : 'none',
           borderBottom: scrolled ? '1px solid rgba(201,168,76,0.16)' : '1px solid transparent',
           boxShadow: scrolled ? '0 10px 30px rgba(0,0,0,0.42)' : 'none',
           /* Not `all`: that would tween the backdrop-filter radius from 0 to

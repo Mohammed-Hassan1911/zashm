@@ -1304,42 +1304,37 @@ export function CheckoutPage() {
             </div>
           </section>
 
-          {/* ── Right column: pieces, discount code and the money ── */}
-          <aside className="checkout-side" aria-label="Order summary">
-            <section className="checkout-card checkout-side-items" aria-labelledby="checkout-items-title">
-              <div className="checkout-card-head checkout-card-head--tight">
-                <span className="checkout-step" aria-hidden="true"><ShoppingBag size={15} strokeWidth={1.6} /></span>
-                <h2 id="checkout-items-title" className="checkout-card-title">{'Your pieces'}</h2>
-              </div>
-              <ul className="checkout-item-list">
-                {safeCart.map(item => (
-                  <li key={item?.key}>
-                    <SafeImage
-                      src={item?.product?.images?.[0]}
-                      fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="50"%3E%3Crect fill="%23222" width="40" height="50"/%3E%3C/svg%3E'}
-                      alt=""
-                      style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
-                      loading="lazy"
-                    />
-                    <div className="checkout-item-copy">
-                      <p className="checkout-item-name">{item?.product?.name ?? 'Unknown Product'}</p>
-                      <p className="checkout-item-meta">{item?.size ?? 'N/A'} / {item?.color ?? 'N/A'} × {item?.qty ?? 0}</p>
-                    </div>
-                    <span className="checkout-item-price">
-                      EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+          {/* ── Right column: one Order Summary card, in the original order:
+              pieces, then the discount, then the running total, then payment,
+              then the CTA. ── */}
+          <aside className="checkout-card checkout-summary" aria-labelledby="checkout-summary-title">
+            <div className="checkout-card-head checkout-card-head--tight">
+              <span className="checkout-step" aria-hidden="true"><ShoppingBag size={15} strokeWidth={1.6} /></span>
+              <h2 id="checkout-summary-title" className="checkout-card-title">{'Order Summary'}</h2>
+            </div>
+            <ul className="checkout-item-list">
+              {safeCart.map(item => (
+                <li key={item?.key}>
+                  <SafeImage
+                    src={item?.product?.images?.[0]}
+                    fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="50"%3E%3Crect fill="%23222" width="40" height="50"/%3E%3C/svg%3E'}
+                    alt=""
+                    style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                    loading="lazy"
+                  />
+                  <div className="checkout-item-copy">
+                    <p className="checkout-item-name">{item?.product?.name ?? 'Unknown Product'}</p>
+                    <p className="checkout-item-meta">{item?.size ?? 'N/A'} / {item?.color ?? 'N/A'} × {item?.qty ?? 0}</p>
+                  </div>
+                  <span className="checkout-item-price">
+                    EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
 
-            {/* Discount + money travel together: on a phone they are the right
-                column beside the form, so they must share one grid cell. On a
-                desktop the wrapper is display:contents and they stay two cards
-                in the summary column. */}
-            <div className="checkout-money">
-            <section className="checkout-card checkout-side-coupon" aria-labelledby="checkout-coupon-title">
-              <h2 id="checkout-coupon-title" className="checkout-mini-title">{'Discount code'}</h2>
+            <section className="checkout-summary-block checkout-summary-discount" aria-labelledby="checkout-coupon-title">
+              <h3 id="checkout-coupon-title" className="checkout-mini-title">{'Discount code'}</h3>
               {!appliedDiscount ? (
                 <>
                   <div className="checkout-coupon-row">
@@ -1386,7 +1381,7 @@ export function CheckoutPage() {
               )}
             </section>
 
-            <section className="checkout-card checkout-side-totals" aria-label="Order total">
+            <section className="checkout-summary-block checkout-summary-totals" aria-label="Order total">
               <div className="checkout-total-row">
                 <span>{'Subtotal'}</span>
                 <span>EGP {(subtotal ?? 0).toLocaleString()}</span>
@@ -1410,10 +1405,9 @@ export function CheckoutPage() {
                 <strong>EGP {(finalTotal ?? 0).toLocaleString()}</strong>
               </div>
             </section>
-            </div>
 
-            <section className="checkout-card checkout-side-payment" aria-labelledby="checkout-payment-title">
-              <h2 id="checkout-payment-title" className="checkout-mini-title">{'Payment method'}</h2>
+            <section className="checkout-summary-block checkout-summary-payment" aria-labelledby="checkout-payment-title">
+              <h3 id="checkout-payment-title" className="checkout-mini-title">{'Payment method'}</h3>
               {/* Payment method selector. COD is the only live option today;
                   card payments are shown as "Coming soon" so the shopper sees
                   the roadmap without being able to select them. */}

@@ -601,6 +601,39 @@ try {
       assert.ok(/Coming soon/.test(cart), 'card option is advertised as coming soon');
     });
 
+    await step('checkout keeps its original element placement', () => {
+      const deliveryAt = cart.indexOf('checkout-delivery-title');
+      const summaryAt = cart.indexOf('checkout-summary-title');
+      const itemsAt = cart.indexOf('checkout-item-list');
+      const discountAt = cart.indexOf('checkout-coupon-title');
+      const totalsAt = cart.indexOf('checkout-summary-totals');
+      const paymentAt = cart.indexOf('checkout-payment-title');
+      const submitAt = cart.indexOf('checkout-side-submit');
+      assert.ok(deliveryAt >= 0 && summaryAt > deliveryAt,
+        'the delivery form comes first, then the summary');
+      assert.ok(itemsAt > summaryAt && discountAt > itemsAt && totalsAt > discountAt
+        && paymentAt > totalsAt && submitAt > paymentAt,
+        'the summary keeps pieces, discount, total, payment, CTA in the original order');
+      assert.ok(!/checkout-money/.test(cart) && !/checkout-side-items/.test(cart),
+        'the split summary cards are gone: one Order Summary card holds them all');
+      assert.ok(/<aside className="checkout-card checkout-summary"/.test(cart),
+        'the whole summary is a single card');
+    });
+
+    const checkoutCssSource = read('src/index.css');
+    const checkoutCss = checkoutCssSource.slice(
+      checkoutCssSource.indexOf('/* ─── CHECKOUT'),
+      checkoutCssSource.indexOf('/* ─── ORDER CONFIRMATION')
+    );
+    await step('checkout stacks on phones exactly like the original', () => {
+      assert.ok(/@media \(max-width: 768px\) \{[\s\S]*?\.checkout-grid \{\s*grid-template-columns:\s*minmax\(0, 1fr\)/.test(checkoutCss),
+        'phones use one full-width column');
+      assert.ok(!/\.checkout-money/.test(checkoutCss) && !/\.checkout-side-items/.test(checkoutCss),
+        'no interleaving wrapper survives in the stylesheet');
+      assert.ok(/@media \(min-width: 769px\) \{\s*\.checkout-summary \{ position: sticky; top: 100px; \}/.test(checkoutCss),
+        'the summary sticks beside the form on desktop only');
+    });
+
     await step('checkout does not repeat the exchange promise', () => {
       assert.ok(!/checkout-exchange-note/.test(cart),
         'the exchange note is gone from the checkout view');
@@ -975,6 +1008,84 @@ try {
     await step('mobile footer clears the floating actions above the bottom nav', () => {
       assert.ok(/footer\.site-footer\s*\{[^}]*padding-bottom:\s*calc\(12px \+ 128px \+ env\(safe-area-inset-bottom, 0px\)\)/.test(css),
         'footer reserves the full 128px floating-action region plus the safe area');
+    });
+  }
+
+  console.log('\n[10] phone performance: no permanent animation, blur or font storm');
+  {
+    const css = read('src/index.css');
+    const header = read('src/components/shop/Header.js');
+    const product = read('src/pages/ProductPage.js');
+    const entry = read('src/index.js');
+    const html = read('index.html');
+    const lowPower = css.slice(css.indexOf('LOW-POWER MODE'));
+
+    await step('desktop keeps the living room, phones get a still one', () => {
+      assert.ok(/animation: ambient-drift 72s ease-in-out infinite alternate/.test(css),
+        'the desktop wall still drifts');
+      assert.ok(lowPower.length > 0, 'the low-power block exists');
+      assert.ok(/@media \(max-width: 1023px\) \{[\s\S]*?body::before \{\s*animation: none;\s*will-change: auto;/.test(lowPower),
+        'the wall is a single paint on touch sizes and releases its compositor layer');
+      assert.ok(/\.app-shell::after \{\s*display: none;/.test(lowPower),
+        'the travelling sheen layer is not painted at all');
+    });
+
+    await step('background-position loops are frozen on phones', () => {
+      assert.ok(/\.hero-brand-letter \{\s*animation: none;\s*background-position: 50% 0;/.test(lowPower),
+        'the hero wordmark stops re-rasterising its gradient every frame');
+      assert.ok(/\.footer-wordmark-letter \{\s*animation: none;\s*background-position: 50% 0;/.test(lowPower),
+        'the footer wordmark stops too');
+      assert.ok(/\.site-footer::before \{\s*animation: none;/.test(lowPower),
+        'the footer hairline is static');
+    });
+
+    await step('the hero keeps its light but loses its loops', () => {
+      assert.ok(/\.hero-dust \{\s*animation: none;\s*opacity: 0\.34;/.test(lowPower),
+        '28 dust motes stop twinkling on their own layers');
+      assert.ok(/\.hero-brand-letter::after,\s*\.footer-wordmark-letter::after \{\s*animation: none;[\s\S]{0,80}will-change: auto;/.test(lowPower),
+        'per-letter glints stop and release their layers');
+      assert.ok(/\.hero-scroll-cue-line::after \{\s*animation: none;\s*top: 40%;/.test(lowPower),
+        'the scroll cue stops animating layout');
+    });
+
+    await step('the product label keeps its entrance and drops the pulse', () => {
+      assert.ok(/\.product-card-labels \.label-badge \{\s*animation: zashm-label-in 0\.55s[^}]*\}/.test(lowPower),
+        'the one-shot entrance survives');
+      assert.ok(!/zashm-label-glow/.test(lowPower),
+        'the endless box-shadow pulse never reaches a phone');
+    });
+
+    await step('no backdrop blur on phones where it would sample a moving page', () => {
+      assert.ok(/\.label-badge,\s*\.product-card-labels \.label-badge,\s*\.product-card-label-row \.label-badge \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(lowPower),
+        'badges over photos use solid glass');
+      assert.ok(/\.mobile-nav-inner \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(lowPower),
+        'the mobile dock is solid glass');
+      assert.ok(!/backdropFilter: 'blur\(8px\)'/.test(product),
+        'the gallery controls no longer blur the photo they sit on');
+    });
+
+    await step('the header does not blur or re-render while scrolling on a phone', () => {
+      assert.ok(/backdropFilter: scrolled && !lowPower \? 'blur\(22px\) saturate\(140%\)' : 'none'/.test(header),
+        'desktop keeps the blur, touch sizes get none');
+      assert.ok(/lowPower \? 'rgba\(18,15,12,0\.94\)'/.test(header),
+        'the fill is opaque enough to read without the blur');
+      assert.ok(/scrolledRef\.current !== next/.test(header),
+        'state only changes when the boolean flips');
+      assert.ok(/addEventListener\('scroll', handleScroll, \{ passive: true \}\)/.test(header),
+        'the scroll listener is passive');
+    });
+
+    await step('brand fonts are requested as three variable faces', () => {
+      const href = entry.match(/BRAND_FONTS_HREF = '([^']+)'/);
+      assert.ok(href, 'the entry point keeps one font URL');
+      assert.ok(/wght@0,300\.\.700;1,300\.\.700/.test(href[1]),
+        'Cormorant is a 300-700 variable range, roman and italic');
+      assert.ok(/Montserrat:wght@300\.\.700/.test(href[1]),
+        'Montserrat is a 300-700 variable range');
+      const preload = html.match(/rel="preload" as="style" href="([^"]+)"/);
+      assert.ok(preload, 'index.html still preloads the stylesheet');
+      assert.equal(preload[1].replace(/&amp;/g, '&'), href[1],
+        'the preload and the injected link must match byte for byte or the preload is wasted');
     });
   }
 } catch (error) {

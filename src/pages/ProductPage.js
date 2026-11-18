@@ -311,21 +311,25 @@ export default function ProductPage() {
                   }}
                 />
               </AnimatePresence>
+              {/* The gallery controls sit directly on the photo, so they use a
+                  near-opaque fill instead of a backdrop blur: a blur here has
+                  to re-sample the whole image underneath on every frame the
+                  photo moves, which is the most expensive thing on the page. */}
               {productImages.length > 1 && (
                 <>
                   <button onClick={() => changeImage(-1)}
                     type="button"
                     aria-label="Previous image"
-                    style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(12,11,9,0.68)', border: '1px solid rgba(232,200,112,0.4)', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2, WebkitTapHighlightColor: 'transparent', backdropFilter: 'blur(8px)' }}>
+                    style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(12,11,9,0.88)', border: '1px solid rgba(232,200,112,0.4)', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2, WebkitTapHighlightColor: 'transparent' }}>
                     <ChevronLeft size={18} aria-hidden="true" />
                   </button>
                   <button onClick={() => changeImage(1)}
                     type="button"
                     aria-label="Next image"
-                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(12,11,9,0.68)', border: '1px solid rgba(232,200,112,0.4)', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2, WebkitTapHighlightColor: 'transparent', backdropFilter: 'blur(8px)' }}>
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, borderRadius: '50%', background: 'rgba(12,11,9,0.88)', border: '1px solid rgba(232,200,112,0.4)', color: 'var(--gold-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2, WebkitTapHighlightColor: 'transparent' }}>
                     <ChevronRight size={18} aria-hidden="true" />
                   </button>
-                  <span aria-hidden="true" className="product-image-counter" style={{ position: 'absolute', right: 12, bottom: 12, padding: '4px 10px', borderRadius: 999, background: 'rgba(12,11,9,0.74)', border: '1px solid rgba(232,200,112,0.34)', color: 'var(--gold-light)', fontSize: 10.5, fontWeight: 600, letterSpacing: 0.8, lineHeight: 1.4, zIndex: 2, backdropFilter: 'blur(8px)' }}>
+                  <span aria-hidden="true" className="product-image-counter" style={{ position: 'absolute', right: 12, bottom: 12, padding: '4px 10px', borderRadius: 999, background: 'rgba(12,11,9,0.9)', border: '1px solid rgba(232,200,112,0.34)', color: 'var(--gold-light)', fontSize: 10.5, fontWeight: 600, letterSpacing: 0.8, lineHeight: 1.4, zIndex: 2 }}>
                     {imgIdx + 1} / {productImages.length}
                   </span>
                 </>
