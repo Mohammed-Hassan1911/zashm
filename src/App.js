@@ -15,8 +15,7 @@ import {
   ShoppingBag,
   Heart,
   Gem,
-  Search, 
-  ArrowUp,
+  Search,
   X
 } from 'lucide-react';
 
@@ -493,13 +492,6 @@ function Footer({ setModal }) {
     return () => observer.disconnect();
   }, []);
 
-  const backToTop = () => {
-    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
-  };
-
-  const year = new Date().getFullYear();
-
   return (
     <footer className="site-footer" ref={footerRef}>
       <div className="footer-shell">
@@ -561,18 +553,6 @@ function Footer({ setModal }) {
             </div>
           </div>
 
-        </div>
-
-        <div className="footer-bottom footer-reveal" style={{ '--footer-delay': '280ms' }}>
-          <p className="footer-copy">
-            {'© '}
-            <span className="footer-glow-number">{year}</span>
-            {' ZASHM — All rights reserved.'}
-          </p>
-          <button type="button" className="footer-top" onClick={backToTop}>
-            {'Back to top'}
-            <ArrowUp size={14} aria-hidden="true" />
-          </button>
         </div>
       </div>
     </footer>

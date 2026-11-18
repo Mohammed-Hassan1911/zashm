@@ -199,17 +199,20 @@ export default function TrackOrder() {
                 <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 1 }}>Order reference</p>
                 <h2 style={{ fontSize: 16, color: 'var(--gold)', fontFamily: 'monospace', fontWeight: 700, marginTop: 2 }}>{currentOrder.id}</h2>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 1 }}>Current Status</p>
+              {/* The label and the status pill always share one line, on every
+                  width: the pill sits beside "Current Status", never under it. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap', margin: 0 }}>Current Status</p>
                 <span style={{
                   display: 'inline-block',
+                  flexShrink: 0,
                   fontSize: 12,
                   padding: '4px 12px',
                   borderRadius: 20,
                   background: `${STATUS_COLORS[currentOrder.status] || 'var(--gold)'}1a`,
                   color: STATUS_COLORS[currentOrder.status] || 'var(--gold)',
                   fontWeight: 700,
-                  marginTop: 4
+                  whiteSpace: 'nowrap'
                 }}>
                   {currentOrder.status}
                 </span>

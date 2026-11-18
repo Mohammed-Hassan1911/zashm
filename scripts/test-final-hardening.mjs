@@ -592,8 +592,11 @@ console.log('\n[11] reload resilience and footer polish');
   ok(/\.footer-social a\[target='_blank'\]\s*\{[^}]*border-radius: 50%/.test(css) &&
      /\.footer-social a\[target='_blank'\]:hover\s*\{[^}]*transform: translateY\(-2px\)/.test(css),
     'the footer social icons are gold rings that lift on hover');
-  ok(/\.footer-top:hover svg\s*\{\s*transform: translateY\(-3px\)/.test(css),
-    'the footer back-to-top arrow lifts on hover');
+  ok(!/footer-bottom|footer-copy|footer-top/.test(app) &&
+     !/\.footer-bottom|\.footer-copy|\.footer-top/.test(css),
+    'the footer ends on its last column: no copyright bar and no duplicate back-to-top');
+  ok(/\.site-footer \{[\s\S]{0,700}?padding: 64px 0 88px;/.test(css),
+    'the footer closes with a tight 88px that still clears the floating actions');
   ok(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.site-footer\.footer-animate \.footer-reveal,[\s\S]{0,160}?opacity: 1;[\s\S]{0,80}?transform: none/.test(css),
     'the footer reveal is cancelled for reduced motion');
 
@@ -632,11 +635,6 @@ console.log('\n[11] reload resilience and footer polish');
     'the two phone columns are uneven so "Shipping & Returns" never wraps');
   ok(/bottom: calc\(50% - 10px\)/.test(css),
     'the footer hover underline is pinned to the text line, not the 44px tap box');
-  ok(app.includes('className="footer-bottom footer-reveal"') &&
-     app.includes('All rights reserved') &&
-     app.includes('Back to top') &&
-     app.includes('window.scrollTo({ top: 0'),
-    'the footer closes with a copyright line and a working back-to-top action');
   ok(app.includes("el.classList.add('footer-animate')") &&
      app.includes("el.classList.add('footer-revealed')") &&
      app.includes("matchMedia('(prefers-reduced-motion: reduce)')"),
@@ -685,6 +683,28 @@ console.log('\n[12] badge proximity and governorate copy');
     'governorate suggestions show the English name only');
   ok(/clearCanonical/.test(productPage) && /robots: 'noindex, nofollow'/.test(productPage),
     'the unknown-product view is noindex and drops its canonical');
+
+  // Product page typography: one editorial scale, and a title that keeps its
+  // own size instead of being forced by the global phone heading rule.
+  ok(/<h1 className="product-title">/.test(productPage) &&
+     /h1:not\(\.hero-brand\):not\(\.product-title\)/.test(read('src/index.css')),
+    'the product title opts out of the global phone heading override');
+  ok(/\.product-title \{[\s\S]{0,200}?font-family: var\(--font-display\)/.test(read('src/index.css')) &&
+     /\.product-eyebrow::after \{[\s\S]{0,220}?product-rule-in/.test(read('src/index.css')),
+    'the category eyebrow draws a gold rule above the serif title');
+  ok(/\.product-details > \.product-detail-block \{[\s\S]{0,160}?animation-delay: calc\(var\(--pp-i, 0\) \* 55ms/.test(read('src/index.css')) &&
+     /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,200}?\.product-details > \.product-detail-block/.test(read('src/index.css')),
+    'the details column rises in with a stagger that reduced motion cancels');
+  ok(/\.product-tab-underline \{[\s\S]{0,160}?bottom: -1px/.test(read('src/index.css')) &&
+     /layoutId="product-tab-underline"/.test(productPage),
+    'the active tab underline slides between labels');
+
+  // Track order: the status label and its pill always share one line.
+  const track = read('src/pages/TrackOrder.js');
+  ok(/Current Status<\/p>[\s\S]{0,700}?flexShrink: 0/.test(track) &&
+     !/textAlign: 'right'/.test(track) &&
+     /whiteSpace: 'nowrap', margin: 0/.test(track),
+    'the tracking status sits beside "Current Status" instead of under it');
 }
 
 console.log('\n[13] admin image upload payload budget');

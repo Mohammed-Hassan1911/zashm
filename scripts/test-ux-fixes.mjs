@@ -870,8 +870,10 @@ try {
         'the label animation is disabled for reduced-motion users');
       assert.ok(/className="product-card-image"[\s\S]{0,1200}className="product-card-labels"/.test(card),
         'every card cover carries the label box on the image');
-      assert.ok(/className="product-card-image"[\s\S]{0,1600}className="product-card-labels product-page-label"/.test(product),
-        'the product page image carries the label box on the image');
+      assert.ok(/className="product-card-labels product-page-label"[\s\S]{0,400}?className="product-card-image"/.test(product),
+        'the product page label sits in its own row above the photo, never over it');
+      assert.ok(/\.product-page-label\s*\{[\s\S]{0,140}?position: static/.test(css),
+        'the product page label is in flow, so the badge cannot cover the image');
       assert.ok(/fontSize:\s*10,[\s\S]{0,120}whiteSpace:\s*'nowrap'/.test(card), 'the discount badge is 10px');
       assert.ok(/\.product-card-actions\s*\{\s*opacity:\s*1;/.test(css),
         'the wishlist heart is always visible, not hover-only');

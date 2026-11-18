@@ -271,6 +271,13 @@ export default function ProductPage() {
         >
           {/* Images */}
           <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
+            {/* The label gets its own row above the photo, so the badge never
+                sits on top of the product shot - whatever image is uploaded. */}
+            {p.label && (
+              <div className="product-card-labels product-page-label" aria-label="Product label">
+                <span className="label-badge">{p.label}</span>
+              </div>
+            )}
             <div
               className="product-card-image"
               onPointerDown={handleImagePointerDown}
@@ -278,11 +285,6 @@ export default function ProductPage() {
               onPointerCancel={() => { imageSwipeStartRef.current = null; }}
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', borderRadius: 2, cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
-              {p.label && (
-                <div className="product-card-labels product-page-label" aria-label="Product label">
-                  <span className="label-badge">{p.label}</span>
-                </div>
-              )}
               <AnimatePresence mode="wait">
                 <motion.img key={imgIdx}
                   src={mainImage.src}
@@ -342,35 +344,34 @@ export default function ProductPage() {
           </motion.div>
 
           {/* Details */}
-          <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.1 }}>
-            <p style={{ color: 'var(--text3)', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>{p.category}</p>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 400, marginBottom: 16, lineHeight: 1.2 }}>{p.name}</h1>
+          <motion.div className="product-details" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.1 }}>
+            <div className="product-detail-block" style={{ '--pp-i': 0 }}>
+              {p.category && <p className="product-eyebrow">{p.category}</p>}
+              <h1 className="product-title">{p.name}</h1>
+            </div>
 
             {/* Price */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                flexWrap: 'wrap',
-                gap: 8,
-                marginBottom: 24,
-                minWidth: 0,
-              }}
-            >
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: 'var(--gold)' }}>
-                EGP {effectivePrice(p).toLocaleString()}
-              </span>
-              {discount !== null && (
-                <>
-                  <span style={{ color: 'var(--text3)', fontSize: 18, textDecoration: 'line-through' }}>EGP {regularPrice(p).toLocaleString()}</span>
-                  <span style={{ background: 'var(--red)', color: '#fff', fontSize: 11, padding: '3px 8px', borderRadius: 2, fontWeight: 700, letterSpacing: 0.5 }}>-{discount}%</span>
-                </>
-              )}
+            <div className="product-detail-block" style={{ '--pp-i': 1 }}>
+              <div className="product-price-row">
+                <span className="product-price">
+                  <span className="product-price-currency">{'EGP'}</span>
+                  {effectivePrice(p).toLocaleString()}
+                </span>
+                {discount !== null && (
+                  <>
+                    <span className="product-price-was">EGP {regularPrice(p).toLocaleString()}</span>
+                    <span className="product-discount">-{discount}%</span>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Colors */}
-            <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 11, letterSpacing: 2, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>Color: <span style={{ color: 'var(--text)' }}>{selColor}</span></p>
+            <div className="product-detail-block product-block" style={{ '--pp-i': 2 }}>
+              <p className="product-meta-label">
+                {'Color'}
+                <span className="product-meta-value">{selColor}</span>
+              </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
                   const isColorOOS = hasVariantStock(p) ? !(p.sizes || []).some(s => sellableStockFor(p, s, c) > 0) : false;
@@ -391,7 +392,7 @@ export default function ProductPage() {
             </div>
 
             {/* Sizes */}
-<div style={{ marginBottom: 28 }}>
+<div className="product-detail-block product-block" style={{ '--pp-i': 3 }}>
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
     <span
       data-size-value="true"
@@ -466,8 +467,9 @@ export default function ProductPage() {
 
             {/* Qty + Add */}
             <div
-              className="product-buy-row"
+              className="product-buy-row product-detail-block"
               style={{
+                '--pp-i': 4,
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: 8,
@@ -516,7 +518,13 @@ export default function ProductPage() {
               </motion.button>
             </div>
 
-            <p role="status" aria-live="polite" style={{ color: isOutOfStock ? '#e08a82' : currentVariantStock > 5 ? 'var(--green)' : '#d8a94a', fontSize: 12, marginBottom: 24, fontWeight: 600 }}>
+            <p
+              role="status"
+              aria-live="polite"
+              className="product-stock product-detail-block"
+              data-tone={variantConfigInvalid || isOutOfStock ? 'out' : currentVariantStock > 5 ? 'ok' : 'low'}
+              style={{ '--pp-i': 5 }}
+            >
               {variantConfigInvalid
                 ? 'This product is not available to order right now.'
                 : isOutOfStock
@@ -527,37 +535,38 @@ export default function ProductPage() {
             </p>
 
             {/* Features */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, marginBottom: 28, background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: 4, border: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--text2)', fontSize: 12, lineHeight: 1.5 }}>
-                <Truck size={16} color="var(--gold)" style={{ marginTop: 2, flexShrink: 0 }} />
+            <div className="product-perks product-detail-block" style={{ '--pp-i': 6 }}>
+              <div className="product-perk">
+                <Truck size={16} aria-hidden="true" />
                 <div>
-                  <strong style={{ color: 'white', display: 'block', marginBottom: 2, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>Standard Shipping</strong>
+                  <strong>Standard Shipping</strong>
                   Delivery within 4-8 business days across Egypt.
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--text2)', fontSize: 12, lineHeight: 1.5 }}>
-                <RotateCcw size={16} color="var(--gold)" style={{ marginTop: 2, flexShrink: 0 }} />
+              <div className="product-perk">
+                <RotateCcw size={16} aria-hidden="true" />
                 <div>
-                  <strong style={{ color: 'white', display: 'block', marginBottom: 2, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>7-Day Exchanges &amp; Returns</strong>
+                  <strong>7-Day Exchanges &amp; Returns</strong>
                   Exchange or return within 7 days of delivery. Items must be unworn, in their original condition and packaging, with all tags attached.
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--text2)', fontSize: 12, lineHeight: 1.5 }}>
-                <Shield size={16} color="var(--gold)" style={{ marginTop: 2, flexShrink: 0 }} />
+              <div className="product-perk">
+                <Shield size={16} aria-hidden="true" />
                 <div>
-                  <strong style={{ color: 'white', display: 'block', marginBottom: 2, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' }}>Inspect Before You Pay</strong>
+                  <strong>Inspect Before You Pay</strong>
                   You have the full right to check and inspect fabric quality upon delivery before paying the courier.
                 </div>
               </div>
             </div>
 
             {/* Tabs */}
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+            <div className="product-detail-block" style={{ '--pp-i': 7, borderTop: '1px solid var(--border)', paddingTop: 24 }}>
               <div
                 role="tablist"
                 aria-label="Product information"
+                className="product-tabs"
                 style={{
                   display: 'flex',
                   flexWrap: 'wrap',
@@ -586,6 +595,7 @@ export default function ProductPage() {
                       setTab(next);
                       document.getElementById(`product-tab-${next}`)?.focus();
                     }}
+                    className="product-tab"
                     style={{
                       flex: '1 1 80px',
                       minWidth: 0,
@@ -596,14 +606,21 @@ export default function ProductPage() {
                       textTransform: 'uppercase',
                       background: 'none',
                       border: 'none',
-                      borderBottom: `2px solid ${activeTab === t ? 'var(--gold)' : 'transparent'}`,
                       color: activeTab === t ? 'var(--gold)' : 'var(--text2)',
                       cursor: 'pointer',
-                      transition: 'color 0.2s, border-color 0.2s',
+                      transition: 'color 0.2s',
                       marginBottom: -1,
                       overflowWrap: 'anywhere',
                     }}>
                     {t}
+                    {activeTab === t && (
+                      <motion.span
+                        layoutId="product-tab-underline"
+                        className="product-tab-underline"
+                        aria-hidden="true"
+                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                      />
+                    )}
                   </button>
                 ))}
               </div>
@@ -614,19 +631,19 @@ export default function ProductPage() {
                   id={`product-panel-${activeTab}`}
                   aria-labelledby={`product-tab-${activeTab}`}
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                  style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 1.8 }}>
-                  {activeTab === 'description' && <p style={{ margin: 0, whiteSpace: 'pre-line' }}>{descriptionText}</p>}
+                  className="product-panel">
+                  {activeTab === 'description' && <p style={{ whiteSpace: 'pre-line' }}>{descriptionText}</p>}
                   {activeTab === 'details' && (
-                    <dl className="product-detail-list" style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '8px 16px', margin: 0 }}>
+                    <dl className="product-detail-list">
                       {detailRows.map(([label, value]) => (
                         <React.Fragment key={label}>
-                          <dt style={{ color: 'var(--text3)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', margin: 0 }}>{label}</dt>
-                          <dd style={{ margin: 0, color: 'var(--text)', overflowWrap: 'anywhere' }}>{value}</dd>
+                          <dt>{label}</dt>
+                          <dd>{value}</dd>
                         </React.Fragment>
                       ))}
                     </dl>
                   )}
-                  {activeTab === 'care' && <ul style={{ paddingLeft: 18, margin: 0 }}>{['Dry clean recommended', 'Do not bleach', 'Cool iron if needed', 'Store in a garment bag'].map(d => <li key={d} style={{ marginBottom: 4 }}>{d}</li>)}</ul>}
+                  {activeTab === 'care' && <ul>{['Dry clean recommended', 'Do not bleach', 'Cool iron if needed', 'Store in a garment bag'].map(d => <li key={d}>{d}</li>)}</ul>}
                 </motion.div>
               </AnimatePresence>
             </div>

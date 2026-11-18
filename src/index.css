@@ -304,6 +304,23 @@ select option { background: var(--bg3); }
   }
 }
 
+/* The product page label is not an overlay: it is its own row directly above
+   the photo. The badge reserves its full height there, so whatever image the
+   owner uploads starts below the word instead of behind it. */
+.product-page-label {
+  position: static;
+  z-index: auto;
+  max-width: 100%;
+  min-height: 26px;
+  margin: 0 0 10px;
+  padding: 0;
+  pointer-events: none;
+}
+/* It is no longer welded to the image edge, so the box closes on all sides. */
+.product-page-label .label-badge {
+  border-radius: 2px;
+}
+
 /* The product page photo is much larger than a card, so the box scales up a
    little there while staying a small accent. It stays welded to the same
    top-left image edge as every card. */
@@ -370,19 +387,6 @@ select option { background: var(--bg3); }
   to { background-position: 160px 0; }
 }
 
-@keyframes footer-number-glow {
-  0%, 100% {
-    color: var(--gold);
-    text-shadow: 0 0 4px rgba(201, 168, 76, 0.35);
-  }
-  50% {
-    color: #f7e6ad;
-    text-shadow:
-      0 0 8px rgba(201, 168, 76, 0.85),
-      0 0 18px rgba(201, 168, 76, 0.45);
-  }
-}
-
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
@@ -417,13 +421,6 @@ select option { background: var(--bg3); }
   filter: drop-shadow(0 0 7px rgba(201, 168, 76, 0.32));
 }
 
-/* Footer numbers (phone / year) breathe with a soft gold glow. */
-.footer-glow-number {
-  color: var(--gold);
-  font-variant-numeric: tabular-nums;
-  animation: footer-number-glow 3.2s ease-in-out infinite;
-}
-
 /* ─── Footer frame ───────────────────────────────────────────────────────────
    One frame for the whole footer: a gold hairline that drifts along the top
    edge, a soft bloom behind the wordmark, and four columns on one baseline.
@@ -434,7 +431,10 @@ select option { background: var(--bg3); }
   overflow: hidden;
   background: var(--bg2);
   border-top: 1px solid var(--border);
-  padding: 64px 0 40px;
+  /* The footer now ends on its last column: no closing bar and no dead space.
+     The bottom padding is still sized to clear the two fixed floating actions
+     (24px offset + 52px button), so nothing ever sits under them. */
+  padding: 64px 0 88px;
   margin-top: 80px;
 }
 
@@ -657,53 +657,6 @@ select option { background: var(--bg3); }
     transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--footer-delay, 0ms);
 }
 
-/* ─── Footer bottom bar ─────────────────────────────────────────────────────
-   The closing line: copyright on the left, a real back-to-top action on the
-   right, separated from the columns by one hairline. */
-.footer-bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px 24px;
-  margin-top: 52px;
-  padding-top: 22px;
-  border-top: 1px solid var(--border);
-}
-.footer-copy {
-  margin: 0;
-  color: var(--text3);
-  font-size: 12px;
-  letter-spacing: 0.4px;
-}
-.footer-copy .footer-glow-number { font-weight: 600; }
-
-.footer-top {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  margin-right: -2px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text2);
-  font-family: inherit;
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: color 0.26s ease;
-}
-.footer-top svg { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
-.footer-top:hover { color: var(--gold); }
-.footer-top:hover svg { transform: translateY(-3px); }
-.footer-top:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 3px;
-  border-radius: 3px;
-}
-
 /* ─── Footer breakpoints ────────────────────────────────────────────────────
    Tablet: a balanced 2×2. The four blocks keep their DOM order, so the visual
    reading order (brand, Quick Links, Customer Care, Contact) still matches the
@@ -745,14 +698,10 @@ select option { background: var(--bg3); }
   .footer-link { min-height: 44px; margin-bottom: 0; }
   .footer-contact { gap: 0; }
   .footer-contact-row { min-height: 44px; }
-  .footer-bottom { margin-top: 30px; padding-top: 18px; }
-  .footer-copy { font-size: 11.5px; }
 }
 
 @media (max-width: 420px) {
   .footer-grid { gap: 24px 16px; }
-  .footer-copy { font-size: 11px; letter-spacing: 0.2px; }
-  .footer-top { letter-spacing: 1.6px; }
 }
 .app-startup-screen {
   min-height: 100vh;
@@ -932,7 +881,7 @@ select option { background: var(--bg3); }
   /* 2. تصغير العناوين الضخمة في الموبايل عشان متعملش زحمة. A clamp keeps the
         28px phone minimum but lets the title grow again on a 768px tablet,
         where a fixed 28px looked like a phone heading on a big screen. */
-  h1:not(.hero-brand), [style*="font-size: 40"], [style*="font-size:40"], [style*="font-size: 48"], [style*="font-size:48"] {
+  h1:not(.hero-brand):not(.product-title), [style*="font-size: 40"], [style*="font-size:40"], [style*="font-size: 48"], [style*="font-size:48"] {
     font-size: clamp(28px, 5.6vw, 36px) !important;
     letter-spacing: 1px !important;
     margin-bottom: 24px !important;
@@ -1671,8 +1620,9 @@ body.size-finder-open .whatsapp-fab {
   }
 
   footer.site-footer {
-    /* Reserve room for the 44px floating actions (positioned 84px above the
-       viewport bottom) as well as the fixed mobile navigation. */
+    /* The footer ends on its last row, but the 44px floating actions sit 84px
+       above the viewport bottom, so this is the clearance they need - nothing
+       more. */
     padding-bottom: calc(12px + 128px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
@@ -2158,6 +2108,292 @@ main, [role="main"] {
   }
 }
 
+/* ─── Product page typography ───────────────────────────────────────────────
+   One editorial scale for the whole page: a gold eyebrow with a drawn rule, a
+   serif title, a tabular gold price, and small tracked labels above each
+   control. Blocks rise in with a short stagger so the page reads top to bottom
+   instead of appearing all at once. */
+.product-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  color: var(--gold);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3.4px;
+  text-transform: uppercase;
+}
+.product-eyebrow::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 26px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.85), rgba(201, 168, 76, 0));
+  transform-origin: left center;
+  animation: product-rule-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+@keyframes product-rule-in {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+.product-title {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 3.2vw, 40px);
+  font-weight: 400;
+  line-height: 1.14;
+  letter-spacing: 0.2px;
+  text-wrap: balance;
+}
+
+.product-price-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 26px;
+  min-width: 0;
+}
+.product-price {
+  font-family: var(--font-display);
+  font-size: clamp(26px, 3vw, 32px);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: 0.4px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.product-price-currency {
+  margin-right: 7px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  color: var(--text3);
+  vertical-align: 0.55em;
+}
+.product-price-was {
+  color: var(--text3);
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.product-discount {
+  padding: 3px 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(192, 57, 43, 0.55);
+  background: rgba(192, 57, 43, 0.14);
+  color: var(--red-light);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* Small tracked labels that sit above a control ("Color", "Size"). */
+.product-meta-label {
+  margin: 0 0 10px;
+  color: var(--text3);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+}
+.product-meta-value {
+  margin-left: 6px;
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-transform: none;
+}
+
+.product-block { margin-bottom: 24px; }
+
+/* Stock line: a status dot plus the message, in one quiet pill. */
+.product-stock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 24px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+}
+.product-stock::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+.product-stock[data-tone='ok'] { color: var(--green); border-color: rgba(39, 174, 96, 0.4); }
+.product-stock[data-tone='ok']::before { animation: product-stock-pulse 2.6s ease-in-out infinite; }
+.product-stock[data-tone='low'] { color: #d8a94a; border-color: rgba(216, 169, 74, 0.4); }
+.product-stock[data-tone='out'] { color: #e08a82; border-color: rgba(224, 138, 130, 0.4); }
+@keyframes product-stock-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.16); }
+  50% { box-shadow: 0 0 0 6px rgba(39, 174, 96, 0.04); }
+}
+
+/* Perks: one quiet card, three rows, a hairline between them. */
+.product-perks {
+  display: grid;
+  gap: 0;
+  margin: 0 0 28px;
+  padding: 4px 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.product-perk {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 13px 0;
+  color: var(--text2);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+.product-perk + .product-perk { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.product-perk svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--gold);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.product-perk strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+@media (hover: hover) {
+  .product-perk:hover svg { transform: translateY(-1px) scale(1.08); }
+}
+
+/* Tabs: an animated gold underline that slides between the labels. */
+.product-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.product-tab {
+  position: relative;
+  flex: 1 1 80px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 6px;
+  border: 0;
+  background: none;
+  color: var(--text2);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.24s ease;
+  overflow-wrap: anywhere;
+}
+.product-tab:hover { color: var(--text); }
+.product-tab[aria-selected='true'] { color: var(--gold); }
+.product-tab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -4px;
+  border-radius: 3px;
+}
+.product-tab-underline {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--gold);
+}
+
+.product-panel {
+  color: var(--text2);
+  font-size: 13px;
+  line-height: 1.85;
+}
+.product-panel p { margin: 0; max-width: 64ch; }
+.product-panel ul { margin: 0; padding-left: 18px; }
+.product-panel li + li { margin-top: 5px; }
+
+.product-detail-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 20px;
+  margin: 0;
+}
+.product-detail-list dt {
+  margin: 0;
+  padding: 9px 0;
+  color: var(--text3);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.product-detail-list dd {
+  margin: 0;
+  padding: 8px 0;
+  color: var(--text);
+  font-size: 12.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  overflow-wrap: anywhere;
+}
+
+/* Entrance: the details column's blocks rise in one after another. The class
+   is pure CSS, so a reduced-motion visitor sees everything immediately. */
+.product-details > .product-detail-block {
+  animation: product-block-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--pp-i, 0) * 55ms + 90ms);
+}
+@keyframes product-block-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 768px) {
+  .product-eyebrow { font-size: 9.5px; letter-spacing: 2.6px; }
+  .product-title {
+    font-size: clamp(25px, 7vw, 31px);
+    line-height: 1.16;
+    margin-bottom: 12px;
+  }
+  .product-price-row { gap: 8px; margin-bottom: 22px; }
+  .product-block { margin-bottom: 20px; }
+  .product-perks { padding: 2px 13px; }
+  .product-perk { font-size: 12px; padding: 12px 0; }
+  .product-tab { font-size: 10.5px; letter-spacing: 1.1px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-eyebrow::after,
+  .product-details > .product-detail-block,
+  .product-stock[data-tone='ok']::before {
+    animation: none;
+  }
+  .product-perk svg { transition: none; }
+}
+
 .zashm-toast-viewport {
   position: fixed;
   inset: 0;
@@ -2329,17 +2565,12 @@ main, [role="main"] {
     transform: none;
   }
 
-  .site-footer .shimmer-text,
-  .footer-glow-number {
+  .site-footer .shimmer-text {
     animation: none;
   }
 
   .site-footer .shimmer-text {
     filter: none;
-  }
-
-  .footer-glow-number {
-    text-shadow: none;
   }
 
   .site-footer a,
@@ -2372,11 +2603,9 @@ main, [role="main"] {
     animation: none;
   }
 
-  /* The heading rule and the back-to-top arrow must not slide for anyone who
-     asked for reduced motion. */
+  /* The heading rule must not slide for anyone who asked for reduced motion. */
   .site-footer.footer-animate .footer-col-title::after,
-  .site-footer.footer-revealed .footer-col-title::after,
-  .site-footer .footer-top:hover svg {
+  .site-footer.footer-revealed .footer-col-title::after {
     transform: none;
   }
 
