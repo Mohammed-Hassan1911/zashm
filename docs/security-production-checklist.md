@@ -47,28 +47,32 @@ Current data baseline (read-only counts):
 - admins `mohammed` (`mohammedhassanmail1@gmail.com`) and `ahmed`
   (`ahmed@gmail.com`), both role `admin`.
 
-Production https://za-shm.vercel.app runs the bundle built from `258d410`
-(deployment `zashm-hd57gi651-zashm.vercel.app`, 2026-11-19); the served CSS/JS
-hashes match the local build (`index-KdC-GkD9.css`, `index-DGgDlK0C.js`). Verified
-after deploy at 320/390/768/1440px with no horizontal overflow: a product-card
-tap opens the product at ~51ms with `scrollY=0` and no home-page flash; the hero
-wordmark is struck in richer champagne gold; the search field is a 45px
-gold-hairline plate with an inline glyph and an `aria-expanded` toggle; the phone
-sort select fills its toolbar row (9.5px, 10px edge gap) and no scroll-to-top
-button is mounted; a simulated touch swipe moves one composited plate
-(`-17 → -38px`) then settles and crossfades the photo; the size guide fades out on
-opacity alone with no backdrop blur; the two long tracking explanations are gone;
-and the full bag has one "Continue Shopping" while the checkout and place-order
-buttons share one gold bar (48/50px). (`npm test` with
-`ZSHM_REQUIRE_SQL_TESTS=1`: 25 suites, 2908 assertions, 0 failures; the SQL suite
-actually ran on a temporary PostgreSQL cluster.)
+Production https://za-shm.vercel.app runs the bundle built from `0a38649`
+(deployment `zashm-j8fq3ginh-zashm.vercel.app`, 2026-11-19); the served CSS/JS
+hashes match the local build (`index-BQxL9McB.css`, `index-TQ-8wUpA.js`). The new
+`/og-image.jpg` is a 1200×630 JPEG captured from the current home design and is
+served byte-for-byte identical to the committed file. Verified after deploy at
+320/390/768/1440px with no horizontal overflow: the compact phone sort is 116px
+wide (32px tall, 9px type) with a live piece-count beside it (43.7px at 320px,
+113.7px at 390px, 10px edge gap), no forced blur and `0s` transition; the receipt
+tear uses 16px/22px teeth with a champagne-gold top strip and no silhouette
+layer. Source and regression checks cover the restored first-version gallery
+(`mode="wait"`, `1.05 → 1 → 0.95`, 400ms) and the removal of the finger-follow
+plate. (`npm test` with `ZSHM_REQUIRE_SQL_TESTS=1`: 3096 assertions, 0 failures;
+the SQL suite actually ran on a temporary PostgreSQL cluster. `npm run build`
+passed; production secret scan was clean.)
 
-The previous release (`662c96b`, deployment `zashm-oa1bk3ye8`, 2026-11-19)
+The previous release (`258d410`, deployment `zashm-hd57gi651-zashm.vercel.app`,
+2026-11-19) verified instant product navigation with `scrollY=0`, the engraved
+gold search field, the full-width phone sort, the composited finger-follow
+gallery, the opacity-only size-guide exit, and the unified checkout CTAs. The one
+before that (`662c96b`, deployment `zashm-oa1bk3ye8`, 2026-11-19)
 verified the 136px phone sort control at 390px (32px height, 9.5px font), the
 static metal gradient with a transform-only hover sweep on product names,
 WhatsApp on home only (absent while the bag is open), the bag scrim with no
-backdrop blur, and a stacked-frame photo crossfade on swipe. Those behaviours
-remain covered by the test suite. The one before that (`20f7bb7`, deployment
+backdrop blur, and a stacked-frame photo crossfade on swipe. Those were
+historical checks; the current gallery, sort and receipt rules are covered by the
+new suite. An earlier release (`20f7bb7`, deployment
 `zashm-fkh9b0dq7`, 2026-11-19) verified the 343px side drawer with a visible
 storefront strip, checkout's single Cash-on-Delivery row with no badge or
 "Available" copy, the 320px brand-font tracking page, the centred receipt meta
