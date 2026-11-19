@@ -47,25 +47,33 @@ Current data baseline (read-only counts):
 - admins `mohammed` (`mohammedhassanmail1@gmail.com`) and `ahmed`
   (`ahmed@gmail.com`), both role `admin`.
 
-Production https://za-shm.vercel.app runs the bundle built from `662c96b`
-(deployment `zashm-oa1bk3ye8`, 2026-11-19); the served CSS/JS hashes match the
-local build (`index-B2NxeKmi.css`, `index-D9inFnnv.js`). Verified after deploy at
-320/390/768/1440px with no horizontal overflow: the phone sort control is 136px
-wide at 390px while keeping its 32px height and 9.5px font; product names carry
-the static metal gradient with a transform-only hover sweep; WhatsApp is present
-on home, absent while the bag is open and returns on close; the bag scrim has no
-backdrop blur (`rgba(0,0,0,0.86)`); a simulated touch swipe crossfades through
-two stacked frames and changes the photo. No console errors. (`npm test` with
-`ZSHM_REQUIRE_SQL_TESTS=1`: 25 suites, 2996 assertions, 0 failures; the SQL suite
+Production https://za-shm.vercel.app runs the bundle built from `258d410`
+(deployment `zashm-hd57gi651-zashm.vercel.app`, 2026-11-19); the served CSS/JS
+hashes match the local build (`index-KdC-GkD9.css`, `index-DGgDlK0C.js`). Verified
+after deploy at 320/390/768/1440px with no horizontal overflow: a product-card
+tap opens the product at ~51ms with `scrollY=0` and no home-page flash; the hero
+wordmark is struck in richer champagne gold; the search field is a 45px
+gold-hairline plate with an inline glyph and an `aria-expanded` toggle; the phone
+sort select fills its toolbar row (9.5px, 10px edge gap) and no scroll-to-top
+button is mounted; a simulated touch swipe moves one composited plate
+(`-17 → -38px`) then settles and crossfades the photo; the size guide fades out on
+opacity alone with no backdrop blur; the two long tracking explanations are gone;
+and the full bag has one "Continue Shopping" while the checkout and place-order
+buttons share one gold bar (48/50px). (`npm test` with
+`ZSHM_REQUIRE_SQL_TESTS=1`: 25 suites, 2908 assertions, 0 failures; the SQL suite
 actually ran on a temporary PostgreSQL cluster.)
 
-The previous release (`20f7bb7`, deployment `zashm-fkh9b0dq7`, 2026-11-19)
-verified the 343px side drawer with a visible storefront strip, checkout's single
-Cash-on-Delivery row with no badge or "Available" copy, WhatsApp on home only
-(54px on a phone), translucent scroll-to-top, the 320px brand-font tracking page,
-the centred receipt meta with one-line "Cash on delivery", rose discounts, the
-vertical phone timeline, `/api/errors` GET → 405 and POST `{}` → 400, and an
-unknown path → 404. Those behaviours remain covered by the test suite.
+The previous release (`662c96b`, deployment `zashm-oa1bk3ye8`, 2026-11-19)
+verified the 136px phone sort control at 390px (32px height, 9.5px font), the
+static metal gradient with a transform-only hover sweep on product names,
+WhatsApp on home only (absent while the bag is open), the bag scrim with no
+backdrop blur, and a stacked-frame photo crossfade on swipe. Those behaviours
+remain covered by the test suite. The one before that (`20f7bb7`, deployment
+`zashm-fkh9b0dq7`, 2026-11-19) verified the 343px side drawer with a visible
+storefront strip, checkout's single Cash-on-Delivery row with no badge or
+"Available" copy, the 320px brand-font tracking page, the centred receipt meta
+with one-line "Cash on delivery", rose discounts, the vertical phone timeline,
+`/api/errors` GET → 405 and POST `{}` → 400, and an unknown path → 404.
 
 **Not verifiable from this environment** (no Management token / DB connection
 string), so these remain assumptions until checked in the dashboard:
