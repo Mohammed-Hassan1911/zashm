@@ -733,4 +733,13 @@ with the same order body plus a banner stating the order was NOT stored.
 - **Deploy note:** the first `vercel --prod` attempt was rejected by the Hobby
   plan ("No more than 12 Serverless Functions"); the endpoint was then mounted
   on `api/auth` and `vercel build` confirms 11 API functions + middleware = 12.
-- **Not done:** no commit/push/deploy, no production verification.
+- **Deployed 2026-11-19** as `zashm-hsrkfkuna-zashm.vercel.app` (production
+  https://za-shm.vercel.app), from commit `89fbcef`. Production verified:
+  `/api/errors` GET → 405, OPTIONS → 204, POST `{}` → 400 (mount works, no
+  alert); `/api/auth` GET → 405; unknown path → 404; home serves
+  `index-0QRKP_W8.js` with modulepreloads for react/motion/icons only and no
+  supabase chunk; the deployed entry has zero `createClient` and one
+  `products_public` read; headless Chrome at 390px rendered 2 cards and the
+  wordmark with no overflow and no uncaught errors; a product card opened
+  `/product/1794943849613141` (T-SHIRT, EGP 880, size M preselected,
+  add-to-bag enabled).
