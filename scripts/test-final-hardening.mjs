@@ -723,6 +723,8 @@ console.log('\n[12] badge proximity and governorate copy');
     'governorate suggestions show the English name only');
   ok(/clearCanonical/.test(productPage) && /robots: 'noindex, nofollow'/.test(productPage),
     'the unknown-product view is noindex and drops its canonical');
+  ok(/<h1[\s\S]{0,300}Product not found\.[\s\S]{0,20}<\/h1>/.test(productPage),
+    'the unknown-product view still exposes a heading to assistive tech');
 
   // Product page typography: one editorial scale, and a title that keeps its
   // own size instead of being forced by the global phone heading rule.

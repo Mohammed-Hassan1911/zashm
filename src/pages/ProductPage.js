@@ -239,7 +239,7 @@ export default function ProductPage() {
     <ProductPageSkeleton />
   ) : (
     <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>
-      <p style={{ color: 'var(--text2)' }}>{'Product not found.'}</p>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 400, margin: 0 }}>{'Product not found.'}</h1>
       <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>Back to Shop</button>
     </div>
   );
