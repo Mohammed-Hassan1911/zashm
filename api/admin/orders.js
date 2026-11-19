@@ -2,6 +2,7 @@
 
 const {
   json,
+  safeLogError,
   applyCors,
   handleOptions,
   readBody,
@@ -135,7 +136,7 @@ async function listOrders(req, res) {
     const sb = supabaseAdmin();
     const { data, error } = await sb.from('orders').select('*').order('date', { ascending: false });
     if (error) {
-      console.error('Orders list failed:', error.message);
+      safeLogError('Orders list failed', error);
       return json(res, 500, { error: 'Could not load orders' });
     }
     const orders = (data || []).map((row) => {
@@ -145,7 +146,7 @@ async function listOrders(req, res) {
     });
     return json(res, 200, { orders });
   } catch (err) {
-    console.error('Orders list error:', err && err.message);
+    safeLogError('Orders list error', err);
     return json(res, 500, { error: 'Could not load orders' });
   }
 }
@@ -201,7 +202,7 @@ async function updateOrder(req, res) {
       p_timestamps: timestamps,
     });
     if (rpcErr) {
-      console.error('Order status RPC failed:', rpcErr.message);
+      safeLogError('Order status RPC failed', rpcErr);
       return json(res, 500, { error: 'Could not update order' });
     }
     const r = Array.isArray(data) ? (data[0] || {}) : (data || {});
@@ -268,7 +269,7 @@ async function updateOrder(req, res) {
           replyMarkup,
         });
       } catch (e) {
-        console.error('Telegram (status) failed:', e.message);
+        safeLogError('Telegram (status) failed', e);
       }
     }
 
@@ -279,7 +280,7 @@ async function updateOrder(req, res) {
       warnings,
     });
   } catch (err) {
-    console.error('Order update error:', err && err.message);
+    safeLogError('Order update error', err);
     return json(res, 500, { error: 'Could not update order' });
   }
 }
@@ -311,7 +312,7 @@ async function applyOrderEdit(req, res, body) {
     const sb = supabaseAdmin();
     const { data: row, error } = await sb.from('orders').select('*').eq('id', id).maybeSingle();
     if (error) {
-      console.error('Order edit read failed:', error.message);
+      safeLogError('Order edit read failed', error);
       return json(res, 500, { error: 'Could not load order' });
     }
     if (!row) return json(res, 404, { error: 'Order not found' });
@@ -340,7 +341,7 @@ async function applyOrderEdit(req, res, body) {
       const ids = [...new Set(validated.items.map((i) => i.productId))];
       const { data: products, error: prodErr } = await sb.from('products').select('*').in('id', ids);
       if (prodErr) {
-        console.error('Order edit product lookup failed:', prodErr.message);
+        safeLogError('Order edit product lookup failed', prodErr);
         return json(res, 500, { error: 'Could not load products' });
       }
       const built = buildEditedOrderItems(products || [], validated.items);
@@ -375,7 +376,7 @@ async function applyOrderEdit(req, res, body) {
           .eq('code', nextCode)
           .maybeSingle();
         if (couponErr) {
-          console.error('Order edit coupon lookup failed:', couponErr.code || 'unknown');
+          safeLogError('Order edit coupon lookup failed', couponErr);
           return json(res, 500, { error: 'Could not validate the discount code. Please try again.' });
         }
 
@@ -422,7 +423,7 @@ async function applyOrderEdit(req, res, body) {
       p_patch: patch,
     });
     if (rpcErr) {
-      console.error('Order edit RPC failed:', rpcErr.message);
+      safeLogError('Order edit RPC failed', rpcErr);
       return json(res, 500, { error: 'Could not update order' });
     }
     const r = Array.isArray(data) ? (data[0] || {}) : (data || {});
@@ -507,7 +508,7 @@ async function applyOrderEdit(req, res, body) {
         }),
       });
     } catch (e) {
-      console.error('Telegram (edit) failed:', e.message);
+      safeLogError('Telegram (edit) failed', e);
     }
 
     return json(res, 200, {
@@ -517,7 +518,7 @@ async function applyOrderEdit(req, res, body) {
       warnings,
     });
   } catch (err) {
-    console.error('Order edit error:', err && err.message);
+    safeLogError('Order edit error', err);
     return json(res, 500, { error: 'Could not update order' });
   }
 }
@@ -564,7 +565,7 @@ async function deleteOrder(req, res) {
     // restore raises, the DELETE is rolled back and the order stays intact.
     const { data, error: rpcErr } = await sb.rpc('atomic_delete_order', { p_id: id });
     if (rpcErr) {
-      console.error('Order delete RPC failed:', rpcErr.message);
+      safeLogError('Order delete RPC failed', rpcErr);
       return json(res, 500, { error: 'Could not delete order' });
     }
     const r = Array.isArray(data) ? (data[0] || {}) : (data || {});
@@ -600,7 +601,7 @@ async function deleteOrder(req, res) {
         }),
       });
     } catch (e) {
-      console.error('Telegram (delete) failed:', e.message);
+      safeLogError('Telegram (delete) failed', e);
     }
 
     return json(res, 200, {
@@ -611,7 +612,7 @@ async function deleteOrder(req, res) {
       warnings,
     });
   } catch (err) {
-    console.error('Order delete error:', err && err.message);
+    safeLogError('Order delete error', err);
     return json(res, 500, { error: 'Could not delete order' });
   }
 }

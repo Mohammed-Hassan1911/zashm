@@ -15,9 +15,25 @@ const STATUS_COLORS = {
 
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered'];
 
+// SEC-16: the signed token is a credential. Capture it into component state and
+// remove it from the address bar so it cannot leak through history, screenshots
+// or referrers. The plain tracking id stays in the URL for refreshes.
+function stripSensitiveTrackingParams() {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('tk') && !url.searchParams.has('wa')) return;
+    url.searchParams.delete('tk');
+    url.searchParams.delete('wa');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  } catch (err) {
+    /* history may be unavailable in some embedded browsers */
+  }
+}
+
 export default function TrackOrder() {
   const [inputOrderId, setInputOrderId] = useState('');
   const [activeOrderId, setActiveOrderId] = useState('');
+  const [signedToken, setSignedToken] = useState('');
   const [currentOrder, setCurrentOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [missingToken, setMissingToken] = useState(false);
@@ -28,10 +44,13 @@ export default function TrackOrder() {
     const params = new URLSearchParams(window.location.search);
     const idFromUrl = params.get('track');
     const id = (idFromUrl || '').trim();
+    const tk = (params.get('tk') || '').trim();
     if (id) {
       setActiveOrderId(id);
       setInputOrderId(id);
     }
+    if (tk) setSignedToken(tk);
+    stripSensitiveTrackingParams();
   }, []);
 
   // البحث عن الطلب عبر السيرفر (لا يوجد نسخ محلية من الطلبات لضمان الخصوصية)
@@ -43,9 +62,11 @@ export default function TrackOrder() {
       return;
     }
     const id = activeOrderId.trim();
-    // SEC-16: the token in the secure link (?tk=...) is the credential. An
-    // order id on its own is never enough to look anything up.
-    const tk = (new URLSearchParams(window.location.search).get('tk') || '').trim();
+    // SEC-16: the token captured from the secure link is the credential. It is
+    // held in state, not re-read from the live URL, so stripping `tk` from the
+    // address bar cannot invalidate an in-flight lookup. An order id alone is
+    // never enough to look anything up.
+    const tk = signedToken.trim();
     if (!tk) {
       setCurrentOrder(null);
       setNotFound(false);
@@ -78,7 +99,7 @@ export default function TrackOrder() {
     })();
 
     return () => { cancelled = true; };
-  }, [activeOrderId]);
+  }, [activeOrderId, signedToken]);
 
   const shippingAmount = currentOrder
     ? Math.max(0, (currentOrder.total || 0) - (currentOrder.subtotal || 0) + (currentOrder.discount || 0))
@@ -89,7 +110,8 @@ export default function TrackOrder() {
     const id = inputOrderId.trim();
     if (!id) return;
     setActiveOrderId(id);
-    // حافظ على رقم الطلب في الرابط حتى لا يضيع عند التحديث (الـ tk يظل كما هو).
+    // حافظ على رقم الطلب في الرابط حتى لا يضيع عند التحديث. الـ tk اتخزن في
+    // الـ state واتشال من الرابط، فمش بيرجع للعنوان تاني.
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('track', id);

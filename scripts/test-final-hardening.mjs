@@ -289,7 +289,8 @@ console.log('\n[4] secure order tracking');
   eq(r.body.order.notes, 'secret note', 'notes included for the token holder');
   eq(db.queries.length, 1, 'valid token performs exactly one lookup');
 
-  // ?wa=1 hands off to WhatsApp with the customer message already typed.
+  // ?wa=1 hands off to WhatsApp with only the order id and a signed tracking
+  // link. No customer identifying field belongs in a wa.me query string.
   db.queries = [];
   r = await track({ track: orderId, tk: token, wa: '1' });
   eq(r.status, 302, 'wa hand-off redirects');
@@ -297,11 +298,17 @@ console.log('\n[4] secure order tracking');
   ok(location.startsWith('https://wa.me/201012345678?text='), 'wa link targets the normalised phone');
   eq(r.headers['cache-control'], 'no-store', 'hand-off is never cached');
   const prefill = decodeURIComponent(location.split('?text=')[1] || '');
-  ok(prefill.startsWith('السلام عليكم'), 'prefilled text is the customer confirmation message');
-  ok(prefill.includes(`• رقم الطلب: ${orderId}`), 'prefilled text carries the order id');
-  ok(!prefill.includes('• واتساب: https://wa.me/201012345678'), 'the inline customer wa.me line is removed');
-  ok(prefill.includes('• الشحن: EGP 65'),
-    'shipping is derived from the city when the row does not store it');
+  ok(prefill.startsWith(`• رقم الطلب: ${orderId}\n`), 'prefill starts with the order id only');
+  const trackLine = prefill.split('\n').find((line) => line.startsWith('• رابط التتبع: ')) || '';
+  const trackUrl = trackLine.slice('• رابط التتبع: '.length);
+  const signedLink = (() => { try { return new URL(trackUrl); } catch (e) { return null; } })();
+  eq(signedLink && signedLink.searchParams.get('track'), orderId, 'prefill carries the canonical track id');
+  ok(signedLink && lib.verifyTrackToken(orderId, signedLink.searchParams.get('tk')),
+    'the prefill link keeps its signed tracking token');
+  for (const pii of ['Alice', 'alice@example.com', '1 Street', 'secret note', 'Cairo',
+    '01012345678', 'EGP', 'الشحن', 'السلام']) {
+    ok(!prefill.includes(pii), `wa prefill omits ${pii}`);
+  }
   ok(!prefill.includes('/admin'), 'no admin link inside the prefilled text');
   ok(!prefill.includes('/api/orders?'), 'no hand-off link inside the prefilled text');
   eq(db.queries.length, 1, 'hand-off performs one lookup');
@@ -330,6 +337,17 @@ console.log('\n[4] secure order tracking');
   ok(!/trackingLinkFor/.test(adminSrc), 'admin UI never fabricates a token-less tracking link');
   const cartSrc = read('src/pages/CartPage.js');
   ok(!/\/\?track=' \+ encodeURIComponent/.test(cartSrc), 'checkout does not fall back to an id-only tracking URL');
+
+  const trackPageSrc = read('src/pages/TrackOrder.js');
+  ok(/setSignedToken\(tk\)/.test(trackPageSrc) &&
+     /\[activeOrderId, signedToken\]/.test(trackPageSrc) &&
+     !/new URLSearchParams\(window\.location\.search\)\.get\('tk'\)/.test(trackPageSrc),
+    'signed token is captured into state and never re-read from the live URL');
+  ok(/searchParams\.delete\('tk'\)/.test(trackPageSrc) &&
+     /searchParams\.delete\('wa'\)/.test(trackPageSrc) &&
+     /history\.replaceState/.test(trackPageSrc) &&
+     /searchParams\.set\('track', id\)/.test(trackPageSrc),
+    'tk and wa are stripped from the address bar while the plain track id is kept');
 }
 
 // ─── [5] SQL search_path ────────────────────────────────────────────────────
@@ -373,8 +391,8 @@ console.log('\n[6] admin product error messages');
   ok(/error: 'Could not update product'/.test(src), 'update returns a generic error');
   ok(/error: 'Could not delete product'/.test(src), 'delete returns a generic error');
   ok(!/return json\(res, status, \{ error: err && err\.message/.test(src), 'raw DB messages are not returned');
-  ok(/console\.error\('Product create failed:'/.test(src), 'create failures are still logged server-side');
-  ok(/console\.error\('Product update failed:'/.test(src), 'update failures are still logged server-side');
+  ok(/safeLogError\('Product create failed', err\)/.test(src), 'create failures are still logged server-side');
+  ok(/safeLogError\('Product update failed', err\)/.test(src), 'update failures are still logged server-side');
 }
 
 // ─── [7] SEC-27 public product view ─────────────────────────────────────────
@@ -788,6 +806,14 @@ console.log('\n[13] admin image upload payload budget');
     'the client body fits inside the server MAX_BODY');
   ok(/const MAX_DECODED = (\d+) \* 1024 \* 1024;/.test(endpoint),
     'the server still caps decoded bytes');
+
+  const immutableCache = "cacheControl: 'public, max-age=31536000, immutable'";
+  ok(read('api/_lib.js').includes(immutableCache),
+    'review photos ship with immutable year-long browser caching');
+  ok(endpoint.includes(immutableCache),
+    'admin uploads ship with immutable year-long browser caching');
+  ok(!/cacheControl: '31536000'/.test(read('api/_lib.js') + endpoint),
+    'the bare numeric cacheControl value is gone');
 
   // One upload at a time: parallel multi-megabyte bodies saturate mobile
   // uplinks, and a dropped connection surfaces as a network error.

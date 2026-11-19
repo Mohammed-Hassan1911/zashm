@@ -171,7 +171,11 @@ function makeReq({ method = 'GET', body, headers = {}, query = {} } = {}) {
   const listeners = {};
   const req = {
     method,
-    headers: { 'x-real-ip': `203.0.113.${(ipCounter++ % 250) + 1}`, ...headers },
+    headers: {
+      origin: 'https://za-shm.vercel.app',
+      'x-real-ip': `203.0.113.${(ipCounter++ % 250) + 1}`,
+      ...headers,
+    },
     query,
     socket: { remoteAddress: '203.0.113.1' },
     on(event, cb) {

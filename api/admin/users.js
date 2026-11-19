@@ -2,6 +2,7 @@
 
 const {
   json,
+  safeLogError,
   applyCors,
   handleOptions,
   readBody,
@@ -75,7 +76,7 @@ async function listUsers(req, res) {
     if (error) return json(res, 500, { error: 'Could not load users' });
     return json(res, 200, { users: (data || []).map(toPublicUser) });
   } catch (err) {
-    console.error('Users list error:', err && err.message);
+    safeLogError('Users list error', err);
     return json(res, 500, { error: 'Could not load users' });
   }
 }
@@ -117,7 +118,7 @@ async function createUser(req, res) {
     const data = await insertUserWithFallback(sb, record);
     return json(res, 200, { success: true, user: toPublicUser(data) });
   } catch (err) {
-    console.error('User create failed:', err && err.message);
+    safeLogError('User create failed', err);
     if (/duplicate|unique/i.test(String(err.message))) return json(res, 409, { error: 'Email already exists' });
     return json(res, 500, { error: 'Could not create user' });
   }
@@ -202,7 +203,7 @@ async function updateUser(req, res) {
     const { data: fresh } = await sb.from('users').select('*').eq('id', id).maybeSingle();
     return json(res, 200, { success: true, user: toPublicUser(fresh) });
   } catch (err) {
-    console.error('User update failed:', err && err.message);
+    safeLogError('User update failed', err);
     if (/last[_ ]?admin/i.test(String(err.message))) return json(res, 409, { error: LAST_ADMIN_MESSAGE });
     if (/duplicate|unique/i.test(String(err.message))) return json(res, 409, { error: 'Email already exists' });
     return json(res, 500, { error: 'Could not update user' });
@@ -247,7 +248,7 @@ async function deleteUser(req, res) {
     if (delErr) throw delErr;
     return json(res, 200, { success: true });
   } catch (err) {
-    console.error('User delete failed:', err && err.message);
+    safeLogError('User delete failed', err);
     if (/last[_ ]?admin/i.test(String(err.message))) return json(res, 409, { error: LAST_ADMIN_MESSAGE });
     return json(res, 500, { error: 'Could not delete user' });
   }

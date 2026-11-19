@@ -46,14 +46,19 @@ const WishlistPage = lazyWithRetry(() => loadCartPage().then(module => ({ defaul
 const AdminApp = lazyWithRetry(loadAdminPage);
 const NotFoundPage = lazyWithRetry(loadNotFoundPage);
 
-const PUBLIC_PAGE_LOADERS = [
-  loadHomePage,
-  loadShopPage,
-  loadProductPage,
-  loadTrackOrderPage,
-  loadCartPage,
-  loadNotFoundPage,
-];
+// Warm only the chunk a shopper is likely to open next. Preloading every public
+// page on every route spent real bytes on pages most visitors never open; each
+// lazy route still loads normally when it is actually requested.
+const IDLE_PRELOAD_NEXT = {
+  home: [loadShopPage],
+  shop: [loadProductPage, loadCartPage],
+  product: [loadCartPage, loadShopPage],
+  cart: [loadTrackOrderPage],
+  checkout: [loadTrackOrderPage],
+  wishlist: [loadShopPage],
+  track: [loadShopPage],
+  notfound: [loadHomePage],
+};
 
 if (typeof window !== 'undefined') {
   window.toast = toast;
@@ -180,20 +185,19 @@ function AppInner() {
     const connection = typeof navigator !== 'undefined' ? navigator.connection : undefined;
     if (connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType)) return undefined;
 
+    const next = IDLE_PRELOAD_NEXT[currentPage] || [];
+    // No idle API means no preload: a timer would download during busy frames.
+    if (next.length === 0 || typeof window.requestIdleCallback !== 'function') return undefined;
+
     const preload = () => {
-      PUBLIC_PAGE_LOADERS.forEach((loadPage) => {
+      next.forEach((loadPage) => {
         loadPage().catch((error) => console.error('Storefront page preload failed:', error));
       });
     };
 
-    if (typeof window.requestIdleCallback === 'function') {
-      const idleHandle = window.requestIdleCallback(preload, { timeout: 2000 });
-      return () => window.cancelIdleCallback?.(idleHandle);
-    }
-
-    const timeoutHandle = window.setTimeout(preload, 1000);
-    return () => window.clearTimeout(timeoutHandle);
-  }, []);
+    const idleHandle = window.requestIdleCallback(preload);
+    return () => window.cancelIdleCallback?.(idleHandle);
+  }, [currentPage]);
 
   useEffect(() => {
     const route = resolveRoute();

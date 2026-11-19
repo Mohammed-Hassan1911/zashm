@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const {
   json,
+  safeLogError,
   applyCors,
   handleOptions,
   readBody,
@@ -66,13 +67,17 @@ async function uploadImage(req, res) {
     const sb = supabaseAdmin();
     const { error } = await sb.storage
       .from('products')
-      .upload(filename, buffer, { contentType: detected, cacheControl: '31536000', upsert: false });
+      .upload(filename, buffer, {
+        contentType: detected,
+        cacheControl: 'public, max-age=31536000, immutable',
+        upsert: false,
+      });
     if (error) throw error;
 
     const { data: pub } = sb.storage.from('products').getPublicUrl(filename);
     return json(res, 200, { success: true, url: pub.publicUrl, path: filename });
   } catch (err) {
-    console.error('Upload failed:', err && err.message);
+    safeLogError('Upload failed', err);
     return json(res, 500, { error: 'Could not upload image' });
   }
 }
@@ -113,7 +118,7 @@ async function deleteImage(req, res) {
     }
     return json(res, 200, { success: true, cleanup });
   } catch (err) {
-    console.error('Upload delete failed:', err && err.message);
+    safeLogError('Upload delete failed', err);
     return json(res, 500, { error: 'Could not delete image' });
   }
 }

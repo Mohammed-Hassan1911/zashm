@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
@@ -54,6 +54,9 @@ export default function ProductPage() {
   const [stockModal, setStockModal] = useState({ open: false, message: '' });
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const imageSwipeStartRef = useRef(null);
+  // A shopper who asked for reduced motion can still swipe between photos,
+  // but nothing drifts under the finger or springs back on release.
+  const reduceMotion = useReducedMotion();
   // A motion value follows the finger without a React render per pointer move;
   // the browser only has to move a composited layer, never repaint the photo.
   const galleryDragX = useMotionValue(0);
@@ -126,6 +129,9 @@ export default function ProductPage() {
     // Wait for a clear horizontal intent so a vertical page scroll still wins.
     if (!start.following && (Math.abs(deltaX) < 8 || Math.abs(deltaX) <= Math.abs(deltaY))) return;
     start.following = true;
+    // The gesture still advances the photo on release, but the plate stays put
+    // while it is in progress: no drift, no spring to unwind afterwards.
+    if (reduceMotion) return;
     // A gentle share of the drag feeds the spring, so the photo drifts with the
     // finger instead of racing it. The cap keeps the frame filled throughout.
     const limit = Math.max(80, Math.min(window.innerWidth * 0.35, 140));
@@ -328,7 +334,7 @@ export default function ProductPage() {
                   the finger's movement and eases it home, while the photos
                   crossfade slowly on opacity alone — no waiting mode, no scale,
                   no blur, and no React render per pointer move. */}
-              <motion.div className="product-gallery-frames" style={{ x: galleryPlateX }}>
+              <motion.div className="product-gallery-frames" style={{ x: reduceMotion ? 0 : galleryPlateX }}>
                 <AnimatePresence initial={false}>
                   <motion.img key={imgIdx}
                     src={mainImage.src}
@@ -344,7 +350,7 @@ export default function ProductPage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.34, ease: 'easeInOut' }}
+                    transition={{ duration: reduceMotion ? 0 : 0.34, ease: 'easeInOut' }}
                     style={{
                       position: 'absolute',
                       inset: 0,

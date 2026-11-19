@@ -55,6 +55,7 @@ Module._load = function (request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const handler = require('../api/_errors.js');
+const lib = require('../api/_lib.js');
 Module._load = originalLoad;
 
 // ─── HTTP fakes ──────────────────────────────────────────────────────────────
@@ -256,8 +257,42 @@ console.log('\n[6] alert throttling');
   ok(_alertState.seen.size <= 200, 'the dedupe map stays bounded');
 }
 
-// ─── [7] deployment budget: one mounted route, not one more function ───────
-console.log('\n[7] serverless function budget');
+// ─── [7] shared server-side error logging ───────────────────────────────────
+console.log('\n[7] safeLogError');
+{
+  const hostile = Object.assign(
+    new Error('customer alice@example.com 01012345678 12 Nile Street'),
+    { name: 'Hostile\nError', code: 'X\nY' }
+  );
+  const { lines } = await captureConsole(() =>
+    lib.safeLogError('Order\nlookup failed', hostile, 'detail\nwith text '.repeat(40))
+  );
+  eq(lines.length, 1, 'safeLogError writes exactly one line');
+  const line = lines[0];
+  ok(line.startsWith('ZASHM Order lookup failed | Hostile Error | code=X Y | '),
+    'fixed label, sanitised error name and bounded error code are logged');
+  ok(!/[\n\r\x00-\u001f\u007f]/.test(line), 'the log line has no newline or control characters');
+  ok(!line.includes('alice@example.com') && !line.includes('01012345678') &&
+     !line.includes('12 Nile Street'), 'the raw message and customer PII are never logged');
+  ok(line.length <= 400, 'the detail is bounded to a short suffix');
+
+  const { lines: minimal } = await captureConsole(() =>
+    lib.safeLogError('Fixed label', new TypeError('secret detail'))
+  );
+  eq(minimal, ['ZASHM Fixed label | TypeError'], 'without detail only label and error type are logged');
+
+  eq(typeof lib.safeLogError, 'function', 'safeLogError is exported for every API handler');
+  for (const file of [
+    'api/_lib.js', 'api/auth.js', 'api/orders.js', 'api/admin/orders.js',
+    'api/admin/products.js', 'api/admin/users.js', 'api/admin/upload.js',
+  ]) {
+    ok(!/console\.(error|warn)\([^\n]*\.message/.test(read(file)),
+      `${file} never logs a raw error message`);
+  }
+}
+
+// ─── [8] deployment budget: one mounted route, not one more function ───────
+console.log('\n[8] serverless function budget');
 {
   // Vercel Hobby allows 12 Serverless Functions per deployment, and the
   // middleware counts as one. This project is at the cap, so a new endpoint

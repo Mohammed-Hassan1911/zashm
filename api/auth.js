@@ -2,6 +2,7 @@
 
 const {
   json,
+  safeLogError,
   applyCors,
   handleOptions,
   readBody,
@@ -99,7 +100,7 @@ module.exports = async function handler(req, res) {
         }
       } catch (e) {
         // The local cookies are still cleared; never fail logout on DB errors.
-        console.warn('Logout revocation skipped:', e && e.message);
+        safeLogError('Logout revocation skipped', e);
       }
     }
     clearSessionCookie(res);
@@ -144,7 +145,7 @@ module.exports = async function handler(req, res) {
       .maybeSingle();
 
     if (error) {
-      console.error('Auth lookup failed:', error.message);
+      safeLogError('Auth lookup failed', error);
       return json(res, 500, { error: 'Login is temporarily unavailable' });
     }
 
@@ -177,7 +178,7 @@ module.exports = async function handler(req, res) {
     if (loginWriteError) {
       // Login still succeeds; but a silent failure means legacy hashes are
       // re-hashed every time and lastlogin lies, so surface it.
-      console.warn('Login bookkeeping update failed:', loginWriteError.message);
+      safeLogError('Login bookkeeping update failed', loginWriteError);
     }
 
     const token = signSession({
@@ -200,7 +201,7 @@ module.exports = async function handler(req, res) {
       user: { id: data.id, name: data.name, email: data.email, role: data.role },
     });
   } catch (err) {
-    console.error('Auth error:', err && err.message);
+    safeLogError('Auth error', err);
     return json(res, 500, { error: 'Login is temporarily unavailable' });
   }
 };

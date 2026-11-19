@@ -24,6 +24,11 @@ export default function ProductCard({ product, index = 0 }) {
 
   const [hovered, setHovered] = useState(false);
   const [canHover, setCanHover] = useState(false);
+  // The frame stays mounted so the crossfade cannot shift the 3:4 box, but its
+  // Supabase source is only applied on the first hover. A card grid must not
+  // download every second photo before anyone points at it.
+  const [secondaryRequested, setSecondaryRequested] = useState(false);
+  const [secondaryLoaded, setSecondaryLoaded] = useState(false);
 
   // A touch screen has no hover, so the second frame would be a download the
   // shopper never sees. Gate it on a real pointer, and follow the device if a
@@ -49,13 +54,23 @@ export default function ProductCard({ product, index = 0 }) {
     ? product.images.filter(Boolean)
     : [];
 
-  // Both frames stay mounted so the second image is decoded before the pointer
-  // arrives: swapping `src` on hover is what made the transition flash.
+  // Both frames stay mounted: swapping `src` on hover is what made the old
+  // transition flash. Only the second frame's download waits for the pointer.
   const primary = useImageFallback(images[0] || FALLBACK_IMAGE, FALLBACK_IMAGE);
   const secondary = useImageFallback(images[1] || FALLBACK_IMAGE, FALLBACK_IMAGE);
 
   const hasSecondImage = canHover && images.length > 1 && !isSoldOut;
-  const showSecond = hovered && hasSecondImage;
+  // Reveal the deferred frame only once its real image has landed, so the
+  // crossfade never shows the neutral placeholder in its place.
+  const showSecond = hovered && hasSecondImage && secondaryLoaded;
+
+  const handleImageEnter = () => {
+    setHovered(true);
+    if (secondaryRequested) return;
+    // The placeholder's own load event must not count as the second photo.
+    setSecondaryRequested(true);
+    setSecondaryLoaded(false);
+  };
 
   const handleView = () => {
     if (!product?.id) return;
@@ -121,7 +136,7 @@ export default function ProductCard({ product, index = 0 }) {
           overflow: 'hidden',
           background: 'var(--bg3)',
         }}
-        onMouseEnter={() => setHovered(true)}
+        onMouseEnter={handleImageEnter}
         onMouseLeave={() => setHovered(false)}
       >
         <img
@@ -138,12 +153,13 @@ export default function ProductCard({ product, index = 0 }) {
 
         {hasSecondImage && (
           <img
-            src={secondary.src}
+            src={secondaryRequested ? secondary.src : FALLBACK_IMAGE}
             alt=""
             aria-hidden="true"
             loading="lazy"
             fetchpriority="low"
             decoding="async"
+            onLoad={() => setSecondaryLoaded(true)}
             onError={secondary.onError}
             className="product-card-img"
             data-visible={showSecond ? 'true' : 'false'}

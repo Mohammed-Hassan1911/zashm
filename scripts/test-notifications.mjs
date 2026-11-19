@@ -49,6 +49,7 @@ const lib = require('../api/_lib.js');
 const {
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  buildOrderHandoffPrefill,
   buildOrderStatusMessage,
   buildOrderFeedbackMessage,
   buildOrderFeedbackActions,
@@ -374,6 +375,17 @@ try {
     const unsigned = buildOrderTelegramActions(ORDER, TRACKING_URL);
     process.env.SESSION_SECRET = secret;
     ok(!JSON.stringify(unsigned).includes('wa=1'), 'unsigned hand-off button is dropped');
+
+    // The signed wa=1 hand-off is a browser redirect, so its query string is
+    // visible to the browser and messaging app: it carries only id + link.
+    const handoff = buildOrderHandoffPrefill(ORDER, TRACKING_URL);
+    ok(handoff.startsWith(`• رقم الطلب: ${ORDER.id}\n`), 'hand-off prefill starts with the order id');
+    ok(handoff.includes(`• رابط التتبع: ${TRACKING_URL}`), 'hand-off prefill carries the signed tracking link');
+    for (const pii of [ORDER.customer, ORDER.email, ORDER.address, ORDER.phone,
+      ORDER.notes, ORDER.city, 'Silk Abaya', 'EGP 1,615']) {
+      ok(!handoff.includes(pii), `hand-off prefill omits ${pii}`);
+    }
+    ok(handoff.split('\n').length === 2, 'hand-off prefill has exactly two lines');
   });
 
   await section('[7] pathological carts are clamped to the Telegram byte budget', async () => {

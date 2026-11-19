@@ -2,6 +2,7 @@
 
 const {
   json,
+  safeLogError,
   applyCors,
   handleOptions,
   readBody,
@@ -143,7 +144,7 @@ async function createProducts(req, res) {
     if (isBulk) return json(res, 200, { success: true, count: created.length, products: created, warnings });
     return json(res, 200, { success: true, product: created[0], warnings });
   } catch (err) {
-    console.error('Product create failed:', err && err.message);
+    safeLogError('Product create failed', err);
     const status = err && err.status ? err.status : 500;
     // Never echo raw database errors (they can reveal column/table internals).
     return json(res, status, { error: 'Could not save product' });
@@ -230,7 +231,7 @@ async function updateProduct(req, res) {
     try {
       cleanup = await cleanupUnreferencedProductImages(sb, removedPaths);
     } catch (cleanupError) {
-      console.error('Product image reference check failed; files were kept:', cleanupError && cleanupError.message);
+      safeLogError('Product image reference check failed; files were kept', cleanupError);
       cleanup = {
         removed: [],
         failed: removedPaths,
@@ -243,7 +244,7 @@ async function updateProduct(req, res) {
     }
     return json(res, 200, { success: true, product: fresh, cleanup, warnings });
   } catch (err) {
-    console.error('Product update failed:', err && err.message);
+    safeLogError('Product update failed', err);
     const status = err && err.status ? err.status : 500;
     return json(res, status, { error: 'Could not update product' });
   }
@@ -281,7 +282,7 @@ async function listProducts(req, res) {
 
     return json(res, 200, { success: true, count: products.length, products });
   } catch (err) {
-    console.error('Product list failed:', err && err.message);
+    safeLogError('Product list failed', err);
     return json(res, 500, { error: 'Could not load products' });
   }
 }
@@ -333,7 +334,7 @@ function deleteProductRows(sb, ids, rows) {
         cleanup.failed = result.failed;
         cleanup.shared = result.shared;
       } catch (cleanupError) {
-        console.error('Product image reference check failed after product deletion; files were kept:', cleanupError && cleanupError.message);
+        safeLogError('Product image reference check failed after product deletion; files were kept', cleanupError);
         cleanup.failed = candidates;
         cleanup.error = 'Could not verify image references; files were kept.';
       }
@@ -348,7 +349,7 @@ function deleteProductRows(sb, ids, rows) {
         else cleanup.reviewPhotosFailed.push(path);
       } catch (cleanupError) {
         cleanup.reviewPhotosFailed.push(path);
-        console.error('Product review photo cleanup failed after product deletion:', cleanupError && cleanupError.message);
+        safeLogError('Product review photo cleanup failed after product deletion', cleanupError);
       }
     }
     for (const failed of cleanup.reviewPhotosFailed) {
@@ -408,7 +409,7 @@ async function deleteProducts(req, res) {
     const cleanup = await deleteProductRows(sb, [id], [product]);
     return json(res, 200, { success: true, found: true, deleted: 1, cleanup });
   } catch (err) {
-    console.error('Product delete failed:', err && err.message);
+    safeLogError('Product delete failed', err);
     return json(res, 500, { error: 'Could not delete product' });
   }
 }

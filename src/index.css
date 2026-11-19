@@ -590,9 +590,10 @@ select option { background: var(--bg3); }
   pointer-events: none;
 }
 
-/* Two stacked frames crossfade instead of swapping `src`, so the second photo
-   is decoded before the pointer arrives and the change never flashes. The
-   layers are absolutely positioned, so the 3:4 box never shifts. */
+/* Two stacked frames crossfade instead of swapping `src`. The second frame is
+   mounted but its Supabase source waits for the first hover, so a card grid
+   does not download every alternate photo up front. The layers are absolutely
+   positioned, so the 3:4 box never shifts. */
 .product-card-img {
   position: absolute;
   inset: 0;
@@ -5009,6 +5010,11 @@ main, [role="main"] {
   /* The product label is static: no entrance, no box-shadow pulse. */
   .product-card-labels .label-badge {
     animation: none;
+  }
+
+  /* The reduced-motion gallery never drifts, so it needs no composited layer. */
+  .product-gallery-frames {
+    will-change: auto;
   }
 }
 

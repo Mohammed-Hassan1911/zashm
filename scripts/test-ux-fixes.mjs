@@ -1395,8 +1395,8 @@ try {
       assert.ok(/<AnimatePresence initial=\{false\}>/.test(product),
         'the first photo paints immediately instead of fading in');
       assert.ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+exit=\{\{ opacity: 0 \}\}/.test(product)
-        && /transition=\{\{ duration: 0\.34, ease: 'easeInOut' \}\}/.test(product),
-        'the swap is a slow, soft 340ms opacity-only crossfade');
+        && /transition=\{\{ duration: reduceMotion \? 0 : 0\.34, ease: 'easeInOut' \}\}/.test(product),
+        'the swap is a slow, soft 340ms opacity-only crossfade, or instant with reduced motion');
       assert.ok(!/scale: 1\.05|scale: 0\.95/.test(gallery), 'no scale animation moves the photo under the finger');
       assert.ok(/position: 'absolute',\s*\n\s*inset: 0,/.test(product),
         'both frames share the same box, so the crossfade never shifts the layout');
@@ -1416,7 +1416,7 @@ try {
       assert.ok(/const handleImagePointerCancel[\s\S]{0,220}?start\.pointerId !== event\.pointerId\) return;/.test(product) &&
          /onPointerCancel=\{handleImagePointerCancel\}/.test(product),
         'a cancel from another finger cannot strand the plate off-centre');
-      assert.ok(/className="product-gallery-frames" style=\{\{ x: galleryPlateX \}\}/.test(product) &&
+      assert.ok(/className="product-gallery-frames" style=\{\{ x: reduceMotion \? 0 : galleryPlateX \}\}/.test(product) &&
          /\.product-gallery-frames\s*\{[^}]*will-change:\s*transform/.test(css),
         'the drag moves a single composited plate, never the controls or the page');
       assert.ok(/Math\.abs\(deltaX\) < 8 \|\| Math\.abs\(deltaX\) <= Math\.abs\(deltaY\)/.test(product) &&
@@ -1604,6 +1604,116 @@ try {
         'the size-guide scrim does not resample the page on exit');
       assert.ok(!/scale: 0\.985/.test(read('src/components/shop/SizeFinder.js')),
         'the size finder fades without a scale transform');
+    });
+  }
+
+  console.log('\n[14] low-priority UX: reduced motion, deferred card frame, idle preload, OG cache');
+  {
+    const product = read('src/pages/ProductPage.js');
+    const card = read('src/components/shop/ProductCard.js');
+    const app = read('src/App.js');
+    const css = read('src/index.css');
+
+    const downBody = product.slice(
+      product.indexOf('const handleImagePointerDown = (event) => {'),
+      product.indexOf('const handleImagePointerMove = (event) => {')
+    );
+    const moveBody = product.slice(
+      product.indexOf('const handleImagePointerMove = (event) => {'),
+      product.indexOf('const handleImagePointerUp = (event) => {')
+    );
+    const upBody = product.slice(
+      product.indexOf('const handleImagePointerUp = (event) => {'),
+      product.indexOf('const handleImagePointerCancel = (event) => {')
+    );
+
+    await step('a reduced-motion gallery never drifts but still swipes', () => {
+      assert.ok(/import \{ motion, AnimatePresence, useMotionValue, useSpring, useReducedMotion \} from 'framer-motion'/.test(product),
+        'useReducedMotion is imported from the existing motion dependency');
+      assert.ok(/const reduceMotion = useReducedMotion\(\);/.test(product), 'the preference is read in the page');
+      const guardAt = moveBody.indexOf('if (reduceMotion) return;');
+      const setAt = moveBody.indexOf('galleryDragX.set(');
+      assert.ok(guardAt > 0 && setAt > guardAt,
+        'the guard sits before the imperative drift, so no pointer move moves the plate');
+      assert.ok(/style=\{\{ x: reduceMotion \? 0 : galleryPlateX \}\}/.test(product),
+        'the plate reads a fixed zero instead of the spring when motion is reduced');
+      assert.ok(/transition=\{\{ duration: reduceMotion \? 0 : 0\.34, ease: 'easeInOut' \}\}/.test(product),
+        'the crossfade is instant when motion is reduced');
+      assert.ok(!/reduceMotion/.test(upBody) && /changeImage\(deltaX < 0 \? 1 : -1\)/.test(upBody),
+        'swipe-to-advance is decided on release, unaffected by the preference');
+      assert.ok(downBody.includes('if (imageSwipeStartRef.current) return;') &&
+        /start\.pointerId !== event\.pointerId/.test(upBody),
+        'the one-finger ownership fix is untouched');
+      assert.ok(/useSpring\(galleryDragX, \{[\s\S]{0,120}?stiffness: 190, damping: 30, mass: 0\.9, restDelta: 0\.4/.test(product),
+        'the soft spring is still used for everyone else');
+      const reducedBlock = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{/g)]
+        .map((match) => css.slice(match.index, css.indexOf('\n}', match.index) + 2))
+        .find((block) => /\.product-gallery-frames/.test(block)) || '';
+      assert.ok(/\.product-gallery-frames \{\s*will-change: auto;\s*\}/.test(reducedBlock),
+        'the reduced-motion block drops the plate layer');
+    });
+
+    await step('a card defers its second Supabase photo until first hover', () => {
+      assert.ok(/const \[secondaryRequested, setSecondaryRequested\] = useState\(false\)/.test(card),
+        'the deferred source starts unrequested');
+      assert.ok(/const handleImageEnter = \(\) => \{[\s\S]{0,240}?setSecondaryRequested\(true\)/.test(card),
+        'first pointer entry requests the source');
+      assert.ok(/onMouseEnter=\{handleImageEnter\}/.test(card),
+        'the image box uses the deferring handler');
+      assert.ok(/src=\{secondaryRequested \? secondary\.src : FALLBACK_IMAGE\}/.test(card),
+        'the Supabase URL is withheld until then');
+      assert.ok(!/src=\{secondary\.src\}/.test(card), 'no unconditional secondary source remains');
+      assert.ok(/const secondary = useImageFallback\(images\[1\] \|\| FALLBACK_IMAGE, FALLBACK_IMAGE\)/.test(card) &&
+        /onError=\{secondary\.onError\}/.test(card),
+        'the original mirror -> placeholder fallback chain is preserved');
+      assert.ok(/\{hasSecondImage && \(\s*<img/.test(card), 'the second frame stays mounted when eligible');
+      assert.ok(/const showSecond = hovered && hasSecondImage && secondaryLoaded/.test(card) &&
+        /onLoad=\{\(\) => setSecondaryLoaded\(true\)\}/.test(card) &&
+        /data-visible=\{showSecond \? 'true' : 'false'\}/.test(card),
+        'the mounted second frame still crossfades, only after the real image lands');
+    });
+
+    await step('idle preload only warms likely next routes in genuine idle time', () => {
+      assert.ok(/const IDLE_PRELOAD_NEXT = \{/.test(app), 'a per-route map replaces the load-everything list');
+      assert.ok(!/PUBLIC_PAGE_LOADERS/.test(app), 'the all-public-pages list is gone');
+      assert.ok(/home: \[loadShopPage\]/.test(app) &&
+        /shop: \[loadProductPage, loadCartPage\]/.test(app) &&
+        /product: \[loadCartPage, loadShopPage\]/.test(app),
+        'home, shop and product warm only their likely next chunks');
+      assert.ok(/const next = IDLE_PRELOAD_NEXT\[currentPage\] \|\| \[\];/.test(app),
+        'the map is keyed by the current route');
+      assert.ok(/if \(next\.length === 0 \|\| typeof window\.requestIdleCallback !== 'function'\) return undefined;/.test(app),
+        'no timer fallback runs outside idle time');
+      assert.ok(/requestIdleCallback\(preload\)/.test(app) && !/timeout: 2000/.test(app),
+        'no aggressive deadline forces a download');
+      assert.ok(/connection\?\.saveData \|\| \['slow-2g', '2g'\]\.includes\(connection\?\.effectiveType\)/.test(app),
+        'the saveData / slow-link guard is intact');
+      assert.ok(/loadPage\(\)\.catch\(\(error\) => console\.error\('Storefront page preload failed:', error\)\)/.test(app),
+        'a failed preload is still caught');
+      assert.ok(/\}, \[currentPage\]\);/.test(app), 'the effect re-evaluates on navigation');
+    });
+
+    await step('lazy routes still own every page chunk', () => {
+      const loaders = ['loadHomePage', 'loadShopPage', 'loadProductPage', 'loadTrackOrderPage',
+        'loadCartPage', 'loadAdminPage', 'loadNotFoundPage'];
+      for (const loader of loaders) {
+        assert.ok(app.includes(`const ${loader} =`), `${loader} is still a lazy chunk loader`);
+      }
+      const pages = ['home', 'shop', 'product', 'cart', 'checkout', 'wishlist', 'track', 'notfound'];
+      for (const page of pages) {
+        assert.ok(app.includes(`currentPage === '${page}' &&`), `${page} still renders through its lazy chunk`);
+      }
+      assert.ok(app.includes("currentPage === 'admin' ?"), 'admin still has its own lazy branch');
+    });
+
+    await step('/og-image.jpg has a refreshable, non-immutable cache rule', () => {
+      const config = JSON.parse(read('vercel.json'));
+      const rule = (config.headers || []).find((entry) => entry.source === '/og-image.jpg');
+      assert.ok(rule, 'a dedicated header rule exists for the social image');
+      const header = (rule.headers || []).find((entry) => String(entry.key).toLowerCase() === 'cache-control');
+      assert.ok(header, 'the rule sets Cache-Control');
+      assert.equal(header.value, 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+      assert.ok(!/immutable/.test(header.value), 'a replaceable image is never marked immutable');
     });
   }
 } catch (error) {

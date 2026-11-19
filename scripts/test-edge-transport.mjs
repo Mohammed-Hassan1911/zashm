@@ -169,6 +169,30 @@ async function validate(body, ip = '198.51.100.200') {
 // ─── [1] vercel.json ────────────────────────────────────────────────────────
 console.log('\n[1] transport headers + rewrites');
 {
+  // Proxy headers are untrusted: only one valid IP literal may key a limiter.
+  const socketIp = '198.51.100.1';
+  const ipReq = (headers, socket = { remoteAddress: socketIp }) => ({ headers, socket });
+  eq(lib.clientIp(ipReq({ 'x-real-ip': '198.51.100.10' })), '198.51.100.10',
+    'a single IPv4 x-real-ip is accepted');
+  eq(lib.clientIp(ipReq({ 'x-forwarded-for': '203.0.113.9' })), '203.0.113.9',
+    'a single IPv4 x-forwarded-for is accepted');
+  eq(lib.clientIp(ipReq({ 'x-real-ip': '::1' })), '::1',
+    'a single IPv6 literal is accepted');
+  const badIps = [
+    ['comma list', '198.51.100.10, 198.51.100.11'],
+    ['hostname', 'example.com'],
+    ['control characters', '198.51.100.10\r\nX-Evil: 1'],
+    ['overlong value', '1'.repeat(65)],
+    ['padded value', ' 198.51.100.10 '],
+  ];
+  for (const [label, value] of badIps) {
+    eq(lib.clientIp(ipReq({ 'x-real-ip': value })), socketIp,
+      `spoofed x-real-ip (${label}) falls back to the socket IP`);
+    eq(lib.clientIp(ipReq({ 'x-forwarded-for': value })), socketIp,
+      `spoofed x-forwarded-for (${label}) falls back to the socket IP`);
+  }
+  eq(lib.clientIp(ipReq({}, {})), 'unknown', 'a missing socket address is bounded');
+
   const cfg = JSON.parse(read('vercel.json'));
   const all = cfg.headers || [];
   const headerFor = (source, key) => {

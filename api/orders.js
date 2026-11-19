@@ -2,6 +2,7 @@
 
 const {
   json,
+  safeLogError,
   applyCors,
   handleOptions,
   readBody,
@@ -15,6 +16,7 @@ const {
   parseOrderRow,
   sendTelegramNotification,
   buildOrderTelegramMessage,
+  buildOrderHandoffPrefill,
   buildOrderTelegramActions,
   sendPendingOrderAlert,
   trackingUrlFor,
@@ -224,7 +226,7 @@ async function placeOrder(req, res) {
       });
     } catch (e) {
       // The customer already has their confirmation; never let the alert throw.
-      console.error('Order pending alert failed:', e && e.message);
+      safeLogError('Order pending alert failed', e);
     }
   };
 
@@ -238,7 +240,7 @@ async function placeOrder(req, res) {
       .in('id', ids)
       .abortSignal(orderDbSignal());
     if (prodErr) {
-      console.error('Order product lookup failed:', prodErr.message);
+      safeLogError('Order product lookup failed', prodErr);
       await acceptPending('product_lookup');
       return;
     }
@@ -489,7 +491,7 @@ async function placeOrder(req, res) {
       p_idempotency_key: idempotencyKey,
     });
     if (rpcErr) {
-      console.error('atomic_place_order failed:', rpcErr.message);
+      safeLogError('atomic_place_order failed', rpcErr);
       await acceptPending('save_failed');
       return;
     }
@@ -647,7 +649,7 @@ async function placeOrder(req, res) {
         replyMarkup: buildOrderTelegramActions(messageOrder, trackingUrl),
       });
     } catch (e) {
-      console.error('Telegram notification failed:', e.message);
+      safeLogError('Telegram notification failed', e);
     }
 
     const order = parseOrderRow({ ...orderRow, items: orderItems, timestamps });
@@ -656,7 +658,7 @@ async function placeOrder(req, res) {
 
     return json(res, 200, { success: true, order });
   } catch (err) {
-    console.error('Place order error:', err && err.message);
+    safeLogError('Place order error', err);
     if (!orderStored && !responded) {
       await acceptPending('unexpected');
       return;
@@ -688,7 +690,7 @@ async function trackOrder(req, res) {
     const sb = supabaseAdmin();
     const { data, error } = await sb.from('orders').select('*').eq('id', trackId).maybeSingle();
     if (error) {
-      console.error('Track lookup failed:', error.message);
+      safeLogError('Track lookup failed', error);
       return json(res, 500, { found: false, error: 'Tracking is temporarily unavailable' });
     }
     if (!data) return json(res, 200, { found: false });
@@ -696,19 +698,19 @@ async function trackOrder(req, res) {
     const order = parseOrderRow(data);
     order.tracking_url = trackingUrlFor(trackId);
 
-    // ?wa=1 turns the notification button into a WhatsApp deep link with the
-    // customer message pre-filled. The tracking token is the credential,
-    // exactly like the tracking page.
+    // ?wa=1 opens WhatsApp with only the order id and its canonical signed
+    // tracking link. Never put customer PII in a wa.me query string. The token
+    // in that link remains the credential, exactly like the tracking page.
     if (String((req.query && req.query.wa) || '') === '1') {
-      const message = buildOrderTelegramMessage(order, order.tracking_url);
-      const target = whatsAppDeepLink(order.phone, message);
+      const prefill = buildOrderHandoffPrefill(order, order.tracking_url);
+      const target = whatsAppDeepLink(order.phone, prefill);
       if (!target) return redirect(res, order.tracking_url);
       return redirect(res, target);
     }
 
     return json(res, 200, { found: true, access: 'full', order });
   } catch (err) {
-    console.error('Track error:', err && err.message);
+    safeLogError('Track error', err);
     return json(res, 500, { found: false, error: 'Tracking is temporarily unavailable' });
   }
 }

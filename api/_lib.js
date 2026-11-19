@@ -14,6 +14,7 @@
  */
 
 const crypto = require('crypto');
+const net = require('net');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,23 @@ function json(res, status, body) {
     res.setHeader('Cache-Control', 'no-store');
   }
   res.end(JSON.stringify(body));
+}
+
+/**
+ * Log an operational failure without ever writing a raw driver message, stack,
+ * PII or secret to the server log. The label is fixed by the caller, the error
+ * type is bounded, and an optional caller-supplied detail is sanitised to one
+ * short line. Database error codes are useful for triage and are safe to keep.
+ */
+function safeLogError(label, err, detail) {
+  const fixedLabel = safeLineText(label, 80) || 'Server error';
+  const name = safeLineText(err && err.name, 80) || 'Error';
+  const code = safeLineText(err && err.code, 64);
+  const extra = safeLineText(detail, 160);
+  const parts = [`ZASHM ${fixedLabel}`, name];
+  if (code) parts.push(`code=${code}`);
+  if (extra) parts.push(extra);
+  console.error(parts.join(' | '));
 }
 
 function getAllowedOrigin(req) {
@@ -170,8 +188,15 @@ function safeEqualText(a, b) {
 }
 
 function requestOriginAllowed(req) {
+  // Safe reads stay permissive (including plain HTTP clients and health checks).
+  // Any state-changing request must name an allowed Origin: an absent Origin is
+  // no longer a pass for cookie-authenticated or Bearer admin/session calls.
+  if (!isUnsafeMethod(req)) return true;
   const origin = req && req.headers && req.headers.origin;
-  if (!origin) return true; // non-browser client; SameSite still protects cookies
+  if (typeof origin !== 'string' || !origin || origin.length > 256 ||
+      /[\u0000-\u001f\u007f]/.test(origin)) {
+    return false;
+  }
   return getAllowedOrigin(req) === origin;
 }
 
@@ -249,10 +274,25 @@ function readBody(req, maxBytes = 1024 * 1024) {
   });
 }
 
+const MAX_IP_HEADER_CHARS = 64; // longer than any IPv6 literal; blocks header floods
+
+/** Only a single, syntactically valid IP literal may influence rate-limit keys.
+ * Lists, hostnames, control characters and oversized values are ignored so a
+ * direct caller cannot mint unlimited buckets by spoofing proxy headers. */
+function validIpLiteral(value) {
+  if (typeof value !== 'string' || !value || value.length > MAX_IP_HEADER_CHARS) return null;
+  if (/[\s,\x00-\u001f\u007f]/.test(value)) return null;
+  return net.isIP(value) === 0 ? null : value;
+}
+
 function clientIp(req) {
-  const vercelIp = req.headers['x-real-ip'];
-  if (typeof vercelIp === 'string' && vercelIp.trim()) return vercelIp.trim();
-  return (req.socket && req.socket.remoteAddress) || 'unknown';
+  const headers = (req && req.headers) || {};
+  const realIp = validIpLiteral(headers['x-real-ip']);
+  if (realIp) return realIp;
+  const forwarded = validIpLiteral(headers['x-forwarded-for']);
+  if (forwarded) return forwarded;
+  const socketIp = validIpLiteral(req && req.socket && req.socket.remoteAddress);
+  return socketIp || 'unknown';
 }
 
 // ─── SERVER-SIDE RATE LIMITING (per warm instance) ──────────────────────────
@@ -633,14 +673,15 @@ async function requirePerm(req, res, permission) {
     return null;
   }
 
-  // Cookie-authenticated unsafe requests must pass Origin + double-submit CSRF.
-  // Bearer tokens are immune (a cross-site page cannot read or set them).
-  if (auth.source === 'cookie' && isUnsafeMethod(req)) {
+  // Every state-changing privileged call must name an allowed Origin, including
+  // Bearer calls: a non-browser client can always send one. Double-submit CSRF
+  // remains cookie-only because a cross-site page cannot set a Bearer header.
+  if (isUnsafeMethod(req)) {
     if (!requestOriginAllowed(req)) {
       json(res, 403, { error: 'Request origin is not allowed' });
       return null;
     }
-    if (!csrfHeaderValid(req)) {
+    if (auth.source === 'cookie' && !csrfHeaderValid(req)) {
       json(res, 403, { error: 'CSRF validation failed' });
       return null;
     }
@@ -658,7 +699,7 @@ async function requirePerm(req, res, permission) {
     if (error) throw error;
     row = data;
   } catch (e) {
-    console.error('Session re-check failed:', e && e.message);
+    safeLogError('Session re-check failed', e);
     json(res, 401, { error: 'Session could not be verified. Please sign in again.' });
     return null;
   }
@@ -1907,6 +1948,18 @@ function whatsAppDeepLink(phone, text) {
   return `https://wa.me/${number}${suffix}`;
 }
 
+/** Minimal, non-PII prefill for the signed ?wa=1 tracking hand-off. It carries
+ * only the order id and the canonical tracking link — never name, email,
+ * address, phone, items or totals, which stay out of the wa.me query string. */
+function buildOrderHandoffPrefill(order = {}, trackingUrl) {
+  const id = safeLineText(order.id, 48);
+  const link = safeLineText(trackingUrl || order.tracking_url || order.trackingUrl, 500);
+  const lines = [];
+  if (id) lines.push(`• رقم الطلب: ${id}`);
+  if (link) lines.push(`• رابط التتبع: ${link}`);
+  return lines.join('\n');
+}
+
 /** Pre-filled WhatsApp message. Carries the customer confirmation in a form
  * that fits Telegram's 2048-character button-URL limit, so the button opens
  * the WhatsApp app directly with the message already typed — no browser
@@ -2151,10 +2204,7 @@ async function sendPendingOrderAlert(context = {}) {
         replyMarkup,
       })) === true;
     } catch (e) {
-      console.error(
-        `Order pending alert failed (attempt ${attempt}/${ORDER_ALERT_ATTEMPTS}):`,
-        e && e.name ? e.name : 'Error'
-      );
+      safeLogError('Order pending alert failed', e, `attempt ${attempt}/${ORDER_ALERT_ATTEMPTS}`);
     }
     if (telegram) break;
     if (attempt < ORDER_ALERT_ATTEMPTS) {
@@ -2300,13 +2350,13 @@ async function uploadReviewPhoto(sb, productId, photo) {
       .from(REVIEW_PHOTO_BUCKET)
       .upload(path, photo.buffer, {
         contentType: photo.contentType,
-        cacheControl: '31536000',
+        cacheControl: 'public, max-age=31536000, immutable',
         upsert: false,
       });
     if (error) throw error;
     return path;
   } catch (e) {
-    console.error('Review photo upload failed:', (e && e.message) || 'unknown');
+    safeLogError('Review photo upload failed', e);
     return null;
   }
 }
@@ -2490,6 +2540,7 @@ module.exports = {
   getSupabaseUrl,
   supabaseAdmin,
   json,
+  safeLogError,
   applyCors,
   handleOptions,
   readBody,
@@ -2542,6 +2593,7 @@ module.exports = {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildWhatsAppPrefillMessage,
+  buildOrderHandoffPrefill,
   buildOrderStatusMessage,
   buildOrderFeedbackMessage,
   buildOrderFeedbackActions,

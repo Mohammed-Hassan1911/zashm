@@ -340,6 +340,27 @@ console.log('\n[4] Origin allow-list');
   });
   eq(evilAdmin.status, 403, 'admin write from a disallowed origin → 403');
   eq(evilAdmin.body.error, 'Request origin is not allowed', 'clear origin error');
+
+  const noOriginLogin = await call(authHandler, {
+    method: 'POST',
+    body: { action: 'login', email: 'owner@example.com', password: ADMIN_PASSWORD },
+    headers: { 'content-type': 'application/json' },
+  });
+  eq(noOriginLogin.status, 403, 'session POST with no Origin fails closed');
+  eq(noOriginLogin.body.error, 'Request origin is not allowed', 'clear missing-origin error');
+  eq(noOriginLogin.cookies.length, 0, 'no Origin never issues a session cookie');
+
+  const noOriginAdmin = await call(usersHandler, {
+    method: 'PATCH',
+    body: { id: 2, updates: { role: 'manager' } },
+    headers: {
+      'content-type': 'application/json',
+      cookie: cookiePair(sessionToken, csrfToken),
+      'x-csrf-token': csrfToken,
+    },
+  });
+  eq(noOriginAdmin.status, 403, 'cookie admin write with no Origin fails before CSRF');
+  eq(noOriginAdmin.body.error, 'Request origin is not allowed', 'missing Origin is not a CSRF bypass');
 }
 
 // ─── CSRF ───────────────────────────────────────────────────────────────────
@@ -354,6 +375,12 @@ console.log('\n[5] CSRF double-submit');
   eq(safe.status, 200, 'GET works with the session cookie (no CSRF needed)');
   ok(Array.isArray(safe.body.users), 'GET returns the user list');
   ok(!JSON.stringify(safe.body).includes('passwordhash'), 'GET never returns password hashes');
+
+  const safeNoOrigin = await call(usersHandler, {
+    method: 'GET',
+    headers: { cookie: cookiePair(sessionToken, csrfToken) },
+  });
+  eq(safeNoOrigin.status, 200, 'safe GET stays permissive without Origin');
 
   const noHeader = await admin('PATCH', {
     token: sessionToken, csrf: csrfToken, csrfHeader: null,
@@ -400,6 +427,28 @@ console.log('\n[6] legacy Bearer token');
     },
   });
   eq(bearer.status, 200, 'Bearer requests still work without CSRF (not cookie-attached)');
+
+  const bearerNoOrigin = await call(usersHandler, {
+    method: 'PATCH',
+    body: { id: 2, updates: { role: 'manager' } },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${sessionToken}`,
+    },
+  });
+  eq(bearerNoOrigin.status, 403, 'Bearer writes with no Origin → 403');
+  eq(bearerNoOrigin.body.error, 'Request origin is not allowed', 'Bearer is not exempt from Origin checks');
+
+  const bearerEvilOrigin = await call(usersHandler, {
+    method: 'PATCH',
+    body: { id: 2, updates: { role: 'manager' } },
+    headers: {
+      origin: 'https://evil.example',
+      'content-type': 'application/json',
+      authorization: `Bearer ${sessionToken}`,
+    },
+  });
+  eq(bearerEvilOrigin.status, 403, 'Bearer writes from a disallowed Origin → 403');
 
   const noAuth = await call(usersHandler, { method: 'GET', headers: { origin: ALLOWED_ORIGIN } });
   eq(noAuth.status, 401, 'no credential → 401');

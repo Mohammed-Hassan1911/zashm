@@ -10,11 +10,13 @@ Last updated: 2026-11-19
 
 ---
 
-## 0. Production state (verified 2026-11-19, read-only)
+## 0. Production state (verified 2026-11-19)
 
-Project ref `ptegprcbtfylqhbnbkih`. This pass used the service-role key and the
-public anon key for **read-only** probes (PostgREST `OPTIONS` on RPCs, `peek`
-on the rate limiter, `select` on rows). No SQL was applied and no row changed.
+Project ref `ptegprcbtfylqhbnbkih`. The audit probes used the service-role key
+and the public anon key for read-only checks (PostgREST `OPTIONS` on RPCs, `peek`
+on the rate limiter, `select` on rows). No SQL was applied. The only production
+data change in this pass was the owner-approved, reversible deactivation of four
+test products recorded below.
 
 Applied and confirmed by behaviour:
 
@@ -35,51 +37,69 @@ Applied and confirmed by behaviour:
   `200`. The `products_public` rollout and the `orders` lockdown are live.
 - **Public signups closed** — `GET /auth/v1/settings` reports
   `disable_signup: true` (the first item of §3).
-- **Stock invariant** — `T-SHIRT` stock `27` = variant sum `27`, `Pant` stock
-  `24` = variant sum `24`, and `reservedStock` is `0` on both.
+- **Stock invariant** — recorded before deactivation: `T-SHIRT` stock `27` =
+  variant sum `27`, `Pant` stock `24` = variant sum `24`, and `reservedStock`
+  is `0` on both.
 
-Current data baseline (read-only re-check, 2026-11-19):
+Current data baseline (2026-11-19):
 
-- anon `GET /rest/v1/products_public?select=id` returns **4** ids:
-  `1794943849613141`, `1794955384475152`, `1795094753892375`,
-  `1795095084457224`. The earlier service-role baseline recorded products `2`;
-  the two newer ids are the current anon-visible catalog. Owner confirmation of
-  these additions is still required before treating the catalog as final.
-- Orders, users, coupons and admin identities could **not** be re-counted from
-  this environment (no service-role/management token). The earlier baseline —
-  orders `1`, users `2`, coupons `1`, order `ZSH-MWLGRZ7M-EC96FF20`, coupon
-  `ZAMALEK`, admins `mohammed` and `ahmed` — is historical, not a 2026-11-19
-  live count.
+- anon `GET /rest/v1/products_public?select=id` now returns **0** ids. The four
+  previously visible ids — `1794943849613141`, `1794955384475152`,
+  `1795094753892375`, `1795095084457224` — were confirmed by the owner to be
+  **test data**. They were deactivated with a service-role REST
+  `PATCH active=false` after a backup of the four rows was captured locally;
+  the change is reversible with `PATCH active=true`. No rows were deleted and no
+  prices or stock values were rewritten.
+- Orders, users, coupons and admin identities could **not** be live-counted from
+  this environment (no Management token / DB connection string). The earlier
+  baseline — orders `1`, users `2`, coupons `1`, order
+  `ZSH-MWLGRZ7M-EC96FF20`, coupon `ZAMALEK`, admins `mohammed` and `ahmed` — is
+  historical, not a 2026-11-19 live count.
 
-Production https://za-shm.vercel.app currently runs the bundle built from
-`7a0f3e6` (deployment `zashm-aqkiaq7tt-zashm.vercel.app`, 2026-11-19); the served
-CSS/JS hashes match the local build at that commit
-(`index-CREmyxBi.css`, `index-BYirxVHt.js`). `/og-image.jpg` remains a 1200×630
-JPEG served byte-for-byte identical to the committed file. A 28-case production
-sweep at 320/390/768/1440px found no horizontal overflow, one `<h1>` per page,
-no broken images, no missing alt text, no unnamed controls, no captured JS
-errors, WhatsApp on home only, and the mobile dock 6px above the safe-area edge.
-Computed-style checks confirmed `filter: none` on the search icon, no text shadow
-on the mobile hero/footer letter, a 2.4s transform-only hero chevron loop with a
-reduced-motion freeze, and the gold sort focus paint. The gallery now drifts on a
-soft spring (`stiffness 190`, `damping 30`, `mass 0.9`, `restDelta 0.4`) with a
-340ms opacity-only crossfade, not the older `mode="wait"` scale transition.
-(`npm test` at that commit with `ZSHM_REQUIRE_SQL_TESTS=1`: 3098 assertions,
-0 failures; the SQL suite actually ran on a temporary PostgreSQL cluster.
-`npm run build` passed; production secret scan was clean.)
+Production https://za-shm.vercel.app currently runs commit `a62069f`
+(deployment `zashm-m7lv14t0k-zashm.vercel.app`, Ready/Production, 2026-11-19).
+The served JS/CSS hashes matched the local build at that commit:
+`index-vIyADBiI.js` and `index-CREmyxBi.css`. Live checks at that deployment:
+`/shop` static metadata and canonical, `/prerendered-products.json` 200 with the
+four then-visible test ids, sitemap with home/shop plus those four product URLs,
+product metadata/JSON-LD/image preload, `noindex` on private routes, a real 404
+for an unknown route, security headers, and a clean secret scan of the live
+bundle. Because those products were deactivated afterwards, the next deploy must
+publish an empty manifest and a two-URL sitemap (home + `/shop`). A 28-case
+320/390/768/1440px browser sweep and computed-style checks were performed at the
+earlier `7a0f3e6` build and are historical; they were not repeated at `a62069f`.
 
-Pending local fixes (not deployed; production still serves `index-BYirxVHt.js`):
-the multi-touch gallery plate ownership fix, keyboard-safe sort focus, throttled
-admin order/user PII listings, a static `/shop` metadata shell, a prerender
-manifest that gates sitemap product URLs (a failed catalogue read publishes no
-manifest, so the sitemap uses its short fail-closed fallback), and their
-regression tests. Locally `ZSHM_REQUIRE_SQL_TESTS=1 npm test` passed 3395
-assertions with 0 failures and the SQL suite really ran; `npm run build` produced
-`index-vIyADBiI.js` + `index-CREmyxBi.css`, wrote `build/shop/index.html` with
-the shop metadata, published 4 ids in `build/prerendered-products.json`, and the
-bundle secret scan found no service-role, session, Telegram or Upstash secret.
-These are local proofs only; no deployment or production re-verification was
-performed.
+At `a62069f`, `ZSHM_REQUIRE_SQL_TESTS=1 npm test` passed 30 suites / 3395
+assertions with 0 failures (the SQL suite really ran: 490 passed on a temporary
+PostgreSQL 17 cluster), and `npm run build` passed with a clean secret scan.
+
+Safe PII verification: unauthenticated `GET /api/admin/orders` and
+`GET /api/admin/users` both returned `401`, and the deployed bundle hash matched
+the local build containing the 252-assertion limiter regression suite. No
+121-request probe was run against production because a valid admin session was
+not available.
+
+All code-side Low work is now complete in the working tree (not yet deployed):
+reduced-motion gallery, deferred hover image fetch, route-scoped idle preload,
+refreshable `/og-image.jpg` cache, validated `x-real-ip`, fail-closed Origin on
+unsafe methods, sanitised server error logs, signed-token cleanup on the
+tracking page, minimal `?wa=1` prefill, and immutable cache headers on new
+Storage uploads.
+
+Final local proof for this tree: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 30
+suites / 3450 assertions, 0 failures; the SQL suite really ran (490 passed on
+temporary PostgreSQL 17). `npm run build` → `index-wOn8XH1_.js` +
+`index-CP2InU7q.css`, shop shell written, an empty
+`build/prerendered-products.json` published from a successful live
+`products_public` read, and a clean secret scan. One earlier local build hit a
+transient `fetch failed` and deliberately published no manifest; the re-run
+succeeded, and the sitemap's fail-closed fallback is unchanged.
+
+Remaining before this tree is live: commit, push, explicit Vercel production
+deploy, then live re-verification (new bundle hashes, two-URL sitemap, private
+`noindex`, real 404, security headers, unauthenticated admin 401s, and the
+refreshable `/og-image.jpg` cache). Until real products are added, the catalogue
+is intentionally empty and the store is **not** ready for sale.
 
 The previous release (`258d410`, deployment `zashm-hd57gi651-zashm.vercel.app`,
 2026-11-19) verified instant product navigation with `scrollY=0`, the engraved
