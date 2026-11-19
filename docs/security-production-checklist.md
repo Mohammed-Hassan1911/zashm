@@ -47,11 +47,18 @@ Current data baseline (read-only counts):
 - admins `mohammed` (`mohammedhassanmail1@gmail.com`) and `ahmed`
   (`ahmed@gmail.com`), both role `admin`.
 
-Production https://za-shm.vercel.app runs the bundle built from `45ee187`
-(deployment `zashm-oj8z6vi48`); later commits are documentation only. Verified
-after deploy: checkout renders one Cash-on-Delivery row, no payment radios and
-no "coming soon" copy at 390px and 1440px (no overflow, no console errors);
-`/api/errors` GET → 405 and POST `{}` → 400; an unknown path → 404.
+Production https://za-shm.vercel.app runs the bundle built from `20f7bb7`
+(deployment `zashm-fkh9b0dq7`, 2026-11-19); the served CSS/JS hashes match the
+local build. Verified after deploy: the bag opens as a 343px side drawer with a
+visible storefront strip at 390px; checkout renders one Cash-on-Delivery row
+with no badge and no "Available" copy; WhatsApp appears on home only (54px on a
+phone) and scroll-to-top is translucent; `/track` renders at 320px in the brand
+font with no horizontal scroll. The receipt and tracking layouts were checked
+against the deployed CSS at 320/390/1440px: centred meta, one-line "Cash on
+delivery", rose discount, vertical phone timeline, no dark rectangle below the
+receipt. No console errors; `/api/errors` GET → 405 and POST `{}` → 400; an
+unknown path → 404. (`npm test` with `ZSHM_REQUIRE_SQL_TESTS=1`: 25 suites,
+2901 assertions, 0 failures.)
 
 **Not verifiable from this environment** (no Management token / DB connection
 string), so these remain assumptions until checked in the dashboard:
