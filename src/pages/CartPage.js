@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, CreditCard, PackageSearch, Headset, ArrowLeft } from 'lucide-react';
+import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, PackageSearch, Headset, ArrowLeft } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import StockFeedback from '../components/shop/StockFeedback';
@@ -1411,66 +1411,25 @@ export function CheckoutPage() {
 
             <section className="checkout-summary-block checkout-summary-payment" aria-labelledby="checkout-payment-title">
               <h3 id="checkout-payment-title" className="checkout-mini-title">{'Payment method'}</h3>
-              {/* Payment method selector. COD is the only live option today;
-                  card payments are shown as "Coming soon" so the shopper sees
-                  the roadmap without being able to select them. */}
-              <div
-                role="radiogroup"
-                aria-label="Payment method"
-                className="checkout-payment-options"
-              >
-                {/* Cash on Delivery — live */}
-                <label className="checkout-payment-option is-live">
-                  <input
-                    type="radio"
-                    name="payment-method"
-                    value="cod"
-                    defaultChecked
-                    style={{ marginTop: 9, accentColor: 'var(--gold)', flexShrink: 0 }}
-                  />
-                  <span className="checkout-payment-icon" aria-hidden="true">
-                    <Banknote size={17} color="var(--gold)" />
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="checkout-payment-head">
-                      <span className="checkout-payment-name">
-                        Cash on Delivery
-                      </span>
-                      <span className="checkout-payment-badge is-live">
-                        Available
-                      </span>
-                    </div>
-                    <p className="checkout-payment-copy">
-                      Pay in cash when it arrives.
-                    </p>
+              {/* Cash on Delivery is the only payment method the store accepts.
+                  There is deliberately no second, disabled "coming soon" row:
+                  a control the shopper cannot use is a placeholder. */}
+              <div className="checkout-payment-option is-live is-static">
+                <span className="checkout-payment-icon" aria-hidden="true">
+                  <Banknote size={17} color="var(--gold)" />
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="checkout-payment-head">
+                    <span className="checkout-payment-name">
+                      Cash on Delivery
+                    </span>
+                    <span className="checkout-payment-badge is-live">
+                      Available
+                    </span>
                   </div>
-                </label>
-
-                {/* Card payments — coming soon */}
-                <div className="checkout-payment-option is-soon" aria-disabled="true">
-                  <input
-                    type="radio"
-                    name="payment-method"
-                    value="card"
-                    disabled
-                    style={{ marginTop: 9, flexShrink: 0 }}
-                  />
-                  <span className="checkout-payment-icon" aria-hidden="true">
-                    <CreditCard size={17} color="var(--text3)" />
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="checkout-payment-head">
-                      <span className="checkout-payment-name">
-                        Credit / Debit Card
-                      </span>
-                      <span className="checkout-payment-badge is-soon">
-                        Coming soon
-                      </span>
-                    </div>
-                    <p className="checkout-payment-copy">
-                      In a future update.
-                    </p>
-                  </div>
+                  <p className="checkout-payment-copy">
+                    Pay in cash when it arrives.
+                  </p>
                 </div>
               </div>
             </section>

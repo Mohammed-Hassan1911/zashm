@@ -6,28 +6,67 @@ This file is guidance only; it does not apply anything by itself. Every
 migration and Dashboard change below is a manual action. The production status
 is recorded in §0 and must be re-verified, never assumed.
 
-Last updated: 2026-11-07
+Last updated: 2026-11-19
 
 ---
 
-## 0. Production state (verified 2026-11-07)
+## 0. Production state (verified 2026-11-19, read-only)
 
-Project ref `ptegprcbtfylqhbnbkih`. Read-only catalog checks confirmed that
-migrations #1, #2, #4, #5, #6 and #7 — plus `coupons_lockdown.sql`,
-`session_revocation.sql`, `rate_limit_storage.sql` and
-`stock_hardening_constraints.sql` — were already applied. Migration #3
-(`supabase/atomic_edit_order.sql`) was applied on 2026-11-07 and verified:
+Project ref `ptegprcbtfylqhbnbkih`. This pass used the service-role key and the
+public anon key for **read-only** probes (PostgREST `OPTIONS` on RPCs, `peek`
+on the rate limiter, `select` on rows). No SQL was applied and no row changed.
 
-- `public.atomic_edit_order(text, integer, jsonb)` exists, is `SECURITY INVOKER`
-  with `search_path=public, pg_temp`;
-- `anon` / `authenticated` cannot execute it; `service_role` can;
-- a read-only smoke call (`select public.atomic_edit_order('ZSH-DOES-NOT-EXIST', 0, '{}'::jsonb)`)
-  returned `{"ok": false, "reason": "not_found"}`;
-- row counts did not change (orders 15, products 1, users 2, coupons 1).
+Applied and confirmed by behaviour:
 
-Deployment `zashm-2jtixyf86-zashm.vercel.app` (commit `2598e32`) is live at
-https://za-shm.vercel.app. The deployed admin chunk matches the local build and
-contains the order-edit UI; it has no Bark references and no server secrets.
+- **Order RPCs exist** — `OPTIONS /rest/v1/rpc/<fn>` returned `200` for
+  `atomic_place_order`, `atomic_set_order_status`, `atomic_delete_order`,
+  `atomic_edit_order`, `zshm_adjust_coupon_usage` and
+  `zshm_restore_storage_policies`, so migrations #1–#3 and the coupon/storage
+  helpers are installed.
+- **Durable rate limiting** — `zshm_rate_limit(..., 'peek')` returned
+  `{"count":0,"allowed":true,"remaining":10,"resetIn":0}`, so
+  `rate_limit_storage.sql` is applied. With no Upstash variables in Vercel the
+  database RPC *is* the shared limiter, not the per-instance fallback.
+- **Session revocation** — `users.session_version` exists (values `19` and `1`
+  for the two admins), so `session_revocation.sql` is applied and logout can
+  invalidate a copied cookie.
+- **Browser isolation** — anon `GET /rest/v1/products` → `401` (`42501`),
+  anon `GET /rest/v1/orders` → `401`, anon `GET /rest/v1/products_public` →
+  `200`. The `products_public` rollout and the `orders` lockdown are live.
+- **Public signups closed** — `GET /auth/v1/settings` reports
+  `disable_signup: true` (the first item of §3).
+- **Stock invariant** — `T-SHIRT` stock `27` = variant sum `27`, `Pant` stock
+  `24` = variant sum `24`, and `reservedStock` is `0` on both.
+
+Current data baseline (read-only counts):
+
+- products `2`, orders `1`, users `2`, coupons `1`;
+- order `ZSH-MWLGRZ7M-EC96FF20` — `Processing`, EGP `737`, created
+  `2026-11-18`;
+- coupon `ZAMALEK` — `usageCount 1`, active;
+- admins `mohammed` (`mohammedhassanmail1@gmail.com`) and `ahmed`
+  (`ahmed@gmail.com`), both role `admin`.
+
+Deployment `zashm-hsrkfkuna-zashm.vercel.app` (commit `9601766`) is live at
+https://za-shm.vercel.app.
+
+**Not verifiable from this environment** (no Management token / DB connection
+string), so these remain assumptions until checked in the dashboard:
+
+- function attributes (`SECURITY DEFINER` vs `INVOKER`, pinned `search_path`,
+  execute grants beyond what PostgREST exposes);
+- RLS policies, storage policies, and column-level grants on the base tables;
+- the last-admin trigger and the `atomic_*` internals;
+- admin MFA (not offered by the custom login — see §3).
+
+The 2026-11-07 record below is **historical and superseded**; its row counts
+(orders 15, products 1) no longer match production.
+
+> 2026-11-07: migrations #1, #2, #4, #5, #6, #7 plus `coupons_lockdown.sql`,
+> `session_revocation.sql`, `rate_limit_storage.sql` and
+> `stock_hardening_constraints.sql` were recorded as applied; migration #3 was
+> applied and smoke-tested (`atomic_edit_order('ZSH-DOES-NOT-EXIST', 0, '{}')`
+> → `{"ok": false, "reason": "not_found"}`).
 
 ---
 
@@ -203,8 +242,11 @@ based on `stock` or the selected `variantStock` entry. Nothing writes or expires
 reservations, so adding a reservation lifecycle would be a separate product
 decision. Keep the legacy column for compatibility and do not add a writer.
 `supabase/atomic_place_order.sql` Revision 8 must be applied and verified on
-Production before relying on this behavior there. COD orders deduct real stock
-atomically at placement; no inventory is held until delivery.
+Production before relying on this behavior there. A read-only probe on
+2026-11-19 confirmed the function exists and is callable by `service_role`; its
+deployed revision body still cannot be confirmed without database access. COD
+orders deduct real stock atomically at placement; no inventory is held until
+delivery.
 
 ---
 
@@ -258,6 +300,12 @@ Preview as appropriate. Values are not stored in the repo.
 Upstash is the primary shared limiter when configured. The database RPC migration
 is used when Upstash is absent or unavailable. If neither shared provider is
 available, the bounded limiter is only per warm serverless instance.
+
+**Current production state (verified 2026-11-19):** no Upstash variables are set,
+so `zshm_rate_limit` is the active shared limiter. That is durable and correct,
+but every login / coupon / error request pays a database round-trip, and under
+sustained abuse the database becomes the bottleneck. Adding Upstash is a
+performance improvement, not an open security hole.
 
 **Exact Upstash setup (manual, not performed):**
 
@@ -372,7 +420,7 @@ appear.
 | ID | Status | Note |
 |----|--------|------|
 | SEC-24 | Fixed locally; production pending | `reservedStock` is intentionally unused — see §2; verify atomic migration Revision 8 on Production. |
-| SEC-28 | Open (manual) | Supabase Auth settings — see §3. |
+| SEC-28 | Partially applied | Public signups are **closed** (`disable_signup: true`, verified 2026-11-19). Still open: MFA for the admin accounts (the custom scrypt login has no second factor) and the URL allow-list check — see §3. |
 | SEC-07 | Mitigated | `/api/coupons/validate` still returns the discount value so the cart can show it. It is rate-limited (10/min/IP) and lockout-protected (5 failures/15 min per IP+code), and the server recomputes the discount at checkout. |
 | Public coupon metadata | Accepted | The endpoint reveals whether a code exists and its value. This is required for the cart UX and is bounded by the limits above. |
 | `/api/errors` | Accepted | Unauthenticated by design (the browser reports its own crashes). Served by `api/_errors.js` through an `api/auth` rewrite (Hobby 12-function cap). 30 reports/10 min/IP, 8 KB body cap, every field sanitised and truncated, one log line per report, one Telegram alert per distinct error (6/hour/instance, 30-min dedupe). No storage, no echo, no PII. |

@@ -518,7 +518,16 @@ try {
           .filter(function(e){ return e.textContent.trim(); })
           .map(function(e){ return e.textContent.trim(); }),
         stillOnCheckout: location.pathname === '/checkout',
-        mentionsMissing: /required|enter|please|مطلوب/i.test(body)
+        mentionsMissing: /required|enter|please|مطلوب/i.test(body),
+        payment: (function(){
+          var row = document.querySelector('.checkout-payment-option');
+          var name = row && row.querySelector('.checkout-payment-name');
+          return {
+            label: name ? name.textContent.trim() : null,
+            radios: document.querySelectorAll('input[name="payment-method"]').length,
+            soon: /Coming soon|In a future update/i.test(body)
+          };
+        })()
       };
     })()
   `);
@@ -527,6 +536,9 @@ try {
   ok(validation.mentionsMissing, 'the messages say what is missing');
   eq(validation.stillOnCheckout, true, 'an empty checkout stays on /checkout');
   eq(requests.orders, ordersBefore, 'an invalid form never reaches /api/orders');
+  eq(validation.payment.label, 'Cash on Delivery', 'the only payment method is Cash on Delivery');
+  eq(validation.payment.radios, 0, 'no selectable payment radios are rendered');
+  eq(validation.payment.soon, false, 'no "coming soon" payment placeholder is rendered');
 
   console.log('\n[8] unknown routes are real 404s');
   await goto(cdp, '/this-route-does-not-exist');

@@ -8709,12 +8709,6 @@ main, [role="main"] {
   color: var(--gold-1);
 }
 
-.checkout-payment-options {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
 .checkout-payment-option {
   display: flex;
   align-items: flex-start;
@@ -8746,18 +8740,21 @@ main, [role="main"] {
     0 12px 28px rgba(0, 0, 0, 0.42);
 }
 
-.checkout-payment-option.is-soon {
-  border-style: dashed;
-  border-color: rgba(255, 255, 255, 0.12);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 100%),
-    rgba(12, 11, 10, 0.24);
-  opacity: 0.62;
-  cursor: not-allowed;
+/* Cash on Delivery is the only method, so the row is information rather than a
+   control: no pointer cursor and no hover lift that invites a click. */
+.checkout-payment-option.is-static {
+  cursor: default;
+}
+
+.checkout-payment-option.is-static:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 24px rgba(0, 0, 0, 0.34);
 }
 
 /* The icon sits in its own black-glass medallion with a champagne glyph, so the
-   two methods read as matching products rather than a label and an afterthought. */
+   method reads as a product rather than a label and an afterthought. */
 .checkout-payment-icon {
   width: 32px;
   height: 32px;
@@ -8773,12 +8770,6 @@ main, [role="main"] {
   color: var(--gold-2);
 }
 
-.checkout-payment-option.is-soon .checkout-payment-icon {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: none;
-}
-
 .checkout-payment-head {
   display: flex;
   align-items: center;
@@ -8791,8 +8782,6 @@ main, [role="main"] {
   font-weight: 600;
   line-height: 1.4;
 }
-
-.checkout-payment-option.is-soon .checkout-payment-name { color: var(--text2); }
 
 .checkout-payment-badge {
   font-size: 8.5px;
@@ -8808,12 +8797,6 @@ main, [role="main"] {
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.025) 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.checkout-payment-badge.is-soon {
-  color: var(--text3);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.035);
 }
 
 .checkout-payment-copy {

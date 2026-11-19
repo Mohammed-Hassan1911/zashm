@@ -598,7 +598,9 @@ try {
         'payment selector must sit after the total and before PLACE ORDER');
       assert.ok(/Cash on Delivery/.test(cart), 'English COD label is present');
       assert.ok(/Pay in cash when it arrives\./.test(cart), 'payment-on-arrival explanation is present');
-      assert.ok(/Coming soon/.test(cart), 'card option is advertised as coming soon');
+      assert.ok(!/Coming soon|In a future update|Credit \/ Debit Card/.test(cart),
+        'no disabled "coming soon" payment placeholder is rendered');
+      assert.ok(!/value="card"/.test(cart), 'the card method is gone, not merely hidden');
     });
 
     await step('checkout keeps its original element placement', () => {

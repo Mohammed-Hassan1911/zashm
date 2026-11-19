@@ -435,7 +435,13 @@ console.log('\n[8] production rollout decisions');
   ok(/sign ?ups?/i.test(doc) && /disable/i.test(doc), 'signup shutdown is documented');
   ok(/does not apply anything by itself/i.test(doc), 'the checklist states migrations stay manual actions');
   ok(/must be re-verified, never assumed/i.test(doc), 'production state is never assumed');
-  ok(/Production state \(verified 2026-11-07\)/.test(doc), 'the recorded production state is dated');
+  const lastUpdated = doc.match(/Last updated: (\d{4}-\d{2}-\d{2})/);
+  const verifiedOn = doc.match(/Production state \(verified (\d{4}-\d{2}-\d{2})/);
+  ok(Boolean(verifiedOn), 'the recorded production state is dated');
+  ok(
+    Boolean(lastUpdated && verifiedOn && lastUpdated[1] === verifiedOn[1]),
+    'the header date matches the production-state date'
+  );
 
   const sqlFiles = readdirSync(new URL('supabase/', root)).filter((f) => f.endsWith('.sql'));
   const writerSql = sqlFiles
