@@ -880,9 +880,9 @@ try {
         'mobile nav labels are 10px and lighter, so they read as a caption');
       assert.ok(/mobile-nav--keyboard-open/.test(nav),
         'the keyboard-open state still hides the bottom nav');
-      assert.ok(/padding:\s*\n\s*'0 max\(14px, calc\(env\(safe-area-inset-right, 0px\) \+ 14px\)\) env\(safe-area-inset-bottom, 0px\) max\(14px, calc\(env\(safe-area-inset-left, 0px\) \+ 14px\)\)'/.test(nav) &&
+      assert.ok(/padding:\s*\n\s*'0 max\(14px, calc\(env\(safe-area-inset-right, 0px\) \+ 14px\)\) calc\(6px \+ env\(safe-area-inset-bottom, 0px\)\) max\(14px, calc\(env\(safe-area-inset-left, 0px\) \+ 14px\)\)'/.test(nav) &&
          !/calc\(10px \+ env\(safe-area-inset-bottom/.test(nav),
-        'the mobile dock sits flush with the bottom edge, with no extra gap');
+        'the mobile dock sits 6px above the bottom edge plus the safe area, clear of the gesture strip');
       assert.ok(/\.site-search-input\s*\{[^}]*min-height:\s*44px/.test(css) &&
          /className="site-search-input"/.test(header),
         'the header search field is 44px tall, with its sizing in CSS');
@@ -1346,34 +1346,37 @@ try {
         'forced colours fall back to readable text');
     });
 
-    await step('touch gallery swipes follow the finger, settle on one composited layer and crossfade', () => {
+    await step('touch gallery swipes drift smoothly, ease home and crossfade slowly', () => {
       const gallery = product.slice(
         product.indexOf('product-gallery-main'),
         product.indexOf('The gallery controls sit directly')
       );
-      assert.ok(!/mode="wait"/.test(gallery), 'the outgoing photo no longer blocks the incoming one');
+      assert.ok(!/mode="wait"/.test(gallery), 'the outgoing photo never blocks the incoming one');
       assert.ok(/<AnimatePresence initial=\{false\}>/.test(product),
         'the first photo paints immediately instead of fading in');
       assert.ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+exit=\{\{ opacity: 0 \}\}/.test(product)
-        && /transition=\{\{ duration: 0\.12, ease: 'easeOut' \}\}/.test(product),
-        'the swap is a fast 120ms opacity-only crossfade');
+        && /transition=\{\{ duration: 0\.34, ease: 'easeInOut' \}\}/.test(product),
+        'the swap is a slow, soft 340ms opacity-only crossfade');
       assert.ok(!/scale: 1\.05|scale: 0\.95/.test(gallery), 'no scale animation moves the photo under the finger');
       assert.ok(/position: 'absolute',\s*\n\s*inset: 0,/.test(product),
         'both frames share the same box, so the crossfade never shifts the layout');
       assert.ok(/onPointerMove=\{handleImagePointerMove\}/.test(product),
         'the gallery actually listens for the drag, not just the release');
       assert.ok(/useMotionValue\(0\)/.test(product) &&
-         /const limit = Math\.max\(90, Math\.min\(window\.innerWidth \* 0\.45, 180\)\)/.test(product) &&
-         /galleryDragX\.set\(Math\.max\(-limit, Math\.min\(limit, deltaX \* 0\.92\)\)\)/.test(product),
-        'the photo follows the finger smoothly with a wide, fluid range and no sticky stop');
-      assert.ok(/gallerySettleRef\.current\?\.stop\?\.\(\)/.test(product) &&
-         /type: 'spring', stiffness: 720, damping: 42, mass: 0\.45/.test(product),
-        'the drag settles back quickly with one short spring and no competing animation');
-      assert.ok(/className="product-gallery-frames" style=\{\{ x: galleryDragX \}\}/.test(product) &&
+         /useSpring\(galleryDragX, \{[\s\S]{0,120}?stiffness: 190, damping: 30, mass: 0\.9, restDelta: 0\.4/.test(product),
+        'a low-stiffness spring smooths every pixel of the drag instead of snapping');
+      assert.ok(/const limit = Math\.max\(80, Math\.min\(window\.innerWidth \* 0\.35, 140\)\)/.test(product) &&
+         /galleryDragX\.set\(Math\.max\(-limit, Math\.min\(limit, deltaX \* 0\.62\)\)\)/.test(product),
+        'a gentle share of the drag drifts the plate with the finger, capped inside the frame');
+      assert.ok(!/gallerySettleRef|animate\(galleryDragX/.test(product) &&
+         /if \(!start \|\| start\.pointerId !== event\.pointerId\) return;[\s\S]{0,160}?galleryDragX\.set\(0\);/.test(product),
+        'only the dragging pointer returns the spring target to centre, so the glide is slow and even');
+      assert.ok(/className="product-gallery-frames" style=\{\{ x: galleryPlateX \}\}/.test(product) &&
          /\.product-gallery-frames\s*\{[^}]*will-change:\s*transform/.test(css),
         'the drag moves a single composited plate, never the controls or the page');
-      assert.ok(/Math\.abs\(deltaX\) < 8 \|\| Math\.abs\(deltaX\) <= Math\.abs\(deltaY\)/.test(product),
-        'a vertical page scroll still wins until the gesture is clearly horizontal');
+      assert.ok(/Math\.abs\(deltaX\) < 8 \|\| Math\.abs\(deltaX\) <= Math\.abs\(deltaY\)/.test(product) &&
+         /Math\.abs\(deltaX\) < 40/.test(product),
+        'a vertical scroll still wins until horizontal intent is clear, and a gentle swipe advances');
     });
 
     await step('Delivery details and Order Summary carry a light champagne wash', () => {

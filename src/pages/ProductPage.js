@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { animate, motion, AnimatePresence, useMotionValue } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
@@ -57,7 +57,11 @@ export default function ProductPage() {
   // A motion value follows the finger without a React render per pointer move;
   // the browser only has to move a composited layer, never repaint the photo.
   const galleryDragX = useMotionValue(0);
-  const gallerySettleRef = useRef(null);
+  // The plate reads a soft spring fed by the raw drag value: the finger never
+  // jerks the photo, and on release it glides back instead of snapping.
+  const galleryPlateX = useSpring(galleryDragX, {
+    stiffness: 190, damping: 30, mass: 0.9, restDelta: 0.4,
+  });
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
@@ -101,15 +105,8 @@ export default function ProductPage() {
   const changeImage = (direction) => {
     setImgIdx(index => (index + direction + productImages.length) % productImages.length);
   };
-  const settleGallery = () => {
-    gallerySettleRef.current?.stop?.();
-    gallerySettleRef.current = animate(galleryDragX, 0, {
-      type: 'spring', stiffness: 720, damping: 42, mass: 0.45,
-    });
-  };
   const handleImagePointerDown = (event) => {
     if (event.pointerType === 'mouse') return;
-    gallerySettleRef.current?.stop?.();
     imageSwipeStartRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
@@ -125,23 +122,23 @@ export default function ProductPage() {
     // Wait for a clear horizontal intent so a vertical page scroll still wins.
     if (!start.following && (Math.abs(deltaX) < 8 || Math.abs(deltaX) <= Math.abs(deltaY))) return;
     start.following = true;
-    // Follow the finger closely for a fast, fluid swipe with no sticky stop;
-    // the plate still stays within the frame.
-    const limit = Math.max(90, Math.min(window.innerWidth * 0.45, 180));
-    galleryDragX.set(Math.max(-limit, Math.min(limit, deltaX * 0.92)));
+    // A gentle share of the drag feeds the spring, so the photo drifts with the
+    // finger instead of racing it. The cap keeps the frame filled throughout.
+    const limit = Math.max(80, Math.min(window.innerWidth * 0.35, 140));
+    galleryDragX.set(Math.max(-limit, Math.min(limit, deltaX * 0.62)));
   };
   const handleImagePointerUp = (event) => {
     const start = imageSwipeStartRef.current;
     imageSwipeStartRef.current = null;
-    if (!start || start.pointerId !== event.pointerId || productImages.length < 2) {
-      settleGallery();
-      return;
-    }
+    if (!start || start.pointerId !== event.pointerId) return;
+    // Releasing lets the spring unwind slowly back to centre, whether or not
+    // the gesture was long enough to change the photo.
+    galleryDragX.set(0);
+    if (productImages.length < 2) return;
 
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
-    settleGallery();
-    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
     changeImage(deltaX < 0 ? 1 : -1);
   };
 
@@ -313,14 +310,14 @@ export default function ProductPage() {
               onPointerDown={handleImagePointerDown}
               onPointerMove={handleImagePointerMove}
               onPointerUp={handleImagePointerUp}
-              onPointerCancel={() => { imageSwipeStartRef.current = null; settleGallery(); }}
+              onPointerCancel={() => { imageSwipeStartRef.current = null; galleryDragX.set(0); }}
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
-              {/* One composited plate holds both frames. It follows the finger
-                  by a few pixels during a swipe, then springs back while the
-                  photos crossfade on opacity alone — no waiting mode, no scale,
+              {/* One composited plate holds both frames. A soft spring carries
+                  the finger's movement and eases it home, while the photos
+                  crossfade slowly on opacity alone — no waiting mode, no scale,
                   no blur, and no React render per pointer move. */}
-              <motion.div className="product-gallery-frames" style={{ x: galleryDragX }}>
+              <motion.div className="product-gallery-frames" style={{ x: galleryPlateX }}>
                 <AnimatePresence initial={false}>
                   <motion.img key={imgIdx}
                     src={mainImage.src}
@@ -336,7 +333,7 @@ export default function ProductPage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.12, ease: 'easeOut' }}
+                    transition={{ duration: 0.34, ease: 'easeInOut' }}
                     style={{
                       position: 'absolute',
                       inset: 0,
