@@ -389,7 +389,7 @@ console.log('\n[5] every API handler uses the shared limiter');
   const files = [
     'api/orders.js', 'api/auth.js', 'api/admin/orders.js', 'api/admin/products.js',
     'api/admin/users.js', 'api/admin/upload.js', 'api/admin/coupons.js',
-    'api/coupons/validate.js', 'api/errors.js',
+    'api/coupons/validate.js', 'api/_errors.js',
   ];
   for (const file of files) {
     const src = read(file);

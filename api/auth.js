@@ -23,6 +23,7 @@ const {
   readSession,
   SESSION_TTL_MS,
 } = require('./_lib');
+const errorsHandler = require('./_errors');
 
 // A real scrypt hash used when the email does not exist, so "no such user" and
 // "wrong password" cost the same. Never matches a real password.
@@ -40,6 +41,15 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
  * token: the token is delivered in an HttpOnly cookie.
  */
 module.exports = async function handler(req, res) {
+  // The Hobby plan caps a deployment at 12 Serverless Functions and this
+  // project is at the cap, so /api/errors is served by this function through a
+  // rewrite (vercel.json) instead of a file of its own. The marker is only set
+  // by that rewrite; a direct /api/auth?__zshm_route=errors reaches the same
+  // bounded handler and never touches login.
+  if (req.query && req.query.__zshm_route === 'errors') {
+    return errorsHandler(req, res);
+  }
+
   applyCors(req, res);
   if (req.method === 'OPTIONS') return handleOptions(req, res);
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });

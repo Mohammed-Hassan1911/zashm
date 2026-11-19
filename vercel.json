@@ -130,6 +130,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/errors", "destination": "/api/auth?__zshm_route=errors" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/shop", "destination": "/index.html" },
     { "source": "/cart", "destination": "/index.html" },

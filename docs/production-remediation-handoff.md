@@ -701,7 +701,10 @@ with the same order body plus a banner stating the order was NOT stored.
   `login:<ip>` (20) and adds `login:acct:<email>` (12 / 15 min) so rotating IPs
   cannot brute-force one account. The three checks run in `Promise.all`; a
   successful login clears the IP+email and account budgets (not the per-IP one).
-- **Client error reporting.** `POST /api/errors` (`api/errors.js`): method guard,
+- **Client error reporting.** `POST /api/errors` (`api/_errors.js`, mounted
+  through `api/auth.js` by a `vercel.json` rewrite because the Hobby plan caps a
+  deployment at 12 Serverless Functions and this project is at the cap — 11
+  handlers + `middleware.ts`): method guard,
   `errors:<ip>` 30 / 10 min, 8 KB body cap, every field sanitised/truncated, one
   greppable `CLIENT-ERROR` log line, and at most one Telegram alert per distinct
   error (6/hour/instance, 30-min dedupe, bounded map). No database, no PII, no
@@ -720,10 +723,14 @@ with the same order body plus a banner stating the order was NOT stored.
   console errors. 24 passed locally. CI now uses Node 22 and runs it via
   `npm test`; a missing browser is a hard failure when `CI=true` and a loud SKIP
   otherwise.
-- **Tests.** New `scripts/test-error-reporting.mjs` (46 passed) and a
+- **Tests.** New `scripts/test-error-reporting.mjs` (54 passed, including a
+  guard that the deployment stays within the 12-function cap) and a
   `[13] per-account login budget` section in `scripts/test-sessions-admin.mjs`
-  (84 passed). `scripts/test-edge-transport.mjs` now also scans `api/errors.js`
+  (84 passed). `scripts/test-edge-transport.mjs` now also scans `api/_errors.js`
   and accepts the `Promise.all` limiter shape (113 passed). Full local run:
   `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 0 failed, SQL suite 490 passed on real
   PostgreSQL 17; `npm run build` passes, no secret in the bundle.
+- **Deploy note:** the first `vercel --prod` attempt was rejected by the Hobby
+  plan ("No more than 12 Serverless Functions"); the endpoint was then mounted
+  on `api/auth` and `vercel build` confirms 11 API functions + middleware = 12.
 - **Not done:** no commit/push/deploy, no production verification.

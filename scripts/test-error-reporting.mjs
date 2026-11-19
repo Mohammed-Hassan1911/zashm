@@ -14,7 +14,7 @@
  *   - the browser reporter is capped, de-duped, dev-off and PII-free
  */
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import Module from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +54,7 @@ Module._load = function (request, parent, isMain) {
   if (request === '@supabase/supabase-js') return { createClient: () => ({}) };
   return originalLoad.call(this, request, parent, isMain);
 };
-const handler = require('../api/errors.js');
+const handler = require('../api/_errors.js');
 Module._load = originalLoad;
 
 // ─── HTTP fakes ──────────────────────────────────────────────────────────────
@@ -254,6 +254,42 @@ console.log('\n[6] alert throttling');
   const { _alertState } = handler;
   ok(_alertState && _alertState.seen instanceof Map, 'the alert state is exposed for the suite');
   ok(_alertState.seen.size <= 200, 'the dedupe map stays bounded');
+}
+
+// ─── [7] deployment budget: one mounted route, not one more function ───────
+console.log('\n[7] serverless function budget');
+{
+  // Vercel Hobby allows 12 Serverless Functions per deployment, and the
+  // middleware counts as one. This project is at the cap, so a new endpoint
+  // must be mounted on an existing function instead of adding a file.
+  const apiDir = path.join(root, 'api');
+  const handlers = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(?:js|mjs)$/.test(entry.name) && !entry.name.startsWith('_')) handlers.push(full);
+    }
+  };
+  walk(apiDir);
+  const functions = handlers.length + (existsSync(path.join(root, 'middleware.ts')) ? 1 : 0);
+  ok(functions <= 12, `deployment stays within the 12-function cap (${functions})`);
+
+  ok(!existsSync(path.join(apiDir, 'errors.js')), '/api/errors is not its own function');
+  ok(existsSync(path.join(apiDir, '_errors.js')), 'the handler lives in an underscore module');
+
+  const vercel = JSON.parse(read('vercel.json'));
+  const mount = (vercel.rewrites || []).find((rule) => rule.source === '/api/errors');
+  ok(Boolean(mount), 'vercel.json rewrites /api/errors');
+  eq(mount && mount.destination, '/api/auth?__zshm_route=errors', 'the rewrite targets the auth function with a marker');
+
+  const authSrc = read('api/auth.js');
+  ok(/require\('\.\/_errors'\)/.test(authSrc), 'api/auth.js requires the errors handler');
+  ok(/__zshm_route === 'errors'/.test(authSrc), 'api/auth.js recognises the marker');
+  ok(
+    authSrc.indexOf("__zshm_route === 'errors'") < authSrc.indexOf('requestOriginAllowed(req)'),
+    'the mount is handled before any auth logic'
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

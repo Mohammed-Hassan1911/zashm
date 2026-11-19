@@ -3,6 +3,11 @@
 /**
  * POST /api/errors — client error reports.
  *
+ * Mounted through `api/auth.js` (see the rewrite in vercel.json) rather than as
+ * its own Serverless Function: the Hobby plan caps a deployment at 12 functions
+ * and this project is at the cap (12 handlers + middleware). The leading
+ * underscore keeps Vercel from turning this file into a function of its own.
+ *
  * The storefront has no error tracking service and no dependency budget for
  * one, so this endpoint is the smallest useful thing that fits the existing
  * infrastructure: a rate-limited, size-capped report that (a) appears in the
