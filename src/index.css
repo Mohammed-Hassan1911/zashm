@@ -1181,14 +1181,12 @@ select option { background: var(--bg3); }
    The confirmation is a receipt torn off a roll, not a floating invoice card.
    Its top edge is a raw zigzag: a repeating conic-gradient carves a row of
    teeth out of the mask, and a second linear-gradient paints the rest of the
-   paper below them. The teeth are taller and narrower than the old 12/24 edge
-   so the tear reads clearly, and the paper's top strip is champagne gold.
-   Square top corners, a rounded foot. The paper sits directly on the page:
-   the old blurred silhouette behind it read as a dark rectangle between the
-   receipt and the footer, so it was removed. */
+   paper below them. Square top corners, a rounded foot. The paper sits
+   directly on the page: the old blurred silhouette behind it read as a dark
+   rectangle between the receipt and the footer, so it was removed. */
 .order-receipt {
-  --receipt-tear: 16px;
-  --receipt-tooth: 22px;
+  --receipt-tear: 12px;
+  --receipt-tooth: 24px;
   position: relative;
   width: 100%;
   max-width: 560px;
@@ -1210,6 +1208,11 @@ select option { background: var(--bg3); }
       0 0 / var(--receipt-tooth) var(--receipt-tear) repeat-x,
     linear-gradient(#000 0 0)
       0 var(--receipt-tear) / 100% calc(100% - var(--receipt-tear)) no-repeat;
+  /* A soft gold glass rim follows the torn edge and its tips only — the paper
+     itself stays dark. */
+  filter:
+    drop-shadow(0 -0.5px 0 rgba(255, 239, 190, 0.75))
+    drop-shadow(0 0 3px rgba(201, 168, 76, 0.38));
 }
 
 /* Shipping details stay side by side (across the width) on phones instead of
@@ -3668,69 +3671,16 @@ main, [role="main"] {
   filter: brightness(1.05);
 }
 
-/* Filter, sort and the live count move as one cluster. At tablet widths the
-   cluster can wrap below the category chips, but the count never separates
-   from the control it belongs to. */
-.shop-toolbar-actions {
-  display: flex;
-  align-items: center;
-  flex: 0 1 auto;
-  gap: 10px;
-  min-width: 0;
-}
-
-/* The select is a compact instrument, not a full-width row: a live count sits
-   beside it and takes the remaining space, so the utility strip never presents
-   one oversized control with a dead tail. */
+/* The sort is a compact instrument — a little wider than the label, never a
+   full-width bar, and never a stretched tail. */
 .shop-sort-wrap {
   position: relative;
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  width: clamp(132px, 12vw, 168px);
+  width: clamp(140px, 11vw, 160px);
   min-width: 0;
   max-width: 100%;
-}
-
-.shop-result-pill {
-  flex: 0 1 164px;
-  min-width: 0;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 7px;
-  padding: 0 14px;
-  border: 1px solid rgba(201, 168, 76, 0.24);
-  border-radius: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008));
-  box-shadow: inset 0 1px 0 rgba(255, 242, 205, 0.06);
-  color: var(--text3);
-  font-size: 9px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.shop-result-pill-mark {
-  width: 6px;
-  height: 6px;
-  margin-right: auto;
-  border: 1px solid var(--gold);
-  transform: rotate(45deg);
-}
-
-.shop-result-pill-count {
-  color: var(--gold-light);
-  font-family: var(--font-display);
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: 0;
-}
-
-.shop-result-pill-label {
-  font-size: 8px;
-  letter-spacing: 0.8px;
 }
 
 .shop-sort-chevron {
@@ -3740,9 +3690,14 @@ main, [role="main"] {
   pointer-events: none;
 }
 
+.shop-sort:hover {
+  border-color: rgba(201, 168, 76, 0.42);
+}
+
 .shop-sort:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+  outline: none;
+  border-color: rgba(232, 200, 112, 0.68);
+  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.16), inset 0 1px 0 rgba(255, 242, 205, 0.08);
 }
 
 .shop-filter-panel input {
@@ -3762,7 +3717,6 @@ main, [role="main"] {
    chips inside the filter panel keep their larger type. */
 @media (max-width: 767px) {
   .shop-toolbar { gap: 7px; padding: 9px; }
-  .shop-toolbar-actions { flex: 1 1 auto; gap: 7px; }
   .shop-chip-row { gap: 6px; }
   .shop-chip,
   .shop-filter-toggle {
@@ -3778,38 +3732,19 @@ main, [role="main"] {
     letter-spacing: 0.7px;
   }
   .shop-filter-toggle svg { width: 11px; height: 11px; }
-  /* Same 32px ladder as the chips, but the select keeps a compact width and the
-     live count takes the rest of the row. The label stays left-aligned and the
-     chevron stays at the edge of the smaller control. */
-  .shop-sort-wrap { width: 116px; }
+  /* Same 32px ladder as the chips, but the select stays compact and a little
+     wider than its label — not a full-width bar. */
+  .shop-sort-wrap { width: 148px; }
   .shop-sort {
     min-height: 32px;
-    padding: 6px 23px 6px 9px;
-    font-size: 9px;
+    padding: 6px 24px 6px 10px;
+    font-size: 9.5px;
     letter-spacing: 0.4px;
   }
   .shop-sort-chevron { right: 7px; width: 10px; height: 10px; }
-  .shop-result-pill {
-    flex: 1 1 0;
-    min-height: 32px;
-    padding: 0 8px;
-    gap: 5px;
-    font-size: 8px;
-    letter-spacing: 0.5px;
-  }
-  .shop-result-pill-mark { width: 5px; height: 5px; }
-  .shop-result-pill-count { font-size: 12px; }
-  .shop-result-pill-label { font-size: 7.5px; letter-spacing: 0.4px; }
 }
 
-/* At 320px the count keeps its gold diamond and number; the word is left to
-   the accessible label so the pill never clips or pushes the page wider. */
-@media (max-width: 360px) {
-  .shop-result-pill { gap: 4px; padding: 0 6px; }
-  .shop-result-pill-mark { width: 4px; height: 4px; }
-  .shop-result-pill-count { font-size: 11px; }
-  .shop-result-pill-label { display: none; }
-}
+
 
 @media (prefers-reduced-motion: reduce) {
   body::before {
@@ -4437,6 +4372,14 @@ main, [role="main"] {
    inner mat hairline are both switched off here, so the shot sits inside the
    single outer border instead of a border inside a border. */
 .product-card-image.product-gallery-main::before { display: none; }
+
+/* The swipe plate sits under the controls and above the mat. Only `transform`
+   moves during a touch drag, so the photo never repaints under the finger. */
+.product-gallery-frames {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
 
 /* The print sits on a dark mat: a soft vignette at its edges, so a bright
    studio shot still reads as a mounted print rather than a white rectangle

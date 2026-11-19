@@ -34,7 +34,9 @@ export default function MobileNav() {
     const isEditable = (element) => {
       if (!(element instanceof HTMLElement)) return false;
       if (element.isContentEditable) return true;
-      if (element.matches('textarea, select')) return !element.disabled;
+      // A native <select> opens a system picker: it is not a keyboard, so the
+      // dock must stay put instead of jumping away and back.
+      if (element.matches('textarea')) return !element.disabled;
       return element.matches('input') && !element.disabled && !element.readOnly &&
         !['button', 'checkbox', 'file', 'hidden', 'image', 'radio', 'reset', 'submit'].includes(element.type);
     };

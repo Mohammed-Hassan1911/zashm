@@ -870,12 +870,7 @@ export function CheckoutPage() {
             boxSizing: 'border-box',
             textAlign: 'center',
             padding: '34px 26px 22px',
-            // The top strip is painted inside the masked paper, so only the
-            // torn teeth catch the gold; no glow or silhouette sits behind it.
-            background:
-              'linear-gradient(180deg, #fff0c4 0px, #d8bd7a 2px, #a8853d var(--receipt-tear), transparent var(--receipt-tear)),' +
-              ' linear-gradient(160deg, #17150f 0%, #100f0d 46%, #0b0b0b 100%)',
-            backgroundRepeat: 'no-repeat, no-repeat',
+            background: 'linear-gradient(160deg, #17150f 0%, #100f0d 46%, #0b0b0b 100%)',
             border: '1px solid rgba(201,168,76,0.30)',
             width: '100%',
             color: '#f5f0e8',

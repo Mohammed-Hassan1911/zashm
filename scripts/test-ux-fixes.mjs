@@ -903,26 +903,22 @@ try {
         .find((block) => /\.shop-chip,/.test(block)) || '';
       assert.ok(/\.shop-chip,\s*\n\s*\.shop-filter-toggle \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
         'phones shrink the chips and the Filter toggle together (44→32px, 11→9.5px)');
-      assert.ok(/\.shop-sort \{\s*min-height:\s*32px;[^}]*font-size:\s*9px;/.test(phoneToolbar),
+      assert.ok(/\.shop-sort \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
         'the sort select shrinks with the chips into a compact control');
-      assert.ok(/\.shop-sort-wrap \{[^}]*width:\s*clamp\(132px, 12vw, 168px\)/.test(css) &&
-         /\.shop-sort-wrap \{ width: 116px; \}/.test(phoneToolbar),
-        'the sort is a fixed compact width on every screen');
-      assert.ok(/\.shop-result-pill \{\s*flex: 1 1 0;/.test(phoneToolbar) &&
-         /className="shop-result-pill"/.test(shop) &&
-         /aria-label=\{`\$\{filtered\.length\}/.test(shop) &&
-         /filtered\.length/.test(shop),
-        'a live, labelled piece-count fills the gap beside the phone sort with real data');
-      const narrowToolbar = (css.match(/@media \(max-width: 360px\) \{[\s\S]*?\n\}/g) || [])
-        .find((block) => /\.shop-result-pill-label/.test(block)) || '';
-      assert.ok(/className="shop-toolbar-actions"/.test(shop) &&
-         /\.shop-toolbar-actions \{[^}]*display: flex;/.test(css) &&
-         /\.shop-result-pill-label \{ display: none; \}/.test(narrowToolbar),
-        'the count stays with the sort, and the narrowest phones drop only its word');
+      assert.ok(/\.shop-sort-wrap \{[^}]*width:\s*clamp\(140px, 11vw, 160px\)/.test(css) &&
+         /\.shop-sort-wrap \{ width: 148px; \}/.test(phoneToolbar),
+        'the sort is compact but a little wider than its label on every screen');
+      assert.ok(!/shop-result-pill/.test(shop) && !/shop-toolbar-actions/.test(shop),
+        'there is no piece-count pill or extra wrapper beside the sort');
       assert.ok(!/event\.currentTarget\.blur\(\)/.test(shop),
         'no forced blur adds a second focus animation after the native picker closes');
       assert.ok(/\.shop-sort \{[^}]*transition: none;[^}]*touch-action: manipulation;/.test(css),
         'the select has no CSS transition of its own to lag behind the picker');
+      assert.ok(/\.shop-sort:focus-visible\s*\{[^}]*outline:\s*none;[^}]*border-color:\s*rgba\(232, 200, 112, 0\.68\);[^}]*box-shadow:\s*0 0 0 2px rgba\(201, 168, 76, 0\.16\)/.test(css),
+        'the focused sort border is a smaller, softer gold ring');
+      assert.ok(/isEditable[\s\S]{0,320}?element\.matches\('textarea'\)/.test(nav) &&
+         !/isEditable[\s\S]{0,320}?element\.matches\('textarea, select'\)/.test(nav),
+        'opening the native sort picker does not count as a keyboard, so the bottom nav stays');
       assert.ok(/\.shop-label-chip \{\s*min-height:\s*38px;[^}]*font-size:\s*12px;/.test(phoneToolbar),
         'the label chips inside the panel keep their larger 38px / 12px scale');
       assert.ok(/\.price-input \{\s*font-size:\s*16px/.test(css),
@@ -1344,25 +1340,33 @@ try {
         'forced colours fall back to readable text');
     });
 
-    await step('the phone gallery is back to the original waiting scale swap', () => {
+    await step('touch gallery swipes follow the finger, settle on one composited layer and crossfade', () => {
       const gallery = product.slice(
         product.indexOf('product-gallery-main'),
         product.indexOf('The gallery controls sit directly')
       );
-      assert.ok(/<AnimatePresence mode="wait">/.test(gallery),
-        'the outgoing photo finishes its exit before the next one enters');
-      assert.ok(/initial=\{\{ opacity: 0, scale: 1\.05 \}\}/.test(gallery) &&
-         /animate=\{\{ opacity: 1, scale: 1 \}\}/.test(gallery) &&
-         /exit=\{\{ opacity: 0, scale: 0\.95 \}\}/.test(gallery) &&
-         /transition=\{\{ duration: 0\.4 \}\}/.test(gallery),
-        'the photo uses the original 400ms 1.05 → 1 → 0.95 swap');
-      assert.ok(/onPointerDown=\{handleImagePointerDown\}/.test(gallery) &&
-         /onPointerUp=\{handleImagePointerUp\}/.test(gallery),
-        'the swipe still advances the photo on release');
-      assert.ok(!/onPointerMove|useMotionValue|galleryDragX|gallerySettleRef|product-gallery-frames/.test(gallery + product.slice(0, 3000)),
-        'the finger-follow plate, spring and its motion value are gone');
-      assert.ok(!/\.product-gallery-frames\s*\{/.test(css),
-        'the extra composited plate rule was removed from the stylesheet');
+      assert.ok(!/mode="wait"/.test(gallery), 'the outgoing photo no longer blocks the incoming one');
+      assert.ok(/<AnimatePresence initial=\{false\}>/.test(product),
+        'the first photo paints immediately instead of fading in');
+      assert.ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+exit=\{\{ opacity: 0 \}\}/.test(product)
+        && /transition=\{\{ duration: 0\.18, ease: 'easeOut' \}\}/.test(product),
+        'the swap is an 180ms opacity-only crossfade');
+      assert.ok(!/scale: 1\.05|scale: 0\.95/.test(gallery), 'no scale animation moves the photo under the finger');
+      assert.ok(/position: 'absolute',\s*\n\s*inset: 0,/.test(product),
+        'both frames share the same box, so the crossfade never shifts the layout');
+      assert.ok(/onPointerMove=\{handleImagePointerMove\}/.test(product),
+        'the gallery actually listens for the drag, not just the release');
+      assert.ok(/useMotionValue\(0\)/.test(product) &&
+         /galleryDragX\.set\(Math\.max\(-38, Math\.min\(38, deltaX \* 0\.42\)\)\)/.test(product),
+        'the photo follows a horizontal drag with resistance and a capped offset');
+      assert.ok(/gallerySettleRef\.current\?\.stop\?\.\(\)/.test(product) &&
+         /type: 'spring', stiffness: 480, damping: 36, mass: 0\.6/.test(product),
+        'the drag settles back with one short spring and no competing animation');
+      assert.ok(/className="product-gallery-frames" style=\{\{ x: galleryDragX \}\}/.test(product) &&
+         /\.product-gallery-frames\s*\{[^}]*will-change:\s*transform/.test(css),
+        'the drag moves a single composited plate, never the controls or the page');
+      assert.ok(/Math\.abs\(deltaX\) < 8 \|\| Math\.abs\(deltaX\) <= Math\.abs\(deltaY\)/.test(product),
+        'a vertical page scroll still wins until the gesture is clearly horizontal');
     });
 
     await step('Delivery details and Order Summary carry a light champagne wash', () => {
@@ -1432,12 +1436,17 @@ try {
         'the blurred silhouette that read as a dark rectangle below the receipt is gone');
     });
 
-    await step('the torn receipt edge is clearer and gold', () => {
+    await step('the torn receipt edge keeps its shape with gold glass tips', () => {
       const receipt = (css.match(/\.order-receipt \{[\s\S]*?\n\}/) || [])[0] || '';
-      assert.ok(/--receipt-tear: 16px;/.test(receipt) && /--receipt-tooth: 22px;/.test(receipt),
-        'the teeth are taller and narrower than the old 12px / 24px edge');
-      assert.ok(/linear-gradient\(180deg, #fff0c4 0px, #d8bd7a 2px, #a8853d var\(--receipt-tear\), transparent var\(--receipt-tear\)\)/.test(cartPage),
-        'the masked top strip paints only the torn teeth in champagne gold');
+      const card = (css.match(/\.order-confirmation-card \{[\s\S]*?\n\}/g) || [])
+        .find((block) => /drop-shadow/.test(block)) || '';
+      assert.ok(/--receipt-tear: 12px;/.test(receipt) && /--receipt-tooth: 24px;/.test(receipt),
+        'the receipt keeps its original zigzag shape and scale');
+      assert.ok(/drop-shadow\(0 -0\.5px 0 rgba\(255, 239, 190, 0\.75\)\)/.test(card) &&
+         /drop-shadow\(0 0 3px rgba\(201, 168, 76, 0\.38\)\)/.test(card),
+        'only the torn edge and tips carry a soft gold glass rim');
+      assert.ok(/background: 'linear-gradient\(160deg, #17150f 0%, #100f0d 46%, #0b0b0b 100%\)',/.test(cartPage),
+        'the paper itself stays dark instead of a full gold strip');
       assert.ok(!/\.order-receipt::before/.test(css),
         'no glow layer returns a rectangle behind the paper');
     });
