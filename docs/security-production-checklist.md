@@ -6,7 +6,7 @@ This file is guidance only; it does not apply anything by itself. Every
 migration and Dashboard change below is a manual action. The production status
 is recorded in §0 and must be re-verified, never assumed.
 
-Last updated: 2026-11-19
+Last updated: 2026-11-20
 
 ---
 
@@ -56,15 +56,16 @@ Current data baseline (2026-11-19):
   `ZSH-MWLGRZ7M-EC96FF20`, coupon `ZAMALEK`, admins `mohammed` and `ahmed` — is
   historical, not a 2026-11-19 live count.
 
-Production https://za-shm.vercel.app serves the bundle built from `03b055f`
-(`index-wOn8XH1_.js` and `index-CP2InU7q.css`), first deployed as
-`zashm-cj604d2l1-zashm.vercel.app` (Ready/Production, 2026-11-20). Aliases:
-`za-shm.vercel.app`, `zashm-zashm.vercel.app`,
-`zashm-git-main-zashm.vercel.app`. Later docs-only pushes (starting with
-`b66e03a`) trigger Vercel rebuilds with byte-identical output, so they do not
-change the served assets.
+Production https://za-shm.vercel.app serves the bundle built from `b5543fc`
+(`index-CKR1oqUT.js` and `index-CP2InU7q.css`), deployed as
+`zashm-1rnczuj1f-zashm.vercel.app` (Ready/Production, 2026-11-20) and aliased to
+`za-shm.vercel.app`. Earlier releases in this pass were `03b055f`
+(`zashm-cj604d2l1-zashm.vercel.app`, `index-wOn8XH1_.js`) and the docs-only
+pushes `b66e03a`, `d14dd2d`; those rebuilds were byte-identical. The live bundle
+hash was re-read from the deployed HTML after `b5543fc` and matches the local
+build.
 
-Live verification at `03b055f`:
+Live verification at `b5543fc`:
 
 - `/shop` static metadata, canonical, OG/Twitter tags and `<noscript>` shell.
 - `/prerendered-products.json` → 200 with `{"ids":[]}`.
@@ -78,26 +79,42 @@ Live verification at `03b055f`:
   stale-while-revalidate=604800`.
 - unauthenticated `GET /api/admin/orders` and `/api/admin/users` → `401`.
 - a deactivated test product URL serves the generic SPA title with no stale
-  Product JSON-LD.
+  Product JSON-LD, and the settled not-found view exposes a real `<h1>`.
+- a 24-case browser sweep at 320/375/768/1440px on `/`, `/shop`, `/cart`,
+  `/wishlist`, `/track` and the deactivated product URL: exactly one `<h1>` per
+  settled page, no document overflow, no broken images, no missing alt text, no
+  unnamed controls, no console/network errors, WhatsApp home-only at
+  `z-index: 30000` with safe-area offsets, and no back-to-top action. The only
+  out-of-viewport box is the clipped decorative `span.shop-hero-glow`; it never
+  creates document overflow.
 
 An explicit `vercel --prod --yes` attempt returned `Not authorized` from the
-CLI; the push to `main` auto-deployed the same commit successfully, and the live
-checks above were performed against that production deployment. No second manual
-deploy was attempted.
+CLI; every push to `main` auto-deployed the same commit successfully, and the
+live checks above were performed against those production deployments. No second
+manual deploy was attempted.
 
 The previous release `a62069f` (`zashm-m7lv14t0k-zashm.vercel.app`,
 2026-11-19) served `index-vIyADBiI.js` / `index-CREmyxBi.css` with the four then
 test products in the sitemap; `ZSHM_REQUIRE_SQL_TESTS=1 npm test` passed 30
 suites / 3395 assertions with 0 failures and the SQL suite really ran (490
 passed). A 28-case 320/390/768/1440px browser sweep and computed-style checks
-were performed at the earlier `7a0f3e6` build and are historical; they were not
-repeated at `a62069f` or `03b055f`.
+at the earlier `7a0f3e6` build are historical. The current 24-case
+320/375/768/1440px sweep listed above was repeated on the final `b5543fc`
+deployment.
 
 Safe PII verification: unauthenticated `GET /api/admin/orders` and
-`GET /api/admin/users` both returned `401`, and the deployed bundle hash matched
-the local build containing the 252-assertion limiter regression suite. No
-121-request probe was run against production because a valid admin session was
-not available.
+`GET /api/admin/users` both returned `401`. With the owner-supplied test admin
+account, login returned HTTP 200 with two cookies and a 247-character session
+cookie; 121 authenticated reads per endpoint were then issued. All returned
+`200`, which initially looked like a limiter failure. Production evidence shows
+the limiter is correct: the shared Supabase RPC recorded 121 hits per endpoint,
+split across six hashed keys because this test client's egress IP rotated
+(`41.33.87.10`, `197.246.142.68`, `197.246.142.208`, …) between requests; a
+Vercel header-echo probe confirmed the rotation. No single IP crossed 120 in the
+window. A deterministic production-DB check with 121 `consume` calls on one key
+returned `allowed: true` at count 120 and `allowed: false` at count 121
+(`resetIn` 26s). No limiter code change was needed; the HTTP burst simply could
+not exercise one per-IP bucket from a rotating-IP client.
 
 All code-side Low work is now deployed: reduced-motion gallery, deferred hover
 image fetch, route-scoped idle preload, refreshable `/og-image.jpg` cache,
@@ -106,8 +123,8 @@ error logs, signed-token cleanup on the tracking page, minimal `?wa=1` prefill,
 and immutable cache headers on new Storage uploads.
 
 Final local proof for this tree: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 30
-suites / 3450 assertions, 0 failures; the SQL suite really ran (490 passed on
-temporary PostgreSQL 17). `npm run build` → `index-wOn8XH1_.js` +
+suites / 3451 assertions, 0 failures; the SQL suite really ran (490 passed on
+temporary PostgreSQL 17). `npm run build` → `index-CKR1oqUT.js` +
 `index-CP2InU7q.css`, shop shell written, an empty
 `build/prerendered-products.json` published from a successful live
 `products_public` read, and a clean secret scan. One earlier local build hit a
