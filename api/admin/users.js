@@ -65,6 +65,10 @@ async function listUsers(req, res) {
   const session = await requirePerm(req, res, 'users.read');
   if (!session) return;
 
+  const ip = clientIp(req);
+  const check = await rateLimitShared(`adminuserread:${ip}`, 120, 60 * 1000);
+  if (!check.allowed) return tooMany(res, check.resetIn);
+
   try {
     const sb = supabaseAdmin();
     const { data, error } = await sb.from('users').select('*').order('createdate', { ascending: false });

@@ -18,7 +18,11 @@ import {
   baseUrlFromEnv,
   escapeHtml,
   renderProductHtml,
+  renderShopHtml,
+  prerenderCatalogue,
+  writeProductManifest,
   writeProductPages,
+  writeShopPage,
 } from './prerender-products.mjs';
 
 let pass = 0;
@@ -35,6 +39,7 @@ function eq(actual, expected, label) {
 function ok(value, label) { eq(Boolean(value), true, label); }
 
 const ROOT = new URL('..', import.meta.url).pathname;
+const origin = 'https://za-shm.vercel.app';
 const read = (file) => readFileSync(join(ROOT, file), 'utf8');
 
 // A trimmed copy of the real built shell: the parts the injection touches.
@@ -230,6 +235,93 @@ console.log('\n[9] build wiring');
   ok(!script.includes('loadExclusions'), 'live products are not filtered by the offline-backup exclusions');
   ok(!script.includes('EXCLUSIONS_FILE'), 'the exclusion file is never read');
   ok(script.includes("type: 'application/ld+json'") || script.includes('application/ld+json'), 'JSON-LD is emitted');
+}
+
+console.log('\n[10] shop page has its own static metadata');
+{
+  const html = renderShopHtml(TEMPLATE, { baseUrl: origin });
+  ok(html.includes('<title>Shop — ZASHM</title>'), 'shop title replaces the home title');
+  ok(html.includes('<meta name="description" content="Browse the full ZASHM collection — premium clothing with delivery across Egypt."/>'),
+    'shop description replaces the home description');
+  ok(html.includes(`<link rel="canonical" href="${origin}/shop"/>`), 'canonical points at /shop');
+  ok(html.includes(`<meta property="og:url" content="${origin}/shop"/>`), 'OG url points at /shop');
+  ok(html.includes('<meta property="og:title" content="Shop — ZASHM"/>'), 'OG title is the shop title');
+  ok(html.includes('<meta name="twitter:title" content="Shop — ZASHM"/>'), 'twitter title is the shop title');
+  ok(!html.includes('application/ld+json'), 'no product JSON-LD leaks into the shop shell');
+  ok(!html.includes('rel="preload" as="image"'), 'no product LCP preload leaks into the shop shell');
+  ok(html.includes('<div id="root"></div>'), 'the React root is untouched');
+  ok(html.includes('src="/assets/index-abc.js"'), 'the module entry still loads');
+  ok(html.includes('<h1 style="font-size:28px'), 'a no-JS heading describes the page');
+
+  const dir = mkdtempSync(join(tmpdir(), 'zashm-shop-prerender-'));
+  try {
+    eq(writeShopPage(TEMPLATE, { buildDir: dir, baseUrl: origin }), true, 'shop page is written');
+    ok(existsSync(join(dir, 'shop', 'index.html')), 'build/shop/index.html exists');
+    eq(writeShopPage(TEMPLATE, { buildDir: dir, baseUrl: origin, dryRun: true }), true,
+      'a dry run still reports the shop page');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+console.log('\n[11] the sitemap manifest matches written product shells');
+{
+  const dir = mkdtempSync(join(tmpdir(), 'zashm-prerender-manifest-'));
+  try {
+    const result = writeProductPages([PRODUCT, { ...PRODUCT, id: '1794232720755262' }], TEMPLATE, { buildDir: dir });
+    const manifest = writeProductManifest(result.ids, { buildDir: dir });
+    eq(manifest.ids, ['1794232720755261', '1794232720755262'], 'manifest lists the ids that got shells');
+    const file = join(dir, 'prerendered-products.json');
+    ok(existsSync(file), 'build/prerendered-products.json exists');
+    eq(JSON.parse(readFileSync(file, 'utf8')).ids, manifest.ids, 'the file is valid JSON');
+
+    const skipped = writeProductPages([{ ...PRODUCT, id: 'bad' }], TEMPLATE, { buildDir: dir });
+    eq(skipped.ids, [], 'a rejected product is not counted as written');
+    const empty = writeProductManifest([], { buildDir: dir });
+    eq(empty.ids, [], 'a genuinely empty catalogue publishes an empty manifest');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+console.log('\n[12] a failed catalogue read never publishes an empty manifest');
+{
+  const env = {
+    VITE_SUPABASE_URL: 'https://example.supabase.co',
+    VITE_SUPABASE_ANON_KEY: 'public-anon-test-key',
+  };
+  const dir = mkdtempSync(join(tmpdir(), 'zashm-prerender-outage-'));
+  try {
+    const failedFetch = await prerenderCatalogue(TEMPLATE, {
+      buildDir: dir,
+      env,
+      fetchImpl: async () => { throw new Error('catalogue offline'); },
+    });
+    eq(failedFetch.available, false, 'a network failure is reported as unavailable');
+    eq(failedFetch.reason, 'catalogue offline', 'the reason is preserved for the build log');
+    eq(failedFetch.manifest, null, 'no manifest is returned');
+    ok(!existsSync(join(dir, 'prerendered-products.json')), 'no empty manifest is published');
+    ok(!existsSync(join(dir, 'product')), 'no product shells are written from a failed read');
+
+    const skipped = await prerenderCatalogue(TEMPLATE, {
+      buildDir: dir,
+      env: {},
+      fetchImpl: async () => { throw new Error('must not fetch without env'); },
+    });
+    eq(skipped.available, false, 'a missing configuration is reported as unavailable');
+    ok(!existsSync(join(dir, 'prerendered-products.json')), 'missing configuration does not publish a manifest');
+
+    const empty = await prerenderCatalogue(TEMPLATE, {
+      buildDir: dir,
+      env,
+      fetchImpl: async () => new Response('[]', { status: 200 }),
+    });
+    eq(empty.available, true, 'a successful empty catalogue is available');
+    eq(empty.manifest.ids, [], 'only a successful read may publish an empty manifest');
+    ok(existsSync(join(dir, 'prerendered-products.json')), 'the successful empty manifest is present');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

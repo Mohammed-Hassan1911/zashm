@@ -127,6 +127,10 @@ async function listOrders(req, res) {
   const session = await requirePerm(req, res, 'orders.read');
   if (!session) return;
 
+  const ip = clientIp(req);
+  const check = await rateLimitShared(`adminorderread:${ip}`, 120, 60 * 1000);
+  if (!check.allowed) return tooMany(res, check.resetIn);
+
   try {
     const sb = supabaseAdmin();
     const { data, error } = await sb.from('orders').select('*').order('date', { ascending: false });

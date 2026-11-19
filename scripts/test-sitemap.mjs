@@ -25,6 +25,19 @@ function ok(value, label) { eq(Boolean(value), true, label); }
 
 const origin = 'https://za-shm.vercel.app';
 
+/** Stub the build-generated manifest so product shells always exist in tests. */
+function withManifest(ids, fetchImpl) {
+  return async (url, options) => {
+    if (String(url).includes('/prerendered-products.json')) {
+      return new Response(JSON.stringify({ ids }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return fetchImpl(url, options);
+  };
+}
+
 console.log('\n[1] active and available product selection');
 {
   const xml = buildSitemapXml([
@@ -98,14 +111,14 @@ console.log('\n[3] public data source and pagination');
 
   const originalFetch = globalThis.fetch;
   const requests = [];
-  globalThis.fetch = async (url, options) => {
+  globalThis.fetch = withManifest(['1', '1001'], async (url, options) => {
     requests.push({ url: String(url), options });
     const start = Number(String(options.headers.Range).split('-')[0]);
     const rows = start === 0
       ? Array.from({ length: 1000 }, (_, index) => ({ id: index + 1, stock: 1 }))
       : [{ id: 1001, stock: 1 }];
     return new Response(JSON.stringify(rows), { status: 200 });
-  };
+  });
   const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
   try {
     await sitemapHandler({ method: 'GET' }, response);
@@ -168,7 +181,7 @@ console.log('\n[3b] variant product through the real fetch path');
   };
   const selects = [];
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = withManifest([String(row.id)], async (url) => {
     const select = new URL(String(url)).searchParams.get('select') || '';
     selects.push(select);
     const columns = select.split(',').map((value) => value.trim()).filter(Boolean);
@@ -177,7 +190,7 @@ console.log('\n[3b] variant product through the real fetch path');
       if (column in row) projected[column] = row[column];
     }
     return new Response(JSON.stringify([projected]), { status: 200 });
-  };
+  });
   const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
   try {
     await sitemapHandler({ method: 'GET' }, response);
@@ -218,7 +231,7 @@ console.log('\n[4] safe handling of source failures');
   process.env.SUPABASE_URL = 'https://example.supabase.co';
   process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
   process.env.PUBLIC_BASE_URL = origin;
-  globalThis.fetch = async () => new Response('unavailable', { status: 503 });
+  globalThis.fetch = withManifest([], async () => new Response('unavailable', { status: 503 }));
   let errors = 0;
   console.error = () => { errors += 1; };
   const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
@@ -282,7 +295,7 @@ console.log('\n[6] missing canonical origin');
   process.env.SUPABASE_URL = 'https://example.supabase.co';
   process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
   delete process.env.PUBLIC_BASE_URL;
-  globalThis.fetch = async () => new Response('[]', { status: 200 });
+  globalThis.fetch = withManifest([], async () => new Response('[]', { status: 200 }));
   const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
   try {
     await sitemapHandler({ method: 'GET' }, response);
@@ -304,6 +317,70 @@ console.log('\n[7] method guard');
   await sitemapHandler({ method: 'POST' }, response);
   eq(response.statusCode, 405, 'rejects non-GET requests');
   eq(response.headers.Allow, 'GET', 'advertises the supported method');
+}
+
+console.log('\n[8] product URLs are limited to ids with a static shell');
+{
+  const products = [{ id: 'old', stock: 2 }, { id: 'new', stock: 2 }];
+  const filtered = buildSitemapXml(products, origin, new Set(['old']));
+  ok(filtered.includes(`${origin}/product/old`), 'a prerendered product stays in the sitemap');
+  ok(!filtered.includes(`${origin}/product/new`), 'a product created after the last deploy is withheld');
+
+  const oldUrl = process.env.SUPABASE_URL;
+  const oldKey = process.env.SUPABASE_ANON_KEY;
+  const oldSite = process.env.PUBLIC_BASE_URL;
+  const oldFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  process.env.PUBLIC_BASE_URL = origin;
+  globalThis.fetch = withManifest(['old'], async () => new Response(JSON.stringify(products), { status: 200 }));
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = oldFetch;
+    for (const [name, value] of [['SUPABASE_URL', oldUrl], ['SUPABASE_ANON_KEY', oldKey], ['PUBLIC_BASE_URL', oldSite]]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+  ok(response.body.includes(`${origin}/product/old`), 'the handler includes the prerendered product');
+  ok(!response.body.includes(`${origin}/product/new`), 'the handler filters live rows through the manifest');
+}
+
+console.log('\n[9] an unavailable manifest fails closed');
+{
+  const oldUrl = process.env.SUPABASE_URL;
+  const oldKey = process.env.SUPABASE_ANON_KEY;
+  const oldSite = process.env.PUBLIC_BASE_URL;
+  const oldFetch = globalThis.fetch;
+  const oldConsoleError = console.error;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  process.env.PUBLIC_BASE_URL = origin;
+  let productFetches = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/prerendered-products.json')) {
+      return new Response('missing', { status: 404 });
+    }
+    productFetches += 1;
+    return new Response(JSON.stringify([{ id: 'old', stock: 2 }]), { status: 200 });
+  };
+  console.error = () => {};
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = oldFetch;
+    console.error = oldConsoleError;
+    for (const [name, value] of [['SUPABASE_URL', oldUrl], ['SUPABASE_ANON_KEY', oldKey], ['PUBLIC_BASE_URL', oldSite]]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+  eq(productFetches, 0, 'a missing manifest skips the catalogue fetch entirely');
+  eq((response.body.match(/<loc>/g) || []).length, 2, 'only home and shop remain in the fallback');
+  ok(response.headers['Cache-Control'].includes('s-maxage=300'), 'the fallback uses the short cache window');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

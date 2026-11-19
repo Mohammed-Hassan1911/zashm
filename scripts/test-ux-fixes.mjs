@@ -924,11 +924,15 @@ try {
         'pressing or focusing the sort fills it with the same gold as an active chip');
       assert.ok(/\.shop-sort-wrap:active \.shop-sort-chevron,\s*\n\.shop-sort-wrap:focus-within \.shop-sort-chevron \{[^}]*color: #14110b;/.test(css),
         'the chevron switches to dark ink while the sort is gold');
-      assert.ok(/onChange=\{\(event\) => \{\s*\n\s*setSort\(event\.target\.value\);\s*\n\s*event\.currentTarget\.blur\(\);\s*\n\s*\}\}/.test(shop) &&
-         /event\.key === 'Escape'\) event\.currentTarget\.blur\(\)/.test(shop) &&
+      assert.ok(/onPointerDown=\{\(\) => \{ sortPointerRef\.current = true; \}\}/.test(shop) &&
+         /if \(sortPointerRef\.current\) event\.currentTarget\.blur\(\);/.test(shop) &&
+         /event\.key === 'Escape'\)/.test(shop) &&
          /document\.addEventListener\('pointerdown', clearSortFocus, true\)/.test(shop) &&
          /event\.target !== select\) select\.blur\(\)/.test(shop),
-        'choosing, cancelling with Escape, or tapping away blurs at once so the gold clears immediately');
+        'pointer choices, Escape, and tapping away clear the gold; keyboard choices do not');
+      assert.ok(/\['ArrowDown', 'ArrowUp', 'Home', 'End'\]\.includes\(event\.key\)\)\s*\{\s*sortPointerRef\.current = false;\s*\}/.test(shop) &&
+         /onBlur=\{\(\) => \{ sortPointerRef\.current = false; \}\}/.test(shop),
+        'arrow keys clear the pointer flag so the select keeps focus and its gold fill');
       assert.ok(/isEditable[\s\S]{0,320}?element\.matches\('textarea'\)/.test(nav) &&
          !/isEditable[\s\S]{0,320}?element\.matches\('textarea, select'\)/.test(nav),
         'opening the native sort picker does not count as a keyboard, so the bottom nav stays');
@@ -1405,8 +1409,13 @@ try {
          /galleryDragX\.set\(Math\.max\(-limit, Math\.min\(limit, deltaX \* 0\.62\)\)\)/.test(product),
         'a gentle share of the drag drifts the plate with the finger, capped inside the frame');
       assert.ok(!/gallerySettleRef|animate\(galleryDragX/.test(product) &&
-         /if \(!start \|\| start\.pointerId !== event\.pointerId\) return;[\s\S]{0,160}?galleryDragX\.set\(0\);/.test(product),
-        'only the dragging pointer returns the spring target to centre, so the glide is slow and even');
+         /const handleImagePointerDown[\s\S]{0,400}?if \(imageSwipeStartRef\.current\) return;/.test(product),
+        'a second finger cannot replace the pointer that owns the drag');
+      assert.ok(/const handleImagePointerUp[\s\S]{0,260}?if \(!start \|\| start\.pointerId !== event\.pointerId\) return;[\s\S]{0,160}?imageSwipeStartRef\.current = null;[\s\S]{0,160}?galleryDragX\.set\(0\);/.test(product),
+        'an extra finger lifting never clears the active gesture; the owner still eases the plate home');
+      assert.ok(/const handleImagePointerCancel[\s\S]{0,220}?start\.pointerId !== event\.pointerId\) return;/.test(product) &&
+         /onPointerCancel=\{handleImagePointerCancel\}/.test(product),
+        'a cancel from another finger cannot strand the plate off-centre');
       assert.ok(/className="product-gallery-frames" style=\{\{ x: galleryPlateX \}\}/.test(product) &&
          /\.product-gallery-frames\s*\{[^}]*will-change:\s*transform/.test(css),
         'the drag moves a single composited plate, never the controls or the page');

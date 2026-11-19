@@ -2,6 +2,8 @@ import { canonicalUrl, productRoutePath } from '../src/lib/product-url.mjs';
 
 const PAGE_SIZE = 1000;
 const DEFAULT_SITE_ORIGIN = 'https://za-shm.vercel.app';
+const PRERENDER_MANIFEST_PATH = '/prerendered-products.json';
+const MANIFEST_TIMEOUT_MS = 5000;
 const STATIC_URLS = [
   { path: '/', changefreq: 'weekly', priority: '1.0' },
   { path: '/shop', changefreq: 'daily', priority: '0.9' },
@@ -84,6 +86,25 @@ async function fetchPublicProducts({ supabaseOrigin, anonKey }) {
   }
 }
 
+/**
+ * Product shells are written at build time. Only advertise ids that received
+ * one, otherwise a product created after the last deploy would enter the
+ * sitemap while its URL still served the generic home metadata.
+ */
+async function fetchPrerenderedIds(siteOrigin) {
+  const url = new URL(PRERENDER_MANIFEST_PATH, siteOrigin);
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+    signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`prerender manifest returned HTTP ${response.status}`);
+  const manifest = await response.json();
+  if (!manifest || !Array.isArray(manifest.ids)) {
+    throw new Error('prerender manifest is missing its id list');
+  }
+  return new Set(manifest.ids.map((id) => String(id).trim()).filter(Boolean));
+}
+
 function isAvailable(product) {
   if (!product || product.active === false || product.deleted === true || product.private === true) return false;
 
@@ -119,7 +140,7 @@ function xmlEscape(value) {
     .replace(/'/g, '&apos;');
 }
 
-export function buildSitemapXml(products, siteOrigin) {
+export function buildSitemapXml(products, siteOrigin, prerenderedIds = null) {
   const urls = new Map();
   for (const item of STATIC_URLS) {
     const loc = canonicalUrl(item.path, siteOrigin);
@@ -128,6 +149,7 @@ export function buildSitemapXml(products, siteOrigin) {
 
   for (const product of Array.isArray(products) ? products : []) {
     if (!isAvailable(product) || product.id == null || String(product.id).trim() === '') continue;
+    if (prerenderedIds && !prerenderedIds.has(String(product.id).trim())) continue;
     const loc = canonicalUrl(productRoutePath(product), siteOrigin);
     if (loc && !urls.has(loc)) urls.set(loc, { path: 'product', changefreq: 'weekly', priority: '0.7' });
   }
@@ -149,10 +171,14 @@ export default async function sitemapHandler(req, res) {
 
   let siteOrigin = DEFAULT_SITE_ORIGIN;
   let products = [];
+  let prerenderedIds = null;
   let sourceAvailable = true;
   try {
     const config = getOrigins();
     siteOrigin = config.siteOrigin;
+    // Fail closed on the manifest: if we cannot prove a product has a static
+    // shell, omit product URLs instead of pointing crawlers at home metadata.
+    prerenderedIds = await fetchPrerenderedIds(siteOrigin);
     products = await fetchPublicProducts(config);
   } catch (error) {
     sourceAvailable = false;
@@ -166,5 +192,5 @@ export default async function sitemapHandler(req, res) {
     : 'public, s-maxage=300, stale-while-revalidate=3600';
   res.setHeader('Cache-Control', cacheControl);
   res.setHeader('Vercel-CDN-Cache-Control', cacheControl);
-  res.end(buildSitemapXml(products, siteOrigin));
+  res.end(buildSitemapXml(products, siteOrigin, prerenderedIds));
 }

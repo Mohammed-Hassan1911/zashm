@@ -107,6 +107,10 @@ export default function ProductPage() {
   };
   const handleImagePointerDown = (event) => {
     if (event.pointerType === 'mouse') return;
+    // Only one finger owns the plate. A second finger must never replace the
+    // active gesture: its release would otherwise clear the ref and leave the
+    // first finger's drag stranded off-centre.
+    if (imageSwipeStartRef.current) return;
     imageSwipeStartRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
@@ -129,8 +133,9 @@ export default function ProductPage() {
   };
   const handleImagePointerUp = (event) => {
     const start = imageSwipeStartRef.current;
-    imageSwipeStartRef.current = null;
+    // An extra finger lifting must not end the gesture the first finger owns.
     if (!start || start.pointerId !== event.pointerId) return;
+    imageSwipeStartRef.current = null;
     // Releasing lets the spring unwind slowly back to centre, whether or not
     // the gesture was long enough to change the photo.
     galleryDragX.set(0);
@@ -140,6 +145,12 @@ export default function ProductPage() {
     const deltaY = event.clientY - start.y;
     if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
     changeImage(deltaX < 0 ? 1 : -1);
+  };
+  const handleImagePointerCancel = (event) => {
+    const start = imageSwipeStartRef.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    imageSwipeStartRef.current = null;
+    galleryDragX.set(0);
   };
 
   // 🎯 ذكاء اصطناعي لاختيار أول مقاس ولون متوفرين أول ما الصفحة تفتح - تم التأمين ضد الاختفاء المزدوج 🚀
@@ -310,7 +321,7 @@ export default function ProductPage() {
               onPointerDown={handleImagePointerDown}
               onPointerMove={handleImagePointerMove}
               onPointerUp={handleImagePointerUp}
-              onPointerCancel={() => { imageSwipeStartRef.current = null; galleryDragX.set(0); }}
+              onPointerCancel={handleImagePointerCancel}
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               {/* One composited plate holds both frames. A soft spring carries

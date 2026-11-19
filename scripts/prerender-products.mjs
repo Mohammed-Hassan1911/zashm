@@ -22,7 +22,9 @@
 // Data comes from the public `products_public` view with the anon key — the same
 // read the storefront already performs. Nothing secret is read, written, or
 // embedded. Any failure (missing env, network, bad payload, missing build) is a
-// no-op: the deploy keeps the working SPA shell. `scripts/resilience-exclude.json`
+// no-op for product pages and their sitemap manifest: the deploy keeps the
+// working SPA shell, and the sitemap uses its short fail-closed fallback instead
+// of caching an empty product list. `scripts/resilience-exclude.json`
 // is deliberately NOT applied — it only keeps products out of the offline backup,
 // while a live product still deserves real metadata.
 
@@ -40,6 +42,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BUILD_DIR = resolve(ROOT, 'build');
 const TEMPLATE_FILE = resolve(BUILD_DIR, 'index.html');
 const DEFAULT_BASE = 'https://za-shm.vercel.app';
+const SHOP_TITLE = 'Shop — ZASHM';
+const SHOP_DESCRIPTION = 'Browse the full ZASHM collection — premium clothing with delivery across Egypt.';
 const META_DESCRIPTION_MAX = 300;
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -85,6 +89,45 @@ export function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * Inject shop metadata into the built SPA shell. Unlike product pages this
+ * needs no network data, so it always runs — even when Supabase is unreachable.
+ */
+export function renderShopHtml(template, { baseUrl = DEFAULT_BASE } = {}) {
+  if (typeof template !== 'string' || !template.includes('<div id="root"></div>')) return null;
+
+  const origin = baseUrl.replace(/\/+$/, '');
+  const url = `${origin}/shop`;
+  let html = template;
+
+  html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(SHOP_TITLE)}</title>`);
+  html = setMeta(html, 'name', 'description', SHOP_DESCRIPTION);
+  html = html.replace(
+    /<link rel="canonical" href="[^"]*"\s*\/?>/,
+    () => `<link rel="canonical" href="${escapeHtml(url)}"/>`,
+  );
+  html = setMeta(html, 'property', 'og:title', SHOP_TITLE);
+  html = setMeta(html, 'property', 'og:description', SHOP_DESCRIPTION);
+  html = setMeta(html, 'property', 'og:url', url);
+  html = setMeta(html, 'name', 'twitter:title', SHOP_TITLE);
+  html = setMeta(html, 'name', 'twitter:description', SHOP_DESCRIPTION);
+  html = setMeta(html, 'name', 'robots', 'index, follow');
+
+  // A shell inherited from a product render must not keep Product JSON-LD.
+  html = html.replace(/\s*<script type="application\/ld\+json"[^>]*>[\s\S]*?<\/script>/g, '');
+  html = html.replace(/<link rel="preload" as="image"[^>]*>\s*/g, '');
+
+  const noscript = [
+    '<noscript>',
+    '<div style="max-width:640px;margin:96px auto;padding:0 20px;text-align:center;color:#f5f0e8;font-family:Georgia,serif">',
+    `<h1 style="font-size:28px;font-weight:400;margin:0 0 12px">${escapeHtml(SHOP_TITLE)}</h1>`,
+    `<p style="margin:0;color:#c9c4b8;font-size:14px;line-height:1.7">${escapeHtml(SHOP_DESCRIPTION)}</p>`,
+    '</div>',
+    '</noscript>',
+  ].join('');
+  return html.replace('<div id="root"></div>', () => `<div id="root"></div>\n  ${noscript}`);
 }
 
 /** Absolute http(s) URL, or '' when the value cannot be one (data:, blob:, …). */
@@ -267,6 +310,50 @@ async function fetchProducts({ env = process.env, fetchImpl = fetch } = {}) {
   return { products: rows };
 }
 
+/**
+ * Distinguish a genuinely empty catalogue from a failed read. Publishing an
+ * empty manifest after a transient outage would erase every product URL from
+ * the sitemap for an hour, so only a successful read may publish one.
+ */
+export async function loadCatalogue({ env = process.env, fetchImpl = fetch } = {}) {
+  try {
+    const result = await fetchProducts({ env, fetchImpl });
+    if (result.skipped) return { available: false, products: [], reason: result.skipped };
+    return { available: true, products: result.products, reason: '' };
+  } catch (err) {
+    return { available: false, products: [], reason: (err && err.message) || String(err) };
+  }
+}
+
+/** Prerender product shells and publish their manifest only from a live read. */
+export async function prerenderCatalogue(template, {
+  buildDir = BUILD_DIR,
+  baseUrl = DEFAULT_BASE,
+  dryRun: planOnly = false,
+  env = process.env,
+  fetchImpl = fetch,
+} = {}) {
+  const catalogue = await loadCatalogue({ env, fetchImpl });
+  if (!catalogue.available) {
+    return {
+      available: false,
+      reason: catalogue.reason,
+      written: 0,
+      skipped: [],
+      ids: [],
+      manifest: null,
+    };
+  }
+
+  const { written, skipped, ids } = writeProductPages(catalogue.products, template, {
+    buildDir,
+    baseUrl,
+    dryRun: planOnly,
+  });
+  const manifest = writeProductManifest(ids, { buildDir, dryRun: planOnly });
+  return { available: true, reason: '', written, skipped, ids, manifest };
+}
+
 /** Write one page per product. Returns what was written and what was skipped. */
 export function writeProductPages(products, template, {
   buildDir = BUILD_DIR,
@@ -276,6 +363,7 @@ export function writeProductPages(products, template, {
   const productRoot = resolve(buildDir, 'product');
   let written = 0;
   const skipped = [];
+  const ids = [];
 
   for (const product of Array.isArray(products) ? products : []) {
     const html = renderProductHtml(template, product, { baseUrl });
@@ -294,9 +382,45 @@ export function writeProductPages(products, template, {
       writeFileSync(target, html, 'utf8');
     }
     written += 1;
+    ids.push(id);
   }
 
-  return { written, skipped };
+  return { written, skipped, ids };
+}
+
+/** Write the static shop shell. Independent of catalogue availability. */
+export function writeShopPage(template, {
+  buildDir = BUILD_DIR,
+  baseUrl = DEFAULT_BASE,
+  dryRun: planOnly = false,
+} = {}) {
+  const html = renderShopHtml(template, { baseUrl });
+  if (!html) return false;
+  if (!planOnly) {
+    const target = resolve(buildDir, 'shop', 'index.html');
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, html, 'utf8');
+  }
+  return true;
+}
+
+/**
+ * Publish the ids that actually received a static shell. The live sitemap reads
+ * this manifest so it never advertises a product whose page would fall back to
+ * the generic home metadata until the next deploy.
+ */
+export function writeProductManifest(ids, {
+  buildDir = BUILD_DIR,
+  dryRun: planOnly = false,
+} = {}) {
+  const list = Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+  const manifest = { ids: Array.from(new Set(list)).sort() };
+  if (!planOnly) {
+    const target = resolve(buildDir, 'prerendered-products.json');
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  }
+  return manifest;
 }
 
 async function main() {
@@ -309,21 +433,24 @@ async function main() {
   const template = readFileSync(TEMPLATE_FILE, 'utf8');
   const baseUrl = baseUrlFromEnv();
 
-  let result;
-  try {
-    result = await fetchProducts();
-  } catch (err) {
-    console.log(`prerender skipped: ${(err && err.message) || err}`);
-    return;
+  // The shop shell needs no catalogue data, so it is never skipped with the
+  // product pages. Without it crawlers would see the home title on /shop.
+  if (writeShopPage(template, { baseUrl, dryRun })) {
+    console.log(`prerender: ${dryRun ? 'would write' : 'wrote'} the shop page`);
   }
-  if (result.skipped) {
-    console.log(`prerender skipped: ${result.skipped}`);
+
+  const result = await prerenderCatalogue(template, { baseUrl, dryRun });
+  if (!result.available) {
+    // No manifest is written on a failed read. The sitemap then fails closed
+    // with its short fallback cache instead of caching an empty product list.
+    console.log(`product prerender skipped: ${result.reason}; no sitemap manifest published`);
     return;
   }
 
-  const { written, skipped } = writeProductPages(result.products, template, { baseUrl, dryRun });
+  const { written, skipped, manifest } = result;
   const suffix = skipped.length ? `, skipped ${skipped.length} (${skipped.join(', ')})` : '';
   console.log(`prerender: ${dryRun ? 'would write' : 'wrote'} ${written} product page(s)${suffix}`);
+  console.log(`prerender: ${dryRun ? 'would publish' : 'published'} ${manifest.ids.length} product id(s) in the sitemap manifest`);
 }
 
 const isDirectRun = Boolean(process.argv[1])

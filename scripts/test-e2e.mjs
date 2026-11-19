@@ -72,7 +72,7 @@ const PRODUCTS = [
     sizes: ['M'],
     colors: ['Black'],
     variantStock: { 'M-Black': 5 },
-    images: [PIXEL],
+    images: [PIXEL, PIXEL],
     description: 'Fixture product for the end-to-end journey.',
     label: 'New',
     active: true,
@@ -89,7 +89,7 @@ const PRODUCTS = [
     sizes: [],
     colors: [],
     variantStock: {},
-    images: [PIXEL],
+    images: [PIXEL, PIXEL],
     description: 'Second fixture product.',
     label: '',
     active: true,
@@ -402,6 +402,9 @@ try {
   cdp = new Cdp(page.webSocketDebuggerUrl);
   await cdp.open();
   await cdp.send('Page.enable');
+  // Headless Chrome can leave the page unfocused; emulate real focus so CSS
+  // :focus behaves like a keyboard user's browser when we test the sort paint.
+  await cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
   await cdp.send('Runtime.enable');
   await cdp.send('Log.enable');
   await cdp.send('Emulation.setDeviceMetricsOverride', {
@@ -432,12 +435,91 @@ try {
   ok(await evaluate(cdp, 'getComputedStyle(document.body).fontFamily.includes("Montserrat")'), 'the self-hosted body face is applied');
   eq(await evaluate(cdp, 'document.documentElement.scrollWidth <= innerWidth + 1'), true, 'no horizontal overflow at 390px');
 
+  console.log('\n[3b] sort keeps keyboard focus but clears pointer focus');
+  await goto(cdp, '/shop');
+  await waitFor(cdp, '!!document.querySelector(".shop-sort")', 'the shop sort');
+  const sort = await evaluate(cdp, `
+    (async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const select = document.querySelector('.shop-sort');
+      const read = () => ({
+        active: document.activeElement === select,
+        gold: getComputedStyle(select).backgroundImage.includes('rgb(201, 168, 76)'),
+        value: select.value,
+      });
+      select.focus({ preventScroll: true });
+      await wait(80);
+      const focused = read();
+      select.selectedIndex = select.selectedIndex < select.options.length - 1 ? select.selectedIndex + 1 : 0;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await wait(80);
+      const keyboard = read();
+      select.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      select.selectedIndex = select.selectedIndex < select.options.length - 1 ? select.selectedIndex + 1 : 0;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await wait(80);
+      return {
+        focused,
+        keyboard,
+        pointer: read(),
+        activeTag: document.activeElement.tagName,
+      };
+    })()
+  `);
+  eq(sort.focused.active, true, 'the sort receives focus');
+  eq(sort.focused.gold, true, 'focus fills the sort with champagne gold');
+  eq(sort.keyboard.active, true, 'a keyboard change keeps focus on the select');
+  ok(sort.keyboard.value !== sort.focused.value, 'the keyboard change actually changed the sort');
+  eq(sort.pointer.active, false, 'a pointer change clears focus');
+  eq(sort.activeTag, 'BODY', 'focus returns to the page after a pointer choice');
+  // Restore the default sort so the journey below sees the original catalogue
+  // order; the state lives in the mounted React component, not the URL.
+  await evaluate(cdp, `
+    (() => {
+      const select = document.querySelector('.shop-sort');
+      select.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      select.value = 'Newest';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return select.value;
+    })()
+  `);
+
   console.log('\n[4] open a product from its card');
   await evaluate(cdp, clickSelector('.product-card'));
   await waitFor(cdp, '!!document.querySelector(".product-title")', 'the product page');
   eq(await evaluate(cdp, 'location.pathname.startsWith("/product/")'), true, 'the route changed to /product/:id');
   eq(await evaluate(cdp, 'document.querySelector(".product-title").textContent.trim()'), 'E2E Tee', 'the right product opened');
   ok(/500/.test(await evaluate(cdp, 'document.querySelector(".product-price").textContent')), 'the price renders');
+
+  console.log('\n[4b] a second finger cannot strand the gallery plate');
+  await waitFor(cdp, '!!document.querySelector(".product-gallery-frames")', 'the gallery plate');
+  const gallery = await evaluate(cdp, `
+    (async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const box = document.querySelector('.product-gallery-main');
+      const plate = box && box.querySelector('.product-gallery-frames');
+      if (!box || !plate) return { missing: true };
+      const tx = () => Math.round(new DOMMatrixReadOnly(getComputedStyle(plate).transform).m41 * 10) / 10;
+      const fire = (type, id, x) => box.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId: id, pointerType: 'touch',
+        clientX: x, clientY: 300, isPrimary: id === 11,
+      }));
+      fire('pointerdown', 11, 300);
+      fire('pointermove', 11, 278);
+      fire('pointerdown', 12, 300);
+      await wait(100);
+      const dragged = tx();
+      // The original owner must lift first. Under the old code the second
+      // finger hijacked the ref, so this release would strand the plate.
+      fire('pointerup', 11, 278);
+      fire('pointerup', 12, 278);
+      await wait(1200);
+      return { dragged, rested: tx() };
+    })()
+  `);
+  eq(gallery.missing, undefined, 'the gallery plate is rendered');
+  ok(Math.abs(gallery.dragged) > 4, 'the first finger still drifts the plate');
+  eq(gallery.rested, 0, 'an extra finger lifting first cannot strand the plate off-centre');
 
   console.log('\n[5] add the product to the bag');
   // The page pre-selects the first sellable variation, but the shopper's own

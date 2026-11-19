@@ -43,6 +43,10 @@ export default function ShopPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState('All');
   const sortRef = useRef(null);
+  // Remembers how the picker was opened so only a pointer-driven choice blurs.
+  // Keyboard arrow choices must keep focus and the gold fill until the user
+  // moves away, otherwise the first ArrowDown ends the interaction.
+  const sortPointerRef = useRef(false);
 
   // The native picker does not always fire blur when it closes. Clear the
   // focused sort on the first tap elsewhere (and on Escape) so its gold fill
@@ -355,13 +359,23 @@ export default function ShopPage() {
               aria-label="Sort products"
               className="shop-sort"
               value={sort}
+              onPointerDown={() => { sortPointerRef.current = true; }}
               onChange={(event) => {
                 setSort(event.target.value);
-                event.currentTarget.blur();
+                if (sortPointerRef.current) event.currentTarget.blur();
+                sortPointerRef.current = false;
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Escape') event.currentTarget.blur();
+                if (event.key === 'Escape') {
+                  event.currentTarget.blur();
+                  sortPointerRef.current = false;
+                  return;
+                }
+                if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                  sortPointerRef.current = false;
+                }
               }}
+              onBlur={() => { sortPointerRef.current = false; }}
               style={{
                 fontWeight: 600,
                 borderRadius: 8,

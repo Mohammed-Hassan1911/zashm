@@ -38,29 +38,48 @@ Applied and confirmed by behaviour:
 - **Stock invariant** — `T-SHIRT` stock `27` = variant sum `27`, `Pant` stock
   `24` = variant sum `24`, and `reservedStock` is `0` on both.
 
-Current data baseline (read-only counts):
+Current data baseline (read-only re-check, 2026-11-19):
 
-- products `2`, orders `1`, users `2`, coupons `1`;
-- order `ZSH-MWLGRZ7M-EC96FF20` — `Processing`, EGP `737`, created
-  `2026-11-18`;
-- coupon `ZAMALEK` — `usageCount 1`, active;
-- admins `mohammed` (`mohammedhassanmail1@gmail.com`) and `ahmed`
-  (`ahmed@gmail.com`), both role `admin`.
+- anon `GET /rest/v1/products_public?select=id` returns **4** ids:
+  `1794943849613141`, `1794955384475152`, `1795094753892375`,
+  `1795095084457224`. The earlier service-role baseline recorded products `2`;
+  the two newer ids are the current anon-visible catalog. Owner confirmation of
+  these additions is still required before treating the catalog as final.
+- Orders, users, coupons and admin identities could **not** be re-counted from
+  this environment (no service-role/management token). The earlier baseline —
+  orders `1`, users `2`, coupons `1`, order `ZSH-MWLGRZ7M-EC96FF20`, coupon
+  `ZAMALEK`, admins `mohammed` and `ahmed` — is historical, not a 2026-11-19
+  live count.
 
-Production https://za-shm.vercel.app runs the bundle built from `0a38649`
-(deployment `zashm-j8fq3ginh-zashm.vercel.app`, 2026-11-19); the served CSS/JS
-hashes match the local build (`index-BQxL9McB.css`, `index-TQ-8wUpA.js`). The new
-`/og-image.jpg` is a 1200×630 JPEG captured from the current home design and is
-served byte-for-byte identical to the committed file. Verified after deploy at
-320/390/768/1440px with no horizontal overflow: the compact phone sort is 116px
-wide (32px tall, 9px type) with a live piece-count beside it (43.7px at 320px,
-113.7px at 390px, 10px edge gap), no forced blur and `0s` transition; the receipt
-tear uses 16px/22px teeth with a champagne-gold top strip and no silhouette
-layer. Source and regression checks cover the restored first-version gallery
-(`mode="wait"`, `1.05 → 1 → 0.95`, 400ms) and the removal of the finger-follow
-plate. (`npm test` with `ZSHM_REQUIRE_SQL_TESTS=1`: 3096 assertions, 0 failures;
-the SQL suite actually ran on a temporary PostgreSQL cluster. `npm run build`
-passed; production secret scan was clean.)
+Production https://za-shm.vercel.app currently runs the bundle built from
+`7a0f3e6` (deployment `zashm-aqkiaq7tt-zashm.vercel.app`, 2026-11-19); the served
+CSS/JS hashes match the local build at that commit
+(`index-CREmyxBi.css`, `index-BYirxVHt.js`). `/og-image.jpg` remains a 1200×630
+JPEG served byte-for-byte identical to the committed file. A 28-case production
+sweep at 320/390/768/1440px found no horizontal overflow, one `<h1>` per page,
+no broken images, no missing alt text, no unnamed controls, no captured JS
+errors, WhatsApp on home only, and the mobile dock 6px above the safe-area edge.
+Computed-style checks confirmed `filter: none` on the search icon, no text shadow
+on the mobile hero/footer letter, a 2.4s transform-only hero chevron loop with a
+reduced-motion freeze, and the gold sort focus paint. The gallery now drifts on a
+soft spring (`stiffness 190`, `damping 30`, `mass 0.9`, `restDelta 0.4`) with a
+340ms opacity-only crossfade, not the older `mode="wait"` scale transition.
+(`npm test` at that commit with `ZSHM_REQUIRE_SQL_TESTS=1`: 3098 assertions,
+0 failures; the SQL suite actually ran on a temporary PostgreSQL cluster.
+`npm run build` passed; production secret scan was clean.)
+
+Pending local fixes (not deployed; production still serves `index-BYirxVHt.js`):
+the multi-touch gallery plate ownership fix, keyboard-safe sort focus, throttled
+admin order/user PII listings, a static `/shop` metadata shell, a prerender
+manifest that gates sitemap product URLs (a failed catalogue read publishes no
+manifest, so the sitemap uses its short fail-closed fallback), and their
+regression tests. Locally `ZSHM_REQUIRE_SQL_TESTS=1 npm test` passed 3395
+assertions with 0 failures and the SQL suite really ran; `npm run build` produced
+`index-vIyADBiI.js` + `index-CREmyxBi.css`, wrote `build/shop/index.html` with
+the shop metadata, published 4 ids in `build/prerendered-products.json`, and the
+bundle secret scan found no service-role, session, Telegram or Upstash secret.
+These are local proofs only; no deployment or production re-verification was
+performed.
 
 The previous release (`258d410`, deployment `zashm-hd57gi651-zashm.vercel.app`,
 2026-11-19) verified instant product navigation with `scrollY=0`, the engraved
