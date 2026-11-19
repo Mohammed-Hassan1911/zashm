@@ -47,18 +47,25 @@ Current data baseline (read-only counts):
 - admins `mohammed` (`mohammedhassanmail1@gmail.com`) and `ahmed`
   (`ahmed@gmail.com`), both role `admin`.
 
-Production https://za-shm.vercel.app runs the bundle built from `20f7bb7`
-(deployment `zashm-fkh9b0dq7`, 2026-11-19); the served CSS/JS hashes match the
-local build. Verified after deploy: the bag opens as a 343px side drawer with a
-visible storefront strip at 390px; checkout renders one Cash-on-Delivery row
-with no badge and no "Available" copy; WhatsApp appears on home only (54px on a
-phone) and scroll-to-top is translucent; `/track` renders at 320px in the brand
-font with no horizontal scroll. The receipt and tracking layouts were checked
-against the deployed CSS at 320/390/1440px: centred meta, one-line "Cash on
-delivery", rose discount, vertical phone timeline, no dark rectangle below the
-receipt. No console errors; `/api/errors` GET → 405 and POST `{}` → 400; an
-unknown path → 404. (`npm test` with `ZSHM_REQUIRE_SQL_TESTS=1`: 25 suites,
-2901 assertions, 0 failures.)
+Production https://za-shm.vercel.app runs the bundle built from `662c96b`
+(deployment `zashm-oa1bk3ye8`, 2026-11-19); the served CSS/JS hashes match the
+local build (`index-B2NxeKmi.css`, `index-D9inFnnv.js`). Verified after deploy at
+320/390/768/1440px with no horizontal overflow: the phone sort control is 136px
+wide at 390px while keeping its 32px height and 9.5px font; product names carry
+the static metal gradient with a transform-only hover sweep; WhatsApp is present
+on home, absent while the bag is open and returns on close; the bag scrim has no
+backdrop blur (`rgba(0,0,0,0.86)`); a simulated touch swipe crossfades through
+two stacked frames and changes the photo. No console errors. (`npm test` with
+`ZSHM_REQUIRE_SQL_TESTS=1`: 25 suites, 2996 assertions, 0 failures; the SQL suite
+actually ran on a temporary PostgreSQL cluster.)
+
+The previous release (`20f7bb7`, deployment `zashm-fkh9b0dq7`, 2026-11-19)
+verified the 343px side drawer with a visible storefront strip, checkout's single
+Cash-on-Delivery row with no badge or "Available" copy, WhatsApp on home only
+(54px on a phone), translucent scroll-to-top, the 320px brand-font tracking page,
+the centred receipt meta with one-line "Cash on delivery", rose discounts, the
+vertical phone timeline, `/api/errors` GET → 405 and POST `{}` → 400, and an
+unknown path → 404. Those behaviours remain covered by the test suite.
 
 **Not verifiable from this environment** (no Management token / DB connection
 string), so these remain assumptions until checked in the dashboard:
