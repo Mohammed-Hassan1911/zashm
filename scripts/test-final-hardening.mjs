@@ -561,9 +561,10 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok(/loading=\{index === 0 \? 'eager' : 'lazy'\}/.test(productCard) &&
      /fetchpriority=\{index === 0 \? 'high' : 'auto'\}/.test(productCard),
     'only the first collection image loads eagerly with high priority (lowercase attribute avoids the React 18 warning)');
-  ok(!/fonts\.googleapis\.com[^\n]*rel="stylesheet"/.test(read('index.html')) &&
-     /requestAnimationFrame\(\(\) => requestAnimationFrame\(loadBrandFonts\)\)/.test(read('src/index.js')),
-    'brand fonts load after the first render instead of blocking initial paint');
+  ok(!/fonts\.(googleapis|gstatic)\.com/.test(read('index.html')) &&
+     !/BRAND_FONTS_HREF/.test(read('src/index.js')) &&
+     /rel="preload" as="font" type="font\/woff2" href="\/fonts\/cormorant-garamond-latin-var\.woff2" crossorigin/.test(read('index.html')),
+    'brand fonts are self-hosted and preloaded, so no third-party stylesheet can block or delay the paint');
   ok(/color: 'var\(--red-light\)'/.test(productCard) && /--red-light:\s*#ff786b/.test(read('src/index.css')),
     'the small discount badge uses a high-contrast red');
 }

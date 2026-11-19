@@ -30,9 +30,12 @@
   <!-- Favicon (inline SVG, no binary asset required) -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0a0a'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-size='40' font-weight='600' fill='%23c9a84c' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"/>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&amp;family=Montserrat:wght@300..700&amp;display=swap"/>
+  <!-- Brand faces are self-hosted (see the @font-face block in src/index.css).
+       The wordmark is the largest contentful paint, so its roman latin face is
+       fetched at parse time and is already decoded when React paints the hero.
+       The italic and Montserrat files are discovered from the stylesheet, in
+       parallel with the JS, instead of after a third-party stylesheet lands. -->
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/cormorant-garamond-latin-var.woff2" crossorigin/>
 </head>
 <body>
   <div id="root"></div>

@@ -883,8 +883,22 @@ try {
     });
 
     await step('shop filters, sort and price inputs are touch-safe', () => {
-      assert.ok(/minHeight:\s*44,\s*\n?\s*fontSize:\s*11/.test(shop), 'filter chips are 44px at 11px');
-      assert.ok(/minHeight:\s*44,\s*\n?\s*background:\s*'var\(--bg3\)'/.test(shop), 'the sort select is 44px');
+      assert.ok(/\.shop-chip,\s*\n\.shop-filter-toggle \{[^}]*min-height:\s*44px;[^}]*font-size:\s*11px;/.test(css),
+        'chips and the Filter toggle share one 44px / 11px desktop ladder');
+      assert.ok(/\.shop-sort \{[^}]*min-height:\s*44px;[^}]*font-size:\s*11px;/.test(css),
+        'the sort select sits on the same ladder');
+      assert.ok(!/minHeight:\s*44,[\s\S]{0,80}?border: selected/.test(shop),
+        'chip sizing lives in CSS, not an inline style, so phones can override it');
+      assert.ok(!/minHeight:\s*44,\s*\n\s*background:\s*'var\(--bg3\)'/.test(shop),
+        'the sort select no longer pins its own height inline');
+      const phoneToolbar = (css.match(/@media \(max-width: 767px\) \{[\s\S]*?\n\}/g) || [])
+        .find((block) => /\.shop-chip,/.test(block)) || '';
+      assert.ok(/\.shop-chip,\s*\n\s*\.shop-filter-toggle \{\s*min-height:\s*36px;[^}]*font-size:\s*10px;/.test(phoneToolbar),
+        'phones shrink the chips and the Filter toggle together (44→36px, 11→10px)');
+      assert.ok(/\.shop-sort \{\s*min-height:\s*36px;[^}]*font-size:\s*10px;/.test(phoneToolbar),
+        'the sort select shrinks with them instead of towering over the row');
+      assert.ok(/min-height:\s*36px/.test(phoneToolbar) && !/min-height:\s*(?:2[0-9]|3[0-5])px/.test(phoneToolbar),
+        'the phone height stops at 36px so it stays comfortably tappable');
       assert.ok(/fontSize:\s*16,\s*\n?\s*outline:\s*'none'/.test(shop), 'price inputs are 16px (no iOS zoom)');
     });
 
@@ -1215,17 +1229,34 @@ try {
         'the scroll listener is passive');
     });
 
-    await step('brand fonts are requested as three variable faces', () => {
-      const href = entry.match(/BRAND_FONTS_HREF = '([^']+)'/);
-      assert.ok(href, 'the entry point keeps one font URL');
-      assert.ok(/wght@0,300\.\.700;1,300\.\.700/.test(href[1]),
-        'Cormorant is a 300-700 variable range, roman and italic');
-      assert.ok(/Montserrat:wght@300\.\.700/.test(href[1]),
-        'Montserrat is a 300-700 variable range');
-      const preload = html.match(/rel="preload" as="style" href="([^"]+)"/);
-      assert.ok(preload, 'index.html still preloads the stylesheet');
-      assert.equal(preload[1].replace(/&amp;/g, '&'), href[1],
-        'the preload and the injected link must match byte for byte or the preload is wasted');
+    await step('brand fonts are self-hosted, preloaded and subset', () => {
+      // Strip comments so the note explaining *why* Google Fonts was dropped
+      // does not trip the "no third-party font host" assertion.
+      const css = read('src/index.css').replace(/\/\*[\s\S]*?\*\//g, '');
+      const faces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((m) => m[1]);
+      assert.equal(faces.length, 6, 'two families x roman/italic x latin/latin-ext');
+      const files = faces.map((face) => (face.match(/url\('([^']+)'\)/) || [])[1]);
+      assert.equal(new Set(files).size, 6, 'every face points at its own file');
+      for (const file of files) {
+        assert.ok(/^\/fonts\/[a-z0-9-]+\.woff2$/.test(file), `same-origin font path: ${file}`);
+        const bytes = readFileSync(path.join(root, 'public', file), 'latin1');
+        assert.equal(bytes.slice(0, 4), 'wOF2', `${file} is a real woff2 file`);
+      }
+      for (const face of faces) {
+        assert.ok(/font-display:\s*swap/.test(face), 'swap keeps the fallback readable if a file is slow');
+        assert.ok(/font-weight:\s*300 700/.test(face), 'one variable file per style, not nine static weights');
+        assert.ok(/unicode-range:/.test(face), 'subsets so a page downloads only what it paints');
+      }
+      assert.ok(!/fonts\.(googleapis|gstatic)\.com/.test(css), 'no third-party font host in the stylesheet');
+      assert.ok(!/BRAND_FONTS_HREF/.test(entry), 'the entry point no longer injects a font stylesheet');
+      assert.ok(!/fonts\.(googleapis|gstatic)\.com/.test(html), 'index.html has no third-party font origin');
+      const preload = html.match(/rel="preload" as="font" type="font\/woff2" href="([^"]+)" crossorigin/);
+      assert.ok(preload, 'the largest-contentful-paint face is preloaded');
+      assert.equal(preload[1], '/fonts/cormorant-garamond-latin-var.woff2', 'the preload is the roman latin face');
+      assert.ok(files.includes(preload[1]), 'the preload matches a declared face byte for byte');
+      const csp = JSON.stringify(JSON.parse(read('vercel.json')));
+      assert.ok(/font-src 'self'/.test(csp), 'CSP allows same-origin fonts only');
+      assert.ok(!/fonts\.gstatic/.test(csp), 'the Google font origin is gone from the CSP');
     });
   }
 

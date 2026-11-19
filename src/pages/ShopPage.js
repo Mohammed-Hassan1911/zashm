@@ -191,13 +191,10 @@ export default function ShopPage() {
     outline: 'none'
   };
 
+  // Size, tracking and padding live in .shop-chip so a phone media query can
+  // shrink the whole row without fighting an inline style. Only the
+  // state-dependent paint stays here.
   const filterButtonStyle = (selected) => ({
-    minHeight: 44,
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    padding: '10px 18px',
     border: selected
       ? '1px solid rgba(255, 240, 202, 0.3)'
       : '1px solid rgba(255, 255, 255, 0.11)',
@@ -273,10 +270,8 @@ export default function ShopPage() {
           className="shop-toolbar"
           style={{
             display: 'flex',
-            gap: 10,
             flexWrap: 'wrap',
             alignItems: 'center',
-            padding: 14,
             margin: '8px 0 26px',
             border: '1px solid rgba(255, 255, 255, 0.09)',
             borderRadius: 14,
@@ -286,13 +281,8 @@ export default function ShopPage() {
         >
           {/* CATEGORIES */}
           <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-              flex: '1 1 300px',
-              minWidth: 0
-            }}
+            className="shop-chip-row"
+            style={{ minWidth: 0 }}
           >
             {categories.map((category) => {
               const selected =
@@ -304,6 +294,7 @@ export default function ShopPage() {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setFilterCategory(category)}
+                  className="shop-chip"
                   style={filterButtonStyle(selected)}
                 >
                   {category}
@@ -324,8 +315,6 @@ export default function ShopPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              padding: '10px 18px',
-              minHeight: 44,
               background: filterOpen
                 ? 'linear-gradient(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%)'
                 : 'linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01))',
@@ -333,9 +322,7 @@ export default function ShopPage() {
                 ? '1px solid rgba(255, 240, 202, 0.3)'
                 : '1px solid rgba(255, 255, 255, 0.11)',
               color: filterOpen ? '#14110b' : 'var(--text2)',
-              fontSize: 11,
               fontWeight: 600,
-              letterSpacing: 1.4,
               textTransform: 'uppercase',
               cursor: 'pointer',
               borderRadius: 2,
@@ -357,14 +344,10 @@ export default function ShopPage() {
               value={sort}
               onChange={(event) => setSort(event.target.value)}
               style={{
-                minHeight: 44,
                 background: 'var(--bg3)',
-                padding: '10px 38px 10px 16px',
                 border: '1px solid rgba(255, 255, 255, 0.11)',
                 color: 'var(--text2)',
-                fontSize: 11,
                 fontWeight: 600,
-                letterSpacing: 0.8,
                 borderRadius: 8,
                 cursor: 'pointer',
                 maxWidth: '100%',
