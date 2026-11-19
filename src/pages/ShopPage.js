@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { SlidersHorizontal, RotateCcw, ChevronDown } from 'lucide-react';
 import { useStore } from '../store';
@@ -42,6 +42,19 @@ export default function ShopPage() {
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [labelFilter, setLabelFilter] = useState('All');
+  const sortRef = useRef(null);
+
+  // The native picker does not always fire blur when it closes. Clear the
+  // focused sort on the first tap elsewhere (and on Escape) so its gold fill
+  // leaves with the picker instead of hanging around on the toolbar.
+  useEffect(() => {
+    const clearSortFocus = (event) => {
+      const select = sortRef.current;
+      if (select && event.target !== select) select.blur();
+    };
+    document.addEventListener('pointerdown', clearSortFocus, true);
+    return () => document.removeEventListener('pointerdown', clearSortFocus, true);
+  }, []);
 
   // PRODUCT CATEGORIES (only from products visible in the storefront, so a
   // category with no active products never shows up as an empty grid).
@@ -338,22 +351,25 @@ export default function ShopPage() {
           {/* SORT */}
           <div className="shop-sort-wrap">
             <select
+              ref={sortRef}
               aria-label="Sort products"
               className="shop-sort"
               value={sort}
-              onChange={(event) => setSort(event.target.value)}
+              onChange={(event) => {
+                setSort(event.target.value);
+                event.currentTarget.blur();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') event.currentTarget.blur();
+              }}
               style={{
-                background: 'var(--bg3)',
-                border: '1px solid rgba(255, 255, 255, 0.11)',
-                color: 'var(--text2)',
                 fontWeight: 600,
                 borderRadius: 8,
                 cursor: 'pointer',
                 maxWidth: '100%',
                 appearance: 'none',
                 WebkitAppearance: 'none',
-                MozAppearance: 'none',
-                backgroundImage: 'linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.012) 100%)'
+                MozAppearance: 'none'
               }}
             >
               {SORT_OPTIONS.map((option) => (

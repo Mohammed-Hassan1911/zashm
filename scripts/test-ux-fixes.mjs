@@ -853,6 +853,7 @@ try {
     const nav = read('src/components/shop/MobileNav.js');
     const card = read('src/components/shop/ProductCard.js');
     const home = read('src/pages/HomePage.js');
+    const sort = shop.slice(shop.indexOf('{/* SORT */}'), shop.indexOf('{/* FILTER PANEL */}'));
 
     await step('header, footer and checkout chrome reach 44px', () => {
       assert.ok(/\.zashm-header-search,\s*\n?\.zashm-header-utilities > button\s*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px/.test(css),
@@ -913,12 +914,21 @@ try {
         'the sort is compact but a little wider than its label on every screen');
       assert.ok(!/shop-result-pill/.test(shop) && !/shop-toolbar-actions/.test(shop),
         'there is no piece-count pill or extra wrapper beside the sort');
-      assert.ok(!/event\.currentTarget\.blur\(\)/.test(shop),
-        'no forced blur adds a second focus animation after the native picker closes');
+      assert.ok(/\.shop-sort \{[^}]*background: linear-gradient\(180deg, rgba\(255, 255, 255, 0\.05\), rgba\(255, 255, 255, 0\.01\)\), var\(--bg3\);[^}]*border: 1px solid rgba\(255, 255, 255, 0\.11\);[^}]*color: var\(--text2\);/.test(css) &&
+         !/background:\s*'var\(--bg3\)'/.test(sort) &&
+         !/backgroundImage:\s*'linear-gradient/.test(sort),
+        'the sort paint lives in CSS, matching the unselected chip surface');
       assert.ok(/\.shop-sort \{[^}]*transition: none;[^}]*touch-action: manipulation;/.test(css),
         'the select has no CSS transition of its own to lag behind the picker');
-      assert.ok(/\.shop-sort:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--gold\);[^}]*outline-offset:\s*2px;/.test(css),
-        'the focused sort border uses the original gold outline');
+      assert.ok(/\.shop-sort:active,\s*\n\.shop-sort:focus,\s*\n\.shop-sort:focus-visible \{[^}]*border-color: rgba\(255, 240, 202, 0\.3\);[^}]*background: linear-gradient\(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%\);[^}]*color: #14110b;/.test(css),
+        'pressing or focusing the sort fills it with the same gold as an active chip');
+      assert.ok(/\.shop-sort-wrap:active \.shop-sort-chevron,\s*\n\.shop-sort-wrap:focus-within \.shop-sort-chevron \{[^}]*color: #14110b;/.test(css),
+        'the chevron switches to dark ink while the sort is gold');
+      assert.ok(/onChange=\{\(event\) => \{\s*\n\s*setSort\(event\.target\.value\);\s*\n\s*event\.currentTarget\.blur\(\);\s*\n\s*\}\}/.test(shop) &&
+         /event\.key === 'Escape'\) event\.currentTarget\.blur\(\)/.test(shop) &&
+         /document\.addEventListener\('pointerdown', clearSortFocus, true\)/.test(shop) &&
+         /event\.target !== select\) select\.blur\(\)/.test(shop),
+        'choosing, cancelling with Escape, or tapping away blurs at once so the gold clears immediately');
       assert.ok(/isEditable[\s\S]{0,320}?element\.matches\('textarea'\)/.test(nav) &&
          !/isEditable[\s\S]{0,320}?element\.matches\('textarea, select'\)/.test(nav),
         'opening the native sort picker does not count as a keyboard, so the bottom nav stays');

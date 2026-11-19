@@ -3627,8 +3627,14 @@ main, [role="main"] {
   padding: 10px 38px 10px 16px;
   font-size: 11px;
   letter-spacing: 0.8px;
-  /* No fade or filter on the control itself: a native picker already animates
-     its own close, and a second CSS transition read as a slight lag. */
+  /* Paint lives here, not inline, so focus can replace the whole surface in
+     one frame — the same gold fill the selected chips beside it use. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)), var(--bg3);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: var(--text2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  /* No fade or filter on the control itself: the gold must appear and leave
+     with the picker, not trail a second animation after it. */
   transition: none;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -3697,9 +3703,23 @@ main, [role="main"] {
   pointer-events: none;
 }
 
+/* While the finger is down or the native picker owns the control, the sort
+   fills completely with the same champagne gold as an active chip. Blur on
+   change / Escape / the next tap removes it instantly — no fade, no ring. */
+.shop-sort:active,
+.shop-sort:focus,
 .shop-sort:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+  outline: none;
+  border-color: rgba(255, 240, 202, 0.3);
+  background: linear-gradient(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%);
+  color: #14110b;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* The chevron rides on the sort surface, so it swaps to dark ink with it. */
+.shop-sort-wrap:active .shop-sort-chevron,
+.shop-sort-wrap:focus-within .shop-sort-chevron {
+  color: #14110b;
 }
 
 .shop-filter-panel input {
@@ -3799,6 +3819,15 @@ main, [role="main"] {
   .admin-login-mote,
   .admin-login-backdrop {
     display: none;
+  }
+
+  /* The gold fill is suppressed in forced colours, so keep a system-coloured
+     focus ring for keyboard users instead. */
+  .shop-sort:active,
+  .shop-sort:focus,
+  .shop-sort:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
   }
 }
 
