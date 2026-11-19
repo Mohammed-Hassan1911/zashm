@@ -919,8 +919,11 @@ try {
       assert.ok(/isEditable[\s\S]{0,320}?element\.matches\('textarea'\)/.test(nav) &&
          !/isEditable[\s\S]{0,320}?element\.matches\('textarea, select'\)/.test(nav),
         'opening the native sort picker does not count as a keyboard, so the bottom nav stays');
-      assert.ok(/\.shop-label-chip \{\s*min-height:\s*38px;[^}]*font-size:\s*12px;/.test(phoneToolbar),
-        'the label chips inside the panel keep their larger 38px / 12px scale');
+      assert.ok(/\.shop-filter-toggle\s*\{\s*min-width:\s*96px;[^}]*padding:\s*6px 14px;/.test(phoneToolbar),
+        'the Filter toggle is a little wider horizontally on phones');
+      assert.ok(/\.shop-label-chip-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(phoneToolbar) &&
+         /\.shop-label-chip\s*\{\s*min-height:\s*34px;[^}]*font-size:\s*10\.5px;/.test(phoneToolbar),
+        'label chips arrange in a tidy grid and are slightly smaller on phones');
       assert.ok(/\.price-input \{\s*font-size:\s*16px/.test(css),
         'price inputs are 16px on phones (no iOS zoom)');
       assert.ok(/@media \(min-width: 769px\) \{\s*\.price-input \{ font-size: 14px; \}/.test(css),

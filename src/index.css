@@ -3634,6 +3634,11 @@ main, [role="main"] {
 
 /* The label chips inside the filter panel are the panel's main choice, so they
    get a larger, calmer type scale than the toolbar strip above them. */
+.shop-label-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .shop-label-chip {
   min-height: 42px;
   padding: 10px 16px;
@@ -3725,11 +3730,25 @@ main, [role="main"] {
     font-size: 9.5px;
     letter-spacing: 0.7px;
   }
+  /* The toolbar Filter button sits beside Newest, so give it a little more
+     horizontal room than the scrolling category chips. */
+  .shop-filter-toggle {
+    min-width: 96px;
+    padding: 6px 14px;
+  }
+  .shop-label-chip-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
   .shop-label-chip {
-    min-height: 38px;
-    padding: 8px 13px;
-    font-size: 12px;
-    letter-spacing: 0.7px;
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    white-space: normal;
+    text-align: center;
+    justify-content: center;
   }
   .shop-filter-toggle svg { width: 11px; height: 11px; }
   /* Same 32px ladder as the chips, but the select stays compact and a little

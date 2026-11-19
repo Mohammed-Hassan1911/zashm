@@ -310,7 +310,7 @@ export default function ShopPage() {
             className="shop-filter-toggle"
             data-open={filterOpen ? 'true' : 'false'}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
@@ -457,13 +457,7 @@ export default function ShopPage() {
                 Shop by Label
               </h3>
 
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  flexWrap: 'wrap'
-                }}
-              >
+              <div className="shop-label-chip-row">
                 {LABELS.map((label) => {
                   const selected =
                     normalize(labelFilter) === normalize(label);
