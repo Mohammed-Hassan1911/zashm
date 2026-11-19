@@ -92,7 +92,6 @@ function AppInner() {
   );
   const markPageReady = useCallback(() => setFirstPageReady(true), []);
   const trackedFirstView = useRef(false);
-  const previousPage = useRef(currentPage);
 
   // WhatsApp remains visible; scroll-to-top appears after scrolling down.
   // Both are fixed above every page layer (see src/index.css).
@@ -175,15 +174,8 @@ function AppInner() {
   }, [setSelectedProduct, syncPageFromLocation]);
 
   useEffect(() => {
-    const from = previousPage.current;
-    const isHomeShopNavigation = [from, currentPage].every(page => page === 'home' || page === 'shop') && from !== currentPage;
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (isHomeShopNavigation && !reduceMotion) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      window.scrollTo(0, 0);
-    }
-    previousPage.current = currentPage;
+    // Navigation lands at the top instantly: no scroll animation to wait on.
+    window.scrollTo(0, 0);
   }, [currentPage]); 
 
   // Keep the document title / meta description in sync with the active page.
@@ -257,7 +249,7 @@ function AppInner() {
   }
 
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion="always">
     <div className="app-shell" style={{ minHeight: '100vh' }}>
       <Toaster />
       <OrderNotification />
@@ -461,7 +453,6 @@ function Footer({ setModal }) {
 
   const [clickCount, setClickCount] = useState(0);
   const timerRef = useRef(null);
-  const footerRef = useRef(null);
 
   const handleFooterLogoClick = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -480,31 +471,12 @@ function Footer({ setModal }) {
     }, 1500);
   };
 
-  // The columns rise in once, the first time the footer is reached. The class
-  // that hides them is only added from JS, so a failed script (or reduced
-  // motion) leaves every line visible instead of blanking the footer.
-  useEffect(() => {
-    const el = footerRef.current;
-    if (!el || typeof IntersectionObserver !== 'function') return undefined;
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
-
-    el.classList.add('footer-animate');
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        el.classList.add('footer-revealed');
-        observer.disconnect();
-      }
-    }, { threshold: 0.12 });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <footer className="site-footer" ref={footerRef}>
+    <footer className="site-footer">
       <div className="footer-shell">
         <div className="footer-grid">
 
-          <div className="footer-brand footer-reveal" style={{ '--footer-delay': '0ms' }}>
+          <div className="footer-brand">
             <div
               className="footer-wordmark"
               onClick={handleFooterLogoClick}
@@ -531,7 +503,7 @@ function Footer({ setModal }) {
             </div>
           </div>
 
-          <div className="footer-col footer-col--care footer-reveal" style={{ '--footer-delay': '70ms' }}>
+          <div className="footer-col footer-col--care">
             <h2 className="footer-col-title">{'Customer Care'}</h2>
             <button type="button" className="footer-link footer-track" onClick={() => setPage('track')}>
               <Search size={13} aria-hidden="true" />
@@ -545,7 +517,7 @@ function Footer({ setModal }) {
             ))}
           </div>
 
-          <div className="footer-col footer-contact-col footer-reveal" style={{ '--footer-delay': '140ms' }}>
+          <div className="footer-col footer-contact-col">
             <h2 className="footer-col-title">{'Contact'}</h2>
             <div className="footer-contact">
               <a className="footer-contact-row" href="tel:+201013380313">

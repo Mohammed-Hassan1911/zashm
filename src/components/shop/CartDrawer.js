@@ -24,9 +24,34 @@ export default function CartDrawer() {
     openerRef.current = opener && typeof opener.focus === 'function' ? opener : null;
     focusFirstElement(panelRef.current);
 
-    // Lock background scrolling while the overlay owns the screen.
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // Lock background scrolling while the overlay owns the screen. `overflow:
+    // hidden` alone does not stop the page scrolling behind the drawer on iOS
+    // Safari, so the body is fixed in place for the life of the overlay and put
+    // back exactly where it was on close. The drawer's own body keeps
+    // `overscroll-behavior: contain`, so the two scroll areas never chain.
+    const html = document.documentElement;
+    const body = document.body;
+    const liveY = typeof window.scrollY === 'number' ? window.scrollY : window.pageYOffset;
+    const scrollY = Number.isFinite(liveY) ? liveY : 0;
+    const lockedWidth = html.clientWidth;
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      htmlScrollBehavior: html.style.scrollBehavior,
+      bodyOverflow: body.style.overflow,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyLeft: body.style.left,
+      bodyRight: body.style.right,
+      bodyWidth: body.style.width,
+    };
+    html.style.overflow = 'hidden';
+    html.style.scrollBehavior = 'auto';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = `${lockedWidth}px`;
+    body.style.overflow = 'hidden';
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -47,7 +72,17 @@ export default function CartDrawer() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('focusin', handleFocusIn);
-      document.body.style.overflow = previousBodyOverflow;
+      html.style.overflow = previous.htmlOverflow;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.position = previous.bodyPosition;
+      body.style.top = previous.bodyTop;
+      body.style.left = previous.bodyLeft;
+      body.style.right = previous.bodyRight;
+      body.style.width = previous.bodyWidth;
+      window.scrollTo(0, scrollY);
+      // Un-fixing the body can clamp the offset for a frame; re-assert it.
+      window.requestAnimationFrame?.(() => window.scrollTo(0, scrollY));
+      html.style.scrollBehavior = previous.htmlScrollBehavior;
       const openerElement = openerRef.current;
       openerRef.current = null;
       if (openerElement && document.contains(openerElement)) {

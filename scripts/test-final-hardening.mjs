@@ -486,16 +486,20 @@ console.log('\n[9] floating actions stay accessible');
      /aria-label="Chat with ZASHM on WhatsApp"/.test(whatsapp),
     'both floating buttons are accessible');
 
-  ok(/\.back-to-top\s*\{[^}]*width:\s*46px;[^}]*height:\s*46px/.test(floatingBlock) &&
-     /\.whatsapp-fab\s*\{[^}]*width:\s*52px;[^}]*height:\s*52px/.test(floatingBlock),
-    'desktop floating button sizes are unchanged');
-  ok(/@media \(max-width: 768px\)[\s\S]*?\.back-to-top\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*4px solid transparent;[^}]*background-clip:\s*padding-box/.test(css) &&
-     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*4px solid transparent;[^}]*background-clip:\s*padding-box/.test(css),
-    'mobile floating buttons keep a 44px box with a 4px transparent border, so the painted disc is 36px');
+  ok(/\.back-to-top\s*\{[^}]*width:\s*38px;[^}]*height:\s*38px/.test(floatingBlock) &&
+     /\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(floatingBlock),
+    'desktop floating buttons are compact discs');
+  ok(/@media \(max-width: 768px\)[\s\S]*?\.back-to-top\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css) &&
+     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css),
+    'mobile floating buttons keep a 44px box with a 5px transparent border, so the painted disc is 34px');
   ok(!/\.back-to-top::after,\s*\.whatsapp-fab::after/.test(css),
     'the tap target comes from the button box itself, not a pseudo-element ring');
+  ok(!/\.back-to-top\s*\{[^}]*0 0 22px rgba\(201, 168, 76/.test(floatingBlock) &&
+     !/\.whatsapp-fab\s*\{[^}]*0 0 26px rgba\(201, 168, 76/.test(floatingBlock) &&
+     !/whileHover/.test(backToTop) && !/whileHover/.test(whatsapp),
+    'no gold halo and no hover growth: arriving on a route cannot light a circle');
   ok(/\.back-to-top svg\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px/.test(css) &&
-     /\.whatsapp-fab svg\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px/.test(css),
+     /\.whatsapp-fab svg\s*\{[^}]*width:\s*17px;[^}]*height:\s*17px/.test(css),
     'mobile floating icons shrink proportionally');
   ok(!/data-side|setSide|leftOverlap|rightOverlap/.test(whatsapp) &&
      !/\.whatsapp-fab\[data-side="right"\]/.test(css) &&
@@ -546,9 +550,9 @@ console.log('\n[10] public SEO and checkout accessibility');
     'order success is not delayed while refreshing the product catalog');
 
   const app = read('src/App.js');
-  ok(/window\.scrollTo\(\{ top: 0, behavior: 'smooth' \}\)/.test(app) &&
-     /prefers-reduced-motion: reduce/.test(app),
-    'home/shop navigation returns to top smoothly and respects reduced motion');
+  ok(/window\.scrollTo\(0, 0\)/.test(app) &&
+     !/behavior: 'smooth'/.test(app),
+    'route changes return to the top instantly, with no scroll animation');
   ok(/initial=\{\{ opacity: 0 \}\}[\s\S]*?exit=\{\{ opacity: 0 \}\}[\s\S]*?duration: 0\.38, ease: \[0\.4, 0, 0\.2, 1\]/.test(app),
     'storefront page transitions use a restrained crossfade without vertical jumps');
   const productCard = read('src/components/shop/ProductCard.js');
@@ -649,10 +653,9 @@ console.log('\n[11] reload resilience and footer polish');
     'Customer Care stays one column on a phone, so all three links read as one balanced list');
   ok(/bottom: calc\(50% - 10px\)/.test(css),
     'the footer hover underline is pinned to the text line, not the 44px tap box');
-  ok(app.includes("el.classList.add('footer-animate')") &&
-     app.includes("el.classList.add('footer-revealed')") &&
-     app.includes("matchMedia('(prefers-reduced-motion: reduce)')"),
-    'the footer columns rise in once, and never when motion is reduced');
+  ok(!app.includes('footer-animate') &&
+     !app.includes('footer-revealed'),
+    'the footer is always visible: no reveal observer, no hidden columns');
 }
 
 // ─── [12] header/nav badges + governorate suggestions ──────────────────────
@@ -708,11 +711,11 @@ console.log('\n[12] badge proximity and governorate copy');
      /h1:not\(\.hero-brand\):not\(\.product-title\)/.test(read('src/index.css')),
     'the product title opts out of the global phone heading override');
   ok(/\.product-title \{[\s\S]{0,200}?font-family: var\(--font-display\)/.test(read('src/index.css')) &&
-     /\.product-eyebrow::after \{[\s\S]{0,220}?product-rule-in/.test(read('src/index.css')),
-    'the category eyebrow draws a gold rule above the serif title');
-  ok(/\.product-details > \.product-detail-block \{[\s\S]{0,160}?animation-delay: calc\(var\(--pp-i, 0\) \* 55ms/.test(read('src/index.css')) &&
-     /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,200}?\.product-details > \.product-detail-block/.test(read('src/index.css')),
-    'the details column rises in with a stagger that reduced motion cancels');
+     /\.product-eyebrow::after \{[\s\S]{0,220}?linear-gradient/.test(read('src/index.css')),
+    'the category eyebrow draws a still gold rule above the serif title');
+  ok(/\.product-details > \.product-detail-block \{\s*opacity: 1;/.test(read('src/index.css')) &&
+     !/product-block-in/.test(read('src/index.css')),
+    'the details column is laid out once, with no entrance animation');
   ok(/\.product-tab-underline \{[\s\S]{0,160}?bottom: -1px/.test(read('src/index.css')) &&
      /layoutId="product-tab-underline"/.test(productPage),
     'the active tab underline slides between labels');
@@ -838,8 +841,8 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
   const home = read('src/pages/HomePage.js');
   ok(/<h1 className="sr-only">ZASHM — Luxury Menswear<\/h1>/.test(home),
     'the home page exposes a meaningful h1 to assistive tech');
-  ok(/<motion\.div\s+className="hero-brand"/.test(home) && !/<motion\.h1/.test(home),
-    'the decorative wordmark is no longer the page heading');
+  ok(/<div\s+className="hero-brand"/.test(home) && !/<motion\.h1/.test(home),
+    'the decorative wordmark is a plain div, not the page heading');
   ok(/\.skip-link\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?\.skip-link:focus/.test(read('src/index.css')),
     'the skip link stays off-screen until it receives focus');
 

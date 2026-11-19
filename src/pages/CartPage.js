@@ -516,7 +516,7 @@ export function CheckoutPage() {
   // 🚀 سكرول لأعلى الصفحة فوراً عند نجاح الأوردر وتحديث الـ success state
   React.useEffect(() => {
     if (success) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo(0, 0);
     }
   }, [success]);
 
@@ -1324,7 +1324,10 @@ export function CheckoutPage() {
                   />
                   <div className="checkout-item-copy">
                     <p className="checkout-item-name">{item?.product?.name ?? 'Unknown Product'}</p>
-                    <p className="checkout-item-meta">{item?.size ?? 'N/A'} / {item?.color ?? 'N/A'} × {item?.qty ?? 0}</p>
+                    <p className="checkout-item-meta">
+                      <span>{item?.size ?? 'N/A'} / {item?.color ?? 'N/A'}</span>
+                      <span className="checkout-item-qty">× {item?.qty ?? 0}</span>
+                    </p>
                   </div>
                   <span className="checkout-item-price">
                     EGP {(effectivePrice(item?.product) * (item?.qty ?? 0)).toLocaleString()}

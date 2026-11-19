@@ -1,5 +1,4 @@
-import React, { useRef } from 'react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import React from 'react';
 import { ChevronDown, Truck, Banknote, Gem } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
@@ -10,12 +9,20 @@ const HOUSE_PROMISES = [
   { Icon: Gem, title: '7-day exchanges', copy: 'Unworn, with tags and original packaging.' },
 ];
 
+// A deliberately short list: six motes are enough to read as air in the light.
+// They sit inside one field that owns the twinkle, so the whole haze is a
+// single animated layer; each mote is a 1–2px static dot.
+const HERO_DUST = [
+  { left: '12%', top: '22%', size: 2 },
+  { left: '82%', top: '18%', size: 1.5 },
+  { left: '24%', top: '72%', size: 1.5 },
+  { left: '88%', top: '66%', size: 2 },
+  { left: '8%', top: '48%', size: 1 },
+  { left: '70%', top: '84%', size: 1 },
+];
+
 export default function HomePage() {
   const { products, productsLoadStatus, refreshProducts, setPage } = useStore();
-  const heroRef = useRef(null);
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const y = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
-  const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
   // 🎯 إخفاء المنتجات غير النشطة عن العملاء (تُفلتر في الـ storefront فقط)
   const activeProducts = products.filter(p => p.active !== false);
@@ -40,53 +47,45 @@ export default function HomePage() {
   return (
     <div style={{ paddingTop: 0 }}>
       {/* ───── HERO — Old Money Menswear Editorial ───── */}
-      <section ref={heroRef} className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <section className="home-hero" style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {/* The hero does not paint its own base colour: the ambient wall behind
             the whole app shows through, so the home page opens on the same lit
             room as every other route. Only the gold glow and the vignette are
             drawn here, both transparent. */}
-        <motion.div data-decor="true" style={{ position: 'absolute', inset: 0, y }}>
+        <div data-decor="true" style={{ position: 'absolute', inset: 0 }}>
           {/* clamp()/min() are not valid inside a radial-gradient size (Chromium
               drops the whole layer), so the glow is sized in percentages of the
               hero box — which is already viewport-width and viewport-height. */}
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 62% 52% at 50% 44%, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.055) 38%, transparent 72%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 42%, rgba(0,0,0,0.42) 100%)' }} />
-        </motion.div>
+        </div>
 
-        {/* Twinkling gold dust — subtle luxury sparkle. Plain divs with a CSS
-            keyframe: 28 Framer Motion nodes each wrote an inline style on every
-            frame, which is 28 style recalcs the compositor never needed. */}
-        {[...Array(28)].map((_, i) => {
-          const size = 1 + (i % 3) * 0.7;
-          return (
-            <div
-              data-decor="true"
-              key={i}
+        {/* Six dust motes in one field. The field owns the single twinkle and
+            the motes are static dots, so the haze costs one animation, not six;
+            every frame is opacity only and the shadows are painted once. */}
+        <div className="hero-dust-field" data-decor="true" aria-hidden="true">
+          {HERO_DUST.map((mote, index) => (
+            <span
+              key={index}
               className="hero-dust"
-              aria-hidden="true"
               style={{
-                width: `clamp(1px, ${size}px, 2px)`,
-                height: `clamp(1px, ${size}px, 2px)`,
-                left: `${(i * 37) % 100}%`,
-                top: `${(i * 53) % 100}%`,
-                maxWidth: '2px',
-                maxHeight: '2px',
-                animationDuration: `${3 + (i % 5)}s`,
-                animationDelay: `${(i % 7) * 0.45}s`,
+                width: `${mote.size}px`,
+                height: `${mote.size}px`,
+                left: mote.left,
+                top: mote.top,
               }}
             />
-          );
-        })}
+          ))}
+        </div>
 
         {/* Editorial content */}
-        <motion.div style={{ position: 'relative', textAlign: 'center', zIndex: 10, opacity, padding: '0 24px' }} className="hero-content">
+        <div style={{ position: 'relative', textAlign: 'center', zIndex: 10, padding: '0 24px' }} className="hero-content">
           {/* The wordmark below is decorative art; this is the real page heading. */}
           <h1 className="sr-only">ZASHM — Luxury Menswear</h1>
 
-          <motion.div
+          <div
             className="hero-brand"
             aria-hidden="true"
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, calc(7vw + 22px), 140px)', fontWeight: 400, letterSpacing: 'clamp(4px, 1.6vw, 24px)', lineHeight: 0.95, marginBottom: 'clamp(12px, 2.8vw, 22px)' }}
           >
             <span className="hero-brand-lockup">
@@ -99,9 +98,6 @@ export default function HomePage() {
                     style={{ '--letter-index': index }}
                   >
                     {letter}
-                    {index % 2 === 0 && (
-                      <span className="hero-brand-letter-sparkle" aria-hidden="true" />
-                    )}
                   </span>
                 ))}
               </span>
@@ -109,39 +105,34 @@ export default function HomePage() {
               <span className="hero-brand-sparkle hero-brand-sparkle--two" aria-hidden="true" />
               <span className="hero-brand-sparkle hero-brand-sparkle--three" aria-hidden="true" />
             </span>
-          </motion.div>
+          </div>
 
-          <motion.p
+          <p
             className="hero-tagline"
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
             style={{ fontSize: 'clamp(9px, 1.4vw, 11px)', letterSpacing: 'clamp(2px, 0.7vw, 8px)', textTransform: 'uppercase', marginBottom: 'clamp(14px, 3vw, 24px)', fontWeight: 500 }}
-          >EST. 2026 · EGYPT</motion.p>
+          >EST. 2026 · EGYPT</p>
 
-          <motion.p
+          <p
             className="hero-brand-subtitle"
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
             style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(17px, 2.4vw, 28px)', fontStyle: 'italic', fontWeight: 400, letterSpacing: 'clamp(1.5px, 0.3vw, 4px)', marginBottom: 'clamp(22px, 3.5vw, 34px)' }}
-          >Luxury Menswear</motion.p>
+          >Luxury Menswear</p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26, duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-            className="hero-actions"
-          >
+          <div className="hero-actions">
             <button
               className="gold-btn home-glass-btn"
               onClick={() => setPage('shop')}
             >
               Explore Collection
             </button>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
         <div className="hero-scroll-cue-wrap">
           <button
             type="button"
             aria-label="Scroll to the collection"
             className="hero-scroll-cue"
-            onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+            onClick={() => window.scrollTo(0, window.innerHeight)}
           >
             <span className="hero-scroll-cue-line" aria-hidden="true" />
             <ChevronDown size={18} aria-hidden="true" />
@@ -152,21 +143,17 @@ export default function HomePage() {
       {/* ───── THE HOUSE PROMISE ───── */}
       <section className="home-promises" aria-label="The ZASHM promise">
         <div className="home-promises-inner">
-          {HOUSE_PROMISES.map(({ Icon, title, copy }, index) => (
-            <motion.div
+          {HOUSE_PROMISES.map(({ Icon, title, copy }) => (
+            <div
               className="home-promise"
               key={title}
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.4 }}
-              transition={{ duration: 0.5, delay: index * 0.08 }}
             >
               <span className="home-promise-icon" aria-hidden="true"><Icon size={17} strokeWidth={1.5} /></span>
               <div>
                 <p className="home-promise-title">{title}</p>
                 <p className="home-promise-copy">{copy}</p>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -260,13 +247,7 @@ export default function HomePage() {
 
 function SectionHeader({ eyebrow, title, count }) {
   return (
-    <motion.div
-      className="section-head"
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6 }}
-    >
+    <div className="section-head">
       {eyebrow && <p className="section-head-eyebrow">{eyebrow}</p>}
       <h2 className="section-head-title">{title}</h2>
       <span className="section-head-ornament" aria-hidden="true" />
@@ -275,6 +256,6 @@ function SectionHeader({ eyebrow, title, count }) {
           {String(count).padStart(2, '0')} pieces
         </p>
       )}
-    </motion.div>
+    </div>
   );
 }

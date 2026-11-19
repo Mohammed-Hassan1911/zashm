@@ -517,20 +517,20 @@ ok(finder.indexOf('className="size-finder-scroll"') < finder.indexOf('className=
 ok((finder.match(/className="size-finder-progress-seg"/g) || []).length === 1 &&
    /Array\.from\(\{ length: QUESTION_COUNT \}/.test(finder),
   'the progress shows one segment per question');
-ok(/\.size-finder-result > \*\s*\{[^}]*animation:\s*size-finder-result-rise/.test(css),
-  'the result reveals itself in layers');
+ok(/\.size-finder-result > \*\s*\{\s*opacity:\s*1;/.test(css),
+  'the result is laid out at once, with no staggered reveal');
 ok(!css.includes('.size-finder-gauge-halo') && !css.includes('size-finder-halo-spin'),
   'the rotating light behind the gauge is gone');
-ok(/\.size-finder-gauge-size\s*\{[^}]*animation:\s*size-finder-size-glow/s.test(css),
-  'the recommended size itself breathes a gold glow');
-ok(/\.size-finder-gauge-star\s*\{[^}]*animation:\s*size-finder-star-twinkle/s.test(css) &&
+ok(/\.size-finder-gauge-size\s*\{[^}]*text-shadow/s.test(css) && !css.includes('size-finder-size-glow'),
+  'the recommended size keeps a still gold light');
+ok(/\.size-finder-gauge-star\s*\{[^}]*opacity:\s*0\.8/s.test(css) &&
    (finder.match(/className="size-finder-gauge-star"/g) || []).length === 3,
-  'three small stars twinkle around the size');
+  'three small still stars sit around the size');
 ok(/\.size-finder-trigger-result\s*\{[^}]*gap:\s*5px/s.test(css),
   'the product-page trigger separates the size from its score');
 ok(/\.size-finder-gauge-center\s*\{[^}]*gap:\s*12px/s.test(css),
   'the gauge separates the size from its score the same way');
-ok(css.includes('.size-finder-figure-focus') && css.includes('@keyframes size-finder-focus-breathe'),
+ok(css.includes('.size-finder-figure-focus') && !css.includes('size-finder-focus-breathe'),
   'the drawing rings the region the current question asks about');
 ok(finder.includes('focus={figureFocus}') &&
    /const figureFocus = step === 1[\s\S]{0,180}GARMENT\.BOTTOM \? 'waist' : 'chest'[\s\S]{0,180}GARMENT\.BOTTOM \? 'seat' : 'waist'/.test(finder),
@@ -550,8 +550,8 @@ ok(/\.size-finder-explanation\s*\{[^}]*display:\s*grid/.test(css),
   'the comparison explanation stays in the selected-size result area');
 ok(/\.size-finder-restart\s*\{[\s\S]{0,60}min-height:\s*44px/.test(css),
   'Start over has a comfortable touch target');
-ok(/\.size-finder-restart\s*\{[^}]*animation:\s*size-finder-restart-shine/.test(css) &&
-   css.includes('@keyframes size-finder-restart-shine'), 'Start over has a visible, subtle shine');
+ok(/\.size-finder-restart\s*\{[^}]*background:\s*linear-gradient/s.test(css) &&
+   !css.includes('size-finder-restart-shine'), 'Start over keeps its gold gradient, with no moving shine');
 ok(css.includes('@media (prefers-reduced-motion: reduce)') &&
    /\.size-finder-restart\s*\{\s*animation:\s*none/s.test(css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))),
   'the shine respects reduced-motion preferences');

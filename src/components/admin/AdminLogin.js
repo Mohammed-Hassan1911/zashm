@@ -91,14 +91,6 @@ export default function AdminLogin({ onSuccess }) {
           min() are invalid inside a radial-gradient size and silently drop the
           whole layer in Chromium. */}
       <div data-decor="true" className="admin-login-backdrop" />
-      {[...Array(6)].map((_, i) => (
-        <motion.div data-decor="true" key={i}
-          className="admin-login-mote"
-          style={{ left: `${14 + i * 15}%`, top: `${12 + ((i * 23) % 70)}%` }}
-          animate={{ opacity: [0, 0.5, 0], y: [0, -14, 0] }}
-          transition={{ duration: 9 + i * 2, repeat: Infinity, delay: i * 1.4, ease: 'easeInOut' }}
-        />
-      ))}
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -110,13 +102,9 @@ export default function AdminLogin({ onSuccess }) {
         <div className="admin-login-card">
           {/* Logo */}
           <div className="admin-login-head">
-            <motion.div
-              className="admin-login-seal"
-              animate={{ boxShadow: ['0 0 0 0 rgba(201,168,76,0.35)', '0 0 0 14px rgba(201,168,76,0)', '0 0 0 0 rgba(201,168,76,0)'] }}
-              transition={{ duration: 2.6, repeat: Infinity }}
-            >
+            <div className="admin-login-seal">
               <Shield size={24} color="#0d0b08" aria-hidden="true" />
-            </motion.div>
+            </div>
             <h1 className="admin-login-wordmark lit-wordmark">ZASHM</h1>
             <p className="admin-login-subtitle">Admin Panel</p>
           </div>

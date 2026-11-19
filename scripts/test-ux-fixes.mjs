@@ -898,12 +898,10 @@ try {
         'the product page label stays on the top-left image edge too');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*text-align:\s*center/.test(css),
         'the label text is centred inside its box');
-      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*animation:[\s\S]{0,160}zashm-label-in/.test(css)
-        && /@keyframes zashm-label-in/.test(css)
-        && /@keyframes zashm-label-glow/.test(css),
-        'the label box animates in and keeps a soft glow');
-      assert.ok(/@media \(prefers-reduced-motion: reduce\)[\s\S]{0,220}\.product-card-labels \.label-badge\s*\{[^}]*animation:\s*none/.test(css),
-        'the label animation is disabled for reduced-motion users');
+      assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*transition:\s*box-shadow/.test(css)
+        && !/zashm-label-in/.test(css)
+        && !/zashm-label-glow/.test(css),
+        'the label box is static: no entrance, no glow loop');
       assert.ok(/className="product-card-image"[\s\S]{0,1600}className="product-card-labels"/.test(card),
         'every card cover carries the label box on the image');
       assert.ok(/className="product-card-labels product-page-label"[\s\S]{0,400}?className="product-card-image\b/.test(product),
@@ -929,8 +927,88 @@ try {
         'a pointer-only sheen animates the photo without touching the product page gallery');
       assert.ok(/h1:not\(\.hero-brand\)[\s\S]{0,240}font-size:\s*clamp\(28px, 5\.6vw, 36px\)/.test(css),
         'phone titles keep a 28px floor and grow back on a 768px tablet');
-      assert.ok(/<MotionConfig reducedMotion="user">/.test(app),
-        'framer-motion animations honour prefers-reduced-motion');
+      assert.ok(/<MotionConfig reducedMotion="always">/.test(app),
+        'framer-motion movement is disabled for everyone');
+    });
+
+    await step('each scroll area owns its own scroll, and the glass stays flat', () => {
+      // The drawer must not hand its scroll back to the page underneath it.
+      assert.ok(/body\.style\.position = 'fixed'/.test(drawer)
+        && /body\.style\.top = `-\$\{scrollY\}px`/.test(drawer)
+        && /window\.scrollTo\(0, scrollY\)/.test(drawer)
+        && /window\.requestAnimationFrame\?\.\(\(\) => window\.scrollTo\(0, scrollY\)\)/.test(drawer),
+        'the bag drawer fixes the body in place and restores the exact scroll offset');
+      assert.ok(/\.cart-drawer-body\s*\{[^}]*overscroll-behavior:\s*contain/.test(css),
+        'the drawer body contains its own overscroll');
+      assert.ok(!/repeating-linear-gradient/.test(css.slice(css.indexOf('Ambient backdrop'), css.indexOf('Film grain'))),
+        'the background carries no vertical fluted lines');
+      assert.ok(/\.product-card-image\.product-gallery-main::before\s*\{\s*display:\s*none;/.test(css)
+        && !/\.product-gallery-main::after\s*\{[^}]*inset 0 0 0 1px/.test(css),
+        'the product photo keeps one outer border, not a border inside a border');
+
+      // The promo chip is a small champagne pill, never a full-width green box.
+      assert.ok(/\.bag-coupon-applied\s*\{[^}]*border-radius:\s*999px/.test(css)
+        && /\.checkout-coupon-applied\s*\{[^}]*border-radius:\s*999px/.test(css),
+        'applied codes read as compact pills in the bag and at checkout');
+      const chipBlocks = [...css.matchAll(/\.(?:bag|checkout)-coupon-applied[^{]*\{([^}]*)\}/g)]
+        .map((m) => m[1]).join('\n');
+      assert.ok(!/#4ec07e/.test(chipBlocks) && !/rgba\(39, 174, 96/.test(chipBlocks),
+        'the old green success panel is gone');
+      assert.ok(/\.bag-coupon-applied button::after\s*\{[^}]*inset:\s*-5px -6px/.test(css)
+        && /\.checkout-coupon-applied button::after\s*\{[^}]*inset:\s*-5px -6px/.test(css),
+        'the compact Remove keeps a 44px tap area through a transparent pseudo-element');
+
+      // Glass is painted, never blurred: no backdrop-filter on the checkout cards.
+      for (const selector of ['.checkout-card', '.checkout-form-card', '.checkout-summary', '.bag-summary']) {
+        const rules = [...css.matchAll(new RegExp(`${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`, 'g'))]
+          .map((m) => m[1]);
+        assert.ok(rules.some((rule) => /radial-gradient/.test(rule) && /linear-gradient/.test(rule)),
+          `${selector} layers a sheen and a floor instead of a flat fill`);
+        assert.ok(rules.every((rule) => !/backdrop-filter/.test(rule)),
+          `${selector} does not blur the page behind it`);
+      }
+    });
+
+    await step('the header Z has no cloud, and checkout is polished black', () => {
+      const cart = read('src/pages/CartPage.js');
+
+      // The header monogram sits straight on the bar: no blurred halo, no gold glow.
+      assert.ok(!/\.zashm-header-logo::before/.test(css),
+        'the warm pool behind the header Z is gone');
+      assert.ok(/\.zashm-header-logo img\s*\{[^}]*filter:\s*drop-shadow\(0 1px 2px rgba\(0, 0, 0, 0\.55\)\);/.test(css),
+        'the monogram keeps only a dark contact shadow, not a gold halo');
+
+      // The checkout surfaces are glossy black with white specular hairlines.
+      // Each selector is declared more than once (padding, sticky, shells), so
+      // read the block that actually paints the edge.
+      const shellBlock = (selector) => {
+        const rules = [...css.matchAll(new RegExp(`${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`, 'g'))]
+          .map((m) => m[1])
+          .filter((rule) => /border(-color)?:/.test(rule));
+        return rules[rules.length - 1] || '';
+      };
+      const cardBlock = shellBlock('.checkout-card');
+      const formBlock = shellBlock('.checkout-form-card');
+      const summaryBlock = shellBlock('.checkout-summary');
+      assert.ok(/border:\s*1px solid rgba\(255, 255, 255/.test(cardBlock)
+        && /border:\s*1px solid rgba\(255, 255, 255/.test(formBlock)
+        && /border-color:\s*rgba\(255, 255, 255/.test(summaryBlock),
+        'the checkout cards wear white specular hairlines, not gold rings');
+      assert.ok(!/rgba\(201, 168, 76/.test(cardBlock + formBlock + summaryBlock),
+        'the checkout cards carry no gold tint');
+      assert.ok(!/\.checkout-head::after\s*\{[^}]*rgba\(201, 168, 76/.test(css),
+        'the rule under the Checkout title is a cool specular, not gold');
+
+      // The pieces line is legible: real size, quiet grey, and a qty chip.
+      const metaBlock = (css.match(/\.checkout-item-meta\s*\{([^}]*)\}/) || [])[1] || '';
+      assert.ok(/\.checkout-item-name\s*\{[^}]*font-size:\s*14px/.test(css),
+        'the piece name is a readable 14px');
+      assert.ok(/font-size:\s*11px/.test(metaBlock) && !/text-transform:\s*uppercase/.test(metaBlock),
+        'the size/colour line is 11px sentence case, not 9px caps');
+      assert.ok(/\.checkout-item-qty\s*\{[^}]*border-radius:\s*999px/.test(css),
+        'the quantity reads as its own chip');
+      assert.ok(/className="checkout-item-qty"/.test(cart),
+        'the summary renders the quantity chip');
     });
 
     await step('removing a wishlist item is red on the product page', () => {
@@ -1011,54 +1089,116 @@ try {
     });
   }
 
-  console.log('\n[10] phone performance: no permanent animation, blur or font storm');
+  console.log('\n[10] performance: only the ZASHM wordmark lights up');
   {
     const css = read('src/index.css');
     const header = read('src/components/shop/Header.js');
     const product = read('src/pages/ProductPage.js');
+    const home = read('src/pages/HomePage.js');
+    const app = read('src/App.js');
     const entry = read('src/index.js');
     const html = read('index.html');
-    const lowPower = css.slice(css.indexOf('LOW-POWER MODE'));
+    const touch = css.slice(css.indexOf('TOUCH SIZES'));
 
-    await step('desktop keeps the living room, phones get a still one', () => {
-      assert.ok(/animation: ambient-drift 72s ease-in-out infinite alternate/.test(css),
-        'the desktop wall still drifts');
-      assert.ok(lowPower.length > 0, 'the low-power block exists');
-      assert.ok(/@media \(max-width: 1023px\) \{[\s\S]*?body::before \{\s*animation: none;\s*will-change: auto;/.test(lowPower),
-        'the wall is a single paint on touch sizes and releases its compositor layer');
-      assert.ok(/\.app-shell::after \{\s*display: none;/.test(lowPower),
-        'the travelling sheen layer is not painted at all');
+    await step('the ambient room is painted once and never loops', () => {
+      assert.ok(!/@keyframes ambient-drift/.test(css) && !/ambient-drift/.test(css),
+        'the drifting wall keyframe is gone');
+      assert.ok(!/ambient-sheen/.test(css) && !/\.app-shell::after/.test(css),
+        'the travelling sheen layer is gone');
+      const names = [...css.matchAll(/animation:\s*([\w-]+)/g)].map((m) => m[1]);
+      const allowed = new Set([
+        'none',
+        'hero-brand-letter-glint',
+        'hero-brand-twinkle',
+        'hero-dust-twinkle',
+        'app-startup-spin',
+        'zshm-photo-shimmer',
+      ]);
+      assert.ok(names.every((name) => allowed.has(name)),
+        'every animation declaration points at a kept keyframe');
     });
 
-    await step('background-position loops are frozen on phones', () => {
-      assert.ok(/\.hero-brand-letter \{\s*animation: none;\s*background-position: 50% 0;/.test(lowPower),
-        'the hero wordmark stops re-rasterising its gradient every frame');
-      assert.ok(/\.footer-wordmark-letter \{\s*animation: none;\s*background-position: 50% 0;/.test(lowPower),
-        'the footer wordmark stops too');
-      assert.ok(/\.site-footer::before \{\s*animation: none;/.test(lowPower),
-        'the footer hairline is static');
+    await step('the wordmark metal is frozen and only the letter light moves', () => {
+      assert.ok(/\.hero-brand-letter\s*\{[^}]*background-position:\s*50% 0;/.test(css),
+        'the hero metal sits on its richest frame');
+      assert.ok(/\.footer-wordmark-letter\s*\{[^}]*background-position:\s*50% 0;/.test(css),
+        'the footer metal sits on the same frame');
+      assert.ok(!/hero-brand-shimmer/.test(css) && !/footer-letter-light/.test(css),
+        'neither gradient re-rasterises every frame');
+      assert.ok(/\.hero-brand-letter::after\s*\{[^}]*animation:\s*hero-brand-letter-glint 5s ease-in-out infinite/.test(css),
+        'the hero letters still catch the light');
+      assert.ok(/\.footer-wordmark-letter::after\s*\{[^}]*animation:\s*hero-brand-letter-glint 5s ease-in-out infinite/.test(css),
+        'the footer letters light on the same beat');
+      assert.ok(/@keyframes hero-brand-letter-glint/.test(css),
+        'the one kept keyframe is the letter glint');
     });
 
-    await step('the hero keeps its light but loses its loops', () => {
-      assert.ok(/\.hero-dust \{\s*animation: none;\s*opacity: 0\.34;/.test(lowPower),
-        '28 dust motes stop twinkling on their own layers');
-      assert.ok(/\.hero-brand-letter::after,\s*\.footer-wordmark-letter::after \{\s*animation: none;[\s\S]{0,80}will-change: auto;/.test(lowPower),
-        'per-letter glints stop and release their layers');
-      assert.ok(/\.hero-scroll-cue-line::after \{\s*animation: none;\s*top: 40%;/.test(lowPower),
-        'the scroll cue stops animating layout');
+    await step('the wordmark stars and hero dust are tiny and compositor-only', () => {
+      assert.ok(!/hero-brand-lockup::before/.test(css), 'the hero cloud behind the word is gone');
+      assert.ok(!/\.footer-wordmark::before/.test(css), 'the footer cloud behind the word is gone');
+      assert.ok(!/hero-brand-halo/.test(css) && !/hero-brand-letter-sparkle/.test(css),
+        'no halo and no per-letter sparkle came back');
+
+      const sparkleCount = (home.match(/hero-brand-sparkle--/g) || []).length;
+      assert.equal(sparkleCount, 3, 'exactly three stars sit on the wordmark');
+      const dustCount = (home.match(/left: '\d+%', top: '\d+%', size:/g) || []).length;
+      assert.equal(dustCount, 6, 'exactly six dust motes sit in the hero air');
+      assert.ok(/className="hero-dust-field"/.test(home) && !/animationDelay/.test(home),
+        'one dust field owns a single twinkle instead of six separate animations');
+
+      // The loops may only touch opacity and transform: no gradient, shadow,
+      // filter or background-position that would repaint the text every frame.
+      const twinkle = css.slice(css.indexOf('@keyframes hero-brand-twinkle'), css.indexOf('.hero-dust-field {'));
+      assert.ok(/@keyframes hero-brand-twinkle/.test(twinkle) && !/background|box-shadow|filter/.test(twinkle),
+        'the star loop animates opacity/transform only');
+      const dustLoop = css.slice(css.indexOf('@keyframes hero-dust-twinkle'));
+      assert.ok(/@keyframes hero-dust-twinkle/.test(dustLoop)
+        && /opacity/.test(dustLoop.slice(0, 220))
+        && !/transform|background|box-shadow|filter/.test(dustLoop.slice(0, 220)),
+        'the dust loop animates opacity only');
+      assert.ok(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.hero-brand-sparkle\s*\{\s*animation:\s*none;/.test(css)
+        && /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.hero-dust-field\s*\{\s*animation:\s*none;/.test(css),
+        'reduced motion freezes both at a steady glow');
     });
 
-    await step('the product label keeps its entrance and drops the pulse', () => {
-      assert.ok(/\.product-card-labels \.label-badge \{\s*animation: zashm-label-in 0\.55s[^}]*\}/.test(lowPower),
-        'the one-shot entrance survives');
-      assert.ok(!/zashm-label-glow/.test(lowPower),
-        'the endless box-shadow pulse never reaches a phone');
+    await step('the home hero is plain markup with no scroll work', () => {
+      assert.ok(!/framer-motion/.test(home) && !/<motion\./.test(home),
+        'the hero no longer mounts Framer Motion nodes');
+      assert.ok(!/useScroll|useTransform|scrollYProgress/.test(home),
+        'nothing reads scroll position on the home page');
+      assert.ok(/className="hero-brand-letter"[\s\S]{0,160}data-letter=\{letter\}/.test(home)
+        && !/hero-brand-letter-sparkle/.test(home),
+        'the letters keep their data-letter clone and lose the per-letter sparkle');
+      assert.ok(/hero-brand-sparkle--one[\s\S]*?hero-brand-sparkle--two[\s\S]*?hero-brand-sparkle--three/.test(home),
+        'the three stars are plain spans inside the lockup');
+    });
+
+    await step('Framer Motion movement is off everywhere; fades only', () => {
+      assert.ok(/<MotionConfig reducedMotion="always">/.test(app),
+        'transform and layout animations are disabled globally');
+      assert.ok(!/behavior:\s*'smooth'/.test(app), 'route changes jump to the top instantly');
+      assert.ok(/html \{ scroll-behavior: auto; \}/.test(css), 'smooth scrolling is off');
+      assert.ok(!/behavior:\s*'smooth'/.test(read('src/pages/CartPage.js')),
+        'checkout does not animate a scroll');
+      assert.ok(!/behavior:\s*'smooth'/.test(read('src/components/shop/ProductReviews.js')),
+        'review focus does not animate a scroll');
+    });
+
+    await step('only functional spinners keep a keyframe', () => {
+      const keyframes = [...css.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]).sort();
+      assert.deepEqual(keyframes, [
+        'app-startup-spin',
+        'hero-brand-letter-glint',
+        'hero-brand-twinkle',
+        'hero-dust-twinkle',
+        'zshm-photo-shimmer',
+      ], 'the kept loops are the wordmark light, two tiny twinkles and two busy indicators');
     });
 
     await step('no backdrop blur on phones where it would sample a moving page', () => {
-      assert.ok(/\.label-badge,\s*\.product-card-labels \.label-badge,\s*\.product-card-label-row \.label-badge \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(lowPower),
+      assert.ok(/\.label-badge,\s*\.product-card-labels \.label-badge,\s*\.product-card-label-row \.label-badge \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(touch),
         'badges over photos use solid glass');
-      assert.ok(/\.mobile-nav-inner \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(lowPower),
+      assert.ok(/\.mobile-nav-inner \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(touch),
         'the mobile dock is solid glass');
       assert.ok(!/backdropFilter: 'blur\(8px\)'/.test(product),
         'the gallery controls no longer blur the photo they sit on');
@@ -1086,6 +1226,22 @@ try {
       assert.ok(preload, 'index.html still preloads the stylesheet');
       assert.equal(preload[1].replace(/&amp;/g, '&'), href[1],
         'the preload and the injected link must match byte for byte or the preload is wasted');
+    });
+  }
+
+  console.log('\n[11] admin dashboard: KPI labels match the numbers they describe');
+  {
+    const admin = read('src/pages/AdminApp.js');
+    const analytics = read('src/lib/analytics.js');
+
+    await step('"non-cancelled orders" never counts cancelled orders', () => {
+      // The KPI value is the sum of non-cancelled orders, so its sub-label must
+      // subtract them too. Using orderCount (all statuses) overstated the count
+      // whenever a cancelled order existed.
+      assert.ok(/overview\.orderCount - overview\.cancelledCount/.test(admin),
+        'the Total Order Value sub-label subtracts cancelled orders');
+      assert.ok(/cancelledCount:\s*cancelled\.length/.test(analytics),
+        'summarizeOrders still exposes cancelledCount');
     });
   }
 } catch (error) {

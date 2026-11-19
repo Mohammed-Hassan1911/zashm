@@ -481,7 +481,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === range);
 
   const kpis = [
-    { key: 'totalValue', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${overview.orderCount} non-cancelled orders`, color: 'var(--gold)', icon: TrendingUp, delta: overview.totalDeltaPct },
+    { key: 'totalValue', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${Math.max(0, overview.orderCount - overview.cancelledCount)} non-cancelled orders`, color: 'var(--gold)', icon: TrendingUp, delta: overview.totalDeltaPct },
     { key: 'delivered', labelEn: 'Delivered Sales', value: fmtEGP(overview.deliveredSales), sub: `${overview.deliveredCount} delivered`, color: '#27ae60', icon: CheckCircle },
     { key: 'pending', labelEn: 'Orders In Progress Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: '#f39c12', icon: Clock },
     { key: 'shipped', labelEn: 'Shipped Order Value', value: fmtEGP(overview.shippedValue), sub: `${overview.shippedCount} shipped`, color: '#3498db', icon: Truck },

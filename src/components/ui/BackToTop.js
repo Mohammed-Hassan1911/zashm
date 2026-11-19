@@ -38,10 +38,8 @@ export function BackToTop() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
           transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
-          whileHover={!reduceMotion ? { scale: 1.1 } : undefined}
-          whileTap={!reduceMotion ? { scale: 0.9 } : undefined}
           className="back-to-top"
-        ><ArrowUp size={18} aria-hidden="true" /></motion.button>
+        ><ArrowUp size={16} aria-hidden="true" /></motion.button>
       )}
     </AnimatePresence>,
     document.body

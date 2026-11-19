@@ -185,7 +185,7 @@ export default function ProductReviews({ product }) {
     const node = ref && ref.current;
     if (!node) return;
     const timer = setTimeout(() => {
-      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      node.scrollIntoView({ block: 'center' });
       if (typeof node.focus === 'function') {
         try { node.focus(); } catch (e) { /* ignore */ }
       }
@@ -199,7 +199,7 @@ export default function ProductReviews({ product }) {
     const node = successRef.current;
     if (!node) return;
     const timer = setTimeout(() => {
-      node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      node.scrollIntoView({ block: 'center' });
     }, 50);
     return () => clearTimeout(timer);
   }, [sent]);

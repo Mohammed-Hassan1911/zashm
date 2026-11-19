@@ -31,7 +31,7 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: auto; }
 
 body {
   background: var(--bg);
@@ -47,7 +47,7 @@ body {
 }
 
 /* ─── Ambient backdrop ───────────────────────────────────────────────────────
-   One lit room behind every route, built from four fixed layers:
+   One lit room behind every route, built from two fixed layers:
 
      1. body::before        the wall — a warm key light from the upper left, a
                             cooler rim light upper right, a gold bounce off the
@@ -55,16 +55,11 @@ body {
                             shadow side. That cold-warm split is what makes the
                             gold read as light instead of brown paint. A deep
                             vignette and a warm-to-cold wash finish it.
-     2. .app-shell::before  fluted wall panelling: 1px hairlines every 120px,
-                            masked away from the edges so it is a suggestion,
-                            never a grid you notice.
-     3. .app-shell::after   a wide sheen that crosses the wall over a minute,
-                            like light moving through a gallery.
-     4. body::after         film grain on top, so the gradients never band.
+     2. body::after         film grain on top, so the gradients never band.
 
-   Everything is pure CSS: no image request, no JS, no repaint (every motion is
-   a transform on an already-composited layer), and every layer is
-   pointer-events: none. The admin opts out with its own opaque surface. */
+   Everything is pure CSS: no image request, no JS, and every layer is
+   pointer-events: none. Nothing here moves — the room is painted once. The
+   admin opts out with its own opaque surface. */
 body::before {
   content: '';
   position: fixed;
@@ -87,46 +82,6 @@ body::before {
     radial-gradient(126% 116% at 50% 38%, transparent 24%, rgba(0, 0, 0, 0.54) 76%, rgba(0, 0, 0, 0.78) 100%),
     /* base wash: warm where the light lands, cold in the shadow */
     linear-gradient(172deg, #15110c 0%, #0d0b0a 42%, #06060a 100%);
-  animation: ambient-drift 72s ease-in-out infinite alternate;
-  /* The wall is rastered once and then only translated. Scaling it would force
-     the eight stacked gradients to be re-rastered on every frame, which is the
-     one thing that makes an always-on backdrop expensive on a phone. */
-  will-change: transform;
-}
-
-/* Fluted panelling: vertical hairlines only, faded away from the edges. */
-.app-shell::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    repeating-linear-gradient(90deg, rgba(255, 245, 224, 0.055) 0 1px, transparent 1px 120px);
-  -webkit-mask-image: radial-gradient(130% 92% at 50% 14%, #000 0%, rgba(0, 0, 0, 0.4) 54%, transparent 88%);
-  mask-image: radial-gradient(130% 92% at 50% 14%, #000 0%, rgba(0, 0, 0, 0.4) 54%, transparent 88%);
-}
-
-/* The travelling sheen. */
-.app-shell::after {
-  content: '';
-  position: fixed;
-  top: -30%;
-  left: -40%;
-  width: 180%;
-  height: 160%;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent 30%,
-    rgba(255, 241, 210, 0.03) 42%,
-    rgba(255, 250, 232, 0.085) 50%,
-    rgba(255, 241, 210, 0.03) 58%,
-    transparent 70%
-  );
-  animation: ambient-sheen 54s ease-in-out infinite alternate;
-  will-change: transform;
 }
 
 /* Film grain: a 180px tiling SVG noise, faint enough to read as texture on a
@@ -140,16 +95,6 @@ body::after {
   opacity: 0.045;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
-}
-
-@keyframes ambient-drift {
-  from { transform: translate3d(-1.4%, -0.8%, 0); }
-  to { transform: translate3d(1.4%, 0.8%, 0); }
-}
-
-@keyframes ambient-sheen {
-  from { transform: translate3d(-16%, -3%, 0) rotate(0.01deg); }
-  to { transform: translate3d(16%, 3%, 0) rotate(0.01deg); }
 }
 
 html {
@@ -659,9 +604,6 @@ select option { background: var(--bg3); }
     inset 0 1px 0 rgba(255, 255, 255, 0.10);
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
-  animation:
-    zashm-label-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both,
-    zashm-label-glow 3.6s ease-in-out 0.55s infinite;
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
@@ -674,26 +616,6 @@ select option { background: var(--bg3); }
   box-shadow:
     0 5px 20px rgba(201, 168, 76, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-
-@keyframes zashm-label-in {
-  from { opacity: 0; transform: scale(0.72) translateY(-7px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-@keyframes zashm-label-glow {
-  0%, 100% {
-    box-shadow:
-      0 3px 14px rgba(0, 0, 0, 0.45),
-      0 0 0 1px rgba(201, 168, 76, 0.14),
-      inset 0 1px 0 rgba(255, 255, 255, 0.09);
-  }
-  50% {
-    box-shadow:
-      0 3px 18px rgba(201, 168, 76, 0.30),
-      0 0 0 1px rgba(201, 168, 76, 0.30),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  }
 }
 
 /* The product page label is not an overlay: it is its own row directly above
@@ -787,30 +709,12 @@ select option { background: var(--bg3); }
   overflow-wrap: anywhere;
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-
-/* Footer brand: a seamless gold sweep. The gradient tile repeats every
-   160px and the animation shifts exactly one tile, so the glint never pauses
-   or jumps back to a dark gap at the loop boundary. */
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes pulse-gold {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.4); }
-  50% { box-shadow: 0 0 0 12px rgba(201,168,76,0); }
-}
-
 /* ─── Footer wordmark ────────────────────────────────────────────────────────
    The footer repeats the home page's champagne metal instead of inventing a
    second logo: deep bronze at the ends, a warm gold body and a pale highlight
-   through the middle. The gradient tile is twice the word, so one slow pass
-   reads as the same struck metal catching the room's light — the brand looks
-   identical at the top and the bottom of the page. */
+   through the middle. The gradient is frozen on its richest frame; only the
+   per-letter glint below moves, so the brand reads as the same struck metal at
+   the top and the bottom of the page without a text re-raster every frame. */
 .footer-wordmark-letter {
   position: relative;
   display: inline-block;
@@ -823,23 +727,16 @@ select option { background: var(--bg3); }
     #8a7444 100%
   );
   background-size: 220% 100%;
-  background-position: 100% 0;
+  background-position: 50% 0;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: footer-letter-light 7s ease-in-out infinite;
-  animation-delay: calc(var(--letter-i) * 0.18s);
 }
 
-@keyframes footer-letter-light {
-  0%, 100% { background-position: 100% 0; }
-  50% { background-position: 0% 0; }
-}
-
-/* The per-letter glint from the hero wordmark: a pale copy of the letter sits
-   on top and breathes a warm halo, so the metal appears to catch the room's
-   light instead of staying a flat gradient. */
+/* The per-letter glint: a pale copy of the letter sits on top and breathes a
+   warm halo, so the metal appears to catch the room's light. Only `opacity`
+   changes, which the compositor can run without touching paint or layout. */
 .footer-wordmark-letter::after {
   content: attr(data-letter);
   position: absolute;
@@ -888,13 +785,7 @@ select option { background: var(--bg3); }
   inset: 0 0 auto;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.6), transparent);
-  background-size: 240% 100%;
-  animation: footer-hairline 9s linear infinite;
   pointer-events: none;
-}
-@keyframes footer-hairline {
-  from { background-position: 120% 0; }
-  to { background-position: -120% 0; }
 }
 
 .site-footer::after {
@@ -938,29 +829,6 @@ select option { background: var(--bg3); }
   cursor: pointer;
   user-select: none;
   outline: none;
-}
-
-/* The same warm pool that sits behind the hero lockup, sized to the footer
-   wordmark so the brand is lit the same way at the bottom of the page. */
-.footer-wordmark::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 150%;
-  height: 240%;
-  z-index: -1;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(232, 200, 112, 0.28) 0%,
-    rgba(201, 168, 76, 0.13) 36%,
-    rgba(201, 168, 76, 0.04) 60%,
-    transparent 76%
-  );
-  animation: hero-brand-halo 7s ease-in-out infinite;
 }
 
 .footer-blurb {
@@ -1035,12 +903,8 @@ select option { background: var(--bg3); }
   border-radius: 3px;
 }
 
-/* Track Your Order: only the small icon breathes, so the label never pulses. */
-.footer-track svg { animation: footer-track-pulse 3.6s ease-in-out infinite; }
-@keyframes footer-track-pulse {
-  0%, 100% { opacity: 0.72; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.14); }
-}
+/* Track Your Order: a still gold icon; the label and the icon never pulse. */
+.footer-track svg { opacity: 0.85; }
 
 /* ─── Footer social ─────────────────────────────────────────────────────────
    Two gold rings that lift on hover. The 44px tap target is kept on touch. */
@@ -1109,21 +973,6 @@ select option { background: var(--bg3); }
   outline: 2px solid var(--gold);
   outline-offset: 3px;
   border-radius: 3px;
-}
-
-/* ─── Footer reveal ─────────────────────────────────────────────────────────
-   The class that hides the columns is only added from JS, so a failed script
-   or a reduced-motion visitor always sees the full footer. */
-.site-footer.footer-animate .footer-reveal {
-  opacity: 0;
-  transform: translateY(14px);
-}
-.site-footer.footer-revealed .footer-reveal {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity 0.55s ease var(--footer-delay, 0ms),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--footer-delay, 0ms);
 }
 
 /* ─── Footer breakpoints ────────────────────────────────────────────────────
@@ -1504,39 +1353,12 @@ select option { background: var(--bg3); }
   display: inline-block;
 }
 
-/* The warm pool behind the whole lockup: a single composited layer that only
-   breathes its opacity, so the wordmark sits in light without re-rasterising a
-   filter on every frame. The per-letter light is layered on top of this (see
-   .hero-brand-letter::after below). */
-.hero-brand-lockup::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 126%;
-  height: 168%;
-  z-index: -1;
-  pointer-events: none;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(
-    ellipse at center,
-    rgba(232, 200, 112, 0.26) 0%,
-    rgba(201, 168, 76, 0.14) 34%,
-    rgba(201, 168, 76, 0.05) 58%,
-    transparent 74%
-  );
-  animation: hero-brand-halo 7s ease-in-out infinite;
-}
-
-@keyframes hero-brand-halo {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
-
 /* The wordmark is struck in champagne: deep bronze at the ends, a warm gold
    body, and a pale highlight through the middle, so it reads as metal catching
-   the room's key light rather than as flat yellow paint. */
+   the room's key light rather than as flat yellow paint. The gradient is
+   painted once and left alone — a `background-position` loop on clipped text
+   re-rasterises every glyph on every frame, which is the single most expensive
+   thing the old hero did on a phone. */
 .hero-brand-letter {
   position: relative;
   display: inline-block;
@@ -1549,11 +1371,11 @@ select option { background: var(--bg3); }
     #8a7444 100%
   );
   background-size: 220% 100%;
+  background-position: 50% 0;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: hero-brand-shimmer 7s ease-in-out infinite;
 }
 
 /* Each glyph lights itself, on its own beat, exactly as the wordmark did
@@ -1594,61 +1416,74 @@ select option { background: var(--bg3); }
   88% { opacity: 0.42; }
 }
 
-.hero-brand-letter-sparkle {
-  position: absolute;
-  top: 13%;
-  right: 4%;
-  z-index: 2;
-  width: 7px;
-  aspect-ratio: 1;
-  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
-  background: #fff4c2;
-  filter: drop-shadow(0 0 5px rgba(245, 215, 127, 0.95));
-  pointer-events: none;
-  animation: hero-brand-twinkle 2.8s ease-in-out infinite;
-  animation-delay: calc(var(--letter-index) * 0.32s);
-}
-
+/* Three small stars around the wordmark, and a handful of dust motes in the
+   hero air. The previous version put 28 motes plus a sparkle on every other
+   letter on the page; that was 40+ promoted layers. This one is deliberately
+   tiny: three stars and six motes inside one field, and every frame is
+   `opacity`/`transform` only, so the compositor runs it without repainting the
+   text, the gradients or the photo behind it. */
 .hero-brand-sparkle {
   position: absolute;
   z-index: 2;
-  width: 10px;
+  width: 9px;
   aspect-ratio: 1;
   clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
   background: #fff4c2;
-  filter: drop-shadow(0 0 5px rgba(245, 215, 127, 0.95));
+  box-shadow: 0 0 6px rgba(245, 215, 127, 0.75);
   pointer-events: none;
+  /* Four promoted layers in total (three stars, one dust field). Each is a
+     few pixels square, so the texture cost is nil, and the compositor can run
+     the whole twinkle without touching style, layout or paint on the page. */
+  will-change: opacity, transform;
   animation: hero-brand-twinkle 3.2s ease-in-out infinite;
 }
 
 .hero-brand-sparkle--one {
-  top: 3%;
-  right: 3%;
+  top: 1%;
+  right: 1%;
 }
 
 .hero-brand-sparkle--two {
-  top: 22%;
-  left: 12%;
-  width: 7px;
+  top: 20%;
+  left: 8%;
+  width: 6px;
   animation-delay: 1.1s;
 }
 
 .hero-brand-sparkle--three {
-  right: 22%;
-  bottom: 1%;
-  width: 6px;
+  right: 18%;
+  bottom: -2%;
+  width: 5px;
   animation-delay: 2s;
 }
 
-@keyframes hero-brand-shimmer {
-  0%, 100% { background-position: 100% center; }
-  50% { background-position: 0% center; }
+@keyframes hero-brand-twinkle {
+  0%, 100% { opacity: 0.18; transform: scale(0.72) rotate(0deg); }
+  45% { opacity: 1; transform: scale(1.12) rotate(45deg); }
+  62% { opacity: 0.7; transform: scale(0.94) rotate(45deg); }
 }
 
-@keyframes hero-brand-twinkle {
-  0%, 100% { opacity: 0.2; transform: scale(0.65) rotate(0deg); }
-  45% { opacity: 1; transform: scale(1.25) rotate(45deg); }
-  60% { opacity: 0.75; transform: scale(0.95) rotate(45deg); }
+.hero-dust-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  will-change: opacity;
+  animation: hero-dust-twinkle 5.6s ease-in-out infinite;
+}
+
+.hero-dust {
+  position: absolute;
+  border-radius: 50%;
+  background: #f7e6b0;
+  box-shadow: 0 0 6px rgba(247, 230, 176, 0.7);
+  pointer-events: none;
+}
+
+@keyframes hero-dust-twinkle {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.8; }
 }
 
 .hero-brand-subtitle,
@@ -1782,21 +1617,14 @@ select option { background: var(--bg3); }
   content: '';
   position: absolute;
   left: 50%;
-  top: -6px;
+  top: 40%;
   width: 3px;
   height: 6px;
   border-radius: 999px;
   transform: translateX(-50%);
   background: var(--gold-light);
   box-shadow: 0 0 8px rgba(232, 200, 112, 0.9);
-  animation: hero-cue-bead 2.4s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-}
-
-@keyframes hero-cue-bead {
-  0% { top: -6px; opacity: 0; }
-  18% { opacity: 1; }
-  78% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
+  opacity: 1;
 }
 
 @media (max-width: 768px) {
@@ -1851,26 +1679,9 @@ select option { background: var(--bg3); }
   -webkit-tap-highlight-color: transparent;
 }
 
-/* A pool of warm light behind the monogram, so the gold Z sits in its own
-   glow instead of floating on the header. It is a still pool: the mark is
-   polished, not blinking. */
-.zashm-header-logo::before {
-  content: '';
-  position: absolute;
-  inset: -26%;
-  z-index: -1;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 50% 46%,
-    rgba(240, 208, 132, 0.3) 0%,
-    rgba(201, 168, 76, 0.12) 44%,
-    rgba(201, 168, 76, 0) 74%
-  );
-  filter: blur(6px);
-  opacity: 0.7;
-  transition: opacity 0.35s ease, transform 0.35s ease;
-  pointer-events: none;
-}
+/* The monogram sits directly on the header: no blurred pool or halo behind it.
+   The mark is polished metal, not a lamp, so the only light is the specular
+   band painted on the glyph itself (::after). */
 
 /* The gloss on the metal: one narrow specular band resting on the left of the
    glyph, where the room's key light falls. It is static — a polished surface
@@ -1900,7 +1711,7 @@ select option { background: var(--bg3); }
   mask-position: center;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  opacity: 0.38;
+  opacity: 0.3;
   pointer-events: none;
 }
 
@@ -1909,21 +1720,15 @@ select option { background: var(--bg3); }
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(201, 168, 76, 0.3));
+  /* A dark contact shadow only: the gold glow was the "cloud" the owner saw
+     behind the letter, so the mark now sits on the header with no halo. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
   transition: filter 0.35s ease;
-}
-
-/* Hover: the still pool simply opens up, so the mark answers the pointer
-   without a second, competing animation. */
-.zashm-header-logo:hover::before,
-.zashm-header-logo:focus-visible::before {
-  opacity: 1;
-  transform: scale(1.12);
 }
 
 .zashm-header-logo:hover img,
 .zashm-header-logo:focus-visible img {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(232, 200, 112, 0.6));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)) drop-shadow(0 2px 5px rgba(0, 0, 0, 0.5));
 }
 
 .zashm-header-logo:hover::after,
@@ -2039,15 +1844,7 @@ select option { background: var(--bg3); }
 .page-skeleton-product-image {
   display: block;
   border-radius: 3px;
-  background:
-    linear-gradient(90deg, var(--bg3) 0%, var(--bg4) 50%, var(--bg3) 100%);
-  background-size: 200% 100%;
-  animation: page-skeleton-shimmer 1.4s ease-in-out infinite;
-}
-
-@keyframes page-skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  background: var(--bg3);
 }
 
 .page-skeleton-shop {
@@ -2691,41 +2488,35 @@ select option { background: var(--bg3); }
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Both actions are one family: a smoked-glass disc, a fine gold hairline and a
-   soft pool of light. Hover only brightens the hairline and the glow — the
-   colour of the glass and the glyph never change, so the pair stays calm. */
+/* Both actions are one family: a small smoked-glass disc with a fine gold
+   hairline and nothing else. No halo, no gold pool, no hover growth — arriving
+   on a route must never light a circle around the button. */
 .back-to-top {
   right: calc(24px + env(safe-area-inset-right, 0px));
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  width: 46px;
-  height: 46px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background:
-    radial-gradient(120% 120% at 30% 12%, rgba(232, 200, 112, 0.20), transparent 60%),
-    linear-gradient(165deg, rgba(38, 33, 24, 0.97) 0%, rgba(12, 11, 10, 0.99) 74%);
+  background: linear-gradient(165deg, rgba(34, 30, 23, 0.96) 0%, rgba(12, 11, 10, 0.98) 74%);
   color: var(--gold-light);
-  border: 1px solid rgba(201, 168, 76, 0.42);
+  border: 1px solid rgba(201, 168, 76, 0.34);
   box-shadow:
-    0 10px 26px rgba(0, 0, 0, 0.55),
-    0 0 22px rgba(201, 168, 76, 0.18),
-    inset 0 1px 0 rgba(255, 242, 205, 0.16),
-    inset 0 -8px 14px rgba(0, 0, 0, 0.28);
-  transition: border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
+    0 6px 16px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 242, 205, 0.12);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .back-to-top:hover,
 .back-to-top:focus-visible {
-  border-color: rgba(240, 212, 146, 0.9);
+  border-color: rgba(240, 212, 146, 0.82);
   box-shadow:
-    0 12px 30px rgba(0, 0, 0, 0.55),
-    0 0 30px rgba(201, 168, 76, 0.34),
-    inset 0 1px 0 rgba(255, 246, 214, 0.24),
-    inset 0 -8px 14px rgba(0, 0, 0, 0.24);
+    0 8px 20px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 246, 214, 0.2);
 }
 
 .back-to-top:focus-visible {
   outline: 2px solid var(--gold-light);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .back-to-top svg {
@@ -2735,38 +2526,32 @@ select option { background: var(--bg3); }
 .whatsapp-fab {
   left: calc(24px + env(safe-area-inset-left, 0px));
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  /* Dark glass with a warm gold core, so it reads on the lit wall and on a
-     product photo alike. */
-  background:
-    radial-gradient(120% 120% at 30% 16%, rgba(201, 168, 76, 0.24), transparent 62%),
-    linear-gradient(165deg, rgba(40, 34, 24, 0.96) 0%, rgba(14, 13, 12, 0.98) 72%);
+  /* Dark glass with a faint warm top light, so it reads on the lit wall and on
+     a product photo alike without becoming a glowing coin. */
+  background: linear-gradient(165deg, rgba(36, 31, 23, 0.96) 0%, rgba(14, 13, 12, 0.98) 72%);
   color: var(--gold-light);
-  border: 1px solid rgba(201, 168, 76, 0.42);
+  border: 1px solid rgba(201, 168, 76, 0.34);
   box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.55),
-    0 0 26px rgba(201, 168, 76, 0.2),
-    inset 0 1px 0 rgba(255, 242, 205, 0.16),
-    inset 0 -8px 16px rgba(0, 0, 0, 0.3);
-  transition: border-color 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
+    0 6px 18px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 242, 205, 0.12);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .whatsapp-fab:hover,
 .whatsapp-fab:focus-visible {
   color: var(--gold-light);
-  border-color: rgba(240, 212, 146, 0.9);
+  border-color: rgba(240, 212, 146, 0.82);
   box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.55),
-    0 0 34px rgba(201, 168, 76, 0.36),
-    inset 0 1px 0 rgba(255, 246, 214, 0.26),
-    inset 0 -8px 16px rgba(0, 0, 0, 0.26);
+    0 8px 22px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 246, 214, 0.2);
 }
 
 .whatsapp-fab:focus-visible {
   outline: 2px solid var(--gold-light);
-  outline-offset: 4px;
+  outline-offset: 2px;
 }
 
 /* While the size finder is open it owns the screen, so the WhatsApp action is
@@ -3053,9 +2838,9 @@ body.size-finder-open .whatsapp-fab {
   .mobile-nav.mobile-nav--keyboard-open { display: none; }
   /* Keep the floating actions clear of the floating dock. The dock is about
      64px tall including its bottom padding, so the buttons start just above it.
-     On a phone the discs look smaller - 36px of paint - while the button's own
-     box stays 44px: the 4px between the box edge and the painted disc is a
-     transparent border, and background-clip keeps the gradient inside it. A tap
+     On a phone the discs look much smaller - 34px of paint - while the button's
+     own box stays 44px: the 5px between the box edge and the painted disc is a
+     transparent border, and background-clip keeps the glass inside it. A tap
      anywhere in the 44px box is a tap on the button, so the touch target is
      still the full 44px. */
   .back-to-top {
@@ -3063,22 +2848,20 @@ body.size-finder-open .whatsapp-fab {
     bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     width: 44px;
     height: 44px;
-    border: 4px solid transparent;
+    border: 5px solid transparent;
     background-clip: padding-box;
     box-shadow:
-      0 8px 20px rgba(0, 0, 0, 0.5),
-      inset 0 0 0 1px rgba(232, 200, 112, 0.5),
-      0 0 18px rgba(201, 168, 76, 0.2),
-      inset 0 1px 0 rgba(255, 242, 205, 0.18);
+      0 6px 16px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(201, 168, 76, 0.4),
+      inset 0 1px 0 rgba(255, 242, 205, 0.14);
   }
   .back-to-top:hover,
   .back-to-top:focus-visible {
     border-color: transparent;
     box-shadow:
-      0 10px 24px rgba(0, 0, 0, 0.5),
-      inset 0 0 0 1px rgba(240, 212, 146, 0.85),
-      0 0 26px rgba(201, 168, 76, 0.34),
-      inset 0 1px 0 rgba(255, 246, 214, 0.26);
+      0 8px 20px rgba(0, 0, 0, 0.52),
+      inset 0 0 0 1px rgba(240, 212, 146, 0.8),
+      inset 0 1px 0 rgba(255, 246, 214, 0.22);
   }
   .whatsapp-fab {
     left: calc(16px + env(safe-area-inset-left, 0px));
@@ -3086,31 +2869,29 @@ body.size-finder-open .whatsapp-fab {
     right: auto;
     width: 44px;
     height: 44px;
-    border: 4px solid transparent;
+    border: 5px solid transparent;
     border-color: transparent;
     background-clip: padding-box;
     box-shadow:
-      0 8px 22px rgba(0, 0, 0, 0.5),
-      inset 0 0 0 1px rgba(201, 168, 76, 0.46),
-      0 0 18px rgba(201, 168, 76, 0.18),
-      inset 0 1px 0 rgba(255, 242, 205, 0.16);
+      0 6px 18px rgba(0, 0, 0, 0.5),
+      inset 0 0 0 1px rgba(201, 168, 76, 0.4),
+      inset 0 1px 0 rgba(255, 242, 205, 0.14);
   }
   .whatsapp-fab:hover,
   .whatsapp-fab:focus-visible {
     border-color: transparent;
     box-shadow:
-      0 10px 24px rgba(0, 0, 0, 0.5),
-      inset 0 0 0 1px rgba(240, 212, 146, 0.88),
-      0 0 26px rgba(201, 168, 76, 0.32),
-      inset 0 1px 0 rgba(255, 246, 214, 0.24);
+      0 8px 22px rgba(0, 0, 0, 0.52),
+      inset 0 0 0 1px rgba(240, 212, 146, 0.8),
+      inset 0 1px 0 rgba(255, 246, 214, 0.22);
   }
   .back-to-top svg {
     width: 14px;
     height: 14px;
   }
   .whatsapp-fab svg {
-    width: 20px;
-    height: 20px;
+    width: 17px;
+    height: 17px;
   }
 
   footer.site-footer {
@@ -3127,15 +2908,6 @@ body.size-finder-open .whatsapp-fab {
   overflow: hidden;
   background: var(--bg3) !important;
   border-radius: 8px;
-}
-
-.admin-skeleton::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.055), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
 }
 
 @media (max-width: 900px) {
@@ -3773,8 +3545,7 @@ main, [role="main"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body::before,
-  .app-shell::after {
+  body::before {
     animation: none;
   }
 }
@@ -3801,10 +3572,8 @@ main, [role="main"] {
     text-shadow: none;
   }
 
-  .zashm-header-logo::before,
   .zashm-header-logo::after,
   .hero-brand-letter::after,
-  .footer-wordmark::before,
   .footer-wordmark-letter::after,
   .admin-login-mote,
   .admin-login-backdrop {
@@ -3951,11 +3720,6 @@ main, [role="main"] {
   height: 1px;
   background: linear-gradient(90deg, rgba(201, 168, 76, 0.85), rgba(201, 168, 76, 0));
   transform-origin: left center;
-  animation: product-rule-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
-}
-@keyframes product-rule-in {
-  from { transform: scaleX(0); opacity: 0; }
-  to { transform: scaleX(1); opacity: 1; }
 }
 
 .product-title {
@@ -4249,7 +4013,6 @@ main, [role="main"] {
   background: rgba(39, 174, 96, 0.055);
 }
 .product-stock[data-tone='ok']::before {
-  animation: product-stock-pulse 2.6s ease-in-out infinite;
   box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.16), 0 0 10px rgba(39, 174, 96, 0.45);
 }
 .product-stock[data-tone='low'] {
@@ -4266,11 +4029,6 @@ main, [role="main"] {
 .product-stock[data-tone='out']::before {
   box-shadow: 0 0 0 3px rgba(224, 138, 130, 0.16), 0 0 10px rgba(224, 138, 130, 0.4);
 }
-@keyframes product-stock-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.16), 0 0 10px rgba(39, 174, 96, 0.35); }
-  50% { box-shadow: 0 0 0 6px rgba(39, 174, 96, 0.05), 0 0 14px rgba(39, 174, 96, 0.18); }
-}
-
 /* Perks: one quiet glass card, three rows, a hairline between them and a lit
    ring around each icon. The card is the calmest surface on the page, so the
    promises read as part of the piece rather than as an FAQ. */
@@ -4401,24 +4159,24 @@ main, [role="main"] {
     linear-gradient(180deg, #16130f 0%, #0b0a09 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 22px 50px rgba(0, 0, 0, 0.48),
-    0 0 0 1px rgba(0, 0, 0, 0.4);
+    0 22px 50px rgba(0, 0, 0, 0.48);
 }
 
-.product-gallery-main::before { border-radius: inherit; }
+/* The product photo keeps one frame only. The shop-card hairline and the
+   inner mat hairline are both switched off here, so the shot sits inside the
+   single outer border instead of a border inside a border. */
+.product-card-image.product-gallery-main::before { display: none; }
 
-/* The print sits on a dark mat: a champagne hairline around the photo and a
-   soft vignette at its edges, so a bright studio shot still reads as a mounted
-   print rather than a white rectangle dropped on the page. */
+/* The print sits on a dark mat: a soft vignette at its edges, so a bright
+   studio shot still reads as a mounted print rather than a white rectangle
+   dropped on the page. No second hairline. */
 .product-gallery-main::after {
   content: '';
   position: absolute;
   inset: 10px;
   z-index: 1;
   border-radius: 6px;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 244, 214, 0.14),
-    inset 0 0 30px rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.16);
   pointer-events: none;
 }
 
@@ -4549,15 +4307,9 @@ main, [role="main"] {
 }
 .product-detail-list > :nth-last-child(-n + 2) { border-bottom: 0; }
 
-/* Entrance: the details column's blocks rise in one after another. The class
-   is pure CSS, so a reduced-motion visitor sees everything immediately. */
+/* The details column's blocks are laid out once; nothing rises in. */
 .product-details > .product-detail-block {
-  animation: product-block-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--pp-i, 0) * 55ms + 90ms);
-}
-@keyframes product-block-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+  opacity: 1;
 }
 
 @media (max-width: 768px) {
@@ -4755,10 +4507,20 @@ main, [role="main"] {
   }
 
   .hero-brand-word,
-  .hero-brand-letter,
-  .hero-brand-letter-sparkle,
+  .hero-brand-letter {
+    animation: none;
+  }
+
+  /* The stars and motes stay as a still, faint scattering instead of a loop. */
   .hero-brand-sparkle {
     animation: none;
+    opacity: 0.55;
+    transform: none;
+  }
+
+  .hero-dust-field {
+    animation: none;
+    opacity: 0.24;
   }
 
   .hero-scroll-cue-line::after {
@@ -4783,7 +4545,6 @@ main, [role="main"] {
     background-position: 50% 0;
   }
 
-  .footer-wordmark::before,
   .footer-wordmark-letter::after {
     animation: none !important;
   }
@@ -4934,22 +4695,13 @@ main, [role="main"] {
   }
 
   /* Home hero, invoice and checkout motion. */
-  .hero-dust,
-  .hero-brand-lockup::before,
-  .hero-brand-letter::after,
-  .order-invoice-sheen,
-  .order-invoice-star,
-  .order-invoice-seal::after,
-  .order-invoice-wordmark span,
-  .order-invoice-lines li {
+  .hero-brand-letter::after {
     animation: none !important;
   }
 
-  .hero-dust { opacity: 0.35; }
   /* Without the glint, keep a steady light on every letter so the wordmark is
      still warm rather than flat. */
   .hero-brand-letter::after { opacity: 0.32; }
-  .order-invoice-sheen { display: none; }
 
   /* Home glass CTAs: no sweep, no lift. */
   .gold-btn.home-glass-btn::after,
@@ -4968,10 +4720,9 @@ main, [role="main"] {
     animation: none;
   }
 
-  /* The product label keeps its one-shot entrance (instantly) but never
-     pulses its box-shadow. */
+  /* The product label is static: no entrance, no box-shadow pulse. */
   .product-card-labels .label-badge {
-    animation: zashm-label-in 0.01ms linear both;
+    animation: none;
   }
 }
 
@@ -5000,17 +4751,6 @@ main, [role="main"] {
   height: 1px;
   margin-top: 10px;
   background: linear-gradient(90deg, var(--gold), rgba(201, 168, 76, 0.15));
-  transform-origin: left center;
-}
-.site-footer.footer-animate .footer-col-title::after {
-  transform: scaleX(0);
-}
-.site-footer.footer-revealed .footer-col-title::after {
-  animation: footer-rule 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--footer-delay, 0ms) + 120ms) both;
-}
-@keyframes footer-rule {
-  from { transform: scaleX(0); opacity: 0.2; }
-  to { transform: scaleX(1); opacity: 1; }
 }
 /* Tablets sit between the phone and desktop sizes: without this the headings
    would drop back to the 11px base and read smaller than on a phone. */
@@ -5647,26 +5387,6 @@ main, [role="main"] {
 }
 .review-photo-drop:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
-/* One slow highlight pass per hover — the "sheen" reads as light moving over
-   fabric, not as a loading bar. */
-.review-photo-drop::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(105deg, transparent 34%, rgba(201, 168, 76, 0.16) 50%, transparent 66%);
-  transform: translateX(-130%);
-}
-.review-photo-drop:hover::after,
-.review-photo-drop:focus-visible::after { animation: zshm-photo-sheen 1.1s ease-out; }
-
-@keyframes zshm-photo-sheen {
-  0%   { transform: translateX(-130%); opacity: 0; }
-  14%  { opacity: 1; }
-  100% { transform: translateX(130%); opacity: 0; }
-}
-
 .review-photo-icon {
   width: 46px;
   height: 46px;
@@ -5676,12 +5396,6 @@ main, [role="main"] {
   color: var(--gold);
   background: rgba(201, 168, 76, 0.08);
   border: 1px solid rgba(201, 168, 76, 0.32);
-  animation: zshm-photo-breathe 4.2s ease-in-out infinite;
-}
-
-@keyframes zshm-photo-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.0); }
-  50%      { box-shadow: 0 0 0 7px rgba(201, 168, 76, 0.07); }
 }
 
 .review-photo-title {
@@ -5750,7 +5464,6 @@ main, [role="main"] {
   overflow: hidden;
   background: var(--bg2);
   box-shadow: inset 0 0 0 1px rgba(201, 168, 76, 0.14);
-  animation: zshm-photo-in 0.42s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .review-photo-preview img {
   display: block;
@@ -5798,11 +5511,6 @@ main, [role="main"] {
     calc(16px + env(safe-area-inset-bottom, 0px))
     calc(16px + env(safe-area-inset-left, 0px));
   background: rgba(6, 6, 6, 0.94);
-  animation: photo-lightbox-in 0.18s ease-out;
-}
-@keyframes photo-lightbox-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 .photo-lightbox-frame {
   display: flex;
@@ -5853,11 +5561,6 @@ main, [role="main"] {
 .photo-lightbox-close:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
-}
-
-@keyframes zshm-photo-in {
-  from { opacity: 0; transform: scale(0.985) translateY(6px); }
-  to   { opacity: 1; transform: none; }
 }
 
 .review-photo-preview-bar {
@@ -5948,13 +5651,7 @@ main, [role="main"] {
   box-shadow: 0 0 6px rgba(232, 200, 112, 0.3);
   transform: scaleX(1);
   transform-origin: center;
-  animation: product-size-oos-strike 280ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
   pointer-events: none;
-}
-
-@keyframes product-size-oos-strike {
-  from { transform: scaleX(0.12); opacity: 0.45; }
-  to { transform: scaleX(1); opacity: 1; }
 }
 
 .size-finder {
@@ -6263,17 +5960,8 @@ main, [role="main"] {
   background: linear-gradient(90deg, var(--gold-dark), var(--gold-light));
   box-shadow: 0 0 10px rgba(201, 168, 76, 0.35);
 }
-.size-finder-progress-seg[data-current='true']::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-  animation: size-finder-progress-sweep 2.4s ease-in-out infinite;
-}
-
-@keyframes size-finder-progress-sweep {
-  0% { transform: translateX(-110%); }
-  60%, 100% { transform: translateX(110%); }
+.size-finder-progress-seg[data-current='true'] {
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.55), rgba(232, 200, 112, 0.85));
 }
 
 /* ── Layout: figure beside the questions ───────────────────────────────────── */
@@ -6300,7 +5988,6 @@ main, [role="main"] {
   align-items: flex-end;
   justify-content: center;
   transform-origin: bottom center;
-  will-change: transform;
 }
 /* The drawing stands in its own pool of light: a soft ground shadow anchors
    the silhouette instead of letting it float on the dark sheet. */
@@ -6326,11 +6013,7 @@ main, [role="main"] {
 
 /* The dashed ring around the region the current question asks about. */
 .size-finder-figure-focus {
-  animation: size-finder-focus-breathe 2.6s ease-in-out infinite;
-}
-@keyframes size-finder-focus-breathe {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 0.95; }
+  opacity: 0.8;
 }
 
 .size-finder-figure-facts {
@@ -6706,22 +6389,10 @@ main, [role="main"] {
   gap: 12px;
 }
 
-/* The result arrives in layers: gauge first, then the verdict, then the
-   explanation and the size chips. Purely visual, and switched off below. */
+/* The result is laid out once: gauge, verdict, explanation and chips all
+   arrive together. */
 .size-finder-result > * {
-  animation: size-finder-result-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.size-finder-result > *:nth-child(2) { animation-delay: 0.05s; }
-.size-finder-result > *:nth-child(3) { animation-delay: 0.1s; }
-.size-finder-result > *:nth-child(4) { animation-delay: 0.15s; }
-.size-finder-result > *:nth-child(5) { animation-delay: 0.2s; }
-.size-finder-result > *:nth-child(6) { animation-delay: 0.25s; }
-.size-finder-result > *:nth-child(7) { animation-delay: 0.3s; }
-.size-finder-result > *:nth-child(n + 8) { animation-delay: 0.34s; }
-
-@keyframes size-finder-result-rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
+  opacity: 1;
 }
 
 .size-finder-gauge {
@@ -6770,11 +6441,6 @@ main, [role="main"] {
   line-height: 1;
   color: var(--gold);
   text-shadow: 0 0 18px rgba(201, 168, 76, 0.35);
-  animation: size-finder-size-glow 3.6s ease-in-out infinite;
-}
-@keyframes size-finder-size-glow {
-  0%, 100% { text-shadow: 0 0 14px rgba(201, 168, 76, 0.28); }
-  50% { text-shadow: 0 0 24px rgba(232, 200, 112, 0.58), 0 0 44px rgba(201, 168, 76, 0.2); }
 }
 .size-finder-gauge-stars {
   position: absolute;
@@ -6787,29 +6453,22 @@ main, [role="main"] {
   font-size: 10px;
   line-height: 1;
   text-shadow: 0 0 8px rgba(232, 200, 112, 0.75);
-  animation: size-finder-star-twinkle 2.8s ease-in-out infinite;
+  opacity: 0.8;
 }
 .size-finder-gauge-star:nth-child(1) {
   top: -6px;
   right: -13px;
   font-size: 11px;
-  animation-delay: 0s;
 }
 .size-finder-gauge-star:nth-child(2) {
   bottom: -4px;
   left: -15px;
   font-size: 9px;
-  animation-delay: 0.9s;
 }
 .size-finder-gauge-star:nth-child(3) {
   top: 46%;
   right: -17px;
   font-size: 7px;
-  animation-delay: 1.6s;
-}
-@keyframes size-finder-star-twinkle {
-  0%, 100% { opacity: 0.35; transform: scale(0.75) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1.05) rotate(18deg); }
 }
 .size-finder-gauge-score {
   font-size: 11px;
@@ -6965,7 +6624,6 @@ main, [role="main"] {
   font-weight: 600;
   color: var(--gold-light);
   box-shadow: 0 0 12px rgba(201, 168, 76, 0.18), inset 0 0 8px rgba(232, 200, 112, 0.08);
-  animation: size-finder-restart-shine 3s ease-in-out infinite;
   transition: color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 .size-finder-restart:hover,
@@ -6975,11 +6633,6 @@ main, [role="main"] {
   box-shadow: 0 0 18px rgba(201, 168, 76, 0.34), inset 0 0 10px rgba(232, 200, 112, 0.14);
   outline: 2px solid rgba(201, 168, 76, 0.32);
   outline-offset: 2px;
-}
-
-@keyframes size-finder-restart-shine {
-  0%, 100% { background-position: 100% 0; }
-  50% { background-position: 0 0; }
 }
 
 /* ── Responsive ────────────────────────────────────────────────────────────── */
@@ -7200,17 +6853,11 @@ main, [role="main"] {
   border: 1px solid rgba(201, 168, 76, 0.34);
   border-radius: 6px;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.5);
-  animation: zshm-date-in 160ms ease-out;
 }
 .zshm-date-pop.is-down { top: calc(100% + 8px); }
 .zshm-date-pop.is-up { bottom: calc(100% + 8px); }
 .zshm-date-pop.is-left { left: 0; }
 .zshm-date-pop.is-right { right: 0; }
-
-@keyframes zshm-date-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
-}
 
 .zshm-date-head { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
 .zshm-date-nav {
@@ -7510,23 +7157,6 @@ main, [role="main"] {
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* ─── HOME: hero kicker, actions, promise strip, manifesto, closing ───────── */
-
-.hero-dust {
-  position: absolute;
-  border-radius: 50%;
-  background: #f7e6b0;
-  box-shadow: 0 0 6px rgba(247, 230, 176, 0.75);
-  pointer-events: none;
-  opacity: 0;
-  animation-name: hero-dust-twinkle;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-@keyframes hero-dust-twinkle {
-  0%, 100% { opacity: 0.08; transform: scale(0.8); }
-  50% { opacity: 0.85; transform: scale(1.15); }
-}
 
 .hero-actions {
   display: flex;
@@ -8267,13 +7897,21 @@ main, [role="main"] {
   margin-bottom: 24px;
 }
 
+/* The bag summary is the quiet sibling of the checkout summary: the same
+   smoked-glass family, one step calmer, so the two pages feel continuous. */
 .bag-summary {
   position: sticky;
   top: 96px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid rgba(201, 168, 76, 0.22);
+  border-radius: 10px;
   padding: clamp(18px, 3vw, 24px);
+  background:
+    radial-gradient(130% 82% at 16% -18%, rgba(255, 240, 202, 0.08), transparent 60%),
+    linear-gradient(170deg, rgba(29, 25, 19, 0.96) 0%, rgba(17, 15, 12, 0.97) 56%, rgba(11, 10, 9, 0.98) 100%);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 246, 218, 0.11),
+    inset 0 -24px 42px rgba(0, 0, 0, 0.2);
 }
 
 .bag-summary-head {
@@ -8377,38 +8015,67 @@ main, [role="main"] {
   font-size: 10.5px;
 }
 
+/* The applied code is a small champagne pill, not a full-width green panel:
+   one hairline, the code in gold, and a quiet Remove past a short rule. It sits
+   on the glass like a pressed seal instead of shouting over the totals. */
 .bag-coupon-applied {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 8px 10px;
-  border: 1px solid rgba(39, 174, 96, 0.3);
-  background: rgba(39, 174, 96, 0.08);
-  border-radius: 4px;
+  gap: 10px;
+  max-width: 100%;
+  margin-top: 16px;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid rgba(201, 168, 76, 0.34);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(201, 168, 76, 0.16) 0%, rgba(201, 168, 76, 0.055) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 242, 205, 0.16);
 }
 
 .bag-coupon-applied span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #4ec07e;
-  font-size: 11px;
+  min-width: 0;
+  color: #f3e0ab;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.6px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.bag-coupon-applied span svg {
+  flex: none;
+  color: var(--gold);
 }
 
 .bag-coupon-applied button {
-  min-height: 44px;
-  padding: 0 6px;
-  color: var(--text3);
-  background: none;
+  position: relative;
+  flex: none;
+  min-height: 34px;
+  padding: 0 10px;
   border: 0;
-  font-size: 10.5px;
-  letter-spacing: 1px;
+  border-left: 1px solid rgba(201, 168, 76, 0.24);
+  border-radius: 0;
+  background: none;
+  color: var(--text3);
+  font-size: 9px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
+  transition: color 0.2s;
 }
+
+/* The pill stays compact, but the Remove tap area is still 44px tall: the
+   transparent pseudo-element takes the click without painting anything. */
+.bag-coupon-applied button::after {
+  content: '';
+  position: absolute;
+  inset: -5px -6px;
+}
+
+.bag-coupon-applied button:hover,
+.bag-coupon-applied button:focus-visible { color: var(--gold-1); }
 
 .bag-grand-total {
   display: flex;
@@ -8495,8 +8162,9 @@ main, [role="main"] {
   margin-bottom: clamp(18px, 2.6vw, 26px);
 }
 
-/* One gold hairline closes the header, like the rule under a magazine masthead:
-   it separates the title from the form without adding a box. */
+/* One hairline closes the header, like the rule under a magazine masthead: a
+   cool specular edge rather than a gold band, so the page opens on polished
+   black and the title carries the only warm note. */
 .checkout-head::after {
   content: '';
   position: absolute;
@@ -8506,8 +8174,8 @@ main, [role="main"] {
   height: 1px;
   background: linear-gradient(
     90deg,
-    rgba(201, 168, 76, 0.45) 0%,
-    rgba(201, 168, 76, 0.1) 58%,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(255, 255, 255, 0.07) 58%,
     transparent 100%
   );
 }
@@ -8528,22 +8196,44 @@ main, [role="main"] {
   align-items: start;
 }
 
-.checkout-form-card,
+/* ─── Checkout surfaces: glossy black ────────────────────────────────────────
+   Layered gradients rather than `backdrop-filter`: the specular sheen, the
+   lifted top plane and the deep floor are all painted into the card, so a
+   phone composites a static texture instead of blurring the page behind it on
+   every scroll frame. The edge is a fine white specular hairline, not gold, so
+   the surface reads as polished black glass and the champagne accents sit on
+   top of it. */
 .checkout-card {
   min-width: 0;
-  background: var(--surface);
-  border: 1px solid rgba(201, 168, 76, 0.13);
-  border-radius: 8px;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  background:
+    radial-gradient(130% 88% at 16% -16%, rgba(255, 255, 255, 0.07), transparent 60%),
+    radial-gradient(100% 74% at 100% 0%, rgba(255, 255, 255, 0.035), transparent 66%),
+    linear-gradient(168deg, rgba(31, 30, 28, 0.97) 0%, rgba(17, 16, 15, 0.98) 56%, rgba(8, 8, 8, 0.99) 100%);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -26px 44px rgba(0, 0, 0, 0.34);
 }
 
 /* The form is the one surface the shopper works in, so it gets the stronger
    edge and a deeper shadow: the summary cards sit behind it. */
 .checkout-form-card {
+  min-width: 0;
   padding: clamp(18px, 3vw, 28px);
-  border-color: rgba(201, 168, 76, 0.26);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background:
+    radial-gradient(130% 86% at 12% -16%, rgba(255, 255, 255, 0.085), transparent 58%),
+    radial-gradient(90% 70% at 100% 0%, rgba(255, 255, 255, 0.045), transparent 64%),
+    linear-gradient(168deg, rgba(34, 33, 30, 0.98) 0%, rgba(19, 18, 16, 0.98) 58%, rgba(9, 9, 9, 1) 100%);
+  box-shadow:
+    0 26px 68px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    inset 0 -28px 48px rgba(0, 0, 0, 0.36);
 }
+
 
 .checkout-card { padding: 18px; }
 
@@ -8579,26 +8269,27 @@ main, [role="main"] {
   margin-bottom: 12px;
 }
 
-/* A small champagne medallion that carries the section's icon instead of a
-   flat numbered disc: a truck for delivery, a bag for the pieces. */
+/* A small black-glass medallion that carries the section's icon instead of a
+   flat numbered disc: a truck for delivery, a bag for the pieces. The glyph is
+   champagne, so the accent survives without a gold ring around it. */
 .checkout-step {
   width: 30px;
   height: 30px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(201, 168, 76, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 32% 24%, rgba(255, 244, 214, 0.16) 0%, rgba(201, 168, 76, 0.06) 62%),
-    rgba(201, 168, 76, 0.05);
-  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.06), inset 0 1px 0 rgba(255, 244, 214, 0.14);
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.02) 62%),
+    rgba(255, 255, 255, 0.015);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
   font-family: var(--font-display);
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
   letter-spacing: 0.6px;
-  color: var(--gold-light);
+  color: var(--gold-2);
 }
 
 .checkout-step svg { display: block; }
@@ -8658,16 +8349,18 @@ main, [role="main"] {
 .checkout-error--slot { min-height: 13px; }
 
 /* The summary is the one checkout surface the shopper recognises from the bag,
-   so its shell carries the gold: a warm smoked-glass wash and a brighter
-   hairline, with the list itself left quiet. */
+   so its shell is the same polished black glass as the form: a bright specular
+   at the top, a soft floor, and a crisp hairline instead of a gold ring. */
 .checkout-summary {
-  border-color: rgba(201, 168, 76, 0.36);
+  border-color: rgba(255, 255, 255, 0.085);
   background:
-    linear-gradient(165deg, rgba(201, 168, 76, 0.12) 0%, rgba(201, 168, 76, 0.035) 46%, rgba(12, 11, 10, 0.72) 100%),
-    var(--surface);
+    radial-gradient(130% 82% at 18% -18%, rgba(255, 255, 255, 0.075), transparent 60%),
+    radial-gradient(100% 76% at 100% 0%, rgba(255, 255, 255, 0.04), transparent 66%),
+    linear-gradient(170deg, rgba(32, 31, 28, 0.98) 0%, rgba(18, 17, 15, 0.98) 54%, rgba(8, 8, 8, 1) 100%);
   box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 244, 214, 0.1);
+    0 22px 52px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -26px 44px rgba(0, 0, 0, 0.34);
 }
 
 .checkout-summary .checkout-card-title { color: var(--gold-2); }
@@ -8683,44 +8376,66 @@ main, [role="main"] {
 }
 
 /* The pieces are the only photographic content in the summary, so each line
-   becomes a small glass card: a 6px thumb, the name in the display face and
-   the amount in tabular gold. */
+   becomes a small black-glass card: a 6px thumb, the name in the display face
+   at a readable size, the size/colour in a brighter quiet grey (not 9px caps),
+   and the amount in tabular champagne. */
 .checkout-item-list li {
   display: flex;
-  gap: 10px;
+  gap: 11px;
   align-items: center;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 9px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.012) 100%),
-    rgba(12, 11, 10, 0.42);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.014) 100%),
+    rgba(10, 10, 10, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .checkout-item-copy { min-width: 0; flex: 1; }
 
 .checkout-item-name {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.2px;
   line-height: 1.3;
+  color: var(--text);
   overflow-wrap: anywhere;
 }
 
 .checkout-item-meta {
-  font-size: 9.5px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--text3);
-  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  line-height: 1.35;
+  color: var(--text2);
+}
+
+.checkout-item-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--gold-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .checkout-item-price {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--gold-light);
+  color: var(--gold-1);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -8756,9 +8471,9 @@ main, [role="main"] {
   min-height: 44px;
   padding: 0 16px;
   border-radius: 2px;
-  border: 1px solid rgba(201, 168, 76, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.02);
-  color: var(--gold-light);
+  color: var(--gold-1);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 1.4px;
@@ -8766,12 +8481,12 @@ main, [role="main"] {
   transition: border-color 0.2s, background-color 0.2s, color 0.2s;
 }
 .checkout-coupon-apply:hover:not(:disabled) {
-  border-color: var(--gold);
-  background: rgba(201, 168, 76, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
   color: #fff2c7;
 }
 .checkout-coupon-apply:focus-visible {
-  outline: 2px solid rgba(201, 168, 76, 0.7);
+  outline: 2px solid rgba(255, 255, 255, 0.5);
   outline-offset: 2px;
 }
 
@@ -8787,36 +8502,61 @@ main, [role="main"] {
 }
 
 .checkout-coupon-applied {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid rgba(39, 174, 96, 0.3);
-  background: rgba(39, 174, 96, 0.08);
-  border-radius: 4px;
+  gap: 10px;
+  max-width: 100%;
+  margin-top: 10px;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid rgba(201, 168, 76, 0.34);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(201, 168, 76, 0.16) 0%, rgba(201, 168, 76, 0.055) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 242, 205, 0.16);
 }
 
 .checkout-coupon-applied span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #4ec07e;
-  font-size: 11px;
+  min-width: 0;
+  color: #f3e0ab;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.6px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.checkout-coupon-applied span svg {
+  flex: none;
+  color: var(--gold);
 }
 
 .checkout-coupon-applied button {
-  min-height: 44px;
-  padding: 0 6px;
-  color: var(--text3);
-  background: none;
+  position: relative;
+  flex: none;
+  min-height: 34px;
+  padding: 0 10px;
   border: 0;
-  font-size: 10.5px;
-  letter-spacing: 1px;
+  border-left: 1px solid rgba(201, 168, 76, 0.24);
+  border-radius: 0;
+  background: none;
+  color: var(--text3);
+  font-size: 9px;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
+  transition: color 0.2s;
 }
+
+.checkout-coupon-applied button::after {
+  content: '';
+  position: absolute;
+  inset: -5px -6px;
+}
+
+.checkout-coupon-applied button:hover,
+.checkout-coupon-applied button:focus-visible { color: var(--gold-1); }
 
 .checkout-total-row {
   display: flex;
@@ -8837,7 +8577,7 @@ main, [role="main"] {
   gap: 10px;
   margin-top: 8px;
   padding-top: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .checkout-grand-row > span {
@@ -8851,7 +8591,7 @@ main, [role="main"] {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 600;
-  color: var(--gold-light);
+  color: var(--gold-1);
 }
 
 .checkout-payment-options {
@@ -8874,22 +8614,21 @@ main, [role="main"] {
 }
 
 .checkout-payment-option.is-live {
-  border-color: rgba(201, 168, 76, 0.5);
+  border-color: rgba(255, 255, 255, 0.18);
   background:
-    linear-gradient(180deg, rgba(201, 168, 76, 0.15) 0%, rgba(201, 168, 76, 0.04) 100%),
-    rgba(18, 17, 15, 0.55);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.015) 100%),
+    rgba(14, 14, 13, 0.6);
   box-shadow:
-    inset 0 1px 0 rgba(255, 244, 214, 0.13),
-    0 8px 20px rgba(0, 0, 0, 0.24);
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 24px rgba(0, 0, 0, 0.34);
   cursor: pointer;
 }
 
 .checkout-payment-option.is-live:hover {
-  border-color: rgba(232, 200, 112, 0.72);
+  border-color: rgba(255, 255, 255, 0.32);
   box-shadow:
-    inset 0 1px 0 rgba(255, 244, 214, 0.16),
-    0 10px 24px rgba(0, 0, 0, 0.3),
-    0 0 16px rgba(201, 168, 76, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 12px 28px rgba(0, 0, 0, 0.42);
 }
 
 .checkout-payment-option.is-soon {
@@ -8902,8 +8641,8 @@ main, [role="main"] {
   cursor: not-allowed;
 }
 
-/* The icon sits in its own champagne medallion so the two methods read as
-   matching products rather than a label and an afterthought. */
+/* The icon sits in its own black-glass medallion with a champagne glyph, so the
+   two methods read as matching products rather than a label and an afterthought. */
 .checkout-payment-icon {
   width: 32px;
   height: 32px;
@@ -8911,11 +8650,12 @@ main, [role="main"] {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1px solid rgba(201, 168, 76, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   background:
-    radial-gradient(circle at 34% 26%, rgba(255, 244, 214, 0.18) 0%, rgba(201, 168, 76, 0.06) 68%),
-    rgba(201, 168, 76, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 244, 214, 0.16);
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.02) 68%),
+    rgba(255, 255, 255, 0.015);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: var(--gold-2);
 }
 
 .checkout-payment-option.is-soon .checkout-payment-icon {
@@ -8949,10 +8689,10 @@ main, [role="main"] {
 }
 
 .checkout-payment-badge.is-live {
-  color: var(--gold-light);
-  border: 1px solid rgba(201, 168, 76, 0.5);
-  background: linear-gradient(180deg, rgba(201, 168, 76, 0.26) 0%, rgba(201, 168, 76, 0.1) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 244, 214, 0.14);
+  color: var(--gold-1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.025) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .checkout-payment-badge.is-soon {
@@ -9086,11 +8826,11 @@ main, [role="main"] {
     line-height: 1.4;
   }
 
-  .checkout-item-name { font-size: 12px; }
+  .checkout-item-name { font-size: 13px; }
 
-  .checkout-item-meta { font-size: 10.5px; }
+  .checkout-item-meta { font-size: 11px; }
 
-  .checkout-item-price { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .checkout-item-price { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 
   .checkout-payment-name { font-size: 13px; }
 
@@ -9113,28 +8853,6 @@ main, [role="main"] {
 }
 
 /* ─── ORDER CONFIRMATION AS AN INVOICE ─────────────────────────────────────── */
-
-.order-invoice-sheen {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    105deg,
-    transparent 32%,
-    rgba(255, 240, 200, 0.07) 46%,
-    rgba(255, 240, 200, 0.16) 50%,
-    rgba(255, 240, 200, 0.07) 54%,
-    transparent 68%
-  );
-  transform: translateX(-120%);
-  animation: order-invoice-sweep 5.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s 1 both;
-}
-
-@keyframes order-invoice-sweep {
-  0% { transform: translateX(-120%); }
-  55%, 100% { transform: translateX(120%); }
-}
 
 .order-invoice-head {
   position: relative;
@@ -9162,13 +8880,6 @@ main, [role="main"] {
 
 .order-invoice-wordmark span {
   display: inline-block;
-  animation: order-invoice-letter 4.5s ease-in-out infinite;
-  animation-delay: calc(var(--letter-index) * 0.18s);
-}
-
-@keyframes order-invoice-letter {
-  0%, 100% { color: #d8c9a0; }
-  50% { color: #f6ecc9; }
 }
 
 .order-invoice-brand-sub {
@@ -9244,13 +8955,6 @@ main, [role="main"] {
   line-height: 1;
   color: #e6c877;
   text-shadow: 0 0 12px rgba(201, 168, 76, 0.55);
-  animation: order-invoice-twinkle 2.6s ease-in-out infinite;
-  animation-delay: calc(var(--star-index) * 0.22s);
-}
-
-@keyframes order-invoice-twinkle {
-  0%, 100% { opacity: 0.62; transform: translateY(0) scale(1); }
-  50% { opacity: 1; transform: translateY(-1px) scale(1.12); }
 }
 
 .order-invoice-seal {
@@ -9288,12 +8992,7 @@ main, [role="main"] {
   inset: -4px;
   border-radius: 50%;
   border: 1px solid rgba(201, 168, 76, 0.45);
-  animation: order-invoice-pulse 2.8s ease-out infinite;
-}
-
-@keyframes order-invoice-pulse {
-  0% { transform: scale(0.92); opacity: 0.7; }
-  70%, 100% { transform: scale(1.25); opacity: 0; }
+  opacity: 0.55;
 }
 
 .order-invoice-eyebrow {
@@ -9425,13 +9124,6 @@ main, [role="main"] {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  animation: order-invoice-row 0.45s ease-out both;
-  animation-delay: calc(0.35s + var(--row-index) * 0.06s);
-}
-
-@keyframes order-invoice-row {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
 }
 
 .order-invoice-line-copy { min-width: 0; }
@@ -9570,125 +9262,15 @@ body.is-page-hidden *::after {
 :where(h2, h3, h4) { color: var(--gold-2); }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   LOW-POWER MODE — phones and tablets
+   TOUCH SIZES — no backdrop blur
    ════════════════════════════════════════════════════════════════════════════
-   Everything above is designed to look alive on a desk. On a phone that same
-   motion is paid for in battery. Measured on a 375×812 emulation with nobody
-   touching the screen, the home page held 63 running animations and spent 8%
-   of every idle second on the main thread (498 ms of work in 6 s), almost all
-   of it style recalculation and paint from loops that never end:
-
-     · the ambient wall and its travelling sheen (two full-viewport layers)
-     · the footer wordmark and hairline, which animate `background-position`
-       on background-clipped gradients — a text re-raster every frame
-     · the hero wordmark's shimmer (same problem, ×5 letters)
-     · 28 hero dust motes + 10 letter glints, each promoted to its own layer
-     · the product-card label's infinite box-shadow pulse
-     · the scroll-cue bead, which animates `top` (layout, not compositing)
-
-   None of that is visible as "motion" at a glance — it is texture. On touch
-   sizes we keep the exact same composition, gold and gradients, frozen at
-   their most flattering frame, and spend no frames per second on it. Desktop
-   is untouched. */
+   The site no longer runs any ambient or decorative animation, so the only
+   phone-specific cost left is `backdrop-filter`. On a phone the blur radius is
+   paid twice: once to sample a backdrop that is moving under the element, and
+   again for every frame of that movement. The label badge and the mobile dock
+   sit over photos and scrolling grids, so they get a solid glass fill instead —
+   visually the same on an OLED panel, and free to scroll. */
 @media (max-width: 1023px) {
-  /* 1 ── The ambient room: one static paint instead of a permanent loop.
-     `will-change` is released too, otherwise the browser keeps a full-screen
-     compositor layer alive for an animation that no longer exists. */
-  body::before {
-    animation: none;
-    will-change: auto;
-  }
-
-  .app-shell::after {
-    display: none;
-  }
-
-  /* 2 ── Gold that must not repaint: `background-position` on a
-     background-clipped glyph forces the browser to re-rasterise the text on
-     every tick. Freeze at the middle of the gradient, which is the frame the
-     eye reads as "struck metal". */
-  .hero-brand-letter {
-    animation: none;
-    background-position: 50% 0;
-  }
-
-  .footer-wordmark-letter {
-    animation: none;
-    background-position: 50% 0;
-  }
-
-  .site-footer::before {
-    animation: none;
-  }
-
-  /* 3 ── Decorative light. Kept, but steady: no per-letter layers, no dust
-     motes twinkling on 28 separate compositor layers. */
-  .hero-brand-lockup::before,
-  .footer-wordmark::before,
-  .hero-brand-letter-sparkle,
-  .hero-brand-sparkle {
-    animation: none;
-  }
-
-  .hero-brand-letter::after,
-  .footer-wordmark-letter::after {
-    animation: none;
-    opacity: 0.32;
-    will-change: auto;
-  }
-
-  .hero-dust {
-    animation: none;
-    opacity: 0.34;
-  }
-
-  .hero-scroll-cue-line::after {
-    animation: none;
-    top: 40%;
-    opacity: 1;
-  }
-
-  .footer-track svg {
-    animation: none;
-  }
-
-  /* 4 ── The product-card label keeps its one-shot entrance (it runs once and
-     stops) but loses the endless box-shadow pulse, which repaints the badge
-     and the photo behind it for as long as the card is on screen. */
-  .product-card-labels .label-badge {
-    animation: zashm-label-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  .product-stock[data-tone='ok']::before {
-    animation: none;
-  }
-
-  /* 5 ── Loops that live inside overlays. They are only on screen while a
-     dialog is open, but a dialog is exactly when the phone is already busy
-     compositing a scrim. */
-  .review-photo-icon {
-    animation: none;
-  }
-
-  .size-finder-progress-seg[data-current='true']::after,
-  .size-finder-figure-focus,
-  .size-finder-gauge-size,
-  .size-finder-gauge-star,
-  .size-finder-restart {
-    animation: none;
-  }
-
-  .order-invoice-wordmark span,
-  .order-invoice-star,
-  .order-invoice-seal::after {
-    animation: none;
-  }
-
-  /* 6 ── Backdrop blur. On a phone the blur radius is paid twice: once to
-     sample a backdrop that is moving under the element, and again for every
-     frame of that movement. The label badge and the mobile dock sit over
-     photos and scrolling grids, so they get a solid glass fill instead —
-     visually the same on an OLED panel, and free to scroll. */
   .label-badge,
   .product-card-labels .label-badge,
   .product-card-label-row .label-badge {
