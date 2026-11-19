@@ -47,8 +47,11 @@ Current data baseline (read-only counts):
 - admins `mohammed` (`mohammedhassanmail1@gmail.com`) and `ahmed`
   (`ahmed@gmail.com`), both role `admin`.
 
-Deployment `zashm-hsrkfkuna-zashm.vercel.app` (commit `9601766`) is live at
-https://za-shm.vercel.app.
+Deployment `zashm-oj8z6vi48-zashm.vercel.app` (commit `45ee187`) is live at
+https://za-shm.vercel.app. Verified after deploy: checkout renders one
+Cash-on-Delivery row, no payment radios and no "coming soon" copy at 390px and
+1440px (no overflow, no console errors); `/api/errors` GET → 405 and POST `{}` →
+400; an unknown path → 404.
 
 **Not verifiable from this environment** (no Management token / DB connection
 string), so these remain assumptions until checked in the dashboard:
