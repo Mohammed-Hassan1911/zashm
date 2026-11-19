@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../../store';
 import { availableStock, discountPercent, effectivePrice } from '../../lib/pricing';
@@ -22,7 +22,24 @@ export default function ProductCard({ product, index = 0 }) {
     addRecentlyViewed,
   } = useStore();
 
-  const [imgIdx, setImgIdx] = useState(0);
+  const [hovered, setHovered] = useState(false);
+  const [canHover, setCanHover] = useState(false);
+
+  // A touch screen has no hover, so the second frame would be a download the
+  // shopper never sees. Gate it on a real pointer, and follow the device if a
+  // hybrid machine (tablet + mouse) changes its primary input.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const query = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const sync = () => setCanHover(query.matches);
+    sync();
+    if (query.addEventListener) query.addEventListener('change', sync);
+    else query.addListener(sync);
+    return () => {
+      if (query.removeEventListener) query.removeEventListener('change', sync);
+      else query.removeListener(sync);
+    };
+  }, []);
 
   // variantStock هو المصدر الأساسي للتوفر عند وجود المتغيرات، ويُحسب فقط من
   // المفاتيح المطابقة للمقاسات والألوان المعرفة (مخزون اليتيم لا يظهر للعميل).
@@ -32,15 +49,16 @@ export default function ProductCard({ product, index = 0 }) {
     ? product.images.filter(Boolean)
     : [];
 
-  const imageIndex = imgIdx < images.length ? imgIdx : 0;
-  const currentImage = images[imageIndex] || FALLBACK_IMAGE;
-  // Live Supabase image → R2 mirror → neutral placeholder.
-  const image = useImageFallback(currentImage, FALLBACK_IMAGE);
+  // Both frames stay mounted so the second image is decoded before the pointer
+  // arrives: swapping `src` on hover is what made the transition flash.
+  const primary = useImageFallback(images[0] || FALLBACK_IMAGE, FALLBACK_IMAGE);
+  const secondary = useImageFallback(images[1] || FALLBACK_IMAGE, FALLBACK_IMAGE);
+
+  const hasSecondImage = canHover && images.length > 1 && !isSoldOut;
+  const showSecond = hovered && hasSecondImage;
 
   const handleView = () => {
     if (!product?.id) return;
-
-    setImgIdx(0);
 
     setSelectedProduct({
       ...product,
@@ -66,12 +84,6 @@ export default function ProductCard({ product, index = 0 }) {
 
   const formatPrice = (price) =>
     price.toLocaleString('en-US');
-
-  const changeImage = (nextIndex) => {
-    if (!isSoldOut && images.length > 1) {
-      setImgIdx(nextIndex);
-    }
-  };
 
   return (
     <motion.div
@@ -109,28 +121,35 @@ export default function ProductCard({ product, index = 0 }) {
           overflow: 'hidden',
           background: 'var(--bg3)',
         }}
-        onMouseEnter={() => changeImage(1)}
-        onMouseLeave={() => setImgIdx(0)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        <motion.img
-          src={image.src}
+        <img
+          src={primary.src}
           alt={product?.name || 'Product'}
           loading={index === 0 ? 'eager' : 'lazy'}
           fetchpriority={index === 0 ? 'high' : 'auto'}
           decoding="async"
-          onError={image.onError}
-          style={{
-            display: 'block',
-            width: '100%',
-            height: '100%',
-            maxWidth: '100%',
-            objectFit: 'cover',
-            objectPosition: 'center',
-            opacity: isSoldOut ? 0.45 : 1,
-          }}
-          animate={{ scale: imgIdx === 1 ? 1.04 : 1 }}
-          transition={{ duration: 0.35 }}
+          onError={primary.onError}
+          className="product-card-img"
+          data-visible={showSecond ? 'false' : 'true'}
+          data-sold-out={isSoldOut ? 'true' : 'false'}
         />
+
+        {hasSecondImage && (
+          <img
+            src={secondary.src}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            fetchpriority="low"
+            decoding="async"
+            onError={secondary.onError}
+            className="product-card-img"
+            data-visible={showSecond ? 'true' : 'false'}
+            data-sold-out="false"
+          />
+        )}
 
         {/* Labels sit on the photo, welded into its top-left corner, so they
             never reserve vertical space above the image. The photo carries no

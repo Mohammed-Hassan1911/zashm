@@ -121,8 +121,9 @@ export default function CartDrawer() {
               right: 0, 
               top: 0, 
               bottom: 0, 
-              width: '100%',        // 🎯 أول تعديل: يأخذ 100% من عرض الشاشة على الموبايل عشان ما يخرجش برة
-              maxWidth: 420,        // 🎯 ثاني تعديل: يثبت عند 420px كحد أقصى على الشاشات الكبيرة (الكمبيوتر)
+              /* A side panel on every screen, not a full page: a strip of the
+                 storefront stays visible behind the overlay on a phone too. */
+              width: 'min(88vw, 420px)', 
               zIndex: 2001, 
               display: 'flex', 
               flexDirection: 'column' 

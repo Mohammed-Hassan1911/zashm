@@ -293,7 +293,10 @@ function AppInner() {
           {firstPageReady && <Footer setModal={setActiveModal} />}
           <MobileNav />
           {!(isEditingField && isSmallScreen) && <BackToTop />}
-          <WhatsAppButton />
+          {/* The owner keeps the support line on the landing page only, so the
+              storefront routes stay quiet; the contact links in the footer and
+              on the product page remain the way to reach the store. */}
+          {currentPage === 'home' && <WhatsAppButton />}
 
           <InfoModal type={activeModal} onClose={() => setActiveModal(null)} />
         </>

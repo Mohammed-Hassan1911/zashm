@@ -499,8 +499,13 @@ console.log('\n[9] floating actions stay accessible');
      /\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(floatingBlock),
     'desktop floating buttons are compact discs');
   ok(/@media \(max-width: 768px\)[\s\S]*?\.back-to-top\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css) &&
-     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css),
-    'mobile floating buttons keep a 44px box with a 5px transparent border, so the painted disc is 34px');
+     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*54px;[^}]*height:\s*54px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css),
+    'mobile scroll-to-top keeps a 44px box, and WhatsApp grows to a 54px box with a 5px transparent border (44px painted disc)');
+  ok(/\.back-to-top\s*\{[^}]*background:\s*linear-gradient\(165deg, rgba\(34, 30, 23, 0\.46\)[^}]*rgba\(12, 11, 10, 0\.56\)/.test(floatingBlock) &&
+     /\.back-to-top:hover,\s*\n\.back-to-top:focus-visible\s*\{[^}]*rgba\(34, 30, 23, 0\.94\)/.test(floatingBlock),
+    'scroll-to-top rests as smoked glass so the page reads through it, and firms up on hover/focus');
+  ok(/\{currentPage === 'home' && <WhatsAppButton \/>\}/.test(app),
+    'WhatsApp is mounted on the home page only (owner decision 2026-11-19)');
   ok(!/\.back-to-top::after,\s*\.whatsapp-fab::after/.test(css),
     'the tap target comes from the button box itself, not a pseudo-element ring');
   ok(!/\.back-to-top\s*\{[^}]*0 0 22px rgba\(201, 168, 76/.test(floatingBlock) &&
@@ -508,8 +513,8 @@ console.log('\n[9] floating actions stay accessible');
      !/whileHover/.test(backToTop) && !/whileHover/.test(whatsapp),
     'no gold halo and no hover growth: arriving on a route cannot light a circle');
   ok(/\.back-to-top svg\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px/.test(css) &&
-     /\.whatsapp-fab svg\s*\{[^}]*width:\s*17px;[^}]*height:\s*17px/.test(css),
-    'mobile floating icons shrink proportionally');
+     /\.whatsapp-fab svg\s*\{[^}]*width:\s*22px;[^}]*height:\s*22px/.test(css),
+    'mobile floating icons keep their proportion to the disc');
   ok(!/data-side|setSide|leftOverlap|rightOverlap/.test(whatsapp) &&
      !/\.whatsapp-fab\[data-side="right"\]/.test(css) &&
      /\.whatsapp-fab\s*\{[^}]*left:\s*calc\(16px \+ env\(safe-area-inset-left/.test(css),
@@ -730,12 +735,19 @@ console.log('\n[12] badge proximity and governorate copy');
      /layoutId="product-tab-underline"/.test(productPage),
     'the active tab underline slides between labels');
 
-  // Track order: the status label and its pill always share one line.
+  // Track order: the status label and its pill always share one line. The page
+  // is class-driven now, so the guarantee lives in the stylesheet that owns the
+  // layout: the status side is pushed to the far edge of a flex row and the
+  // pill refuses to wrap.
   const track = read('src/pages/TrackOrder.js');
-  ok(/Current Status<\/p>[\s\S]{0,700}?flexShrink: 0/.test(track) &&
-     !/textAlign: 'right'/.test(track) &&
-     /whiteSpace: 'nowrap', margin: 0/.test(track),
-    'the tracking status sits beside "Current Status" instead of under it');
+  const trackCss = read('src/index.css');
+  ok(/className="track-status-head"[\s\S]{0,700}?className="track-status-side"[\s\S]{0,400}?className="track-status-pill"/.test(track) &&
+     !/textAlign: 'right'/.test(track),
+    'the tracking status sits beside "Current status" instead of under it');
+  ok(/\.track-status-head \{[\s\S]{0,200}?flex-wrap: wrap/.test(trackCss) &&
+     /\.track-status-side \{[\s\S]{0,200}?margin-left: auto/.test(trackCss) &&
+     /\.track-status-pill \{[\s\S]{0,220}?white-space: nowrap/.test(trackCss),
+    'the status pill stays on the header line and never wraps');
 }
 
 console.log('\n[13] admin image upload payload budget');

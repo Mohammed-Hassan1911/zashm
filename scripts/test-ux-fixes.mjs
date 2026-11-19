@@ -895,13 +895,18 @@ try {
         'the sort select no longer pins its own height inline');
       const phoneToolbar = (css.match(/@media \(max-width: 767px\) \{[\s\S]*?\n\}/g) || [])
         .find((block) => /\.shop-chip,/.test(block)) || '';
-      assert.ok(/\.shop-chip,\s*\n\s*\.shop-filter-toggle \{\s*min-height:\s*36px;[^}]*font-size:\s*10px;/.test(phoneToolbar),
-        'phones shrink the chips and the Filter toggle together (44→36px, 11→10px)');
-      assert.ok(/\.shop-sort \{\s*min-height:\s*36px;[^}]*font-size:\s*10px;/.test(phoneToolbar),
+      assert.ok(/\.shop-chip,\s*\n\s*\.shop-filter-toggle \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
+        'phones shrink the chips and the Filter toggle together (44→32px, 11→9.5px)');
+      assert.ok(/\.shop-sort \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
         'the sort select shrinks with them instead of towering over the row');
-      assert.ok(/min-height:\s*36px/.test(phoneToolbar) && !/min-height:\s*(?:2[0-9]|3[0-5])px/.test(phoneToolbar),
-        'the phone height stops at 36px so it stays comfortably tappable');
-      assert.ok(/fontSize:\s*16,\s*\n?\s*outline:\s*'none'/.test(shop), 'price inputs are 16px (no iOS zoom)');
+      assert.ok(/\.shop-label-chip \{\s*min-height:\s*38px;[^}]*font-size:\s*12px;/.test(phoneToolbar),
+        'the label chips inside the panel keep their larger 38px / 12px scale');
+      assert.ok(/\.price-input \{\s*font-size:\s*16px/.test(css),
+        'price inputs are 16px on phones (no iOS zoom)');
+      assert.ok(/@media \(min-width: 769px\) \{\s*\.price-input \{ font-size: 14px; \}/.test(css),
+        'and drop to a calmer 14px under a real pointer');
+      assert.ok(!/fontSize:\s*16/.test(shop),
+        'the size lives in CSS so the "No minimum"/"No maximum" hint can be smaller');
     });
 
     await step('product cards keep a clean photo and readable badges', () => {
@@ -1006,12 +1011,16 @@ try {
       const cardBlock = shellBlock('.checkout-card');
       const formBlock = shellBlock('.checkout-form-card');
       const summaryBlock = shellBlock('.checkout-summary');
-      assert.ok(/border:\s*1px solid rgba\(255, 255, 255/.test(cardBlock)
-        && /border:\s*1px solid rgba\(255, 255, 255/.test(formBlock)
-        && /border-color:\s*rgba\(255, 255, 255/.test(summaryBlock),
-        'the checkout cards wear white specular hairlines, not gold rings');
-      assert.ok(!/rgba\(201, 168, 76/.test(cardBlock + formBlock + summaryBlock),
-        'the checkout cards carry no gold tint');
+      assert.ok(/border:\s*1px solid rgba\(255, 255, 255/.test(cardBlock),
+        'the base card stays neutral white specular');
+      assert.ok(/border:\s*1px solid rgba\(201, 168, 76, 0\.16\)/.test(formBlock)
+        && /border-color:\s*rgba\(201, 168, 76, 0\.14\)/.test(summaryBlock),
+        'Delivery details and Order Summary wear a warm champagne hairline');
+      const washes = [...(formBlock + summaryBlock)
+        .matchAll(/radial-gradient\([^)]*rgba\(201, 168, 76, (0\.\d+)\)/g)]
+        .map((match) => Number(match[1]));
+      assert.ok(washes.length >= 2 && washes.every((alpha) => alpha <= 0.08),
+        'the champagne wash stays a whisper (8% or less)');
       assert.ok(!/\.checkout-head::after\s*\{[^}]*rgba\(201, 168, 76/.test(css),
         'the rule under the Checkout title is a cool specular, not gold');
 
@@ -1275,6 +1284,116 @@ try {
         'the Total Order Value sub-label subtracts cancelled orders');
       assert.ok(/cancelledCount:\s*cancelled\.length/.test(analytics),
         'summarizeOrders still exposes cancelledCount');
+    });
+  }
+
+  console.log('\n[12] product hover crossfade, checkout warmth, filter type scale');
+  {
+    const card = read('src/components/shop/ProductCard.js');
+    const css = read('src/index.css');
+    const shop = read('src/pages/ShopPage.js');
+
+    await step('the second product photo crossfades instead of swapping src', () => {
+      // Re-sourcing one <img> made the browser paint the new file the moment it
+      // arrived, which is the flash the owner saw. Two stacked frames are both
+      // decoded up front, so only opacity changes on hover.
+      assert.ok(/matchMedia\('\(hover: hover\) and \(pointer: fine\)'\)/.test(card),
+        'the second frame is gated on a real pointer');
+      assert.ok(/data-visible=\{showSecond \? 'true' : 'false'\}/.test(card),
+        'the incoming frame stays mounted and only its visibility flips');
+      assert.ok(!/motion\.img/.test(card), 'no framer-motion image swap remains');
+      assert.ok(/\.product-card-img \{[\s\S]*?opacity 420ms/.test(css),
+        'the frames crossfade over 420ms');
+      assert.ok(/@media \(prefers-reduced-motion: reduce\) \{\s*\.product-card-img \{ transition: none; \}/.test(css),
+        'reduced motion turns the crossfade off');
+    });
+
+    await step('Delivery details and Order Summary carry a light champagne wash', () => {
+      assert.ok(/\.checkout-form-card \{[\s\S]{0,400}?border: 1px solid rgba\(201, 168, 76, 0\.16\)/.test(css),
+        'the form card gets a warm hairline');
+      assert.ok(/rgba\(201, 168, 76, 0\.075\), transparent 62%\)/.test(css),
+        'the form card gets a 7.5% champagne wash');
+      assert.ok(/\.checkout-summary \{[\s\S]{0,400}?border-color: rgba\(201, 168, 76, 0\.14\)/.test(css),
+        'the summary card gets a warm hairline');
+      assert.ok(/rgba\(201, 168, 76, 0\.07\), transparent 62%\)/.test(css),
+        'the summary card gets a 7% champagne wash');
+    });
+
+    await step('the label chips are larger and the price hints are smaller', () => {
+      assert.ok(/\.shop-label-chip \{[\s\S]{0,200}?font-size: 13px/.test(css),
+        'label chips use a 13px type scale');
+      assert.ok(/className="shop-chip shop-label-chip"/.test(shop),
+        'All / New Arrival / Best Seller / Featured / Limited Edition use the larger class');
+      assert.ok(/\.price-input::placeholder \{[\s\S]{0,160}?font-size: 12px/.test(css),
+        'the "No minimum"/"No maximum" hint is smaller than the value');
+      assert.ok(!/fontSize: 16/.test(shop),
+        'the price input no longer hard-codes 16px inline, so the CSS ladder applies');
+    });
+  }
+
+  console.log('\n[13] bag drawer, receipt and tracking cleanup');
+  {
+    const drawer = read('src/components/shop/CartDrawer.js');
+    const cartPage = read('src/pages/CartPage.js');
+    const track = read('src/pages/TrackOrder.js');
+    const css = read('src/index.css');
+
+    await step('the bag opens as a side drawer on a phone too', () => {
+      // A full-width panel read as a page change, not a drawer. Leaving ~12% of
+      // the storefront visible behind the scrim keeps the context.
+      assert.ok(/bottom: 0,[\s\S]{0,200}?width: 'min\(88vw, 420px\)'/.test(drawer),
+        'the panel keeps a strip of the storefront visible on a phone');
+      assert.ok(!/bottom: 0,[\s\S]{0,120}?width: '100%'/.test(drawer),
+        'the panel itself is no longer a full-screen page');
+    });
+
+    await step('Cash on Delivery carries no "Available" badge', () => {
+      assert.ok(!/checkout-payment-badge/.test(cartPage),
+        'the unused availability badge is gone from the checkout summary');
+      assert.ok(/Cash on Delivery[\s\S]{0,240}?Pay in cash when it arrives\./.test(cartPage),
+        'the payment row still names the method and explains it');
+    });
+
+    await step('the receipt opens on the confirmation, not a letterhead', () => {
+      assert.ok(!/order-invoice-head|order-invoice-wordmark|order-invoice-perf/.test(cartPage),
+        'ZASHM / LUXURY MENSWEAR · EGYPT / INVOICE / order id letterhead removed');
+      assert.ok(!/\.order-invoice-head|\.order-invoice-wordmark|\.order-invoice-perf/.test(css),
+        'the dead letterhead rules were removed from the stylesheet');
+      assert.ok(!/\.order-receipt::before/.test(css),
+        'the blurred silhouette that read as a dark rectangle below the receipt is gone');
+    });
+
+    await step('the invoice figures are centred and "Cash on delivery" stays on one line', () => {
+      assert.ok(/\.order-invoice-meta \{[\s\S]{0,700}?text-align: center/.test(css),
+        'Issued / Items / Payment / Delivery are centred in their columns');
+      assert.ok(/\.order-invoice-meta-payment \{ white-space: nowrap; \}/.test(css),
+        'the payment value cannot break after "Cash on"');
+      assert.ok(/className="order-invoice-meta-payment"/.test(cartPage),
+        'the payment value opts into the nowrap rule');
+    });
+
+    await step('a discount is rose, never green, on every surface', () => {
+      assert.ok(/\.checkout-total-row \.is-credit \{ color: #e0806b; \}/.test(css),
+        'the checkout discount uses the rose tone');
+      assert.ok(/\.order-invoice-totals \.is-credit \{ color: #e0806b; \}/.test(css),
+        'the invoice discount uses the rose tone');
+      assert.ok(/\.track-discount,\s*\.track-discount > span:last-child \{ color: #e0806b; \}/.test(css),
+        'the tracking discount uses the rose tone');
+      assert.ok(!/\.order-invoice-totals \.is-credit \{ color: #9fbd91/.test(css),
+        'no green discount colour is left behind');
+    });
+
+    await step('the tracking page shares the receipt styling and stacks on a phone', () => {
+      assert.ok(/className="track-page"/.test(track) && /className="track-timeline"/.test(track),
+        'the tracking page is class-driven instead of ad-hoc inline styles');
+      assert.ok(!/fontFamily: 'sans-serif'/.test(track),
+        'the page uses the brand font stack');
+      assert.ok(/\.track-timeline \{[\s\S]{0,400}?flex-direction: column/.test(css),
+        'the timeline becomes a vertical rail on a phone');
+      assert.ok(/\.track-step:not\(:last-child\)::before/.test(css),
+        'the vertical rail is drawn between the stacked steps');
+      assert.ok(/\.track-page \{[\s\S]{0,200}?box-sizing: border-box/.test(css),
+        'the page box includes its padding, so it cannot overflow at 320px');
     });
   }
 } catch (error) {

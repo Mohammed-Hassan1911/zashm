@@ -887,23 +887,6 @@ export function CheckoutPage() {
               and never repaints the invoice text underneath. */}
           <span className="order-invoice-sheen" aria-hidden="true" />
 
-          <header className="order-invoice-head">
-            <div className="order-invoice-brand">
-              <span className="order-invoice-wordmark" aria-hidden="true">
-                {'ZASHM'.split('').map((letter, index) => (
-                  <span key={`${letter}-${index}`} style={{ '--letter-index': index }}>{letter}</span>
-                ))}
-              </span>
-              <span className="order-invoice-brand-sub">Luxury Menswear · Egypt</span>
-            </div>
-            <div className="order-invoice-stamp">
-              <span className="order-invoice-stamp-label">{'Invoice'}</span>
-              <span className="order-invoice-stamp-id">{success.id}</span>
-            </div>
-          </header>
-
-          <div className="order-invoice-perf" aria-hidden="true" />
-
           <div className="order-invoice-status">
             <motion.div
               className="order-invoice-seal"
@@ -955,7 +938,7 @@ export function CheckoutPage() {
             </div>
             <div>
               <dt>{'Payment'}</dt>
-              <dd>{'Cash on delivery'}</dd>
+              <dd className="order-invoice-meta-payment">{'Cash on delivery'}</dd>
             </div>
             <div>
               <dt>{'Delivery'}</dt>
@@ -1422,9 +1405,6 @@ export function CheckoutPage() {
                   <div className="checkout-payment-head">
                     <span className="checkout-payment-name">
                       Cash on Delivery
-                    </span>
-                    <span className="checkout-payment-badge is-live">
-                      Available
                     </span>
                   </div>
                   <p className="checkout-payment-copy">

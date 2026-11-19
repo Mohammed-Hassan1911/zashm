@@ -181,13 +181,12 @@ export default function ShopPage() {
     boxSizing: 'border-box',
     width: '100%',
     marginTop: 8,
-    padding: '12px 14px',
+    padding: '10px 12px',
     background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.012) 100%), rgba(18, 17, 15, 0.72)',
     border: '1px solid rgba(255, 255, 255, 0.12)',
     borderRadius: 8,
     boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.07)',
     color: 'var(--text)',
-    fontSize: 16,
     outline: 'none'
   };
 
@@ -475,6 +474,7 @@ export default function ShopPage() {
                       type="button"
                       aria-pressed={selected}
                       onClick={() => setLabelFilter(label)}
+                      className="shop-chip shop-label-chip"
                       style={filterButtonStyle(selected)}
                     >
                       {label}
@@ -512,8 +512,8 @@ export default function ShopPage() {
                   style={{
                     display: 'block',
                     minWidth: 0,
-                    fontSize: 10,
-                    letterSpacing: 1,
+                    fontSize: 9.5,
+                    letterSpacing: 1.1,
                     textTransform: 'uppercase',
                     color: 'var(--text3)'
                   }}
@@ -538,6 +538,7 @@ export default function ShopPage() {
                       }));
                     }}
                     style={inputStyle}
+                    className="price-input"
                   />
                 </label>
 
@@ -546,8 +547,8 @@ export default function ShopPage() {
                   style={{
                     display: 'block',
                     minWidth: 0,
-                    fontSize: 10,
-                    letterSpacing: 1,
+                    fontSize: 9.5,
+                    letterSpacing: 1.1,
                     textTransform: 'uppercase',
                     color: 'var(--text3)'
                   }}
@@ -572,6 +573,7 @@ export default function ShopPage() {
                       }));
                     }}
                     style={inputStyle}
+                    className="price-input"
                   />
                 </label>
               </div>
