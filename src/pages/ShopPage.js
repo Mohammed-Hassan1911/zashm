@@ -341,7 +341,13 @@ export default function ShopPage() {
               aria-label="Sort products"
               className="shop-sort"
               value={sort}
-              onChange={(event) => setSort(event.target.value)}
+              onChange={(event) => {
+                setSort(event.target.value);
+                // Drop focus the moment a choice is made: a native select keeps
+                // its highlight for a few hundred milliseconds otherwise, which
+                // read as the control lingering after the picker closed.
+                event.currentTarget.blur();
+              }}
               style={{
                 background: 'var(--bg3)',
                 border: '1px solid rgba(255, 255, 255, 0.11)',

@@ -880,8 +880,14 @@ try {
         'mobile nav labels are 9px and lighter, so they read as a caption');
       assert.ok(/mobile-nav--keyboard-open/.test(nav),
         'the keyboard-open state still hides the bottom nav');
-      assert.ok(/padding:\s*12,\s*\n?\s*minHeight:\s*44/.test(header),
-        'the header search field is 44px tall');
+      assert.ok(/\.site-search-input\s*\{[^}]*min-height:\s*44px/.test(css) &&
+         /className="site-search-input"/.test(header),
+        'the header search field is 44px tall, with its sizing in CSS');
+      assert.ok(/className="site-search-field-icon"/.test(header) &&
+         /\.site-search-field-icon\s*\{[^}]*color:\s*var\(--gold\)/.test(css),
+        'the search glyph sits inside the field in brand gold');
+      assert.ok(/aria-expanded=\{searchOpen\}/.test(header),
+        'the search toggle announces its open state');
     });
 
     await step('shop filters, sort and price inputs are touch-safe', () => {
@@ -899,11 +905,11 @@ try {
         'phones shrink the chips and the Filter toggle together (44→32px, 11→9.5px)');
       assert.ok(/\.shop-sort \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
         'the sort select shrinks with them instead of towering over the row');
-      assert.ok(/\.shop-sort-wrap \{ flex: 0 0 auto; \}/.test(phoneToolbar)
-        && /\.shop-sort \{[^}]*width: auto;/.test(phoneToolbar),
-        'the phone sort control takes only its own width instead of stretching across the bar');
-      assert.ok(!/flex: 1 1 120px/.test(css) && !/\.shop-sort \{ width: 100%; \}/.test(css),
-        'the old full-width phone sort rule is gone');
+      assert.ok(/\.shop-sort-wrap \{ flex: 1 1 0; \}/.test(phoneToolbar)
+        && /\.shop-sort \{[^}]*width: 100%;/.test(phoneToolbar),
+        'the phone sort control fills the utility row instead of leaving a dead gap beside it');
+      assert.ok(/event\.currentTarget\.blur\(\)/.test(shop),
+        'choosing a sort drops focus immediately instead of lingering highlighted');
       assert.ok(/\.shop-label-chip \{\s*min-height:\s*38px;[^}]*font-size:\s*12px;/.test(phoneToolbar),
         'the label chips inside the panel keep their larger 38px / 12px scale');
       assert.ok(/\.price-input \{\s*font-size:\s*16px/.test(css),
@@ -1096,23 +1102,15 @@ try {
         'the generic retry message is no longer shown unconditionally');
     });
 
-    await step('WhatsApp stays visible while the mobile scroll action hides during typing', () => {
-      assert.ok(/isEditingField/.test(app) && /isSmallScreen/.test(app),
-        'focus and breakpoint state exist');
-      assert.ok(/matchMedia\('\(max-width: 768px\)'\)/.test(app),
-        'the rule matches the 768px mobile breakpoint');
-      assert.ok(/tag === 'input' \|\| tag === 'textarea' \|\| tag === 'select'/.test(app),
-        'any text field triggers it');
-      assert.ok(/el\.isContentEditable/.test(app), 'contenteditable fields count too');
-      assert.ok(/focusin/.test(app) && /focusout/.test(app), 'focus is tracked both ways');
+    await step('WhatsApp is the only floating action and stays visible while typing', () => {
       assert.ok(/currentPage === 'home' && !cartOpen && <WhatsAppButton \/>/.test(app),
         'WhatsApp stays for typing and leaves only while the bag is open');
       assert.ok(/useStore\(\(state\) => state\.cartOpen\)/.test(app),
         'the floating-action gate reads the real drawer state');
-      assert.ok(!/!\(isEditingField && isSmallScreen\) && <WhatsAppButton \/>/.test(app),
-        'WhatsApp is not hidden by the mobile keyboard state');
-      assert.ok(/!\(isEditingField && isSmallScreen\) && <BackToTop \/>/.test(app),
-        'scroll-to-top follows the same rule');
+      assert.ok(!/isEditingField|isSmallScreen|<BackToTop/.test(app),
+        'no keyboard-hiding state and no scroll-to-top button remain');
+      assert.ok(!/focusin|focusout/.test(app),
+        'the removed floating action left no focus listeners behind');
     });
 
     await step('mobile footer clears the floating actions above the bottom nav', () => {
@@ -1333,7 +1331,7 @@ try {
         'forced colours fall back to readable text');
     });
 
-    await step('touch gallery swipes crossfade without waiting or scaling', () => {
+    await step('touch gallery swipes follow the finger, settle on one composited layer and crossfade', () => {
       const gallery = product.slice(
         product.indexOf('product-gallery-main'),
         product.indexOf('The gallery controls sit directly')
@@ -1342,11 +1340,24 @@ try {
       assert.ok(/<AnimatePresence initial=\{false\}>/.test(product),
         'the first photo paints immediately instead of fading in');
       assert.ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+exit=\{\{ opacity: 0 \}\}/.test(product)
-        && /transition=\{\{ duration: 0\.22, ease: 'easeOut' \}\}/.test(product),
-        'the swap is a 220ms opacity-only crossfade');
+        && /transition=\{\{ duration: 0\.18, ease: 'easeOut' \}\}/.test(product),
+        'the swap is an 180ms opacity-only crossfade');
       assert.ok(!/scale: 1\.05|scale: 0\.95/.test(gallery), 'no scale animation moves the photo under the finger');
       assert.ok(/position: 'absolute',\s*\n\s*inset: 0,/.test(product),
         'both frames share the same box, so the crossfade never shifts the layout');
+      assert.ok(/onPointerMove=\{handleImagePointerMove\}/.test(product),
+        'the gallery actually listens for the drag, not just the release');
+      assert.ok(/useMotionValue\(0\)/.test(product) &&
+         /galleryDragX\.set\(Math\.max\(-38, Math\.min\(38, deltaX \* 0\.42\)\)\)/.test(product),
+        'the photo follows a horizontal drag with resistance and a capped offset');
+      assert.ok(/gallerySettleRef\.current\?\.stop\?\.\(\)/.test(product) &&
+         /type: 'spring', stiffness: 480, damping: 36, mass: 0\.6/.test(product),
+        'the drag settles back with one short spring and no competing animation');
+      assert.ok(/className="product-gallery-frames" style=\{\{ x: galleryDragX \}\}/.test(product) &&
+         /\.product-gallery-frames\s*\{[^}]*will-change:\s*transform/.test(css),
+        'the drag moves a single composited plate, never the controls or the page');
+      assert.ok(/Math\.abs\(deltaX\) < 8 \|\| Math\.abs\(deltaX\) <= Math\.abs\(deltaY\)/.test(product),
+        'a vertical page scroll still wins until the gesture is clearly horizontal');
     });
 
     await step('Delivery details and Order Summary carry a light champagne wash', () => {
@@ -1447,6 +1458,72 @@ try {
         'the vertical rail is drawn between the stacked steps');
       assert.ok(/\.track-page \{[\s\S]{0,200}?box-sizing: border-box/.test(css),
         'the page box includes its padding, so it cannot overflow at 320px');
+    });
+
+    await step('the two long tracking explanations are gone but the secure-link rule remains', () => {
+      assert.ok(!/Open the secure tracking link sent with your order confirmation/.test(track),
+        'the first unread tracking paragraph is removed');
+      assert.ok(!/An order number alone cannot be looked up for privacy reasons/.test(track),
+        'the second unread tracking paragraph is removed');
+      assert.ok(/A secure tracking link is required\./.test(track),
+        'the actionable security notice is kept where it belongs');
+    });
+
+    await step('the full bag has exactly one Continue shopping control', () => {
+      const labels = (cartPage.match(/Continue [Ss]hopping/g) || []).length;
+      assert.ok(labels === 1, 'only the arrow-back Continue shopping control remains');
+      assert.ok(/className="bag-continue"[\s\S]{0,160}?<ArrowLeft/.test(cartPage),
+        'the surviving control is the arrow-back button in the cart list');
+      assert.ok(!/bag-shop-btn/.test(cartPage + css),
+        'the duplicate outline button and its CSS are removed');
+    });
+
+    await step('the purchase CTAs share one restrained metal finish', () => {
+      const shared = (css.match(/\.bag-checkout-btn,\s*\n\.checkout-place-order \{[^}]*\}/) || [])[0] || '';
+      assert.ok(/linear-gradient\(135deg, #9a7a2e 0%, #c9a84c 44%, #f0d894 100%\)/.test(shared),
+        'both buttons get the same deep-to-pale gold bar');
+      assert.ok(/inset 0 1px 0 rgba\(255, 255, 255, 0\.34\)/.test(shared),
+        'a fine top light gives the bar depth without a filter');
+      assert.ok(/\.bag-checkout-btn:hover,[\s\S]{0,220}?transform: translateY\(-1px\)/.test(css),
+        'hover is a single-pixel lift, not a growing glow');
+    });
+
+    await step('the receipt ends on the same canvas as the footer', () => {
+      assert.ok(/\.order-confirmation-page \{ background: transparent; \}/.test(css),
+        'the confirmation inherits the page canvas');
+      assert.ok(!/radial-gradient\(ellipse at 50% 0%, rgba\(201,168,76,0\.12\), transparent 42%\), #080808/.test(cartPage),
+        'the local wash that drew a rectangle above the footer is gone');
+    });
+
+    await step('the hero wordmark is struck in richer gold', () => {
+      const heroLetter = (css.match(/\.hero-brand-letter \{[\s\S]*?\n\}/) || [])[0] || '';
+      assert.ok(/#fff0c4 50%/.test(heroLetter) && /#e9c976 58%/.test(heroLetter),
+        'the centre of the wordmark carries a pale champagne highlight');
+      assert.ok(/@keyframes hero-brand-letter-glint \{[^}]*0%, 58%, 100% \{ opacity: 0\.18; \}/.test(css),
+        'the letters keep a stronger steady gold warmth');
+    });
+
+    await step('route changes land at the top without a stale page fading above', () => {
+      const app = read('src/App.js');
+      const store = read('src/store.js');
+      assert.ok(!/AnimatePresence/.test(app),
+        'the page-level AnimatePresence that held the old page for 380ms is gone');
+      assert.ok(!/exit=\{\{ opacity: 0 \}\}/.test(app),
+        'no page exit keeps the previous route mounted');
+      assert.ok(/window\.scrollTo\(0, 0\)/.test(app) && /window\.scrollTo\(0, 0\)/.test(store),
+        'scroll is reset both in the store action and on the committed route');
+    });
+
+    await step('size guides leave as quietly as they arrive', () => {
+      const productSource = read('src/pages/ProductPage.js');
+      assert.ok(/className="size-guide-overlay"[\s\S]{0,220}?exit=\{\{ opacity: 0 \}\}/.test(productSource),
+        'the size-guide scrim now fades through AnimatePresence');
+      assert.ok(!/scale: 0\.96, y: 24/.test(productSource),
+        'the modal no longer scales and slides out');
+      assert.ok(!/backdrop-filter: blur\(10px\)/.test(css.slice(css.indexOf('.size-guide-overlay'), css.indexOf('.size-guide-modal'))),
+        'the size-guide scrim does not resample the page on exit');
+      assert.ok(!/scale: 0\.985/.test(read('src/components/shop/SizeFinder.js')),
+        'the size finder fades without a scale transform');
     });
   }
 } catch (error) {

@@ -448,9 +448,6 @@ export function CartPage() {
               <button className="gold-btn bag-checkout-btn" onClick={() => setPage('checkout')}>
                 {'Proceed to Checkout'}
               </button>
-              <button className="outline-btn bag-shop-btn" onClick={() => setPage('shop')}>
-                {'Continue Shopping'}
-              </button>
 
               <div className="bag-trust">
                 <span><Truck size={14} aria-hidden="true" />{'Delivery across Egypt'}</span>
@@ -824,7 +821,6 @@ export function CheckoutPage() {
     <div
       className="order-confirmation-page"
       style={{
-        background: 'radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.12), transparent 42%), #080808',
         minHeight: 'calc(100vh - 90px)',
         padding: '104px 16px 56px',
         position: 'relative',

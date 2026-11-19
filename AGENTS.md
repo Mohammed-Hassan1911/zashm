@@ -73,12 +73,11 @@ Key routes: `/`, `/shop`, `/product/:id`, `/cart`, `/checkout`, `/wishlist`,
 9. **Floating actions stay accessible.** WhatsApp is shown on the home page
    only (owner decision 2026-11-19), is a little larger on phones, and is
    unmounted while the shopping bag is open so it never sits over the dialog.
-   Scroll-to-top appears after scrolling down, hides near the top, hides while
-   an editable field is focused on a phone (`≤767px`) so it clears the
-   on-screen keyboard, and stays translucent at rest so it never covers
-   content. Both are fixed, `z-index: 30000`, use safe-area offsets, and stay
-   above header, mobile nav, modals, and toasts. Never add any other
-   obstruction or keyboard-hiding logic.
+   Scroll-to-top was removed at the owner's request (2026-11-19) because it
+   covered content without enough benefit; do not reintroduce it or add any
+   other obstruction/keyboard-hiding logic. WhatsApp is fixed,
+   `z-index: 30000`, uses safe-area offsets, and stays above header, mobile
+   nav, modals, and toasts.
 10. **Unknown routes are real 404s.** Do not silently redirect to `/`.
 
 ---

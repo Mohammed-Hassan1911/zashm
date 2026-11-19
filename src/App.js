@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import './index.css';
-import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
+import { MotionConfig, motion } from 'framer-motion';
 import { useStore } from './store';
 import { AuthProvider, useAuth } from './lib/auth'; 
 import {
@@ -21,7 +21,7 @@ import CartDrawer from './components/shop/CartDrawer';
 import MobileNav from './components/shop/MobileNav';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import { ShopPageSkeleton, ProductPageSkeleton } from './components/ui/PageSkeletons';
-import { BackToTop, OrderNotification, Toaster, toast } from './components/ui/BackToTop';
+import { OrderNotification, Toaster, toast } from './components/ui/BackToTop';
 import WhatsAppButton from './components/ui/WhatsAppButton';
 import { setPageMeta, setSiteJsonLd } from './lib/seo';
 import { trackPageView } from './lib/ga';
@@ -85,19 +85,12 @@ function AppInner() {
   // document height; mounting the footer at that moment made it jump when the
   // real content replaced the loader (CLS 0.103 / 0.146 at 1440px).
   const [firstPageReady, setFirstPageReady] = useState(false);
-  // On a phone, hide only scroll-to-top while an editable field is focused so
-  // it does not compete with the on-screen keyboard. WhatsApp stays available.
-  const [isEditingField, setIsEditingField] = useState(false);
-  const [isSmallScreen, setIsSmallScreen] = useState(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(max-width: 768px)').matches
-      : false
-  );
   const markPageReady = useCallback(() => setFirstPageReady(true), []);
   const trackedFirstView = useRef(false);
 
-  // WhatsApp remains visible; scroll-to-top appears after scrolling down.
-  // Both are fixed above every page layer (see src/index.css).
+  // The owner removed the scroll-to-top action: it kept covering content and
+  // was not useful enough to justify the obstruction. WhatsApp stays as the
+  // single floating support action (see src/index.css).
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -121,44 +114,6 @@ function AppInner() {
     return () => {
       document.removeEventListener('visibilitychange', sync);
       document.body.classList.remove('is-page-hidden');
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const isEditable = (el) => {
-      if (!el) return false;
-      const tag = (el.tagName || '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-      if (el.isContentEditable) return true;
-      return false;
-    };
-    const onFocusIn = (e) => {
-      if (isEditable(e.target)) setIsEditingField(true);
-    };
-    const onFocusOut = () => {
-      // Defer so a move between two fields does not flicker the buttons.
-      window.setTimeout(() => {
-        if (!isEditable(document.activeElement)) setIsEditingField(false);
-      }, 0);
-    };
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-    return () => {
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mq = window.matchMedia('(max-width: 768px)');
-    const handler = (e) => setIsSmallScreen(e.matches);
-    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', handler);
-    else if (typeof mq.addListener === 'function') mq.addListener(handler);
-    return () => {
-      if (typeof mq.removeEventListener === 'function') mq.removeEventListener('change', handler);
-      else if (typeof mq.removeListener === 'function') mq.removeListener(handler);
     };
   }, []);
 
@@ -270,32 +225,32 @@ function AppInner() {
           <CartDrawer />
 
           <main id="main-content" tabIndex={-1}>
-            <AnimatePresence>
-              <motion.div
-                key={currentPage}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.38, ease: [0.4, 0, 0.2, 1] }}
-              >
-                <Suspense fallback={<PageLoading page={currentPage} />}>
-                  <PageReadySignal onReady={markPageReady} />
-                  {currentPage === 'home' && <HomePage />}
-                  {currentPage === 'shop' && <ShopPage />}
-                  {currentPage === 'product' && <ProductPage />}
-                  {currentPage === 'cart' && <CartPage />}
-                  {currentPage === 'checkout' && <CheckoutPage />}
-                  {currentPage === 'wishlist' && <WishlistPage />}
-                  {currentPage === 'track' && <TrackOrder />}
-                  {currentPage === 'notfound' && <NotFoundPage />}
-                </Suspense>
-              </motion.div>
-            </AnimatePresence>
+            {/* No page exit animation: the old page used to stay mounted for
+                380ms while the new one mounted underneath, so tapping a card
+                showed the top of the home page before the product arrived.
+                The new page fades in immediately, with no stale route on top. */}
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+            >
+              <Suspense fallback={<PageLoading page={currentPage} />}>
+                <PageReadySignal onReady={markPageReady} />
+                {currentPage === 'home' && <HomePage />}
+                {currentPage === 'shop' && <ShopPage />}
+                {currentPage === 'product' && <ProductPage />}
+                {currentPage === 'cart' && <CartPage />}
+                {currentPage === 'checkout' && <CheckoutPage />}
+                {currentPage === 'wishlist' && <WishlistPage />}
+                {currentPage === 'track' && <TrackOrder />}
+                {currentPage === 'notfound' && <NotFoundPage />}
+              </Suspense>
+            </motion.div>
           </main>
 
           {firstPageReady && <Footer setModal={setActiveModal} />}
           <MobileNav />
-          {!(isEditingField && isSmallScreen) && <BackToTop />}
           {/* The owner keeps the support line on the landing page only, so the
               storefront routes stay quiet; the contact links in the footer and
               on the product page remain the way to reach the store. */}

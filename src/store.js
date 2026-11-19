@@ -1046,8 +1046,14 @@ export const useStore = create((set, get) => ({
       clearOrderConfirmation();
     }
     const url = pageUrl(page, get().selectedProduct);
-    if (typeof window !== 'undefined' && `${window.location.pathname}${window.location.search}` !== url) {
-      window.history.pushState({ page }, '', url);
+    if (typeof window !== 'undefined') {
+      if (`${window.location.pathname}${window.location.search}` !== url) {
+        window.history.pushState({ page }, '', url);
+      }
+      // Reset the scroll with the route change, not a frame later: a page
+      // opened while the shopper was deep in the catalogue must never appear
+      // halfway down with the previous page still fading above it.
+      window.scrollTo(0, 0);
     }
     set({ currentPage: page });
   },

@@ -899,7 +899,7 @@ export default function SizeFinder({
             initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={close}
           >
             <motion.div
@@ -913,10 +913,10 @@ export default function SizeFinder({
               tabIndex={-1}
               onKeyDown={onDialogKeyDown}
               onClick={(event) => event.stopPropagation()}
-              initial={reduceMotion ? false : { opacity: 0, y: 28, scale: 0.985 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={reduceMotion ? undefined : { opacity: 0, y: 20, scale: 0.99 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              initial={reduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={reduceMotion ? undefined : { opacity: 0 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
             >
               <div className="size-finder-scroll">
                 {/* The topbar is sticky inside the scroller: the question and the

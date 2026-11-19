@@ -201,6 +201,7 @@ export default function Header() {
               style={iconButtonStyle}
               whileHover={{ scale: 1.1 }}
               aria-label="Search products"
+              aria-expanded={searchOpen}
             >
               <Search size={20} />
             </motion.button>
@@ -261,30 +262,25 @@ export default function Header() {
             >
               <div style={{ maxWidth: 600, margin: '0 auto', padding: isMobile ? 12 : 16 }}>
                 <label htmlFor="site-search" className="sr-only">Search products</label>
-                <input
-                  id="site-search"
-                  type="search"
-                  name="search"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setPage('shop');
-                  }}
-                  placeholder="Search for products..."
-                  autoFocus
-                  style={{
-                    width: '100%',
-                    padding: 12,
-                    minHeight: 44,
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.012) 100%), rgba(18, 17, 15, 0.72)',
-                    color: 'var(--text)',
-                    borderRadius: 8,
-                    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.07)',
-                    outline: 'none',
-                    fontSize: 16,
-                  }}
-                />
+                {/* The field is one engraved plate: a gold hairline, a quiet
+                    inner light, and the same Search glyph as the header toggle
+                    sitting inside it as a hint of what the box is for. */}
+                <div className="site-search-field">
+                  <Search size={16} className="site-search-field-icon" aria-hidden="true" />
+                  <input
+                    id="site-search"
+                    className="site-search-input"
+                    type="search"
+                    name="search"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setPage('shop');
+                    }}
+                    placeholder="Search for products..."
+                    autoFocus
+                  />
+                </div>
               </div>
             </motion.div>
           )}

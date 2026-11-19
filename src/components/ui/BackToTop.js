@@ -1,50 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ArrowUp, CheckCircle, AlertCircle, AlertTriangle, Info, X, ShoppingBag, Heart } from 'lucide-react';
+import { CheckCircle, AlertCircle, AlertTriangle, Info, X, ShoppingBag, Heart } from 'lucide-react';
 
-export function BackToTop() {
-  const [visible, setVisible] = useState(false);
-  const visibleRef = useRef(false);
-  const reduceMotion = useReducedMotion();
-
-  useEffect(() => {
-    const handler = () => {
-      const nextVisible = window.scrollY > 300;
-      if (visibleRef.current !== nextVisible) {
-        visibleRef.current = nextVisible;
-        setVisible(nextVisible);
-      }
-    };
-
-    handler();
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
-  }, []);
-
-  const handleClick = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
-  }, [reduceMotion]);
-
-  return createPortal(
-    <AnimatePresence initial={false}>
-      {visible && (
-        <motion.button
-          type="button"
-          onClick={handleClick}
-          aria-label="Scroll back to top"
-          title="Scroll back to top"
-          initial={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: reduceMotion ? 0 : 8 }}
-          transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
-          className="back-to-top"
-        ><ArrowUp size={16} aria-hidden="true" /></motion.button>
-      )}
-    </AnimatePresence>,
-    document.body
-  );
-}
+// This module still owns the shared toast/notification system. The scroll-to-top
+// action was removed at the owner's request, so nothing here mounts a floating
+// button any more.
 
 // Toast System
 let toastId = 0;

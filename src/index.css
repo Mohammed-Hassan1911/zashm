@@ -1171,6 +1171,12 @@ select option { background: var(--bg3); }
   background-color: rgba(201, 168, 76, 0.12);
 }
 
+/* The receipt shares the page canvas with the footer. A local radial wash used
+   to paint a visibly different rectangle between the last order line and the
+   footer's top hairline; leaving the background transparent lets the one room
+   wash run through the whole route. */
+.order-confirmation-page { background: transparent; }
+
 /* ─── The receipt ───────────────────────────────────────────────────────────
    The confirmation is a receipt torn off a roll, not a floating invoice card.
    Its top edge is a raw zigzag: a repeating conic-gradient carves a row of
@@ -1403,13 +1409,15 @@ select option { background: var(--bg3); }
   display: inline-block;
   background: linear-gradient(
     108deg,
-    #8a7444 0%,
-    #c9a84c 26%,
-    #efdcae 50%,
-    #c9a84c 74%,
-    #8a7444 100%
+    #a8853d 0%,
+    #d4af4f 20%,
+    #f2d98d 42%,
+    #fff0c4 50%,
+    #e9c976 58%,
+    #c9a84c 78%,
+    #a8853d 100%
   );
-  background-size: 220% 100%;
+  background-size: 200% 100%;
   background-position: 50% 0;
   -webkit-background-clip: text;
   background-clip: text;
@@ -1439,7 +1447,7 @@ select option { background: var(--bg3); }
     0 0 18px rgba(245, 215, 127, 0.8),
     0 0 40px rgba(201, 168, 76, 0.5),
     0 0 76px rgba(201, 168, 76, 0.26);
-  opacity: 0.14;
+  opacity: 0.18;
   will-change: opacity;
   animation: hero-brand-letter-glint 5s ease-in-out infinite;
   animation-delay: calc(var(--letter-index) * 0.32s);
@@ -1449,10 +1457,10 @@ select option { background: var(--bg3); }
    the light — a quick rise, a full flare, a softer fall. The 0.32s stagger then
    carries the flare across the word one letter at a time. */
 @keyframes hero-brand-letter-glint {
-  0%, 58%, 100% { opacity: 0.14; }
-  70% { opacity: 0.32; }
+  0%, 58%, 100% { opacity: 0.18; }
+  70% { opacity: 0.38; }
   80% { opacity: 1; }
-  88% { opacity: 0.42; }
+  88% { opacity: 0.46; }
 }
 
 /* Three small stars around the wordmark, and a handful of dust motes in the
@@ -1839,6 +1847,75 @@ select option { background: var(--bg3); }
 
 .zashm-header-utilities {
   gap: clamp(8px, 1vw, 14px);
+}
+
+/* The toggle is the same gold as the field's hairline: a slightly finer glyph
+   with a warm inner light, so opening the box reads as one continuous gesture. */
+.zashm-header-search svg {
+  stroke-width: 1.7;
+  filter: drop-shadow(0 0 6px rgba(201, 168, 76, 0.28));
+}
+
+.zashm-header-search[aria-expanded='true'] {
+  color: var(--gold-light);
+}
+
+.zashm-header-search[aria-expanded='true'] svg {
+  filter: drop-shadow(0 0 9px rgba(232, 200, 112, 0.5));
+}
+
+/* The search field: an engraved champagne plate rather than a default input.
+    The icon and the text share one baseline, and only border/shadow change on
+    focus — no layout shift and no repaint of the page behind it. */
+.site-search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.site-search-field-icon {
+  position: absolute;
+  left: 15px;
+  color: var(--gold);
+  stroke-width: 1.7;
+  pointer-events: none;
+}
+
+.site-search-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px 12px 44px;
+  border: 1px solid rgba(201, 168, 76, 0.34);
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.012) 100%),
+    rgba(18, 17, 15, 0.78);
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 242, 205, 0.1),
+    0 8px 22px rgba(0, 0, 0, 0.2);
+  font-family: var(--font-body);
+  font-size: 16px;
+  letter-spacing: 0.2px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.site-search-input::placeholder {
+  color: var(--text3);
+  opacity: 0.85;
+}
+
+.site-search-input:focus-visible {
+  border-color: rgba(232, 200, 112, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 242, 205, 0.14),
+    0 0 0 3px rgba(201, 168, 76, 0.12);
+}
+
+.site-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
 }
 
 .zashm-header-search,
@@ -2505,10 +2582,10 @@ select option { background: var(--bg3); }
 }
 
 /* ─── FLOATING ACTIONS ────────────────────────────────────────────────────────
-   WhatsApp stays visible; scroll-to-top appears after scrolling down. The
+   WhatsApp is the only floating action. The scroll-to-top disc was removed at
+   the owner's request: it covered content without earning its place. The
    z-index sits above the header (1000), mobile nav (900), drawers/modals
-   (2000–9999) and toasts (20000). Buttons respect device safe areas and keep
-   comfortable mobile touch targets. */
+   (2000–9999) and toasts (20000), and respects device safe areas. */
 :root { --floating-action-z: 30000; }
 
 /* Accessible label that stays available to screen readers only. */
@@ -2556,7 +2633,6 @@ select option { background: var(--bg3); }
   .skip-link { transition: none; }
 }
 
-.back-to-top,
 .whatsapp-fab {
   position: fixed;
   z-index: var(--floating-action-z);
@@ -2566,47 +2642,6 @@ select option { background: var(--bg3); }
   box-sizing: border-box;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-}
-
-/* Both actions are one family: a small smoked-glass disc with a fine gold
-   hairline and nothing else. No halo, no gold pool, no hover growth — arriving
-   on a route must never light a circle around the button. */
-.back-to-top {
-  right: calc(24px + env(safe-area-inset-right, 0px));
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  /* Smoked glass at rest: the page reads through the disc, so it never sits on
-     top of the content like a lid. It firms up only while in use. */
-  background: linear-gradient(165deg, rgba(34, 30, 23, 0.46) 0%, rgba(12, 11, 10, 0.56) 74%);
-  color: var(--gold-light);
-  border: 1px solid rgba(201, 168, 76, 0.22);
-  box-shadow:
-    0 6px 16px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 242, 205, 0.08);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.back-to-top:hover,
-.back-to-top:focus-visible {
-  background: linear-gradient(165deg, rgba(34, 30, 23, 0.94) 0%, rgba(12, 11, 10, 0.97) 74%);
-  border-color: rgba(240, 212, 146, 0.82);
-  box-shadow:
-    0 8px 20px rgba(0, 0, 0, 0.52),
-    inset 0 1px 0 rgba(255, 246, 214, 0.2);
-}
-
-.back-to-top:focus-visible {
-  outline: 2px solid var(--gold-light);
-  outline-offset: 2px;
-}
-
-.back-to-top svg {
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
-}
-
-.whatsapp-fab {
   left: calc(24px + env(safe-area-inset-left, 0px));
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   width: 44px;
@@ -2659,9 +2694,9 @@ body.size-finder-open .whatsapp-fab {
   box-sizing: border-box;
   padding: clamp(12px, 3vw, 24px);
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.88);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  /* A plain scrim, not a live blur: blurring the whole page has to resample
+     every frame while the modal fades, which is what made the exit feel heavy. */
+  background: rgba(0, 0, 0, 0.9);
 }
 
 .size-guide-modal {
@@ -2919,33 +2954,10 @@ body.size-finder-open .whatsapp-fab {
 
   .mobile-nav { display: block; }
   .mobile-nav.mobile-nav--keyboard-open { display: none; }
-  /* Keep the floating actions clear of the floating dock. The dock is about
-     64px tall including its bottom padding, so the buttons start just above it.
-     On a phone the discs look much smaller - 34px of paint - while the button's
-     own box stays 44px: the 5px between the box edge and the painted disc is a
-     transparent border, and background-clip keeps the glass inside it. A tap
-     anywhere in the 44px box is a tap on the button, so the touch target is
-     still the full 44px. */
-  .back-to-top {
-    right: calc(16px + env(safe-area-inset-right, 0px));
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
-    width: 44px;
-    height: 44px;
-    border: 5px solid transparent;
-    background-clip: padding-box;
-    box-shadow:
-      0 6px 16px rgba(0, 0, 0, 0.5),
-      inset 0 0 0 1px rgba(201, 168, 76, 0.4),
-      inset 0 1px 0 rgba(255, 242, 205, 0.14);
-  }
-  .back-to-top:hover,
-  .back-to-top:focus-visible {
-    border-color: transparent;
-    box-shadow:
-      0 8px 20px rgba(0, 0, 0, 0.52),
-      inset 0 0 0 1px rgba(240, 212, 146, 0.8),
-      inset 0 1px 0 rgba(255, 246, 214, 0.22);
-  }
+  /* Keep the support action clear of the floating dock. The dock is about
+     64px tall including its bottom padding, so the button starts just above it.
+     The box is 54px with a 5px transparent border, painting a 44px disc: a tap
+     anywhere in the 54px box still reaches the button. */
   .whatsapp-fab {
     left: calc(16px + env(safe-area-inset-left, 0px));
     bottom: calc(84px + env(safe-area-inset-bottom, 0px));
@@ -2969,10 +2981,6 @@ body.size-finder-open .whatsapp-fab {
       0 8px 22px rgba(0, 0, 0, 0.52),
       inset 0 0 0 1px rgba(240, 212, 146, 0.8),
       inset 0 1px 0 rgba(255, 246, 214, 0.22);
-  }
-  .back-to-top svg {
-    width: 14px;
-    height: 14px;
   }
   .whatsapp-fab svg {
     width: 22px;
@@ -3704,13 +3712,13 @@ main, [role="main"] {
     letter-spacing: 0.7px;
   }
   .shop-filter-toggle svg { width: 11px; height: 11px; }
-  /* The owner wants a shorter control on phones, not smaller type: keep the
-     32px height and 9.5px label and let the select size itself to its longest
-     option instead of stretching across the free space in the toolbar. */
-  .shop-sort-wrap { flex: 0 0 auto; }
+  /* Same 32px / 9.5px ladder as the chips, but the select now takes the rest
+     of the utility row: the old auto-width left a dead gap to its right on a
+     phone. The label stays left-aligned and the chevron stays at the edge. */
+  .shop-sort-wrap { flex: 1 1 0; }
   .shop-sort {
     min-height: 32px;
-    width: auto;
+    width: 100%;
     padding: 6px 26px 6px 10px;
     font-size: 9.5px;
     letter-spacing: 0.5px;
@@ -4345,6 +4353,14 @@ main, [role="main"] {
    single outer border instead of a border inside a border. */
 .product-card-image.product-gallery-main::before { display: none; }
 
+/* The swipe plate sits under the controls and above the mat. Only `transform`
+   moves during a touch drag, so the photo never repaints under the finger. */
+.product-gallery-frames {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
 /* The print sits on a dark mat: a soft vignette at its edges, so a bright
    studio shot still reads as a mounted print rather than a white rectangle
    dropped on the page. No second hairline. */
@@ -4879,7 +4895,7 @@ main, [role="main"] {
 
   /* Without the glint, keep a steady light on every letter so the wordmark is
      still warm rather than flat. */
-  .hero-brand-letter::after { opacity: 0.32; }
+  .hero-brand-letter::after { opacity: 0.38; }
 
   /* Home glass CTAs: no sweep, no lift. */
   .gold-btn.home-glass-btn::after,
@@ -5951,9 +5967,9 @@ main, [role="main"] {
   align-items: center;
   justify-content: center;
   padding: clamp(8px, 3vw, 24px);
-  background: rgba(0, 0, 0, 0.86);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  /* Same plain scrim as the size guide: opacity-only fades stay on the
+     compositor, so leaving the finder feels as calm as opening it. */
+  background: rgba(0, 0, 0, 0.9);
 }
 
 .size-finder-dialog {
@@ -8279,18 +8295,37 @@ main, [role="main"] {
   color: var(--gold-light);
 }
 
+/* The two purchase CTAs share one struck-metal finish: a deeper bronze at the
+   edges, a warm gold body and a pale top light. The sweep from `.gold-btn`
+   stays inside the bar; only a 1px lift runs on hover, so the buttons feel
+   considered rather than loud. */
+.bag-checkout-btn,
+.checkout-place-order {
+  border-color: rgba(255, 240, 202, 0.42);
+  background: linear-gradient(135deg, #9a7a2e 0%, #c9a84c 44%, #f0d894 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(80, 58, 18, 0.24),
+    0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+.bag-checkout-btn:hover,
+.bag-checkout-btn:focus-visible,
+.checkout-place-order:hover:not(:disabled),
+.checkout-place-order:focus-visible:not(:disabled) {
+  border-color: rgba(255, 248, 222, 0.62);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 14px 30px rgba(0, 0, 0, 0.34);
+}
+
 .bag-checkout-btn {
   width: 100%;
   margin-top: 16px;
-  min-height: 46px;
+  min-height: 48px;
+  font-size: 11.5px;
   letter-spacing: 1.9px;
-}
-
-.bag-shop-btn {
-  width: 100%;
-  margin-top: 10px;
-  min-height: 44px;
-  letter-spacing: 1.7px;
 }
 
 .bag-trust {

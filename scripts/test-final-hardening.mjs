@@ -455,72 +455,54 @@ console.log('\n[9] floating actions stay accessible');
 {
   const css = read('src/index.css');
   const app = read('src/App.js');
-  const backToTop = read('src/components/ui/BackToTop.js');
+  const toastModule = read('src/components/ui/BackToTop.js');
   const whatsapp = read('src/components/ui/WhatsAppButton.js');
 
   const floatingBlock = css.slice(css.indexOf('FLOATING ACTIONS'), css.indexOf('.size-guide-overlay'));
-  ok(/\.back-to-top,\s*\.whatsapp-fab\s*\{[^}]*position:\s*fixed/.test(floatingBlock),
-    'both floating buttons are position: fixed');
+  ok(/\.whatsapp-fab\s*\{[^}]*position:\s*fixed/.test(floatingBlock),
+    'WhatsApp is position: fixed');
   ok(/--floating-action-z:\s*30000/.test(floatingBlock),
-    'floating buttons use a z-index above every page layer');
+    'the floating action uses a z-index above every page layer');
   ok(/z-index:\s*var\(--floating-action-z\)/.test(floatingBlock),
-    'the high z-index is actually applied to the buttons');
+    'the high z-index is actually applied to the button');
   ok(/env\(safe-area-inset-bottom/.test(floatingBlock),
-    'floating buttons respect the bottom safe area');
-  ok(/env\(safe-area-inset-left/.test(floatingBlock) && /env\(safe-area-inset-right/.test(floatingBlock),
-    'floating buttons respect the horizontal safe areas');
+    'the floating action respects the bottom safe area');
+  ok(/env\(safe-area-inset-left/.test(floatingBlock) && /env\(safe-area-inset-bottom/.test(floatingBlock),
+    'the left-aligned floating action respects the left and bottom safe areas');
 
-  ok(!/mobile-whatsapp-obstructed|mobile-back-to-top-obstructed/.test(css + app),
-    'no obstruction class can hide the floating buttons');
-  ok(!/mobile-keyboard-open\s+\.(whatsapp-fab|back-to-top)/.test(css),
-    'the on-screen keyboard never hides the floating buttons');
-  ok(!/\.whatsapp-fab\s*\{[^}]*display:\s*none/.test(css) &&
-     !/\.back-to-top\s*\{[^}]*display:\s*none/.test(css),
-    'CSS never sets display:none on the floating buttons');
+  ok(!/mobile-whatsapp-obstructed/.test(css + app),
+    'no obstruction class can hide the floating action');
+  ok(!/\.whatsapp-fab\s*\{[^}]*display:\s*none/.test(css),
+    'CSS never sets display:none on the floating action');
 
   ok(/createPortal\(/.test(whatsapp) && /document\.body/.test(whatsapp),
     'WhatsApp button is portalled to document.body');
-  ok(/window\.scrollY > 300/.test(backToTop),
-    'scroll-to-top appears after scrolling beyond 300px');
-  ok(/<AnimatePresence/.test(backToTop) && /\{visible && \(/.test(backToTop),
-    'scroll-to-top fades/slides in and out with visibility');
-  ok(/useReducedMotion/.test(backToTop) &&
-     /reduceMotion \? 'auto' : 'smooth'/.test(backToTop),
-    'scroll-to-top respects reduced motion and scroll behavior');
-  ok(/window\.scrollTo\(\{ top: 0, behavior: reduceMotion \? 'auto' : 'smooth' \}\)/.test(backToTop),
-    'scroll-to-top returns the page to the top when clicked');
-  ok(/className="back-to-top"/.test(backToTop) && /className="whatsapp-fab"/.test(whatsapp),
-    'both components use the styled floating classes');
-  ok(/aria-label="Scroll back to top"/.test(backToTop) &&
-     /aria-label="Chat with ZASHM on WhatsApp"/.test(whatsapp),
-    'both floating buttons are accessible');
+  ok(/className="whatsapp-fab"/.test(whatsapp),
+    'the component uses the styled floating class');
+  ok(/aria-label="Chat with ZASHM on WhatsApp"/.test(whatsapp),
+    'the floating action is accessible');
 
-  ok(/\.back-to-top\s*\{[^}]*width:\s*38px;[^}]*height:\s*38px/.test(floatingBlock) &&
-     /\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(floatingBlock),
-    'desktop floating buttons are compact discs');
-  ok(/@media \(max-width: 768px\)[\s\S]*?\.back-to-top\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css) &&
-     /@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*54px;[^}]*height:\s*54px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css),
-    'mobile scroll-to-top keeps a 44px box, and WhatsApp grows to a 54px box with a 5px transparent border (44px painted disc)');
-  ok(/\.back-to-top\s*\{[^}]*background:\s*linear-gradient\(165deg, rgba\(34, 30, 23, 0\.46\)[^}]*rgba\(12, 11, 10, 0\.56\)/.test(floatingBlock) &&
-     /\.back-to-top:hover,\s*\n\.back-to-top:focus-visible\s*\{[^}]*rgba\(34, 30, 23, 0\.94\)/.test(floatingBlock),
-    'scroll-to-top rests as smoked glass so the page reads through it, and firms up on hover/focus');
+  ok(/\.whatsapp-fab\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/.test(floatingBlock),
+    'desktop WhatsApp is a compact disc');
+  ok(/@media \(max-width: 768px\)[\s\S]*?\.whatsapp-fab\s*\{[^}]*width:\s*54px;[^}]*height:\s*54px;[^}]*border:\s*5px solid transparent;[^}]*background-clip:\s*padding-box/.test(css),
+    'WhatsApp grows to a 54px box with a 5px transparent border (44px painted disc) on phones');
   ok(/\{currentPage === 'home' && !cartOpen && <WhatsAppButton \/>\}/.test(app),
     'WhatsApp is mounted on the home page only, and is absent while the bag is open');
   ok(/useStore\(\(state\) => state\.cartOpen\)/.test(app),
     'the bag gate reads the real drawer state');
-  ok(!/\.back-to-top::after,\s*\.whatsapp-fab::after/.test(css),
-    'the tap target comes from the button box itself, not a pseudo-element ring');
-  ok(!/\.back-to-top\s*\{[^}]*0 0 22px rgba\(201, 168, 76/.test(floatingBlock) &&
-     !/\.whatsapp-fab\s*\{[^}]*0 0 26px rgba\(201, 168, 76/.test(floatingBlock) &&
-     !/whileHover/.test(backToTop) && !/whileHover/.test(whatsapp),
-    'no gold halo and no hover growth: arriving on a route cannot light a circle');
-  ok(/\.back-to-top svg\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px/.test(css) &&
-     /\.whatsapp-fab svg\s*\{[^}]*width:\s*22px;[^}]*height:\s*22px/.test(css),
-    'mobile floating icons keep their proportion to the disc');
+  ok(!/whileHover/.test(whatsapp),
+    'no hover growth: arriving on a route cannot light a circle');
+  ok(/\.whatsapp-fab svg\s*\{[^}]*width:\s*22px;[^}]*height:\s*22px/.test(css),
+    'the mobile floating icon keeps its proportion to the disc');
   ok(!/data-side|setSide|leftOverlap|rightOverlap/.test(whatsapp) &&
      !/\.whatsapp-fab\[data-side="right"\]/.test(css) &&
      /\.whatsapp-fab\s*\{[^}]*left:\s*calc\(16px \+ env\(safe-area-inset-left/.test(css),
-    'WhatsApp stays on the left, separate from the right-side scroll-to-top button');
+    'WhatsApp stays on the left, where the removed scroll action used to leave the right clear');
+
+  ok(!/back-to-top|Scroll back to top|scrollY > 300/.test(app + toastModule + css),
+    'the scroll-to-top action is fully removed from the app, module and stylesheet');
+  ok(!/isEditingField|isSmallScreen/.test(app),
+    'no keyboard-hiding floating-action state is left behind');
 }
 
 // ─── [10] public SEO and empty checkout accessibility ────────────────────────
@@ -569,8 +551,10 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok(/window\.scrollTo\(0, 0\)/.test(app) &&
      !/behavior: 'smooth'/.test(app),
     'route changes return to the top instantly, with no scroll animation');
-  ok(/initial=\{\{ opacity: 0 \}\}[\s\S]*?exit=\{\{ opacity: 0 \}\}[\s\S]*?duration: 0\.38, ease: \[0\.4, 0, 0\.2, 1\]/.test(app),
-    'storefront page transitions use a restrained crossfade without vertical jumps');
+  ok(!/AnimatePresence/.test(app) && !/exit=\{\{ opacity: 0 \}\}/.test(app),
+    'no page exit holds the old route mounted above the new one');
+  ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+transition=\{\{ duration: 0\.18, ease: 'easeOut' \}\}/.test(app),
+    'the new page fades in immediately with no vertical jump');
   const productCard = read('src/components/shop/ProductCard.js');
   ok(/initial=\{index === 0 \? false : \{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
     'the LCP product card appears immediately while later cards use a brief fade');
@@ -699,8 +683,8 @@ console.log('\n[12] badge proximity and governorate copy');
     'header badges sit at the upper-right corner of the glyph');
   ok(!/top: isMobile \? -3 : -2/.test(header) && !/right: isMobile \? -2 : 0/.test(header),
     'the bag badge no longer overrides the shared position');
-  eq((header.match(/aria-hidden="true"/g) || []).length, 2,
-    'both header badges are decorative for screen readers');
+  eq((header.match(/aria-hidden="true"/g) || []).length, 3,
+    'both header badges and the search field glyph are decorative for screen readers');
   ok(/aria-label=\{wishlist\?\.length > 0/.test(header),
     'the wishlist button announces its count');
   ok(/cartCount === 1 \? '' : 's'/.test(header),
@@ -841,7 +825,7 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
     'the admin panel keeps its own noindex robots meta');
 
   const app = read('src/App.js');
-  ok(/<main id="main-content" tabIndex=\{-1\}>\s*<AnimatePresence>/.test(app) && /<\/AnimatePresence>\s*<\/main>/.test(app),
+  ok(/<main id="main-content" tabIndex=\{-1\}>[\s\S]{0,600}?<motion\.div/.test(app) && /<\/motion\.div>\s*<\/main>/.test(app),
     'storefront page content renders inside the skippable main landmark');
   ok((app.match(/<main\b/g) || []).length === 1,
     'the storefront declares exactly one main landmark');
