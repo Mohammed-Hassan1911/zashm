@@ -2218,6 +2218,47 @@ select option { background: var(--bg3); }
   letter-spacing: 0.2px;
 }
 
+/* Product names carry a fixed metal gradient — one paint, no loop, no filter
+   and no background-position animation. The only motion is a single
+   transform-only light pass on hover, so the browser composites it instead of
+   repainting the text. Touch screens keep the static shine. */
+.product-name-shine,
+.product-title {
+  background-image: linear-gradient(104deg, #efe0b8 0%, #cbaa63 34%, #fff5d6 50%, #cbaa63 66%, #a3833f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 769px) {
+  .product-card-name,
+  .product-title {
+    position: relative;
+    isolation: isolate;
+  }
+  .product-card-name::after,
+  .product-title::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(105deg, transparent 40%, rgba(255, 249, 226, 0.17) 50%, transparent 60%);
+    transform: translateX(-125%);
+    transition: transform 0.8s ease;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .product-card:hover .product-card-name::after,
+  .product-card:focus-within .product-card-name::after,
+  .product-title:hover::after { transform: translateX(125%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card-name::after,
+  .product-title::after { display: none; }
+}
+
 /* ─── Product card: frame and information ───────────────────────────────────
    The card is one framed print: a hairline around the whole object, a warm
    glass body, and a gold edge that only appears under the cursor. Inside, the
@@ -3641,8 +3682,6 @@ main, [role="main"] {
 
 @media (max-width: 560px) {
   .shop-toolbar { gap: 8px; padding: 12px; }
-  .shop-sort-wrap { flex: 1 1 120px; }
-  .shop-sort { width: 100%; }
 }
 
 /* Phones: the toolbar is a utility strip, not a hero. Shrink the whole ladder
@@ -3665,13 +3704,18 @@ main, [role="main"] {
     letter-spacing: 0.7px;
   }
   .shop-filter-toggle svg { width: 11px; height: 11px; }
+  /* The owner wants a shorter control on phones, not smaller type: keep the
+     32px height and 9.5px label and let the select size itself to its longest
+     option instead of stretching across the free space in the toolbar. */
+  .shop-sort-wrap { flex: 0 0 auto; }
   .shop-sort {
     min-height: 32px;
-    padding: 6px 28px 6px 10px;
+    width: auto;
+    padding: 6px 26px 6px 10px;
     font-size: 9.5px;
     letter-spacing: 0.5px;
   }
-  .shop-sort-chevron { right: 9px; width: 11px; height: 11px; }
+  .shop-sort-chevron { right: 8px; width: 11px; height: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3684,7 +3728,9 @@ main, [role="main"] {
    leave transparent text. Fall back to plain text there. */
 @media (forced-colors: active) {
   .shop-hero-title,
-  .section-head-title {
+  .section-head-title,
+  .product-name-shine,
+  .product-title {
     background: none;
     -webkit-text-fill-color: currentColor;
     color: CanvasText;
@@ -3860,6 +3906,8 @@ main, [role="main"] {
   line-height: 1.14;
   letter-spacing: 0.2px;
   text-wrap: balance;
+  /* Keeps the hover light pass inside the heading box. */
+  overflow: hidden;
 }
 
 .product-price-row {

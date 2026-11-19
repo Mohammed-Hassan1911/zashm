@@ -899,6 +899,11 @@ try {
         'phones shrink the chips and the Filter toggle together (44→32px, 11→9.5px)');
       assert.ok(/\.shop-sort \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
         'the sort select shrinks with them instead of towering over the row');
+      assert.ok(/\.shop-sort-wrap \{ flex: 0 0 auto; \}/.test(phoneToolbar)
+        && /\.shop-sort \{[^}]*width: auto;/.test(phoneToolbar),
+        'the phone sort control takes only its own width instead of stretching across the bar');
+      assert.ok(!/flex: 1 1 120px/.test(css) && !/\.shop-sort \{ width: 100%; \}/.test(css),
+        'the old full-width phone sort rule is gone');
       assert.ok(/\.shop-label-chip \{\s*min-height:\s*38px;[^}]*font-size:\s*12px;/.test(phoneToolbar),
         'the label chips inside the panel keep their larger 38px / 12px scale');
       assert.ok(/\.price-input \{\s*font-size:\s*16px/.test(css),
@@ -1100,8 +1105,10 @@ try {
         'any text field triggers it');
       assert.ok(/el\.isContentEditable/.test(app), 'contenteditable fields count too');
       assert.ok(/focusin/.test(app) && /focusout/.test(app), 'focus is tracked both ways');
-      assert.ok(/<WhatsAppButton \/>/.test(app),
-        'WhatsApp remains rendered while an editable field is focused');
+      assert.ok(/currentPage === 'home' && !cartOpen && <WhatsAppButton \/>/.test(app),
+        'WhatsApp stays for typing and leaves only while the bag is open');
+      assert.ok(/useStore\(\(state\) => state\.cartOpen\)/.test(app),
+        'the floating-action gate reads the real drawer state');
       assert.ok(!/!\(isEditingField && isSmallScreen\) && <WhatsAppButton \/>/.test(app),
         'WhatsApp is not hidden by the mobile keyboard state');
       assert.ok(/!\(isEditingField && isSmallScreen\) && <BackToTop \/>/.test(app),
@@ -1292,6 +1299,7 @@ try {
     const card = read('src/components/shop/ProductCard.js');
     const css = read('src/index.css');
     const shop = read('src/pages/ShopPage.js');
+    const product = read('src/pages/ProductPage.js');
 
     await step('the second product photo crossfades instead of swapping src', () => {
       // Re-sourcing one <img> made the browser paint the new file the moment it
@@ -1306,6 +1314,39 @@ try {
         'the frames crossfade over 420ms');
       assert.ok(/@media \(prefers-reduced-motion: reduce\) \{\s*\.product-card-img \{ transition: none; \}/.test(css),
         'reduced motion turns the crossfade off');
+    });
+
+    await step('product names have a static metal shine and one transform-only sweep', () => {
+      assert.ok(/<span className="product-name-shine">\{product\?\.name \|\| 'Product'\}<\/span>/.test(card),
+        'the card wraps the name so the line clamp stays on the block');
+      assert.ok(/\.product-name-shine,\s*\.product-title \{\s*background-image: linear-gradient\(104deg/.test(css)
+        && /-webkit-background-clip: text;/.test(css),
+        'both names carry a fixed gradient fill');
+      assert.ok(/\.product-card-name::after,\s*\.product-title::after \{[\s\S]*?transform: translateX\(-125%\);/.test(css)
+        && /transition: transform 0\.8s ease;/.test(css),
+        'the light pass is a transform transition, not a gradient animation');
+      assert.ok(!/@keyframes [a-z-]*shine|background-position:[\s\S]{0,80}?product-name/.test(css),
+        'no infinite shimmer keyframe or moving gradient repaints the names');
+      assert.ok(/@media \(prefers-reduced-motion: reduce\) \{\s*\.product-card-name::after,\s*\.product-title::after \{\s*display: none;/.test(css),
+        'reduced motion keeps the static shine and drops the sweep');
+      assert.ok(/forced-colors: active[\s\S]{0,240}?\.product-name-shine,\s*\.product-title/.test(css),
+        'forced colours fall back to readable text');
+    });
+
+    await step('touch gallery swipes crossfade without waiting or scaling', () => {
+      const gallery = product.slice(
+        product.indexOf('product-gallery-main'),
+        product.indexOf('The gallery controls sit directly')
+      );
+      assert.ok(!/mode="wait"/.test(gallery), 'the outgoing photo no longer blocks the incoming one');
+      assert.ok(/<AnimatePresence initial=\{false\}>/.test(product),
+        'the first photo paints immediately instead of fading in');
+      assert.ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+exit=\{\{ opacity: 0 \}\}/.test(product)
+        && /transition=\{\{ duration: 0\.22, ease: 'easeOut' \}\}/.test(product),
+        'the swap is a 220ms opacity-only crossfade');
+      assert.ok(!/scale: 1\.05|scale: 0\.95/.test(gallery), 'no scale animation moves the photo under the finger');
+      assert.ok(/position: 'absolute',\s*\n\s*inset: 0,/.test(product),
+        'both frames share the same box, so the crossfade never shifts the layout');
     });
 
     await step('Delivery details and Order Summary carry a light champagne wash', () => {
@@ -1345,6 +1386,18 @@ try {
         'the panel keeps a strip of the storefront visible on a phone');
       assert.ok(!/bottom: 0,[\s\S]{0,120}?width: '100%'/.test(drawer),
         'the panel itself is no longer a full-screen page');
+    });
+
+    await step('the bag opens with an opaque scrim and one short transform', () => {
+      assert.ok(!/backdropFilter/.test(drawer),
+        'the scrim never blurs the live storefront behind the drawer');
+      assert.ok(/background: 'rgba\(0,0,0,0\.86\)'/.test(drawer),
+        'a solid smoked scrim replaces the blur');
+      assert.ok(!/type: 'spring'/.test(drawer), 'the panel no longer springs past its resting edge');
+      assert.ok(/transition=\{\{ duration: 0\.24, ease: \[0\.22, 1, 0\.36, 1\] \}\}/.test(drawer),
+        'the panel slides in on a single short ease-out');
+      assert.ok(/transition=\{\{ duration: 0\.18, ease: 'easeOut' \}\}/.test(drawer),
+        'the scrim fades faster than the panel moves');
     });
 
     await step('Cash on Delivery carries no "Available" badge', () => {

@@ -199,7 +199,7 @@ export default function ProductCard({ product, index = 0 }) {
             wordBreak: 'normal',
           }}
         >
-          {product?.name || 'Product'}
+          <span className="product-name-shine">{product?.name || 'Product'}</span>
         </p>
 
         <div

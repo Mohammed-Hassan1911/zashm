@@ -286,7 +286,12 @@ export default function ProductPage() {
               onPointerCancel={() => { imageSwipeStartRef.current = null; }}
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
-              <AnimatePresence mode="wait">
+              {/* Both frames are stacked in the same box and crossfade on
+                  opacity alone. The old waiting swap + scale held the
+                  outgoing photo for 0.4s, so a fast touch swipe queued frames
+                  and felt sticky. No mode, no scale, no blur: the next photo
+                  is already underneath the finger. */}
+              <AnimatePresence initial={false}>
                 <motion.img key={imgIdx}
                   src={mainImage.src}
                   alt={p.name}
@@ -298,11 +303,13 @@ export default function ProductPage() {
                   fetchpriority={imgIdx === 0 ? 'high' : 'auto'}
                   loading={imgIdx === 0 ? 'eager' : 'lazy'}
                   decoding="async"
-                  initial={{ opacity: 0, scale: 1.05 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.4 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
                   style={{
+                    position: 'absolute',
+                    inset: 0,
                     display: 'block',
                     width: '100%',
                     height: '100%',

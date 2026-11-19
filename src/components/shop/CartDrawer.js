@@ -102,10 +102,14 @@ export default function CartDrawer() {
     <AnimatePresence>
       {cartOpen && (
         <>
+          {/* A solid scrim instead of a backdrop blur: blurring the live page
+              on every frame of the open animation re-sampled the whole
+              storefront and made the drawer feel heavy on a phone. */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={() => setCartOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 2000, backdropFilter: 'blur(4px)' }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.86)', zIndex: 2000 }}
           />
           <motion.div
             ref={panelRef}
@@ -114,7 +118,9 @@ export default function CartDrawer() {
             aria-label="Shopping bag"
             tabIndex={-1}
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            /* One short ease-out on the transform only — no spring overshoot,
+               no animation of width, blur or shadow. */
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             className="cart-drawer"
             style={{ 
               position: 'fixed', 

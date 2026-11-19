@@ -75,6 +75,9 @@ function AppInner() {
   
   const refreshProducts = useStore((state) => state.refreshProducts);
   const refreshOrders = useStore((state) => state.refreshOrders);
+  // The bag drawer owns the screen while it is open; WhatsApp sits above every
+  // page layer, so remove it for the lifetime of the dialog.
+  const cartOpen = useStore((state) => state.cartOpen);
 
   const [activeModal, setActiveModal] = useState(null);
   // The footer is only added once the first page has actually committed. While a
@@ -296,7 +299,7 @@ function AppInner() {
           {/* The owner keeps the support line on the landing page only, so the
               storefront routes stay quiet; the contact links in the footer and
               on the product page remain the way to reach the store. */}
-          {currentPage === 'home' && <WhatsAppButton />}
+          {currentPage === 'home' && !cartOpen && <WhatsAppButton />}
 
           <InfoModal type={activeModal} onClose={() => setActiveModal(null)} />
         </>

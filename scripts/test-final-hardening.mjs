@@ -504,8 +504,10 @@ console.log('\n[9] floating actions stay accessible');
   ok(/\.back-to-top\s*\{[^}]*background:\s*linear-gradient\(165deg, rgba\(34, 30, 23, 0\.46\)[^}]*rgba\(12, 11, 10, 0\.56\)/.test(floatingBlock) &&
      /\.back-to-top:hover,\s*\n\.back-to-top:focus-visible\s*\{[^}]*rgba\(34, 30, 23, 0\.94\)/.test(floatingBlock),
     'scroll-to-top rests as smoked glass so the page reads through it, and firms up on hover/focus');
-  ok(/\{currentPage === 'home' && <WhatsAppButton \/>\}/.test(app),
-    'WhatsApp is mounted on the home page only (owner decision 2026-11-19)');
+  ok(/\{currentPage === 'home' && !cartOpen && <WhatsAppButton \/>\}/.test(app),
+    'WhatsApp is mounted on the home page only, and is absent while the bag is open');
+  ok(/useStore\(\(state\) => state\.cartOpen\)/.test(app),
+    'the bag gate reads the real drawer state');
   ok(!/\.back-to-top::after,\s*\.whatsapp-fab::after/.test(css),
     'the tap target comes from the button box itself, not a pseudo-element ring');
   ok(!/\.back-to-top\s*\{[^}]*0 0 22px rgba\(201, 168, 76/.test(floatingBlock) &&
