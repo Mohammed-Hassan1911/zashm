@@ -1181,12 +1181,14 @@ select option { background: var(--bg3); }
    The confirmation is a receipt torn off a roll, not a floating invoice card.
    Its top edge is a raw zigzag: a repeating conic-gradient carves a row of
    teeth out of the mask, and a second linear-gradient paints the rest of the
-   paper below them. Square top corners, a rounded foot. The paper sits
-   directly on the page: the old blurred silhouette behind it read as a dark
-   rectangle between the receipt and the footer, so it was removed. */
+   paper below them. The teeth are taller and narrower than the old 12/24 edge
+   so the tear reads clearly, and the paper's top strip is champagne gold.
+   Square top corners, a rounded foot. The paper sits directly on the page:
+   the old blurred silhouette behind it read as a dark rectangle between the
+   receipt and the footer, so it was removed. */
 .order-receipt {
-  --receipt-tear: 12px;
-  --receipt-tooth: 24px;
+  --receipt-tear: 16px;
+  --receipt-tooth: 22px;
   position: relative;
   width: 100%;
   max-width: 560px;
@@ -1208,11 +1210,11 @@ select option { background: var(--bg3); }
       0 0 / var(--receipt-tooth) var(--receipt-tear) repeat-x,
     linear-gradient(#000 0 0)
       0 var(--receipt-tear) / 100% calc(100% - var(--receipt-tear)) no-repeat;
-  /* A soft gold glass rim follows the torn edge and its tips only — the paper
-     itself stays dark. */
+  /* The triangular zigzag lines catch a bright, glassy gold edge. */
   filter:
-    drop-shadow(0 -0.5px 0 rgba(255, 239, 190, 0.75))
-    drop-shadow(0 0 3px rgba(201, 168, 76, 0.38));
+    drop-shadow(0 -0.6px 0 rgba(255, 246, 214, 0.92))
+    drop-shadow(0 -1px 0 rgba(232, 200, 112, 0.5))
+    drop-shadow(0 0 5px rgba(201, 168, 76, 0.28));
 }
 
 /* Shipping details stay side by side (across the width) on phones instead of
@@ -2448,10 +2450,10 @@ select option { background: var(--bg3); }
   position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
-  width: min(100%, 280px);
+  gap: 3px;
+  width: min(100%, 320px);
   margin: 0 auto;
-  padding: 3px;
+  padding: 4px;
   box-sizing: border-box;
   border-radius: 999px;
   pointer-events: auto;
@@ -2512,10 +2514,10 @@ select option { background: var(--bg3); }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 4px 4px 3px;
+  gap: 3px;
+  min-width: 46px;
+  min-height: 50px;
+  padding: 5px 6px 4px;
   border: 0;
   border-radius: 999px;
   background: none;
@@ -2532,8 +2534,8 @@ select option { background: var(--bg3); }
    it can also follow a finger across the dock before snapping into place. */
 .mobile-nav-plate {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: 4px;
+  bottom: 4px;
   left: 0;
   z-index: 0;
   width: 0;
@@ -2559,7 +2561,7 @@ select option { background: var(--bg3); }
 .mobile-nav-label {
   position: relative;
   z-index: 1;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -2965,7 +2967,7 @@ body.size-finder-open .whatsapp-fab {
      anywhere in the 54px box still reaches the button. */
   .whatsapp-fab {
     left: calc(16px + env(safe-area-inset-left, 0px));
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
     right: auto;
     /* A 54px box with a 5px transparent border paints a 44px disc: a little
        larger than before, so the support line is easy to hit on a phone. */
@@ -3695,14 +3697,9 @@ main, [role="main"] {
   pointer-events: none;
 }
 
-.shop-sort:hover {
-  border-color: rgba(201, 168, 76, 0.42);
-}
-
 .shop-sort:focus-visible {
-  outline: none;
-  border-color: rgba(232, 200, 112, 0.68);
-  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.16), inset 0 1px 0 rgba(255, 242, 205, 0.08);
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .shop-filter-panel input {
@@ -3730,9 +3727,10 @@ main, [role="main"] {
     font-size: 9.5px;
     letter-spacing: 0.7px;
   }
-  /* The toolbar Filter button sits beside Newest, so give it a little more
-     horizontal room than the scrolling category chips. */
+  /* The toolbar Filter button sits beside Newest and fills the remaining
+     space next to the fixed sort control. */
   .shop-filter-toggle {
+    flex: 1 1 auto;
     min-width: 96px;
     padding: 6px 14px;
   }

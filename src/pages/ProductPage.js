@@ -104,7 +104,7 @@ export default function ProductPage() {
   const settleGallery = () => {
     gallerySettleRef.current?.stop?.();
     gallerySettleRef.current = animate(galleryDragX, 0, {
-      type: 'spring', stiffness: 480, damping: 36, mass: 0.6,
+      type: 'spring', stiffness: 720, damping: 42, mass: 0.45,
     });
   };
   const handleImagePointerDown = (event) => {
@@ -125,9 +125,10 @@ export default function ProductPage() {
     // Wait for a clear horizontal intent so a vertical page scroll still wins.
     if (!start.following && (Math.abs(deltaX) < 8 || Math.abs(deltaX) <= Math.abs(deltaY))) return;
     start.following = true;
-    // Resistance keeps the photo inside its frame, and the offset is capped so
-    // the swap never exposes a bare edge when the next image comes in.
-    galleryDragX.set(Math.max(-38, Math.min(38, deltaX * 0.42)));
+    // Follow the finger closely for a fast, fluid swipe with no sticky stop;
+    // the plate still stays within the frame.
+    const limit = Math.max(90, Math.min(window.innerWidth * 0.45, 180));
+    galleryDragX.set(Math.max(-limit, Math.min(limit, deltaX * 0.92)));
   };
   const handleImagePointerUp = (event) => {
     const start = imageSwipeStartRef.current;
@@ -335,7 +336,7 @@ export default function ProductPage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    transition={{ duration: 0.12, ease: 'easeOut' }}
                     style={{
                       position: 'absolute',
                       inset: 0,

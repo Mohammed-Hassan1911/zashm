@@ -344,7 +344,7 @@ export default function MobileNav() {
               transition={{ type: 'spring', stiffness: 520, damping: 32 }}
             >
               <span className="mobile-nav-icon">
-                <Icon size={17} aria-hidden="true" />
+                <Icon size={19} aria-hidden="true" />
                 {badge > 0 && (
                   <span className="mobile-nav-badge" aria-hidden="true">{badge}</span>
                 )}

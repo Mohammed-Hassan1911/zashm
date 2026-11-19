@@ -874,10 +874,10 @@ try {
       // The nav's tap targets and label size moved from inline styles into
       // .mobile-nav-item / .mobile-nav-label, so the guarantee is asserted on
       // the stylesheet that now owns them.
-      assert.ok(/\.mobile-nav-item\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px/.test(css),
+      assert.ok(/\.mobile-nav-item\s*\{[^}]*min-width:\s*(4[4-9]|[5-9]\d)px;[^}]*min-height:\s*(4[4-9]|[5-9]\d)px/.test(css),
         'mobile nav items are at least 44px');
-      assert.ok(/\.mobile-nav-label\s*\{[^}]*font-size:\s*9px;[^}]*font-weight:\s*500/.test(css),
-        'mobile nav labels are 9px and lighter, so they read as a caption');
+      assert.ok(/\.mobile-nav-label\s*\{[^}]*font-size:\s*10px;[^}]*font-weight:\s*500/.test(css),
+        'mobile nav labels are 10px and lighter, so they read as a caption');
       assert.ok(/mobile-nav--keyboard-open/.test(nav),
         'the keyboard-open state still hides the bottom nav');
       assert.ok(/\.site-search-input\s*\{[^}]*min-height:\s*44px/.test(css) &&
@@ -914,13 +914,13 @@ try {
         'no forced blur adds a second focus animation after the native picker closes');
       assert.ok(/\.shop-sort \{[^}]*transition: none;[^}]*touch-action: manipulation;/.test(css),
         'the select has no CSS transition of its own to lag behind the picker');
-      assert.ok(/\.shop-sort:focus-visible\s*\{[^}]*outline:\s*none;[^}]*border-color:\s*rgba\(232, 200, 112, 0\.68\);[^}]*box-shadow:\s*0 0 0 2px rgba\(201, 168, 76, 0\.16\)/.test(css),
-        'the focused sort border is a smaller, softer gold ring');
+      assert.ok(/\.shop-sort:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--gold\);[^}]*outline-offset:\s*2px;/.test(css),
+        'the focused sort border uses the original gold outline');
       assert.ok(/isEditable[\s\S]{0,320}?element\.matches\('textarea'\)/.test(nav) &&
          !/isEditable[\s\S]{0,320}?element\.matches\('textarea, select'\)/.test(nav),
         'opening the native sort picker does not count as a keyboard, so the bottom nav stays');
-      assert.ok(/\.shop-filter-toggle\s*\{\s*min-width:\s*96px;[^}]*padding:\s*6px 14px;/.test(phoneToolbar),
-        'the Filter toggle is a little wider horizontally on phones');
+      assert.ok(/\.shop-filter-toggle\s*\{\s*flex:\s*1 1 auto;[^}]*min-width:\s*96px;[^}]*padding:\s*6px 14px;/.test(phoneToolbar),
+        'the Filter toggle fills the remaining space beside the sort on phones');
       assert.ok(/\.shop-label-chip-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(phoneToolbar) &&
          /\.shop-label-chip\s*\{\s*min-height:\s*34px;[^}]*font-size:\s*10\.5px;/.test(phoneToolbar),
         'label chips arrange in a tidy grid and are slightly smaller on phones');
@@ -1352,19 +1352,20 @@ try {
       assert.ok(/<AnimatePresence initial=\{false\}>/.test(product),
         'the first photo paints immediately instead of fading in');
       assert.ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+exit=\{\{ opacity: 0 \}\}/.test(product)
-        && /transition=\{\{ duration: 0\.18, ease: 'easeOut' \}\}/.test(product),
-        'the swap is an 180ms opacity-only crossfade');
+        && /transition=\{\{ duration: 0\.12, ease: 'easeOut' \}\}/.test(product),
+        'the swap is a fast 120ms opacity-only crossfade');
       assert.ok(!/scale: 1\.05|scale: 0\.95/.test(gallery), 'no scale animation moves the photo under the finger');
       assert.ok(/position: 'absolute',\s*\n\s*inset: 0,/.test(product),
         'both frames share the same box, so the crossfade never shifts the layout');
       assert.ok(/onPointerMove=\{handleImagePointerMove\}/.test(product),
         'the gallery actually listens for the drag, not just the release');
       assert.ok(/useMotionValue\(0\)/.test(product) &&
-         /galleryDragX\.set\(Math\.max\(-38, Math\.min\(38, deltaX \* 0\.42\)\)\)/.test(product),
-        'the photo follows a horizontal drag with resistance and a capped offset');
+         /const limit = Math\.max\(90, Math\.min\(window\.innerWidth \* 0\.45, 180\)\)/.test(product) &&
+         /galleryDragX\.set\(Math\.max\(-limit, Math\.min\(limit, deltaX \* 0\.92\)\)\)/.test(product),
+        'the photo follows the finger smoothly with a wide, fluid range and no sticky stop');
       assert.ok(/gallerySettleRef\.current\?\.stop\?\.\(\)/.test(product) &&
-         /type: 'spring', stiffness: 480, damping: 36, mass: 0\.6/.test(product),
-        'the drag settles back with one short spring and no competing animation');
+         /type: 'spring', stiffness: 720, damping: 42, mass: 0\.45/.test(product),
+        'the drag settles back quickly with one short spring and no competing animation');
       assert.ok(/className="product-gallery-frames" style=\{\{ x: galleryDragX \}\}/.test(product) &&
          /\.product-gallery-frames\s*\{[^}]*will-change:\s*transform/.test(css),
         'the drag moves a single composited plate, never the controls or the page');
@@ -1439,17 +1440,18 @@ try {
         'the blurred silhouette that read as a dark rectangle below the receipt is gone');
     });
 
-    await step('the torn receipt edge keeps its shape with gold glass tips', () => {
+    await step('the torn receipt edge is clearer with glassy gold zigzag lines', () => {
       const receipt = (css.match(/\.order-receipt \{[\s\S]*?\n\}/) || [])[0] || '';
       const card = (css.match(/\.order-confirmation-card \{[\s\S]*?\n\}/g) || [])
         .find((block) => /drop-shadow/.test(block)) || '';
-      assert.ok(/--receipt-tear: 12px;/.test(receipt) && /--receipt-tooth: 24px;/.test(receipt),
-        'the receipt keeps its original zigzag shape and scale');
-      assert.ok(/drop-shadow\(0 -0\.5px 0 rgba\(255, 239, 190, 0\.75\)\)/.test(card) &&
-         /drop-shadow\(0 0 3px rgba\(201, 168, 76, 0\.38\)\)/.test(card),
-        'only the torn edge and tips carry a soft gold glass rim');
-      assert.ok(/background: 'linear-gradient\(160deg, #17150f 0%, #100f0d 46%, #0b0b0b 100%\)',/.test(cartPage),
-        'the paper itself stays dark instead of a full gold strip');
+      assert.ok(/--receipt-tear: 16px;/.test(receipt) && /--receipt-tooth: 22px;/.test(receipt),
+        'the teeth are taller and narrower so the tear reads clearly');
+      assert.ok(/linear-gradient\(180deg, #fff0c4 0px, #d8bd7a 2px, #a8853d var\(--receipt-tear\), transparent var\(--receipt-tear\)\)/.test(cartPage),
+        'the masked top strip paints the torn teeth in champagne gold');
+      assert.ok(/drop-shadow\(0 -0\.6px 0 rgba\(255, 246, 214, 0\.92\)\)/.test(card) &&
+         /drop-shadow\(0 -1px 0 rgba\(232, 200, 112, 0\.5\)\)/.test(card) &&
+         /drop-shadow\(0 0 5px rgba\(201, 168, 76, 0\.28\)\)/.test(card),
+        'the triangular zigzag lines carry a bright, glassy gold edge');
       assert.ok(!/\.order-receipt::before/.test(css),
         'no glow layer returns a rectangle behind the paper');
     });
