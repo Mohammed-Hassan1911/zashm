@@ -29,6 +29,10 @@ const {
 const DUMMY_PASSWORD_HASH =
   'scrypt$16384$8$1$9235e98da7b9db0c3908d02f9877f404$44031c67af6a4173a996c8a200fefd4358a05a676110367be48b9e20970e5bb1';
 
+// One window for every login budget, so a retry that clears one clears the
+// others at the same moment.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
 /**
  * POST /api/auth  { action: 'login', email, password }
  * POST /api/auth  { action: 'logout' }
@@ -104,12 +108,22 @@ module.exports = async function handler(req, res) {
   }
 
   // Server-side rate limiting (per IP+email and per IP) — cannot be reset by reloading the page.
+  // The per-IP keys alone are weak against an attacker who rotates addresses
+  // (mobile carriers and CGNAT make that trivial), so the account itself gets
+  // a budget shared across every IP. It is looser than the per-IP+email budget
+  // so a shared NAT cannot lock a real owner out, and a successful login
+  // clears it. The three checks run together so login latency is unchanged.
   const emailKey = `login:${ip}:${email}`;
   const ipKey = `login:${ip}`;
-  const emailCheck = await rateLimitShared(emailKey, 5, 15 * 60 * 1000);
-  const ipCheck = await rateLimitShared(ipKey, 20, 15 * 60 * 1000);
+  const accountKey = `login:acct:${email}`;
+  const [emailCheck, ipCheck, accountCheck] = await Promise.all([
+    rateLimitShared(emailKey, 5, LOGIN_WINDOW_MS),
+    rateLimitShared(ipKey, 20, LOGIN_WINDOW_MS),
+    rateLimitShared(accountKey, 12, LOGIN_WINDOW_MS),
+  ]);
   if (!emailCheck.allowed) return tooMany(res, emailCheck.resetIn);
   if (!ipCheck.allowed) return tooMany(res, ipCheck.resetIn);
+  if (!accountCheck.allowed) return tooMany(res, accountCheck.resetIn);
 
   try {
     const sb = supabaseAdmin();
@@ -134,8 +148,13 @@ module.exports = async function handler(req, res) {
 
     // Clear the failed-attempt budget for this IP+email in the SHARED limiter
     // too, otherwise a user who retried a few times gets 429 after a
-    // successful login. The per-IP key is deliberately not reset.
-    await resetRateLimitShared(emailKey);
+    // successful login. The per-IP key is deliberately not reset. The account
+    // key is cleared as well: the person who just proved they own the account
+    // should not inherit a budget burnt by an attacker.
+    await Promise.all([
+      resetRateLimitShared(emailKey),
+      resetRateLimitShared(accountKey),
+    ]);
 
     const nowIso = new Date().toISOString();
     const updates = { lastlogin: nowIso };

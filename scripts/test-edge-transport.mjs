@@ -389,11 +389,14 @@ console.log('\n[5] every API handler uses the shared limiter');
   const files = [
     'api/orders.js', 'api/auth.js', 'api/admin/orders.js', 'api/admin/products.js',
     'api/admin/users.js', 'api/admin/upload.js', 'api/admin/coupons.js',
-    'api/coupons/validate.js',
+    'api/coupons/validate.js', 'api/errors.js',
   ];
   for (const file of files) {
     const src = read(file);
-    ok(/await rateLimitShared\(/.test(src), `${file} awaits rateLimitShared`);
+    ok(
+      /await rateLimitShared\(|await Promise\.all\(\[[\s\S]*?rateLimitShared\(/.test(src),
+      `${file} awaits rateLimitShared`
+    );
     ok(!/[^t]rateLimit\(/.test(src.replace(/rateLimitShared\(/g, '')), `${file} has no synchronous limiter call`);
   }
   const libSrc = read('api/_lib.js');

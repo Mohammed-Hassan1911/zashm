@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db, trackEvent } from './lib/security';
-import { supabase } from './lib/supabase'; // ربط سوبابيز الأونلاين
+import { fetchPublicProducts } from './lib/supabase'; // قراءة الكتالوج العام فقط
 import { api } from './lib/api';
 import { fetchCatalogSnapshot } from './lib/resilience';
 import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
@@ -269,23 +269,20 @@ export const useStore = create((set, get) => ({
       let failure = null;
       try {
         // SEC-27: read the sanitized view (no reservedStock). The server is the
-        // single source of truth for availability at checkout.
-        const { data, error } = await supabase.from('products_public').select('*');
-        if (!error && Array.isArray(data)) {
-          const secureData = data.map(normalizeProductRow);
-          db.setAll('products', secureData);
-          set({
-            products: secureData,
-            productsLoadStatus: 'success',
-            productsSource: 'live',
-            productsDegraded: false,
-            productsError: null,
-          });
-          return;
-        }
-        failure = error
-          ? (error.message || 'Could not load products')
-          : 'No product data returned';
+        // single source of truth for availability at checkout. Plain fetch on
+        // the REST endpoint — see src/lib/supabase.js for why supabase-js is
+        // not part of the storefront bundle.
+        const data = await fetchPublicProducts();
+        const secureData = data.map(normalizeProductRow);
+        db.setAll('products', secureData);
+        set({
+          products: secureData,
+          productsLoadStatus: 'success',
+          productsSource: 'live',
+          productsDegraded: false,
+          productsError: null,
+        });
+        return;
       } catch (err) {
         failure = (err && err.message) || 'Could not load products';
       }

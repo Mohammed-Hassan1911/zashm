@@ -685,3 +685,45 @@ with the same order body plus a banner stating the order was NOT stored.
   locally (Vercel CLI logged out). The directory-index approach relies on Vercel's
   default filesystem serving; if rewrites ever win over the filesystem the site
   still works (only no benefit). Middleware (`middleware.ts`) is unchanged.
+
+### 13.11 Storefront weight, login budget, client errors, browser E2E (2026-11-19, uncommitted)
+
+- **supabase-js out of the storefront bundle.** The only browser use was one
+  `SELECT * FROM products_public` (uploads already go through
+  `/api/admin/upload`). `src/lib/supabase.js` is now config +
+  `fetchPublicProducts()` (plain `fetch`, throws on non-2xx/non-array so the
+  snapshot fallback is unchanged); `src/store.js`, `src/lib/security.js` and
+  `src/components/admin/ImageUploader.js` use it. `syncFromServer` also ignores
+  an empty array so a blank response cannot wipe the cached catalogue. Build:
+  no `vendor-supabase` chunk (was ~54 KB gzip), `index.html` modulepreloads only
+  `vendor-react`, `vendor-motion`, `vendor-icons`; entry 103.40 KB / 33.97 gzip.
+- **Per-account login budget.** `api/auth.js` keeps `login:<ip>:<email>` (5) and
+  `login:<ip>` (20) and adds `login:acct:<email>` (12 / 15 min) so rotating IPs
+  cannot brute-force one account. The three checks run in `Promise.all`; a
+  successful login clears the IP+email and account budgets (not the per-IP one).
+- **Client error reporting.** `POST /api/errors` (`api/errors.js`): method guard,
+  `errors:<ip>` 30 / 10 min, 8 KB body cap, every field sanitised/truncated, one
+  greppable `CLIENT-ERROR` log line, and at most one Telegram alert per distinct
+  error (6/hour/instance, 30-min dedupe, bounded map). No database, no PII, no
+  echo. `src/lib/errorReporting.js` hooks `error`, `unhandledrejection` and the
+  React boundary; max 5 reports/page, de-duped, `sendBeacon` → keepalive fetch,
+  off in dev and on localhost, path only (no query string, no cookies).
+  **No dashboard or stored history**: reports surface in Vercel logs and Telegram
+  only.
+- **Real browser E2E.** `scripts/test-e2e.mjs` builds `build-e2e/` against a local
+  fixture catalogue, serves it with a tiny static server that mocks
+  `/rest/v1/products_public` and `/api/*`, and drives headless Chrome over CDP
+  with Node 22's global `WebSocket` (no Playwright/Puppeteer dependency). Journey:
+  home renders 2 cards → product route/title/price → colour + size → add to bag →
+  toast + mobile bag badge → drawer → reload keeps the bag (500 EGP) → empty
+  checkout marks required fields and never calls `/api/orders` → 404 view → zero
+  console errors. 24 passed locally. CI now uses Node 22 and runs it via
+  `npm test`; a missing browser is a hard failure when `CI=true` and a loud SKIP
+  otherwise.
+- **Tests.** New `scripts/test-error-reporting.mjs` (46 passed) and a
+  `[13] per-account login budget` section in `scripts/test-sessions-admin.mjs`
+  (84 passed). `scripts/test-edge-transport.mjs` now also scans `api/errors.js`
+  and accepts the `Promise.all` limiter shape (113 passed). Full local run:
+  `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 0 failed, SQL suite 490 passed on real
+  PostgreSQL 17; `npm run build` passes, no secret in the bundle.
+- **Not done:** no commit/push/deploy, no production verification.

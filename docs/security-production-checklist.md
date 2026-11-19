@@ -375,6 +375,8 @@ appear.
 | SEC-28 | Open (manual) | Supabase Auth settings — see §3. |
 | SEC-07 | Mitigated | `/api/coupons/validate` still returns the discount value so the cart can show it. It is rate-limited (10/min/IP) and lockout-protected (5 failures/15 min per IP+code), and the server recomputes the discount at checkout. |
 | Public coupon metadata | Accepted | The endpoint reveals whether a code exists and its value. This is required for the cart UX and is bounded by the limits above. |
+| `/api/errors` | Accepted | Unauthenticated by design (the browser reports its own crashes). 30 reports/10 min/IP, 8 KB body cap, every field sanitised and truncated, one log line per report, one Telegram alert per distinct error (6/hour/instance, 30-min dedupe). No storage, no echo, no PII. |
+| Login budget | Hardened | `api/auth.js` keeps per-IP (20) and per-IP+email (5) budgets and adds per-account (12/15 min) so rotating IPs cannot brute-force one account. A successful login clears the IP+email and account budgets. |
 
 ---
 

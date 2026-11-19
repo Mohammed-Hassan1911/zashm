@@ -558,5 +558,49 @@ console.log('\n[12] no-store');
   eq(unauthorized.headers['cache-control'], 'no-store', 'error responses are not cacheable');
 }
 
+console.log('\n[13] per-account login budget');
+{
+  // Per-IP keys are weak against an attacker who rotates addresses (mobile
+  // carriers and CGNAT make that trivial), so the account itself has a budget
+  // shared across every IP.
+  resetUsers([{ id: 1, name: 'Owner', email: 'owner@example.com', role: 'admin', passwordhash: adminHash }]);
+  const target = 'bruteforce-target@example.com';
+  const codes = [];
+  for (let i = 0; i < 12; i += 1) {
+    const res = await login(target, 'WrongPassword12', { 'x-real-ip': `198.18.1.${i + 1}` });
+    codes.push(res.status);
+  }
+  ok(codes.every((code) => code === 401), '12 failures from 12 different IPs all stay 401');
+
+  const blocked = await login(target, 'WrongPassword12', { 'x-real-ip': '198.18.1.99' });
+  eq(blocked.status, 429, 'the 13th attempt on that account → 429');
+  ok(Number(blocked.headers['retry-after']) > 0, 'the account 429 carries Retry-After');
+  eq(blocked.body.rateLimited, true, 'the account 429 is flagged as rate limiting');
+
+  const other = await login('another-target@example.com', 'WrongPassword12', { 'x-real-ip': '198.18.1.100' });
+  eq(other.status, 401, 'a different account keeps its own budget');
+
+  // The person who proves they own the account must not inherit a budget that
+  // an attacker burnt, so a successful login clears it.
+  const ipA = '198.18.2.1';
+  for (let i = 0; i < 3; i += 1) {
+    await login('owner@example.com', 'WrongPassword12', { 'x-real-ip': ipA });
+  }
+  const success = await login('owner@example.com', ADMIN_PASSWORD, { 'x-real-ip': ipA });
+  eq(success.status, 200, 'the owner can still sign in after a few typos');
+
+  const afterReset = [];
+  for (let i = 0; i < 12; i += 1) {
+    const res = await login('owner@example.com', 'WrongPassword12', { 'x-real-ip': `198.18.2.${i + 10}` });
+    afterReset.push(res.status);
+  }
+  ok(afterReset.every((code) => code === 401), 'a successful login cleared the account budget');
+
+  const src = readFileSync(new URL('../api/auth.js', import.meta.url), 'utf8');
+  ok(/login:acct:\$\{email\}/.test(src), 'the account key is the normalised email, not the IP');
+  ok(/rateLimitShared\(accountKey, 12, LOGIN_WINDOW_MS\)/.test(src), 'the account budget is 12 per window');
+  ok(/resetRateLimitShared\(accountKey\)/.test(src), 'a successful login resets the account budget');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

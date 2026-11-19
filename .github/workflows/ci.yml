@@ -23,7 +23,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 22: the end-to-end browser suite drives Chrome over CDP with
+          # the global WebSocket that ships with Node 22+.
+          node-version: 22
           cache: npm
 
       # GitHub's Ubuntu image ships PostgreSQL but its bin directory is not on

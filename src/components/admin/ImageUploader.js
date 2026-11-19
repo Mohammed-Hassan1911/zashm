@@ -10,7 +10,7 @@ import { Upload, X, AlertCircle } from 'lucide-react';
 
 import { api, deleteStorageFile } from '../../lib/api';
 import { getOptimizedImageUrl } from '../../lib/security';
-import { supabase } from '../../lib/supabase';
+import { SUPABASE_URL } from '../../lib/supabase';
 import { prepareImage as prepareImageForUpload } from '../../lib/imagePrep';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
@@ -40,7 +40,7 @@ function storagePathFromUrl(url) {
   let configuredOrigin;
 
   try {
-    configuredOrigin = new URL(supabase.supabaseUrl).origin;
+    configuredOrigin = new URL(SUPABASE_URL).origin;
   } catch {
     return null;
   }

@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { fetchPublicProducts } from './supabase';
 
 // ─── ZASHM SECURITY LAYER ─────────────────────────────────────────────────────
 // Client-side hardening layer. All authentication, password verification,
@@ -388,8 +388,8 @@ class LocalDB {
   async syncFromServer() {
     try {
       // SEC-27: the anon key may only read the sanitized view.
-      const { data, error } = await supabase.from('products_public').select('*');
-      if (error || !data) return;
+      const data = await fetchPublicProducts();
+      if (!Array.isArray(data) || data.length === 0) return;
       const formatted = data.map(p => ({
         ...p,
         images: p.images || (p.image ? [p.image] : []),

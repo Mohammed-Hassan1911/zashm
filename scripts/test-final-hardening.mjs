@@ -413,10 +413,13 @@ console.log('\n[7] products_public view');
 
   const store = read('src/store.js');
   const security = read('src/lib/security.js');
-  ok(/from\('products_public'\)/.test(store), 'storefront reads products_public');
-  ok(/from\('products_public'\)/.test(security), 'security cache reads products_public');
+  const supabaseLib = read('src/lib/supabase.js');
+  ok(/fetchPublicProducts/.test(store), 'storefront reads the public catalogue through fetchPublicProducts');
+  ok(/fetchPublicProducts/.test(security), 'security cache reads the public catalogue the same way');
+  ok(/\/rest\/v1\/products_public/.test(supabaseLib), 'the read hits the sanitized view over REST');
   ok(!/from\('products'\)/.test(store), 'storefront never reads the base table');
   ok(!/from\('products'\)/.test(security), 'security cache never reads the base table');
+  ok(!/createClient/.test(supabaseLib), 'the storefront does not bundle supabase-js to run one GET');
 }
 
 // ─── [8] SEC-24 / SEC-28 documentation ──────────────────────────────────────

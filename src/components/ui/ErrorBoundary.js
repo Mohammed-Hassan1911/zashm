@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportError } from '../../lib/errorReporting';
 
 // Catches render-time errors in the tree below so a single bad component
 // (e.g. a malformed product) never blanks the whole storefront.
@@ -16,6 +17,7 @@ export default class ErrorBoundary extends React.Component {
     if (typeof console !== 'undefined') {
       console.error('UI ErrorBoundary caught an error:', error, info && info.componentStack);
     }
+    reportError('boundary', error);
   }
 
   handleReset = () => {
