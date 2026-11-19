@@ -880,6 +880,9 @@ try {
         'mobile nav labels are 10px and lighter, so they read as a caption');
       assert.ok(/mobile-nav--keyboard-open/.test(nav),
         'the keyboard-open state still hides the bottom nav');
+      assert.ok(/padding:\s*\n\s*'0 max\(14px, calc\(env\(safe-area-inset-right, 0px\) \+ 14px\)\) env\(safe-area-inset-bottom, 0px\) max\(14px, calc\(env\(safe-area-inset-left, 0px\) \+ 14px\)\)'/.test(nav) &&
+         !/calc\(10px \+ env\(safe-area-inset-bottom/.test(nav),
+        'the mobile dock sits flush with the bottom edge, with no extra gap');
       assert.ok(/\.site-search-input\s*\{[^}]*min-height:\s*44px/.test(css) &&
          /className="site-search-input"/.test(header),
         'the header search field is 44px tall, with its sizing in CSS');

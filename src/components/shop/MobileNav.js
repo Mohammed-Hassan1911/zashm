@@ -304,9 +304,10 @@ export default function MobileNav() {
         boxSizing: 'border-box',
         // The wrapper spans the viewport but paints nothing; the glass capsule
         // inside is centred and narrower. Horizontal padding keeps it clear of
-        // the screen edges, and the bottom padding lifts it off the safe area.
+        // the screen edges, and the dock sits flush with the bottom edge,
+        // respecting only the device safe area.
         padding:
-          '0 max(14px, calc(env(safe-area-inset-right, 0px) + 14px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, calc(env(safe-area-inset-left, 0px) + 14px))',
+          '0 max(14px, calc(env(safe-area-inset-right, 0px) + 14px)) env(safe-area-inset-bottom, 0px) max(14px, calc(env(safe-area-inset-left, 0px) + 14px))',
       }}
     >
       <div
