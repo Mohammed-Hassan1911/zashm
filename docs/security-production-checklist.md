@@ -56,22 +56,40 @@ Current data baseline (2026-11-19):
   `ZSH-MWLGRZ7M-EC96FF20`, coupon `ZAMALEK`, admins `mohammed` and `ahmed` — is
   historical, not a 2026-11-19 live count.
 
-Production https://za-shm.vercel.app currently runs commit `a62069f`
-(deployment `zashm-m7lv14t0k-zashm.vercel.app`, Ready/Production, 2026-11-19).
-The served JS/CSS hashes matched the local build at that commit:
-`index-vIyADBiI.js` and `index-CREmyxBi.css`. Live checks at that deployment:
-`/shop` static metadata and canonical, `/prerendered-products.json` 200 with the
-four then-visible test ids, sitemap with home/shop plus those four product URLs,
-product metadata/JSON-LD/image preload, `noindex` on private routes, a real 404
-for an unknown route, security headers, and a clean secret scan of the live
-bundle. Because those products were deactivated afterwards, the next deploy must
-publish an empty manifest and a two-URL sitemap (home + `/shop`). A 28-case
-320/390/768/1440px browser sweep and computed-style checks were performed at the
-earlier `7a0f3e6` build and are historical; they were not repeated at `a62069f`.
+Production https://za-shm.vercel.app now runs commit `03b055f` (deployment
+`zashm-cj604d2l1-zashm.vercel.app`, Ready/Production, 2026-11-20; aliases
+`za-shm.vercel.app`, `zashm-zashm.vercel.app`,
+`zashm-git-main-zashm.vercel.app`). The served JS/CSS hashes match the local
+build at that commit: `index-wOn8XH1_.js` and `index-CP2InU7q.css`.
 
-At `a62069f`, `ZSHM_REQUIRE_SQL_TESTS=1 npm test` passed 30 suites / 3395
-assertions with 0 failures (the SQL suite really ran: 490 passed on a temporary
-PostgreSQL 17 cluster), and `npm run build` passed with a clean secret scan.
+Live verification at `03b055f`:
+
+- `/shop` static metadata, canonical, OG/Twitter tags and `<noscript>` shell.
+- `/prerendered-products.json` → 200 with `{"ids":[]}`.
+- `/sitemap.xml` → two URLs only (home + `/shop`), `application/xml`,
+  `s-maxage=3600`.
+- `/admin`, `/cart`, `/checkout`, `/wishlist`, `/track` →
+  `noindex, nofollow, noarchive`; an unknown route → real 404.
+- security headers (CSP, HSTS, nosniff, `DENY`, referrer policy) intact; the live
+  JS bundle has no service-role/session/Telegram/Upstash secret markers.
+- `/og-image.jpg` → `public, max-age=0, s-maxage=86400,
+  stale-while-revalidate=604800`.
+- unauthenticated `GET /api/admin/orders` and `/api/admin/users` → `401`.
+- a deactivated test product URL serves the generic SPA title with no stale
+  Product JSON-LD.
+
+An explicit `vercel --prod --yes` attempt returned `Not authorized` from the
+CLI; the push to `main` auto-deployed the same commit successfully, and the live
+checks above were performed against that production deployment. No second manual
+deploy was attempted.
+
+The previous release `a62069f` (`zashm-m7lv14t0k-zashm.vercel.app`,
+2026-11-19) served `index-vIyADBiI.js` / `index-CREmyxBi.css` with the four then
+test products in the sitemap; `ZSHM_REQUIRE_SQL_TESTS=1 npm test` passed 30
+suites / 3395 assertions with 0 failures and the SQL suite really ran (490
+passed). A 28-case 320/390/768/1440px browser sweep and computed-style checks
+were performed at the earlier `7a0f3e6` build and are historical; they were not
+repeated at `a62069f` or `03b055f`.
 
 Safe PII verification: unauthenticated `GET /api/admin/orders` and
 `GET /api/admin/users` both returned `401`, and the deployed bundle hash matched
@@ -79,12 +97,11 @@ the local build containing the 252-assertion limiter regression suite. No
 121-request probe was run against production because a valid admin session was
 not available.
 
-All code-side Low work is now complete in the working tree (not yet deployed):
-reduced-motion gallery, deferred hover image fetch, route-scoped idle preload,
-refreshable `/og-image.jpg` cache, validated `x-real-ip`, fail-closed Origin on
-unsafe methods, sanitised server error logs, signed-token cleanup on the
-tracking page, minimal `?wa=1` prefill, and immutable cache headers on new
-Storage uploads.
+All code-side Low work is now deployed: reduced-motion gallery, deferred hover
+image fetch, route-scoped idle preload, refreshable `/og-image.jpg` cache,
+validated `x-real-ip`, fail-closed Origin on unsafe methods, sanitised server
+error logs, signed-token cleanup on the tracking page, minimal `?wa=1` prefill,
+and immutable cache headers on new Storage uploads.
 
 Final local proof for this tree: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 30
 suites / 3450 assertions, 0 failures; the SQL suite really ran (490 passed on
@@ -95,11 +112,8 @@ temporary PostgreSQL 17). `npm run build` → `index-wOn8XH1_.js` +
 transient `fetch failed` and deliberately published no manifest; the re-run
 succeeded, and the sitemap's fail-closed fallback is unchanged.
 
-Remaining before this tree is live: commit, push, explicit Vercel production
-deploy, then live re-verification (new bundle hashes, two-URL sitemap, private
-`noindex`, real 404, security headers, unauthenticated admin 401s, and the
-refreshable `/og-image.jpg` cache). Until real products are added, the catalogue
-is intentionally empty and the store is **not** ready for sale.
+Until real products are added, the catalogue is intentionally empty and the
+store is **not** ready for sale.
 
 The previous release (`258d410`, deployment `zashm-hd57gi651-zashm.vercel.app`,
 2026-11-19) verified instant product navigation with `scrollY=0`, the engraved
