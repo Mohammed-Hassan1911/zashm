@@ -1166,6 +1166,7 @@ try {
         'hero-brand-letter-glint',
         'hero-brand-twinkle',
         'hero-dust-twinkle',
+        'hero-scroll-cue-bob',
         'app-startup-spin',
         'zshm-photo-shimmer',
       ]);
@@ -1239,6 +1240,30 @@ try {
         'review focus does not animate a scroll');
     });
 
+    await step('the search glyph and phone wordmark have no background smudge', () => {
+      const search = css.slice(css.indexOf('.zashm-header-search svg {'), css.indexOf('/* The search field:'));
+      assert.ok(!/filter:\s*drop-shadow/.test(search) && /filter: none;/.test(search),
+        'the search icon has no glow, open or closed');
+      const phone = (css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [])
+        .find((block) => /\.hero-brand-letter::after/.test(block)) || '';
+      assert.ok(/\.hero-brand-letter::after,\s*\n\s*\.footer-wordmark-letter::after \{\s*text-shadow: none;/.test(phone),
+        'phone wordmarks keep the glint but lose the halo behind the Z');
+    });
+
+    await step('the scroll chevron bobs on the compositor only', () => {
+      assert.ok(/className="hero-scroll-cue-arrow"/.test(home),
+        'the down arrow is the only animated child of the scroll cue');
+      assert.ok(/\.hero-scroll-cue-arrow \{[^}]*animation: hero-scroll-cue-bob 2\.4s ease-in-out infinite;[^}]*will-change: transform;/.test(css),
+        'one small transform layer carries the bob');
+      const bobStart = css.indexOf('@keyframes hero-scroll-cue-bob');
+      const bob = css.slice(bobStart, css.indexOf('\n}', bobStart) + 2);
+      assert.ok(/@keyframes hero-scroll-cue-bob/.test(bob) && /translate3d/.test(bob)
+        && !/opacity|color|background|box-shadow|filter|width|height|top|left/.test(bob),
+        'the loop animates translate only, with no paint or layout work');
+      assert.ok(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.hero-scroll-cue-arrow \{\s*animation: none;\s*transform: none;\s*will-change: auto;/.test(css),
+        'reduced motion leaves the chevron still and drops its layer');
+    });
+
     await step('only functional spinners keep a keyframe', () => {
       const keyframes = [...css.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]).sort();
       assert.deepEqual(keyframes, [
@@ -1246,8 +1271,9 @@ try {
         'hero-brand-letter-glint',
         'hero-brand-twinkle',
         'hero-dust-twinkle',
+        'hero-scroll-cue-bob',
         'zshm-photo-shimmer',
-      ], 'the kept loops are the wordmark light, two tiny twinkles and two busy indicators');
+      ], 'the kept loops are the wordmark light, two tiny twinkles, the scroll chevron and two busy indicators');
     });
 
     await step('no backdrop blur on phones where it would sample a moving page', () => {

@@ -1658,6 +1658,18 @@ select option { background: var(--bg3); }
   color: var(--gold-light);
 }
 
+/* One tiny transform-only loop on the chevron. The compositor moves a single
+   18px layer; no layout, paint, filter or scroll listener is involved. */
+.hero-scroll-cue-arrow {
+  animation: hero-scroll-cue-bob 2.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes hero-scroll-cue-bob {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, 5px, 0); }
+}
+
 .hero-scroll-cue-line {
   position: relative;
   display: block;
@@ -1690,6 +1702,13 @@ select option { background: var(--bg3); }
 
   .hero-brand-subtitle {
     font-size: clamp(17px, 5vw, 22px) !important;
+  }
+
+  /* On a phone the pale letter clones lost their metal edge behind the bright
+     halo, especially the first Z. Keep the glint, drop the soft shadow. */
+  .hero-brand-letter::after,
+  .footer-wordmark-letter::after {
+    text-shadow: none;
   }
 
   .hero-content .gold-btn {
@@ -1856,11 +1875,12 @@ select option { background: var(--bg3); }
   gap: clamp(8px, 1vw, 14px);
 }
 
-/* The toggle is the same gold as the field's hairline: a slightly finer glyph
-   with a warm inner light, so opening the box reads as one continuous gesture. */
+/* The toggle is the same gold as the field's hairline. No drop-shadow: the
+   glow used to read as a smudge from the page behind the icon, so the glyph
+   stays clean whether the field is open or closed. */
 .zashm-header-search svg {
   stroke-width: 1.7;
-  filter: drop-shadow(0 0 6px rgba(201, 168, 76, 0.28));
+  filter: none;
 }
 
 .zashm-header-search[aria-expanded='true'] {
@@ -1868,7 +1888,7 @@ select option { background: var(--bg3); }
 }
 
 .zashm-header-search[aria-expanded='true'] svg {
-  filter: drop-shadow(0 0 9px rgba(232, 200, 112, 0.5));
+  filter: none;
 }
 
 /* The search field: an engraved champagne plate rather than a default input.
@@ -4787,6 +4807,12 @@ main, [role="main"] {
     animation: none;
     opacity: 1;
     top: 40%;
+  }
+
+  .hero-scroll-cue-arrow {
+    animation: none;
+    transform: none;
+    will-change: auto;
   }
 
   .outline-btn,

@@ -135,7 +135,7 @@ export default function HomePage() {
             onClick={() => window.scrollTo(0, window.innerHeight)}
           >
             <span className="hero-scroll-cue-line" aria-hidden="true" />
-            <ChevronDown size={18} aria-hidden="true" />
+            <ChevronDown className="hero-scroll-cue-arrow" size={18} aria-hidden="true" />
           </button>
         </div>
       </section>
