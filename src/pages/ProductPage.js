@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { animate, motion, AnimatePresence, useMotionValue } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
@@ -54,10 +54,6 @@ export default function ProductPage() {
   const [stockModal, setStockModal] = useState({ open: false, message: '' });
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const imageSwipeStartRef = useRef(null);
-  // A motion value follows the finger without a React render per pointer move;
-  // the browser only has to move a composited layer, never repaint the photo.
-  const galleryDragX = useMotionValue(0);
-  const gallerySettleRef = useRef(null);
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
@@ -101,45 +97,21 @@ export default function ProductPage() {
   const changeImage = (direction) => {
     setImgIdx(index => (index + direction + productImages.length) % productImages.length);
   };
-  const settleGallery = () => {
-    gallerySettleRef.current?.stop?.();
-    gallerySettleRef.current = animate(galleryDragX, 0, {
-      type: 'spring', stiffness: 480, damping: 36, mass: 0.6,
-    });
-  };
   const handleImagePointerDown = (event) => {
     if (event.pointerType === 'mouse') return;
-    gallerySettleRef.current?.stop?.();
     imageSwipeStartRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      following: false,
     };
-  };
-  const handleImagePointerMove = (event) => {
-    const start = imageSwipeStartRef.current;
-    if (!start || start.pointerId !== event.pointerId || productImages.length < 2) return;
-    const deltaX = event.clientX - start.x;
-    const deltaY = event.clientY - start.y;
-    // Wait for a clear horizontal intent so a vertical page scroll still wins.
-    if (!start.following && (Math.abs(deltaX) < 8 || Math.abs(deltaX) <= Math.abs(deltaY))) return;
-    start.following = true;
-    // Resistance keeps the photo inside its frame, and the offset is capped so
-    // the swap never exposes a bare edge when the next image comes in.
-    galleryDragX.set(Math.max(-38, Math.min(38, deltaX * 0.42)));
   };
   const handleImagePointerUp = (event) => {
     const start = imageSwipeStartRef.current;
     imageSwipeStartRef.current = null;
-    if (!start || start.pointerId !== event.pointerId || productImages.length < 2) {
-      settleGallery();
-      return;
-    }
+    if (!start || start.pointerId !== event.pointerId || productImages.length < 2) return;
 
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
-    settleGallery();
     if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
     changeImage(deltaX < 0 ? 1 : -1);
   };
@@ -310,44 +282,35 @@ export default function ProductPage() {
             <div
               className="product-card-image product-gallery-main"
               onPointerDown={handleImagePointerDown}
-              onPointerMove={handleImagePointerMove}
               onPointerUp={handleImagePointerUp}
-              onPointerCancel={() => { imageSwipeStartRef.current = null; settleGallery(); }}
+              onPointerCancel={() => { imageSwipeStartRef.current = null; }}
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
-              {/* One composited plate holds both frames. It follows the finger
-                  by a few pixels during a swipe, then springs back while the
-                  photos crossfade on opacity alone — no waiting mode, no scale,
-                  no blur, and no React render per pointer move. */}
-              <motion.div className="product-gallery-frames" style={{ x: galleryDragX }}>
-                <AnimatePresence initial={false}>
-                  <motion.img key={imgIdx}
-                    src={mainImage.src}
-                    alt={p.name}
-                    draggable={false}
-                    onError={mainImage.onError}
-                    // The first image is the LCP element on this route: load it at
-                    // high priority instead of letting the browser queue it behind
-                    // the bundle. Later gallery images stay lazy.
-                    fetchpriority={imgIdx === 0 ? 'high' : 'auto'}
-                    loading={imgIdx === 0 ? 'eager' : 'lazy'}
-                    decoding="async"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'block',
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      objectPosition: 'center',
-                    }}
-                  />
-                </AnimatePresence>
-              </motion.div>
+              <AnimatePresence mode="wait">
+                <motion.img key={imgIdx}
+                  src={mainImage.src}
+                  alt={p.name}
+                  draggable={false}
+                  onError={mainImage.onError}
+                  // The first image is the LCP element on this route: load it at
+                  // high priority instead of letting the browser queue it behind
+                  // the bundle. Later gallery images stay lazy.
+                  fetchpriority={imgIdx === 0 ? 'high' : 'auto'}
+                  loading={imgIdx === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4 }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    objectPosition: 'center',
+                  }}
+                />
+              </AnimatePresence>
               {/* The gallery controls sit directly on the photo, so they use a
                   near-opaque fill instead of a backdrop blur: a blur here has
                   to re-sample the whole image underneath on every frame the

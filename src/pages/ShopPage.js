@@ -302,73 +302,86 @@ export default function ShopPage() {
             })}
           </div>
 
-          {/* FILTER TOGGLE */}
-          <button
-            type="button"
-            aria-expanded={filterOpen}
-            onClick={() => setFilterOpen((open) => !open)}
-            className="shop-filter-toggle"
-            data-open={filterOpen ? 'true' : 'false'}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              background: filterOpen
-                ? 'linear-gradient(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%)'
-                : 'linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01))',
-              border: filterOpen
-                ? '1px solid rgba(255, 240, 202, 0.3)'
-                : '1px solid rgba(255, 255, 255, 0.11)',
-              color: filterOpen ? '#14110b' : 'var(--text2)',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              borderRadius: 2,
-              whiteSpace: 'nowrap',
-              boxShadow: filterOpen
-                ? 'inset 0 1px 0 rgba(255, 255, 255, 0.22)'
-                : 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
-            }}
-          >
-            <SlidersHorizontal size={14} />
-            {filterOpen ? 'Close Filters' : 'Filter'}
-          </button>
-
-          {/* SORT */}
-          <div className="shop-sort-wrap">
-            <select
-              aria-label="Sort products"
-              className="shop-sort"
-              value={sort}
-              onChange={(event) => {
-                setSort(event.target.value);
-                // Drop focus the moment a choice is made: a native select keeps
-                // its highlight for a few hundred milliseconds otherwise, which
-                // read as the control lingering after the picker closed.
-                event.currentTarget.blur();
-              }}
+          {/* Filter, sort and the live count stay one utility cluster, so the
+              count always sits beside the sort instead of wrapping away. */}
+          <div className="shop-toolbar-actions">
+            {/* FILTER TOGGLE */}
+            <button
+              type="button"
+              aria-expanded={filterOpen}
+              onClick={() => setFilterOpen((open) => !open)}
+              className="shop-filter-toggle"
+              data-open={filterOpen ? 'true' : 'false'}
               style={{
-                background: 'var(--bg3)',
-                border: '1px solid rgba(255, 255, 255, 0.11)',
-                color: 'var(--text2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                background: filterOpen
+                  ? 'linear-gradient(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%)'
+                  : 'linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01))',
+                border: filterOpen
+                  ? '1px solid rgba(255, 240, 202, 0.3)'
+                  : '1px solid rgba(255, 255, 255, 0.11)',
+                color: filterOpen ? '#14110b' : 'var(--text2)',
                 fontWeight: 600,
-                borderRadius: 8,
+                textTransform: 'uppercase',
                 cursor: 'pointer',
-                maxWidth: '100%',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                MozAppearance: 'none',
-                backgroundImage: 'linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.012) 100%)'
+                borderRadius: 2,
+                whiteSpace: 'nowrap',
+                boxShadow: filterOpen
+                  ? 'inset 0 1px 0 rgba(255, 255, 255, 0.22)'
+                  : 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
               }}
             >
-              {SORT_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="shop-sort-chevron" size={14} aria-hidden="true" />
+              <SlidersHorizontal size={14} />
+              {filterOpen ? 'Close Filters' : 'Filter'}
+            </button>
+
+            {/* SORT */}
+            <div className="shop-sort-wrap">
+              <select
+                aria-label="Sort products"
+                className="shop-sort"
+                value={sort}
+                onChange={(event) => setSort(event.target.value)}
+                style={{
+                  background: 'var(--bg3)',
+                  border: '1px solid rgba(255, 255, 255, 0.11)',
+                  color: 'var(--text2)',
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  maxWidth: '100%',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  backgroundImage: 'linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.012) 100%)'
+                }}
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="shop-sort-chevron" size={14} aria-hidden="true" />
+            </div>
+
+            {/* The live count turns the space beside the compact sort into useful
+                information instead of a stretched control with an empty tail. */}
+            <div
+              className="shop-result-pill"
+              aria-live="polite"
+              aria-atomic="true"
+              aria-label={`${filtered.length} ${filtered.length === 1 ? 'piece' : 'pieces'} available`}
+            >
+              <span className="shop-result-pill-mark" aria-hidden="true" />
+              <span className="shop-result-pill-count" aria-hidden="true">{filtered.length}</span>
+              <span className="shop-result-pill-label" aria-hidden="true">
+                {filtered.length === 1 ? 'piece' : 'pieces'}
+              </span>
+            </div>
           </div>
         </div>
 
