@@ -56,11 +56,13 @@ Current data baseline (2026-11-19):
   `ZSH-MWLGRZ7M-EC96FF20`, coupon `ZAMALEK`, admins `mohammed` and `ahmed` — is
   historical, not a 2026-11-19 live count.
 
-Production https://za-shm.vercel.app now runs commit `03b055f` (deployment
-`zashm-cj604d2l1-zashm.vercel.app`, Ready/Production, 2026-11-20; aliases
+Production https://za-shm.vercel.app serves the bundle built from `03b055f`
+(`index-wOn8XH1_.js` and `index-CP2InU7q.css`), first deployed as
+`zashm-cj604d2l1-zashm.vercel.app` (Ready/Production, 2026-11-20). Aliases:
 `za-shm.vercel.app`, `zashm-zashm.vercel.app`,
-`zashm-git-main-zashm.vercel.app`). The served JS/CSS hashes match the local
-build at that commit: `index-wOn8XH1_.js` and `index-CP2InU7q.css`.
+`zashm-git-main-zashm.vercel.app`. Later docs-only pushes (starting with
+`b66e03a`) trigger Vercel rebuilds with byte-identical output, so they do not
+change the served assets.
 
 Live verification at `03b055f`:
 
