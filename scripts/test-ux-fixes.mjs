@@ -1193,6 +1193,21 @@ try {
         'the one kept keyframe is the letter glint');
     });
 
+    await step('the light is one soft travelling gold band on every size', () => {
+      const heroGlint = /\.hero-brand-letter::after\s*\{[^}]*\}/.exec(css);
+      const footerGlint = /\.footer-wordmark-letter::after\s*\{[^}]*\}/.exec(css);
+      assert.ok(heroGlint && footerGlint, 'both wordmarks still carry a lit clone');
+      assert.ok(!/#fdf0c4|255, 248, 220|0 0 76px/.test(heroGlint[0] + footerGlint[0]),
+        'the near-white flare and its wide halo are gone');
+      assert.ok(/#e9c976/.test(heroGlint[0]) && /#e9c976/.test(footerGlint[0]),
+        'both clones are warm gold');
+      assert.ok(/@keyframes hero-brand-letter-glint\s*\{\s*0%,\s*100%\s*\{\s*opacity:\s*0\.06;\s*\}\s*50%\s*\{\s*opacity:\s*0\.78;/.test(css),
+        'one slow, symmetrical pass per cycle');
+      const mobileBlocks = css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [];
+      assert.ok(!mobileBlocks.some((block) => /\.hero-brand-letter::after,\s*\n\s*\.footer-wordmark-letter::after\s*\{\s*display:\s*none/.test(block)),
+        'phones keep the band instead of hiding it');
+    });
+
     await step('the wordmark stars and hero dust are tiny and compositor-only', () => {
       assert.ok(!/hero-brand-lockup::before/.test(css), 'the hero cloud behind the word is gone');
       assert.ok(!/\.footer-wordmark::before/.test(css), 'the footer cloud behind the word is gone');
@@ -1249,9 +1264,9 @@ try {
       assert.ok(!/filter:\s*drop-shadow/.test(search) && /filter: none;/.test(search),
         'the search icon has no glow, open or closed');
       const phone = (css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [])
-        .find((block) => /\.hero-brand-letter::after/.test(block)) || '';
-      assert.ok(/\.hero-brand-letter::after,\s*\n\s*\.footer-wordmark-letter::after \{\s*text-shadow: none;/.test(phone),
-        'phone wordmarks keep the glint but lose the halo behind the Z');
+        .find((block) => /\.hero-brand \{/.test(block)) || '';
+      assert.ok(!/\.hero-brand-letter::after,\s*\n\s*\.footer-wordmark-letter::after/.test(phone),
+        'phone wordmarks keep the calm gold band without a local override');
     });
 
     await step('the scroll chevron bobs on the compositor only', () => {
@@ -1579,8 +1594,8 @@ try {
       const heroLetter = (css.match(/\.hero-brand-letter \{[\s\S]*?\n\}/) || [])[0] || '';
       assert.ok(/#fff0c4 50%/.test(heroLetter) && /#e9c976 58%/.test(heroLetter),
         'the centre of the wordmark carries a pale champagne highlight');
-      assert.ok(/@keyframes hero-brand-letter-glint \{[^}]*0%, 58%, 100% \{ opacity: 0\.18; \}/.test(css),
-        'the letters keep a stronger steady gold warmth');
+      assert.ok(/@keyframes hero-brand-letter-glint \{[^}]*0%, 100% \{ opacity: 0\.06; \}/.test(css),
+        'the band rests at a quiet gold warmth between passes');
     });
 
     await step('route changes land at the top without a stale page fading above', () => {

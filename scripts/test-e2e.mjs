@@ -504,11 +504,22 @@ try {
         bubbles: true, cancelable: true, pointerId: id, pointerType: 'touch',
         clientX: x, clientY: 300, isPrimary: id === 11,
       }));
+      // Wait for the spring to actually move rather than for a fixed 100ms:
+      // under a busy renderer a frame may not have landed yet, which made the
+      // drift assertion fail even though the plate followed the finger.
+      const waitForDrift = () => new Promise((resolve) => {
+        const deadline = Date.now() + 1000;
+        const tick = () => {
+          const value = tx();
+          if (Math.abs(value) > 4 || Date.now() > deadline) return resolve(value);
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
       fire('pointerdown', 11, 300);
       fire('pointermove', 11, 278);
       fire('pointerdown', 12, 300);
-      await wait(100);
-      const dragged = tx();
+      const dragged = await waitForDrift();
       // The original owner must lift first. Under the old code the second
       // finger hijacked the ref, so this release would strand the plate.
       fire('pointerup', 11, 278);
