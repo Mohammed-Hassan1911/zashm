@@ -4103,10 +4103,22 @@ main, [role="main"] {
     inset 0 -7px 12px rgba(0, 0, 0, 0.24);
 }
 
-.product-color-name {
+/* One shared treatment for the swatch label and the selected-value label: the
+   same weight and halo everywhere. The inline variables only thicken and
+   brighten the rim when the ink would vanish into the canvas. */
+.product-color-name,
+.product-meta-value {
   font-family: var(--font-body);
+  font-weight: 700;
+  -webkit-text-stroke: var(--color-stroke, 0px) var(--color-rim, transparent);
+  paint-order: stroke fill;
+  text-shadow:
+    0 0 2px var(--color-rim, transparent),
+    0 0 var(--color-glow-size, 6px) var(--color-glow, transparent);
+}
+
+.product-color-name {
   font-size: 12.5px;
-  font-weight: 600;
   letter-spacing: 0.3px;
   line-height: 1;
   white-space: nowrap;

@@ -79,23 +79,23 @@ function contrastRatio(a, b) {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-// The colour name stays the true fabric colour. When that ink is too close to
-// the canvas (black on near-black, cream on white), a hairline rim and soft
-// glow give the letters an edge instead of replacing the colour with grey.
+// Every name gets the same treatment: the true fabric colour, a faint halo in
+// its own hue, and bold type. Only inks that would disappear into the canvas
+// get a contrasting rim and a slightly heavier, shinier version of that same
+// treatment — the shape of the style never changes, so the eye stays calm.
 export function getColorTextStyle(color, background = '#0a0a0a') {
   const ink = getColorSwatch(color);
   const rgb = parseHex(ink);
   const canvas = parseHex(background) || [10, 10, 10];
-  const base = { color: ink };
-  if (!rgb || contrastRatio(rgb, canvas) >= 4.5) return base;
-
+  const lowContrast = !rgb || contrastRatio(rgb, canvas) < 4.5;
   const onDark = relativeLuminance(canvas) < 0.18;
-  const rim = onDark ? 'rgba(255, 255, 255, 0.78)' : 'rgba(0, 0, 0, 0.72)';
-  const glow = onDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.16)';
+  const haloRgb = lowContrast ? (onDark ? [255, 255, 255] : [0, 0, 0]) : (rgb || [138, 138, 138]);
+  const [r, g, b] = haloRgb;
   return {
-    ...base,
-    WebkitTextStroke: `0.35px ${rim}`,
-    paintOrder: 'stroke fill',
-    textShadow: `0 0 2px ${rim}, 0 0 9px ${glow}`,
+    color: ink,
+    '--color-rim': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.85 : 0.3})`,
+    '--color-glow': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.26 : 0.16})`,
+    '--color-stroke': lowContrast ? '0.45px' : '0px',
+    '--color-glow-size': lowContrast ? '11px' : '6px',
   };
 }

@@ -9,17 +9,23 @@ assert.equal(getColorSwatch('أصفر'), '#facc15');
 assert.equal(getColorSwatch('#123abc'), '#123abc');
 assert.equal(getColorSwatch('unlisted color'), '#8a8a8a');
 
-// The name keeps the fabric's true colour; only inks that would disappear into
-// the canvas get a hairline rim, with the rim flipped on a light background.
+// Every name keeps its true colour and the same style. Only inks that would
+// disappear into the canvas get a heavier rim and a wider glow; a light canvas
+// flips the rim to black.
 const black = getColorTextStyle('Black');
 assert.equal(black.color, '#111111');
-assert.match(black.WebkitTextStroke, /rgba\(255, 255, 255/);
+assert.equal(black['--color-stroke'], '0.45px');
+assert.equal(black['--color-rim'], 'rgba(255, 255, 255, 0.85)');
+assert.equal(black['--color-glow-size'], '11px');
 const white = getColorTextStyle('White');
 assert.equal(white.color, '#ffffff');
-assert.equal(white.WebkitTextStroke, undefined);
-assert.match(getColorTextStyle('Navy').WebkitTextStroke, /rgba\(255, 255, 255/);
-assert.equal(getColorTextStyle('Black', '#ffffff').WebkitTextStroke, undefined);
-assert.match(getColorTextStyle('White', '#ffffff').WebkitTextStroke, /rgba\(0, 0, 0/);
+assert.equal(white['--color-stroke'], '0px');
+assert.equal(white['--color-rim'], 'rgba(255, 255, 255, 0.3)');
+assert.equal(getColorTextStyle('Navy')['--color-stroke'], '0.45px');
+assert.equal(getColorTextStyle('Black', '#ffffff')['--color-stroke'], '0px');
+const onLight = getColorTextStyle('White', '#ffffff');
+assert.equal(onLight['--color-stroke'], '0.45px');
+assert.equal(onLight['--color-rim'], 'rgba(0, 0, 0, 0.85)');
 assert.equal(getColorTextStyle('#123abc').color, '#123abc');
 
 const adminApp = await readFile(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
@@ -35,5 +41,8 @@ assert.match(css, /\.product-color-name \{/);
 assert.match(css, /\.product-color-option \{[\s\S]*?gap: 10px;/);
 assert.match(css, /\.product-color-option \{ min-height: 44px; padding: 0 12px 0 6px; gap: 8px; \}/);
 assert.match(css, /\.product-color-name \{ font-size: 12px; \}/);
+assert.match(css, /\.product-color-name,\s*\n\.product-meta-value \{[\s\S]*?font-weight: 700;/);
+assert.match(css, /-webkit-text-stroke: var\(--color-stroke, 0px\) var\(--color-rim, transparent\);/);
+assert.match(css, /text-shadow:[\s\S]*?0 0 var\(--color-glow-size, 6px\) var\(--color-glow, transparent\);/);
 
-console.log('product-colors: 24 passed, 0 failed');
+console.log('product-colors: 31 passed, 0 failed');
