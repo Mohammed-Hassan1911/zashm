@@ -9,25 +9,24 @@ assert.equal(getColorSwatch('أصفر'), '#facc15');
 assert.equal(getColorSwatch('#123abc'), '#123abc');
 assert.equal(getColorSwatch('unlisted color'), '#8a8a8a');
 
-// Every name keeps its true colour and the same style. Only inks that would
-// disappear into the canvas get a heavier rim and a wider glow; a light canvas
-// flips the rim to black.
-const black = getColorTextStyle('Black');
-assert.equal(black.color, '#111111');
-assert.equal(black['--color-stroke'], '0.5px');
-assert.equal(black['--color-rim'], 'rgba(255, 255, 255, 0.92)');
-assert.equal(black['--color-glow-size'], '12px');
-const white = getColorTextStyle('White');
-assert.equal(white.color, '#ffffff');
-assert.equal(white['--color-stroke'], '0px');
-assert.equal(white['--color-rim'], 'rgba(255, 255, 255, 0.55)');
-assert.equal(white['--color-glow-size'], '8px');
-assert.equal(getColorTextStyle('Navy')['--color-stroke'], '0.5px');
-assert.equal(getColorTextStyle('Black', '#ffffff')['--color-stroke'], '0px');
+// Every name wears the exact same painted shape as Black; only the true fabric
+// colour changes. A light canvas flips the rim to black for readability.
+const samples = ['Black', 'White', 'Navy', 'Yellow', 'Gold', '#123abc', 'unlisted color'];
+const treatments = samples.map((c) => getColorTextStyle(c));
+for (const style of treatments) {
+  assert.equal(style['--color-stroke'], '0.5px');
+  assert.equal(style['--color-rim'], 'rgba(255, 255, 255, 0.92)');
+  assert.equal(style['--color-glow'], 'rgba(255, 255, 255, 0.42)');
+  assert.equal(style['--color-glow-size'], '12px');
+}
+assert.equal(treatments[0].color, '#111111');
+assert.equal(treatments[1].color, '#ffffff');
+assert.equal(treatments[5].color, '#123abc');
+assert.equal(treatments[6].color, '#8a8a8a');
 const onLight = getColorTextStyle('White', '#ffffff');
 assert.equal(onLight['--color-stroke'], '0.5px');
 assert.equal(onLight['--color-rim'], 'rgba(0, 0, 0, 0.92)');
-assert.equal(getColorTextStyle('#123abc').color, '#123abc');
+assert.equal(onLight['--color-glow'], 'rgba(0, 0, 0, 0.42)');
 
 const adminApp = await readFile(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
 const productPage = await readFile(new URL('../src/pages/ProductPage.js', import.meta.url), 'utf8');
@@ -46,4 +45,4 @@ assert.match(css, /\.product-color-name,\s*\n\.product-meta-value \{[\s\S]*?font
 assert.match(css, /-webkit-text-stroke: var\(--color-stroke, 0px\) var\(--color-rim, transparent\);/);
 assert.match(css, /text-shadow:[\s\S]*?0 0 var\(--color-glow-size, 6px\) var\(--color-glow, transparent\);/);
 
-console.log('product-colors: 32 passed, 0 failed');
+console.log('product-colors: 54 passed, 0 failed');

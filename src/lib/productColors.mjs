@@ -73,29 +73,18 @@ function relativeLuminance([r, g, b]) {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
-function contrastRatio(a, b) {
-  const la = relativeLuminance(a);
-  const lb = relativeLuminance(b);
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
-
-// Every name gets the same treatment: the true fabric colour, a soft halo in
-// its own hue, and bold type. Only inks that would disappear into the canvas
-// get a contrasting rim and a slightly heavier, shinier version of that same
-// treatment — the shape of the style never changes, so the eye stays calm.
+// One identical treatment for every name: the true fabric colour, the same
+// bold contrasting rim and the same lit halo as Black. Only the rim colour
+// flips to black on a light canvas, so the shape never changes between colours.
 export function getColorTextStyle(color, background = '#0a0a0a') {
   const ink = getColorSwatch(color);
-  const rgb = parseHex(ink);
   const canvas = parseHex(background) || [10, 10, 10];
-  const lowContrast = !rgb || contrastRatio(rgb, canvas) < 4.5;
-  const onDark = relativeLuminance(canvas) < 0.18;
-  const haloRgb = lowContrast ? (onDark ? [255, 255, 255] : [0, 0, 0]) : (rgb || [138, 138, 138]);
-  const [r, g, b] = haloRgb;
+  const [r, g, b] = relativeLuminance(canvas) < 0.18 ? [255, 255, 255] : [0, 0, 0];
   return {
     color: ink,
-    '--color-rim': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.92 : 0.55})`,
-    '--color-glow': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.42 : 0.34})`,
-    '--color-stroke': lowContrast ? '0.5px' : '0px',
-    '--color-glow-size': lowContrast ? '12px' : '8px',
+    '--color-rim': `rgba(${r}, ${g}, ${b}, 0.92)`,
+    '--color-glow': `rgba(${r}, ${g}, ${b}, 0.42)`,
+    '--color-stroke': '0.5px',
+    '--color-glow-size': '12px',
   };
 }
