@@ -1197,11 +1197,17 @@ try {
       const heroGlint = /\.hero-brand-letter::after\s*\{[^}]*\}/.exec(css);
       const footerGlint = /\.footer-wordmark-letter::after\s*\{[^}]*\}/.exec(css);
       assert.ok(heroGlint && footerGlint, 'both wordmarks still carry a lit clone');
-      assert.ok(!/#fdf0c4|255, 248, 220|0 0 76px/.test(heroGlint[0] + footerGlint[0]),
-        'the near-white flare and its wide halo are gone');
-      assert.ok(/#e9c976/.test(heroGlint[0]) && /#e9c976/.test(footerGlint[0]),
-        'both clones are warm gold');
-      assert.ok(/@keyframes hero-brand-letter-glint\s*\{\s*0%,\s*100%\s*\{\s*opacity:\s*0\.06;\s*\}\s*50%\s*\{\s*opacity:\s*0\.78;/.test(css),
+      assert.ok(!/#fdf0c4|0 0 76px/.test(heroGlint[0] + footerGlint[0]),
+        'the old near-white flare and its wide halo are gone');
+      const lum = (hex) => {
+        const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const heroLight = /#([0-9a-f]{6})/i.exec(heroGlint[0])[1];
+      const footerLight = /#([0-9a-f]{6})/i.exec(footerGlint[0])[1];
+      assert.ok(lum(heroLight) > lum('fff0c4') && lum(footerLight) > lum('fff0c4'),
+        'the light is paler than the brightest stop in the metal gradient, so it is visible');
+      assert.ok(/@keyframes hero-brand-letter-glint\s*\{\s*0%,\s*100%\s*\{\s*opacity:\s*0\.08;\s*\}\s*50%\s*\{\s*opacity:\s*0\.9;/.test(css),
         'one slow, symmetrical pass per cycle');
       const mobileBlocks = css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [];
       assert.ok(!mobileBlocks.some((block) => /\.hero-brand-letter::after,\s*\n\s*\.footer-wordmark-letter::after\s*\{\s*display:\s*none/.test(block)),
@@ -1594,7 +1600,7 @@ try {
       const heroLetter = (css.match(/\.hero-brand-letter \{[\s\S]*?\n\}/) || [])[0] || '';
       assert.ok(/#fff0c4 50%/.test(heroLetter) && /#e9c976 58%/.test(heroLetter),
         'the centre of the wordmark carries a pale champagne highlight');
-      assert.ok(/@keyframes hero-brand-letter-glint \{[^}]*0%, 100% \{ opacity: 0\.06; \}/.test(css),
+      assert.ok(/@keyframes hero-brand-letter-glint \{[^}]*0%, 100% \{ opacity: 0\.08; \}/.test(css),
         'the band rests at a quiet gold warmth between passes');
     });
 

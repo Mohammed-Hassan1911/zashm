@@ -832,8 +832,9 @@ select option { background: var(--bg3); }
 }
 
 /* The footer rides the same travelling gold band as the hero, just a touch
-   quieter: the clone is warm gold with a tight halo, and only its opacity is
-   animated so the compositor does the work. */
+   quieter. Light needs to be paler than the metal underneath it to be seen at
+   all — a gold clone matching a gradient stop simply disappears into the word —
+   so both wordmarks use a pale champagne highlight with a tight warm halo. */
 .footer-wordmark-letter::after {
   content: attr(data-letter);
   position: absolute;
@@ -842,12 +843,12 @@ select option { background: var(--bg3); }
   background: none;
   -webkit-background-clip: border-box;
   background-clip: border-box;
-  -webkit-text-fill-color: #e9c976;
-  color: #e9c976;
+  -webkit-text-fill-color: #fff5df;
+  color: #fff5df;
   text-shadow:
-    0 0 5px rgba(245, 215, 127, 0.5),
-    0 0 14px rgba(201, 168, 76, 0.28);
-  opacity: 0.05;
+    0 0 6px rgba(255, 248, 220, 0.75),
+    0 0 16px rgba(245, 215, 127, 0.45);
+  opacity: 0.07;
   will-change: opacity;
   pointer-events: none;
   animation: hero-brand-letter-glint 5s ease-in-out infinite;
@@ -1434,10 +1435,10 @@ select option { background: var(--bg3); }
 /* A single soft band of gold travels across the word instead of five letters
    flashing one by one. Each glyph carries the same warm clone, and the 0.32s
    stagger simply decides when the band reaches it: a slow rise, one gentle peak,
-   a slow fall. The clone is gold rather than near-white and the halo is kept
-   tight, so the light reads as brushed metal catching the room rather than a
-   neon flash. Only `opacity` moves, so the compositor runs it without
-   re-rasterising the gradient-clipped text on every frame. */
+   a slow fall. The clone has to be paler than the metal beneath it or it just
+   vanishes into the gradient; the halo stays tight, so it reads as brushed gold
+   catching the room rather than a neon flash. Only `opacity` moves, so the
+   compositor runs it without re-rasterising the text on every frame. */
 .hero-brand-letter::after {
   content: attr(data-letter);
   position: absolute;
@@ -1447,12 +1448,13 @@ select option { background: var(--bg3); }
   background: none;
   -webkit-background-clip: border-box;
   background-clip: border-box;
-  -webkit-text-fill-color: #e9c976;
-  color: #e9c976;
+  -webkit-text-fill-color: #fff8e6;
+  color: #fff8e6;
   text-shadow:
-    0 0 5px rgba(245, 215, 127, 0.55),
-    0 0 16px rgba(201, 168, 76, 0.32);
-  opacity: 0.06;
+    0 0 6px rgba(255, 250, 230, 0.85),
+    0 0 18px rgba(245, 215, 127, 0.5),
+    0 0 34px rgba(201, 168, 76, 0.28);
+  opacity: 0.08;
   will-change: opacity;
   animation: hero-brand-letter-glint 5s ease-in-out infinite;
   animation-delay: calc(var(--letter-index) * 0.32s);
@@ -1462,8 +1464,8 @@ select option { background: var(--bg3); }
    curve and only the delay differs, the five peaks join into a single band
    moving from Z toward M. */
 @keyframes hero-brand-letter-glint {
-  0%, 100% { opacity: 0.06; }
-  50% { opacity: 0.78; }
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.9; }
 }
 
 /* Three small stars around the wordmark, and a handful of dust motes in the
