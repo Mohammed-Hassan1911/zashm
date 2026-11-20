@@ -10,7 +10,7 @@ Last updated: 2026-11-20
 
 ---
 
-## 0. Production state (verified 2026-11-19)
+## 0. Production state (verified 2026-11-20)
 
 Project ref `ptegprcbtfylqhbnbkih`. The audit probes used the service-role key
 and the public anon key for read-only checks (PostgREST `OPTIONS` on RPCs, `peek`
@@ -50,20 +50,21 @@ Current data baseline (2026-11-19):
   `PATCH active=false` after a backup of the four rows was captured locally;
   the change is reversible with `PATCH active=true`. No rows were deleted and no
   prices or stock values were rewritten.
-- Orders, users, coupons and admin identities could **not** be live-counted from
-  this environment (no Management token / DB connection string). The earlier
-  baseline — orders `1`, users `2`, coupons `1`, order
-  `ZSH-MWLGRZ7M-EC96FF20`, coupon `ZAMALEK`, admins `mohammed` and `ahmed` — is
-  historical, not a 2026-11-19 live count.
+- Live SQL counts (owner-run 2026-11-20, detailed below) are orders `8`, users
+  `2`, coupons `1`, products `4`, and two accounts with the `admin` role. The
+  earlier baseline (orders `1`, order `ZSH-MWLGRZ7M-EC96FF20`, coupon `ZAMALEK`,
+  admin `mohammed`) is historical and superseded. Admin identities and customer
+  PII are deliberately not copied into this document.
 
 Production https://za-shm.vercel.app serves the bundle built from `b5543fc`
-(`index-CKR1oqUT.js` and `index-CP2InU7q.css`), deployed as
-`zashm-1rnczuj1f-zashm.vercel.app` (Ready/Production, 2026-11-20) and aliased to
-`za-shm.vercel.app`. Earlier releases in this pass were `03b055f`
-(`zashm-cj604d2l1-zashm.vercel.app`, `index-wOn8XH1_.js`) and the docs-only
-pushes `b66e03a`, `d14dd2d`; those rebuilds were byte-identical. The live bundle
-hash was re-read from the deployed HTML after `b5543fc` and matches the local
-build.
+(`index-CKR1oqUT.js` and `index-CP2InU7q.css`). The code deployment
+`zashm-1rnczuj1f-zashm.vercel.app` was Ready/Production (2026-11-20) and aliased
+to `za-shm.vercel.app`. Subsequent docs-only pushes to `main` (including
+`abd0e2e` and this update) produce byte-identical rebuilds with the same bundle
+hash; the live JS/CSS does not change. Earlier releases in this pass were
+`03b055f` (`zashm-cj604d2l1-zashm.vercel.app`, `index-wOn8XH1_.js`) and the
+docs-only pushes `b66e03a`, `d14dd2d`. The live bundle hash was re-read from the
+deployed HTML after `b5543fc` and matches the local build.
 
 Live verification at `b5543fc`:
 
@@ -151,14 +152,53 @@ storefront strip, checkout's single Cash-on-Delivery row with no badge or
 with one-line "Cash on delivery", rose discounts, the vertical phone timeline,
 `/api/errors` GET → 405 and POST `{}` → 400, and an unknown path → 404.
 
-**Not verifiable from this environment** (no Management token / DB connection
-string), so these remain assumptions until checked in the dashboard:
+**Supabase SQL verification (owner-run, read-only, 2026-11-20).** The owner ran
+the aggregated catalog queries in the Supabase SQL Editor and pasted every row:
 
-- function attributes (`SECURITY DEFINER` vs `INVOKER`, pinned `search_path`,
-  execute grants beyond what PostgREST exposes);
-- RLS policies, storage policies, and column-level grants on the base tables;
-- the last-admin trigger and the `atomic_*` internals;
-- admin MFA (not offered by the custom login — see §3).
+- counts: orders `8`, users `2`, coupons `1`, products `4`,
+  `active_products=0`; `"reservedStock"` is `0` on all four rows (`bad=0`,
+  `min=0`, `max=0`).
+- both accounts have the `admin` role with `session_version` `1` and `19`;
+  identities were verified in the dashboard and are not repeated here.
+- RLS is enabled on `products`, `orders`, `users`, `coupons`, `product_reviews`
+  and `zshm_rate_limits`; `products_public` is a view (`rls=f` by design).
+- `anon`/`authenticated` have **no** table or column `SELECT` on the five
+  sensitive tables; `service_role` keeps `SELECT/INSERT/UPDATE/DELETE`.
+- `products_public` is owned by `postgres`, uses
+  `security_invoker=false, security_barrier=true`, and exposes only the
+  explicit allow-list (including `sizeRanges`, excluding `reservedStock`,
+  `active`, `tags`). anon/auth/service_role all have `SELECT` on the view.
+- All `atomic_*` helpers and `zshm_adjust_coupon_usage` are deliberately
+  `SECURITY INVOKER` (the repo says so explicitly), pinned to
+  `search_path=public, pg_temp`, and executable only by `service_role`.
+  `zshm_rate_limit` is `SECURITY DEFINER`, pinned, and service-role-only.
+  `zshm_restore_storage_policies` is `SECURITY DEFINER`, pinned, and has **no**
+  anon/auth/service_role `EXECUTE` (trusted SQL role only).
+- `zshm_protect_last_admin` is enabled (`O`), SECURITY DEFINER, pinned, and uses
+  the advisory lock + admin recount defined in `supabase/admin_protection.sql`.
+- bucket `products`: 5 MB, `image/jpeg|png|webp|gif|avif` only. Four storage
+  policies: public `SELECT` restricted to image extensions, authenticated image
+  management, and the `RESTRICTIVE` `zshm_products_no_public_listing`
+  (`bucket_id <> 'products'`) that blocks browser-role listing while direct
+  image downloads remain available.
+- rate-limit snapshot: 4 expired rows, 0 active.
+
+**Legacy policy cleanup (owner-approved, applied 2026-11-20).** The catalog
+still had a permissive `public_read_products` `SELECT` policy on base `products`
+for `anon, authenticated` with `USING (true)`. It was inert because Phase 3
+revoked every browser table/column grant, but it remained a latent exposure if a
+future grant restored access. The owner ran
+`supabase/remove_legacy_products_read_policy.sql` after approval. Verified:
+`legacy_policy_rows=0`, anon/auth `SELECT products=false`, anon
+`SELECT products_public=true`, service_role `SELECT products=true`. A fresh
+anon probe from this environment confirmed `GET /rest/v1/products?select=id` →
+`401` and `GET /rest/v1/products_public?select=id` → `200 []`. The migration is
+idempotent, fails closed if browser grants exist, and is covered by
+`scripts/test-sql-concurrency.mjs` (495 passed / 0 failed on PostgreSQL 17).
+Its rollback is documented in the file and must only be used if Phase 3 is
+reverted.
+
+Still not verifiable here: admin MFA (not offered by the custom login — §3).
 
 The 2026-11-07 record below is **historical and superseded**; its row counts
 (orders 15, products 1) no longer match production.

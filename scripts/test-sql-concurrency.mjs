@@ -744,6 +744,13 @@ async function main() {
   eq(scalar(DB, `SELECT has_table_privilege('anon', 'public.products', 'SELECT')`), 't',
     'Phase 1 deliberately keeps the base table readable');
 
+  // The legacy allow-all policy still exists in older production databases.
+  runSql(DB, `CREATE POLICY public_read_products ON public.products
+              FOR SELECT TO anon, authenticated USING (true);`);
+  const guardedCleanup = applyExpectOutcome(DB, 'supabase/remove_legacy_products_read_policy.sql');
+  ok(guardedCleanup.status !== 0 && /browser roles can still read/i.test(guardedCleanup.out),
+    'legacy-policy cleanup refuses to run before Phase 3 revokes base-table grants');
+
   runSql(DB, `INSERT INTO public.zshm_deploy_flags (name, note)
               VALUES ('products_public_frontend_live', 'test')
               ON CONFLICT (name) DO NOTHING;`);
@@ -765,6 +772,18 @@ async function main() {
     'anon has no column-level SELECT grant on products');
   eq(scalar(DB, `SELECT has_any_column_privilege('authenticated', 'public.products', 'SELECT')`), 'f',
     'authenticated has no column-level SELECT grant on products');
+  const legacyCleanup = apply(DB, 'supabase/remove_legacy_products_read_policy.sql');
+  ok(/legacy public_read_products policy removed/.test(legacyCleanup),
+    'the cleanup reports that the legacy policy was dropped');
+  eq(scalarNum(DB, `SELECT count(*) FROM pg_policies
+                     WHERE schemaname='public' AND tablename='products'
+                       AND policyname='public_read_products'`), 0,
+    'the legacy allow-all SELECT policy no longer exists');
+  {
+    const anonAfterCleanup = runSql(DB, 'SET ROLE anon; SELECT count(*) FROM public.products_public;');
+    eq(anonAfterCleanup.stdout.trim(), '1',
+      'anon still reads products_public after the legacy policy is removed');
+  }
   {
     const col = runSql(DB, 'SET ROLE anon; SELECT "reservedStock" FROM public.products;');
     ok(col.status !== 0 && /permission denied/i.test(col.out),
