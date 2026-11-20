@@ -79,7 +79,7 @@ function contrastRatio(a, b) {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-// Every name gets the same treatment: the true fabric colour, a faint halo in
+// Every name gets the same treatment: the true fabric colour, a soft halo in
 // its own hue, and bold type. Only inks that would disappear into the canvas
 // get a contrasting rim and a slightly heavier, shinier version of that same
 // treatment — the shape of the style never changes, so the eye stays calm.
@@ -93,9 +93,9 @@ export function getColorTextStyle(color, background = '#0a0a0a') {
   const [r, g, b] = haloRgb;
   return {
     color: ink,
-    '--color-rim': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.85 : 0.3})`,
-    '--color-glow': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.26 : 0.16})`,
-    '--color-stroke': lowContrast ? '0.45px' : '0px',
-    '--color-glow-size': lowContrast ? '11px' : '6px',
+    '--color-rim': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.92 : 0.55})`,
+    '--color-glow': `rgba(${r}, ${g}, ${b}, ${lowContrast ? 0.42 : 0.34})`,
+    '--color-stroke': lowContrast ? '0.5px' : '0px',
+    '--color-glow-size': lowContrast ? '12px' : '8px',
   };
 }

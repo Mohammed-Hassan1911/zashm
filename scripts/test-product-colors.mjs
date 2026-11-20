@@ -14,18 +14,19 @@ assert.equal(getColorSwatch('unlisted color'), '#8a8a8a');
 // flips the rim to black.
 const black = getColorTextStyle('Black');
 assert.equal(black.color, '#111111');
-assert.equal(black['--color-stroke'], '0.45px');
-assert.equal(black['--color-rim'], 'rgba(255, 255, 255, 0.85)');
-assert.equal(black['--color-glow-size'], '11px');
+assert.equal(black['--color-stroke'], '0.5px');
+assert.equal(black['--color-rim'], 'rgba(255, 255, 255, 0.92)');
+assert.equal(black['--color-glow-size'], '12px');
 const white = getColorTextStyle('White');
 assert.equal(white.color, '#ffffff');
 assert.equal(white['--color-stroke'], '0px');
-assert.equal(white['--color-rim'], 'rgba(255, 255, 255, 0.3)');
-assert.equal(getColorTextStyle('Navy')['--color-stroke'], '0.45px');
+assert.equal(white['--color-rim'], 'rgba(255, 255, 255, 0.55)');
+assert.equal(white['--color-glow-size'], '8px');
+assert.equal(getColorTextStyle('Navy')['--color-stroke'], '0.5px');
 assert.equal(getColorTextStyle('Black', '#ffffff')['--color-stroke'], '0px');
 const onLight = getColorTextStyle('White', '#ffffff');
-assert.equal(onLight['--color-stroke'], '0.45px');
-assert.equal(onLight['--color-rim'], 'rgba(0, 0, 0, 0.85)');
+assert.equal(onLight['--color-stroke'], '0.5px');
+assert.equal(onLight['--color-rim'], 'rgba(0, 0, 0, 0.92)');
 assert.equal(getColorTextStyle('#123abc').color, '#123abc');
 
 const adminApp = await readFile(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
@@ -45,4 +46,4 @@ assert.match(css, /\.product-color-name,\s*\n\.product-meta-value \{[\s\S]*?font
 assert.match(css, /-webkit-text-stroke: var\(--color-stroke, 0px\) var\(--color-rim, transparent\);/);
 assert.match(css, /text-shadow:[\s\S]*?0 0 var\(--color-glow-size, 6px\) var\(--color-glow, transparent\);/);
 
-console.log('product-colors: 31 passed, 0 failed');
+console.log('product-colors: 32 passed, 0 failed');
