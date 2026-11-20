@@ -996,9 +996,10 @@ try {
       // The drawer must not hand its scroll back to the page underneath it.
       assert.ok(/body\.style\.position = 'fixed'/.test(drawer)
         && /body\.style\.top = `-\$\{scrollY\}px`/.test(drawer)
-        && /window\.scrollTo\(0, scrollY\)/.test(drawer)
-        && /window\.requestAnimationFrame\?\.\(\(\) => window\.scrollTo\(0, scrollY\)\)/.test(drawer),
-        'the bag drawer fixes the body in place and restores the exact scroll offset');
+        && /const restoreY = leaveAtTopRef\.current \? 0 : scrollY;/.test(drawer)
+        && /window\.scrollTo\(0, restoreY\)/.test(drawer)
+        && /window\.requestAnimationFrame\?\.\(\(\) => window\.scrollTo\(0, restoreY\)\)/.test(drawer),
+        'the bag drawer fixes the body and restores its offset unless it is leaving for a new page');
       assert.ok(/\.cart-drawer-body\s*\{[^}]*overscroll-behavior:\s*contain/.test(css),
         'the drawer body contains its own overscroll');
       assert.ok(!/repeating-linear-gradient/.test(css.slice(css.indexOf('Ambient backdrop'), css.indexOf('Film grain'))),
@@ -1613,6 +1614,22 @@ try {
         'no page exit keeps the previous route mounted');
       assert.ok(/window\.scrollTo\(0, 0\)/.test(app) && /window\.scrollTo\(0, 0\)/.test(store),
         'scroll is reset both in the store action and on the committed route');
+    });
+
+    await step('leaving the bag for checkout or the cart keeps the new page at the top', () => {
+      const drawer = read('src/components/shop/CartDrawer.js');
+      assert.ok(/leaveAtTopRef\.current = true;\s*setCartOpen\(false\);\s*setPage\(page\);/.test(drawer),
+        'navigation out of the drawer marks the close as a page change');
+      assert.ok(/const restoreY = leaveAtTopRef\.current \? 0 : scrollY;/.test(drawer)
+        && /window\.scrollTo\(0, restoreY\)/.test(drawer)
+        && /requestAnimationFrame\?\.\(\(\) => window\.scrollTo\(0, restoreY\)\)/.test(drawer),
+        'the scroll restore honours the flag on both the immediate and deferred reset');
+      assert.ok(/onClick=\{\(\) => goToPage\('checkout'\)\}/.test(drawer)
+        && /onClick=\{\(\) => goToPage\('cart'\)\}/.test(drawer),
+        'both checkout and view-full-cart leave through the flagged navigation');
+      assert.ok(!/setCartOpen\(false\); setPage\('checkout'\)/.test(drawer)
+        && !/setCartOpen\(false\); setPage\('cart'\)/.test(drawer),
+        'no navigation button bypasses the flagged helper');
     });
 
     await step('size guides leave as quietly as they arrive', () => {

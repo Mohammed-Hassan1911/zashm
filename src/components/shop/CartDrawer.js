@@ -14,9 +14,15 @@ export default function CartDrawer() {
   const total = cartTotal() ?? 0;
   const panelRef = React.useRef(null);
   const openerRef = React.useRef(null);
+  // Closing the drawer normally restores the shopper's old scroll offset. A
+  // navigation out of the drawer must keep the new page at the top instead:
+  // AnimatePresence keeps this effect alive through the exit animation, so its
+  // cleanup would otherwise scroll back down after the route already reset.
+  const leaveAtTopRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!cartOpen) return undefined;
+    leaveAtTopRef.current = false;
 
     // Remember what opened the drawer (usually the bag button) so focus can
     // return there on close, then move focus inside the dialog.
@@ -79,9 +85,11 @@ export default function CartDrawer() {
       body.style.left = previous.bodyLeft;
       body.style.right = previous.bodyRight;
       body.style.width = previous.bodyWidth;
-      window.scrollTo(0, scrollY);
+      const restoreY = leaveAtTopRef.current ? 0 : scrollY;
+      leaveAtTopRef.current = false;
+      window.scrollTo(0, restoreY);
       // Un-fixing the body can clamp the offset for a frame; re-assert it.
-      window.requestAnimationFrame?.(() => window.scrollTo(0, scrollY));
+      window.requestAnimationFrame?.(() => window.scrollTo(0, restoreY));
       html.style.scrollBehavior = previous.htmlScrollBehavior;
       const openerElement = openerRef.current;
       openerRef.current = null;
@@ -90,6 +98,12 @@ export default function CartDrawer() {
       }
     };
   }, [cartOpen, setCartOpen]);
+
+  const goToPage = (page) => {
+    leaveAtTopRef.current = true;
+    setCartOpen(false);
+    setPage(page);
+  };
 
   const changeQty = (item, nextQty) => {
     const result = updateCartQty(item.key, nextQty);
@@ -245,11 +259,11 @@ export default function CartDrawer() {
                   <span className="cart-drawer-total-value">EGP {total.toLocaleString()}</span>
                 </div>
                 <button className="gold-btn cart-drawer-checkout"
-                  onClick={() => { setCartOpen(false); setPage('checkout'); }}>
+                  onClick={() => goToPage('checkout')}>
                   Proceed to Checkout
                 </button>
                 <button className="outline-btn cart-drawer-view"
-                  onClick={() => { setCartOpen(false); setPage('cart'); }}>
+                  onClick={() => goToPage('cart')}>
                   View Full Cart
                 </button>
               </div>
