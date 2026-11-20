@@ -1408,20 +1408,27 @@ try {
         'forced colours fall back to readable text');
     });
 
-    await step('touch gallery swipes drift smoothly, ease home and crossfade slowly', () => {
+    await step('touch gallery swipes drift smoothly and the strip slides sideways', () => {
       const gallery = product.slice(
         product.indexOf('product-gallery-main'),
         product.indexOf('The gallery controls sit directly')
       );
-      assert.ok(!/mode="wait"/.test(gallery), 'the outgoing photo never blocks the incoming one');
-      assert.ok(/<AnimatePresence initial=\{false\}>/.test(product),
-        'the first photo paints immediately instead of fading in');
-      assert.ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+exit=\{\{ opacity: 0 \}\}/.test(product)
-        && /transition=\{\{ duration: reduceMotion \? 0 : 0\.34, ease: 'easeInOut' \}\}/.test(product),
-        'the swap is a slow, soft 340ms opacity-only crossfade, or instant with reduced motion');
+      assert.ok(!/mode="wait"/.test(gallery), 'no outgoing photo blocks the incoming one');
+      assert.ok(/className="product-gallery-track" ref=\{galleryTrackRef\}/.test(product)
+        && /transform: `translateX\(-\$\{imgIdx \* galleryFrameWidth\}px\)`/.test(product),
+        'selecting a photo slides the strip by exactly one measured frame width');
+      assert.ok(/getBoundingClientRect\(\)\.width/.test(product)
+        && /new ResizeObserver\(measure\)/.test(product),
+        'the step is measured, not a percentage that would snap');
+      assert.ok(/transition: reduceMotion \? 'none' : 'transform 550ms cubic-bezier\(0\.45, 0, 0\.2, 1\)'/.test(product),
+        'the slide is a 550ms ease-in-out like the reference storefront, or instant with reduced motion');
+      assert.ok(/\.product-gallery-frame \{[^}]*flex: 0 0 100%/.test(css)
+        && /className="product-gallery-frame"/.test(product),
+        'each photo owns one full frame, so the incoming print enters from the right');
       assert.ok(!/scale: 1\.05|scale: 0\.95/.test(gallery), 'no scale animation moves the photo under the finger');
-      assert.ok(/position: 'absolute',\s*\n\s*inset: 0,/.test(product),
-        'both frames share the same box, so the crossfade never shifts the layout');
+      assert.ok(/\.product-gallery-frames \{[^}]*display: flex;[\s\S]{0,80}?width: 100%/.test(css)
+        && /\.product-gallery-track \{[^}]*position: absolute;/.test(css),
+        'the strip and its plate share the lit box, so a slide never shifts the layout');
       assert.ok(/onPointerMove=\{handleImagePointerMove\}/.test(product),
         'the gallery actually listens for the drag, not just the release');
       assert.ok(/useMotionValue\(0\)/.test(product) &&
@@ -1675,8 +1682,8 @@ try {
         'the guard sits before the imperative drift, so no pointer move moves the plate');
       assert.ok(/style=\{\{ x: reduceMotion \? 0 : galleryPlateX \}\}/.test(product),
         'the plate reads a fixed zero instead of the spring when motion is reduced');
-      assert.ok(/transition=\{\{ duration: reduceMotion \? 0 : 0\.34, ease: 'easeInOut' \}\}/.test(product),
-        'the crossfade is instant when motion is reduced');
+      assert.ok(/transition: reduceMotion \? 'none' : 'transform 550ms cubic-bezier\(0\.45, 0, 0\.2, 1\)'/.test(product),
+        'the sideways slide is instant when motion is reduced');
       assert.ok(!/reduceMotion/.test(upBody) && /changeImage\(deltaX < 0 \? 1 : -1\)/.test(upBody),
         'swipe-to-advance is decided on release, unaffected by the preference');
       assert.ok(downBody.includes('if (imageSwipeStartRef.current) return;') &&
@@ -1689,6 +1696,8 @@ try {
         .find((block) => /\.product-gallery-frames/.test(block)) || '';
       assert.ok(/\.product-gallery-frames \{\s*will-change: auto;\s*\}/.test(reducedBlock),
         'the reduced-motion block drops the plate layer');
+      assert.ok(/\.product-gallery-track \{\s*will-change: auto;\s*\}/.test(reducedBlock),
+        'the reduced-motion block drops the sliding strip layer too');
     });
 
     await step('a card defers its second Supabase photo until first hover', () => {

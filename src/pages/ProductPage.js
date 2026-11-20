@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import ProductReviews from '../components/shop/ProductReviews';
 import SizeFinder from '../components/shop/SizeFinder';
-import SafeImage, { useImageFallback } from '../components/ui/SafeImage';
+import SafeImage from '../components/ui/SafeImage';
 import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
@@ -48,6 +48,8 @@ export default function ProductPage() {
   const [selColor, setSelColor] = useState('');
   const [qty, setQty] = useState(1);
   const [imgIdx, setImgIdx] = useState(0);
+  const galleryTrackRef = useRef(null);
+  const [galleryFrameWidth, setGalleryFrameWidth] = useState(0);
   const [tab, setTab] = useState('description');
 
   // ستايت التحكم في مودال المخزون ومودال دليل المقاسات
@@ -65,6 +67,23 @@ export default function ProductPage() {
   const galleryPlateX = useSpring(galleryDragX, {
     stiffness: 190, damping: 30, mass: 0.9, restDelta: 0.4,
   });
+
+  // The strip travels in pixels so its step follows the lit plate at every
+  // breakpoint. A measured pixel transform slides smoothly where a percentage
+  // one snaps, and the observer keeps the step exact if the plate resizes.
+  useEffect(() => {
+    const el = galleryTrackRef.current;
+    if (!el) return undefined;
+    const measure = () => setGalleryFrameWidth(el.getBoundingClientRect().width);
+    measure();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(el);
+      return () => observer.disconnect();
+    }
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [p?.id]);
 
   // مرجع لحفظ الـ ID الحالي لمنع التحديث المزدوج العشوائي الذي يسبب اختفاء الصورة
   const lastProductIdRef = useRef(null);
@@ -102,9 +121,6 @@ export default function ProductPage() {
 
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
-  // Live Supabase image → R2 mirror → placeholder.
-  const mainImage = useImageFallback(productImages[imgIdx] || productImages[0], FALLBACK_IMG);
-
   const changeImage = (direction) => {
     setImgIdx(index => (index + direction + productImages.length) % productImages.length);
   };
@@ -330,39 +346,38 @@ export default function ProductPage() {
               onPointerCancel={handleImagePointerCancel}
               style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
-              {/* One composited plate holds both frames. A soft spring carries
-                  the finger's movement and eases it home, while the photos
-                  crossfade slowly on opacity alone — no waiting mode, no scale,
-                  no blur, and no React render per pointer move. */}
-              <motion.div className="product-gallery-frames" style={{ x: reduceMotion ? 0 : galleryPlateX }}>
-                <AnimatePresence initial={false}>
-                  <motion.img key={imgIdx}
-                    src={mainImage.src}
-                    alt={p.name}
-                    draggable={false}
-                    onError={mainImage.onError}
-                    // The first image is the LCP element on this route: load it at
-                    // high priority instead of letting the browser queue it behind
-                    // the bundle. Later gallery images stay lazy.
-                    fetchpriority={imgIdx === 0 ? 'high' : 'auto'}
-                    loading={imgIdx === 0 ? 'eager' : 'lazy'}
-                    decoding="async"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: reduceMotion ? 0 : 0.34, ease: 'easeInOut' }}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'block',
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain',
-                      objectPosition: 'center',
-                    }}
-                  />
-                </AnimatePresence>
-              </motion.div>
+              {/* Every photo owns one full frame of a horizontal strip. Choosing
+                  another photo slides the strip by exactly one frame, so the new
+                  print enters from the right as the old one leaves — the same
+                  sideways move the reference storefront uses. A soft spring still
+                  lets a finger pull the strip before it eases to the selection,
+                  and only transforms move: the mat and the arrows stay still.
+                  The app disables framer-motion transforms globally, so the strip
+                  uses one CSS transform transition instead. */}
+              <div className="product-gallery-track" ref={galleryTrackRef}
+                style={{
+                  transform: `translateX(-${imgIdx * galleryFrameWidth}px)`,
+                  transition: reduceMotion ? 'none' : 'transform 550ms cubic-bezier(0.45, 0, 0.2, 1)',
+                }}>
+                <motion.div className="product-gallery-frames" style={{ x: reduceMotion ? 0 : galleryPlateX }}>
+                  {productImages.map((img, i) => (
+                    <div key={i} className="product-gallery-frame">
+                      <SafeImage
+                        src={img}
+                        alt={i === imgIdx ? p.name : ''}
+                        draggable={false}
+                        fallback={FALLBACK_IMG}
+                        // The first image is the LCP element on this route: load
+                        // it at high priority. The rest stay lazy.
+                        fetchpriority={i === 0 ? 'high' : 'auto'}
+                        loading={i === 0 ? 'eager' : 'lazy'}
+                        decoding="async"
+                        style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center' }}
+                      />
+                    </div>
+                  ))}
+                </motion.div>
+              </div>
               {/* The gallery controls sit directly on the photo, so they use a
                   near-opaque fill instead of a backdrop blur: a blur here has
                   to re-sample the whole image underneath on every frame the
