@@ -4062,18 +4062,19 @@ main, [role="main"] {
 .product-block { margin-bottom: 24px; }
 
 /* ─── Colour swatches ────────────────────────────────────────────────────────
-   A lit well around the actual fabric colour: hairline ring, soft inner shade
-   on the swatch, and a two-step gold ring with a dark gap when selected, so the
-   choice reads as an inset stone rather than a thick painted border. */
+   A lit well holding the fabric colour beside its own name: hairline ring,
+   soft inner shade on the swatch, and a two-step gold ring with a dark gap
+   when selected. The name wears the same colour; the helper adds a rim only
+   when that colour would disappear into the canvas. */
 .product-color-option {
   position: relative;
-  width: 46px;
-  height: 46px;
-  padding: 0;
+  width: auto;
+  min-height: 46px;
+  padding: 0 14px 0 8px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 50%;
+  gap: 10px;
+  border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.13);
   background: radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.01));
   cursor: pointer;
@@ -4095,10 +4096,20 @@ main, [role="main"] {
 .product-color-swatch {
   width: 30px;
   height: 30px;
+  flex: 0 0 30px;
   border-radius: 50%;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.24),
     inset 0 -7px 12px rgba(0, 0, 0, 0.24);
+}
+
+.product-color-name {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* ─── Size selector ──────────────────────────────────────────────────────────
@@ -4618,8 +4629,9 @@ main, [role="main"] {
   }
   .product-price-row { gap: 8px; margin-bottom: 22px; }
   .product-block { margin-bottom: 20px; }
-  .product-color-option { width: 44px; height: 44px; }
-  .product-color-swatch { width: 28px; height: 28px; }
+  .product-color-option { min-height: 44px; padding: 0 12px 0 6px; gap: 8px; }
+  .product-color-swatch { width: 26px; height: 26px; flex-basis: 26px; }
+  .product-color-name { font-size: 12px; }
   .product-size-head { margin-bottom: 10px; }
   .product-size-row { gap: 7px; }
   .product-size-option { width: 50px; height: 46px; font-size: 11.5px; }

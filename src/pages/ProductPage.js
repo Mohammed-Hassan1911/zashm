@@ -12,7 +12,7 @@ import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } fro
 import { discountPercent, effectivePrice, hasInvalidVariantConfig, hasVariantStock, regularPrice, sellableStockFor } from '../lib/pricing';
 import { GARMENT, garmentKind } from '../lib/fit';
 import { resolveRoute } from '../lib/routes';
-import { getColorSwatch } from '../lib/productColors.mjs';
+import { getColorSwatch, getColorTextStyle } from '../lib/productColors.mjs';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
@@ -443,7 +443,7 @@ export default function ProductPage() {
             <div className="product-detail-block product-block" style={{ '--pp-i': 2 }}>
               <p className="product-meta-label">
                 {'Color'}
-                <span className="product-meta-value">{selColor}</span>
+                <span className="product-meta-value" style={getColorTextStyle(selColor)}>{selColor}</span>
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
@@ -460,6 +460,7 @@ export default function ProductPage() {
                       aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
                       title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}>
                       <span className="product-color-swatch" aria-hidden="true" style={{ background:getColorSwatch(c) }} />
+                      <span className="product-color-name" style={getColorTextStyle(c)}>{c}</span>
                     </button>
                   );
                 })}
