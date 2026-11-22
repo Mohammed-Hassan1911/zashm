@@ -658,16 +658,17 @@ function startAlerts() {
   process.env.TELEGRAM_CHAT_ID = '99887766';
 }
 
-console.log('\n[11] database failure: the customer is confirmed, the owner is alerted');
+console.log('\n[11] database failure: the order is accepted as pending, the owner is alerted');
 {
   seed();
   state.failProducts = true;
   startAlerts();
   try {
     const r = await place();
-    eq(r.status, 200, 'product read failure still confirms the order');
-    eq(r.body.success, true, 'success is true');
+    eq(r.status, 202, 'product read failure yields an honest 202');
+    eq(r.body.success, true, 'the request was accepted');
     eq(r.body.pending, true, 'the response is flagged pending');
+    eq(r.body.messageAr, 'استلمنا طلبك وسنتأكد منه قريبًا.', 'the shopper gets clear Arabic pending copy');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram receives the alert');
     eq(notifyCalls.length, 1, 'Telegram is the only notification channel');
 
@@ -678,7 +679,7 @@ console.log('\n[11] database failure: the customer is confirmed, the owner is al
     ok(tg.includes('01012345678'), 'phone is included (manual follow-up)');
     ok(tg.includes('تعذر قراءة بيانات المنتجات'), 'reason is the product read');
     ok(tg.includes('منتج #1'), 'cart line survives without a product name');
-    ok(tg.includes('❗ العميل شاف رسالة «تم تنفيذ طلبك»'), 'owner is told the customer was reassured');
+    ok(tg.includes('❗ العميل شاف رسالة «استلمنا طلبك وسنتأكد منه قريبًا»'), 'owner is told the exact pending message the customer saw');
     ok(tg.includes('• الإجمالي: EGP 265 (حسب العميل، غير مؤكد)'), 'client total is labelled unverified');
     ok(!tg.includes('رقم المحاولة'), 'no attempt id exists before the RPC');
     ok(!JSON.parse(notificationsTo('api.telegram.org')[0].init.body).parse_mode,
@@ -697,7 +698,7 @@ console.log('\n[12] coupon read failure still alerts');
   startAlerts();
   try {
     const r = await place({ coupon: 'SAVE10' });
-    eq(r.status, 200, 'coupon read failure still confirms the order');
+    eq(r.status, 202, 'coupon read failure still yields a pending acceptance');
     eq(r.body.pending, true, 'the response is flagged pending');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
     const tg = telegramText();
@@ -718,7 +719,7 @@ console.log('\n[13] atomic_place_order failure keeps prices in the alert');
   startAlerts();
   try {
     const r = await place();
-    eq(r.status, 200, 'RPC error still confirms the order');
+    eq(r.status, 202, 'RPC error still yields a pending acceptance');
     eq(r.body.pending, true, 'the response is flagged pending');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
     const tg = telegramText();
@@ -741,7 +742,7 @@ console.log('\n[14] unexpected server error alerts before the commit');
   startAlerts();
   try {
     const r = await place();
-    eq(r.status, 200, 'unexpected error still confirms the order');
+    eq(r.status, 202, 'unexpected error still yields a pending acceptance');
     eq(r.body.pending, true, 'the response is flagged pending');
     eq(notificationsTo('api.telegram.org').length, 1, 'Telegram alert');
     ok(telegramText().includes('خطأ غير متوقع'), 'unexpected reason is explicit');

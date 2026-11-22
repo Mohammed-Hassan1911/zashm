@@ -5,6 +5,7 @@ const {
   safeLogError,
   applyCors,
   handleOptions,
+  enforceMutationOrigin,
   readBody,
   clientIp,
   rateLimitShared,
@@ -35,8 +36,8 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // unreachable database keeps the shopper on "Placing order…" for ~7 seconds
 // before the outage path can answer. Every checkout database step therefore
 // runs under one short deadline: a query that cannot answer in time is treated
-// exactly like an unreachable database (optimistic confirmation + owner alert),
-// never as a failure the customer sees.
+// exactly like an unreachable database (honest 202 + owner alert), never as a
+// broken storefront the customer has to recover from.
 const ORDER_DB_TIMEOUT_MS = 3500;
 
 function orderDbSignal() {
@@ -74,6 +75,10 @@ function clampClientDate(value) {
 // ─── POST /api/orders — place order (all money/stock logic server-side) ─────
 
 async function placeOrder(req, res) {
+  // Guest checkout has no session cookie, so the Origin allow-list is its CSRF
+  // boundary. readBody() additionally refuses non-JSON content types.
+  if (!enforceMutationOrigin(req, res)) return;
+
   const ip = clientIp(req);
   // 30/hour/IP: Egypt's mobile carriers use CGNAT, so many real customers can
   // share one public IP during a campaign. The previous 10/hour limit could
@@ -208,16 +213,24 @@ async function placeOrder(req, res) {
     };
   };
 
-  /** Database/infrastructure failure: confirm the order to the customer exactly
-   * like a stored order, then alert the owner. Owner decision 2026-11-10 — a
-   * shopper must never see a broken storefront because the database is down.
-   * Business refusals (stock, coupon, inactive product) never reach here. */
+  /** Database/infrastructure failure: the order was NOT stored. Answer 202
+   * Accepted with an honest "we will confirm shortly" message, keep the
+   * client's idempotency key so a retry cannot create a duplicate, and alert
+   * the owner. Owner decision 2026-11-22 supersedes the optimistic 200
+   * confirmation of 2026-11-10. Business refusals (stock, coupon, inactive
+   * product) never reach here. */
   const acceptPending = async (reason) => {
     if (responded) return;
     const order = pendingOrder();
     // Answer first. Nothing after this line can change what the customer sees.
     responded = true;
-    json(res, 200, { success: true, pending: true, order });
+    json(res, 202, {
+      success: true,
+      pending: true,
+      order,
+      message: 'We received your order and will confirm it shortly.',
+      messageAr: 'استلمنا طلبك وسنتأكد منه قريبًا.',
+    });
     try {
       await sendPendingOrderAlert({
         order,
@@ -225,7 +238,7 @@ async function placeOrder(req, res) {
         amountsFromClient: !pricingAuthoritative,
       });
     } catch (e) {
-      // The customer already has their confirmation; never let the alert throw.
+      // The customer already has an honest answer; never let the alert throw.
       safeLogError('Order pending alert failed', e);
     }
   };

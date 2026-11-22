@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Truck, Banknote, PackageSearch, Headset, ArrowLeft } from 'lucide-react';
+import { Trash2, ShoppingBag, Heart, Plus, Minus, Tag, Check, AlertCircle, CheckCircle, Clock, Truck, Banknote, PackageSearch, Headset, ArrowLeft } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import StockFeedback from '../components/shop/StockFeedback';
@@ -702,10 +702,15 @@ export function CheckoutPage() {
       // 🛑 تم حذف وإلغاء كود تكرار إرسال التليجرام من هنا نهائياً
       // العملية الآن تتم بأمان من داخل الـ Store لضمان إرسال رسالة واحدة فقط!
 
-      clearCheckoutIdempotencyKey(idempotencyKey);
+      // A 202 means the order was NOT stored. Keep the idempotency key so a
+      // retry reuses the same one and cannot create a duplicate when the
+      // database comes back. Only a definitive success clears it.
+      if (!result.pending) clearCheckoutIdempotencyKey(idempotencyKey);
       if (!saveOrderConfirmation(result.order)) {
         toast(
-          'Order confirmed, but this browser could not save the confirmation for refresh. Please keep your order ID.',
+          result.pending
+            ? 'We received your order, but this browser could not save the reference for refresh. Please keep the temporary reference shown below.'
+            : 'Order confirmed, but this browser could not save the confirmation for refresh. Please keep your order ID.',
           'warning'
         );
       }
@@ -896,41 +901,51 @@ export function CheckoutPage() {
               transition={{ delay: 0.1, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               aria-hidden="true"
             >
-              <CheckCircle size={22} color="#0b0b0b" strokeWidth={2.2} />
+              {success.pending
+                ? <Clock size={22} color="#0b0b0b" strokeWidth={2.2} />
+                : <CheckCircle size={22} color="#0b0b0b" strokeWidth={2.2} />}
             </motion.div>
 
             <div className="order-invoice-status-copy">
-              <p className="order-invoice-eyebrow">{'Order confirmed'}</p>
-              <h1 className="order-invoice-title">{'Thank you for your order'}</h1>
+              <p className="order-invoice-eyebrow">
+                {success.pending ? 'Received — awaiting confirmation' : 'Order confirmed'}
+              </p>
+              <h1 className="order-invoice-title">
+                {success.pending ? 'We will confirm your order shortly' : 'Thank you for your order'}
+              </h1>
 
-              {/* Five gold stars: the receipt opens on a rating, not a tick. */}
-              <div className="order-invoice-stars" aria-hidden="true">
-                {[0, 1, 2, 3, 4].map((index) => (
-                  <motion.span
-                    key={index}
-                    className="order-invoice-star"
-                    style={{ '--star-index': index }}
-                    initial={{ opacity: 0, scale: 0.5, y: 6 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ delay: 0.16 + index * 0.08, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    ★
-                  </motion.span>
-                ))}
-              </div>
+              {/* A pending order has no stored row: never open with a "done" seal. */}
+              {!success.pending && (
+                <div className="order-invoice-stars" aria-hidden="true">
+                  {[0, 1, 2, 3, 4].map((index) => (
+                    <motion.span
+                      key={index}
+                      className="order-invoice-star"
+                      style={{ '--star-index': index }}
+                      initial={{ opacity: 0, scale: 0.5, y: 6 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ delay: 0.16 + index * 0.08, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      ★
+                    </motion.span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           {success.pending && (
-            <p className="order-invoice-pending">
-              هنكلمك على رقمك لتأكيد تفاصيل الأوردر قبل الشحن.
-              <span>We&apos;ll contact you to confirm your order before shipping.</span>
+            <p className="order-invoice-pending" role="status">
+              <strong>استلمنا طلبك وسنتأكد منه قريبًا. لم يتم تحصيل أي مبلغ.</strong>
+              <span>
+                We received your order and will confirm it shortly. No payment has been taken; this reference is temporary until we confirm.
+              </span>
             </p>
           )}
 
           <dl className="order-invoice-meta">
             <div>
-              <dt>{'Issued'}</dt>
+              <dt>{success.pending ? 'Received' : 'Issued'}</dt>
               <dd>{placedDate || '—'}</dd>
             </div>
             <div>
@@ -943,13 +958,13 @@ export function CheckoutPage() {
             </div>
             <div>
               <dt>{'Delivery'}</dt>
-              <dd>{success.city || 'Egypt'}</dd>
+              <dd>{success.pending ? 'To be confirmed' : (success.city || 'Egypt')}</dd>
             </div>
           </dl>
 
           <div className="order-confirmation-summary">
             <div className="order-invoice-summary-head">
-              <span>{'Reference'}</span>
+              <span>{success.pending ? 'Temporary reference' : 'Reference'}</span>
               <span className="order-invoice-ref">
                 {success.id}
                 <button
@@ -1012,7 +1027,7 @@ export function CheckoutPage() {
                 </div>
               )}
               <div className="order-invoice-total-row">
-                <span>{'Total paid on delivery'}</span>
+                <span>{success.pending ? 'Estimated total' : 'Total paid on delivery'}</span>
                 <strong>EGP {Number(success.total || 0).toLocaleString()}</strong>
               </div>
             </div>
@@ -1100,7 +1115,9 @@ export function CheckoutPage() {
 
           <p className="order-invoice-foot">
             <Truck size={13} aria-hidden="true" />
-            {'Our team will call before delivery.'}
+            {success.pending
+              ? 'We will call you to confirm before anything is shipped.'
+              : 'Our team will call before delivery.'}
           </p>
         </motion.article>
       </div>

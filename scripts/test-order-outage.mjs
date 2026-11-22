@@ -1,11 +1,12 @@
 /**
  * Checkout during a database outage.
  *
- * Owner decision (2026-11-10): when the database is unreachable the shopper must
- * see NOTHING broken — the checkout confirms the order exactly like a stored one.
- * The only trace is a Telegram alert to the owner that carries the same order
- * body a normal notification would, plus a banner saying the order was not
- * stored and the customer was already told it was.
+ * Owner decision (2026-11-22, superseding 2026-11-10): when the database is
+ * unreachable the shopper gets an honest 202 "we received your order and will
+ * confirm it shortly" — never a fake confirmation and never a tracking link.
+ * The idempotency key stays in the browser so a retry cannot duplicate an
+ * order. A Telegram alert tells the owner the row was not stored and carries
+ * the same order body a normal notification would.
  *
  * This suite runs the REAL `/api/orders` handler with the Supabase host
  * unreachable and captures what the Telegram API would receive.
@@ -171,22 +172,26 @@ function customerSafe(body) {
   return BROKEN_MARKERS.filter((marker) => text.includes(marker));
 }
 
-console.log('\n[1] database unreachable: the customer gets a normal confirmation');
+console.log('\n[1] database unreachable: the customer gets an honest 202');
 let firstAlert = '';
 let pendingOrder = null;
 {
   alerts.length = 0;
   telegramMode = 'ok';
   const { status, body, res } = await place();
-  eq(status, 200, 'the API answers 200, never a 5xx');
-  eq(body.success, true, 'success is true');
-  eq(body.pending, true, 'the response is flagged pending for the client only');
+  eq(status, 202, 'the API answers 202 Accepted, never a fake 200 confirmation');
+  eq(body.success, true, 'the request was accepted');
+  eq(body.pending, true, 'the response is flagged pending for the client');
+  eq(body.message, 'We received your order and will confirm it shortly.', 'clear English pending copy');
+  eq(body.messageAr, 'استلمنا طلبك وسنتأكد منه قريبًا.', 'clear Arabic pending copy');
   eq(res.writes, 1, 'exactly one HTTP response is written');
   ok(/^ZSH-[A-Z0-9]+-[A-F0-9]{8}$/.test(body.order && body.order.id), 'the order has a real ZSH reference');
   eq(body.order.customer, 'Ahmed Hassan', 'the confirmation carries the customer');
   eq(body.order.total, 2565, 'the confirmation carries the total the shopper saw');
   eq(body.order.items[0].name, 'Jacket', 'the confirmation carries the product name');
   eq(body.order.tracking_url, '', 'no tracking link for an order that does not exist');
+  ok(!JSON.stringify(body).includes('تم تنفيذ طلبك'), 'no fake Arabic confirmation reaches the shopper');
+  ok(!JSON.stringify(body).includes('Order confirmed'), 'no fake English confirmation reaches the shopper');
   eq(customerSafe(body), [], 'no broken/outage string reaches the shopper');
   pendingOrder = body.order;
   eq(alerts.length, 1, 'exactly one Telegram alert is sent');
@@ -198,7 +203,7 @@ console.log('\n[2] the owner alert says the database is down and the order was n
   ok(firstAlert.startsWith('⚠️ ZASHM | تنبيه: الداتابيز معطّلة والأوردر لم يُسجَّل'), 'banner names the outage');
   ok(firstAlert.includes(`🔖 المرجع: ${pendingOrder.id}`), 'the reference is the same order id the customer saw');
   ok(firstAlert.includes('تعذر قراءة بيانات المنتجات'), 'the reason names the database read');
-  ok(firstAlert.includes('❗ العميل شاف رسالة «تم تنفيذ طلبك»'), 'the owner is told the customer was already reassured');
+  ok(firstAlert.includes('❗ العميل شاف رسالة «استلمنا طلبك وسنتأكد منه قريبًا»'), 'the owner is told exactly what the customer saw');
   ok(firstAlert.includes('الأسعار اللي تحت جاية من شاشة العميل'), 'client-sourced amounts are explained');
 }
 
@@ -252,7 +257,7 @@ console.log('\n[6] Telegram being down cannot change the customer response');
   telegramAttempts = 0;
   telegramMode = 'down';
   const { status, body } = await place({ ...ORDER, idempotencyKey: 'outage-test-key-0003' }, { ip: '203.0.113.9' });
-  eq(status, 200, 'the confirmation is still a 200');
+  eq(status, 202, 'the pending answer is still a 202');
   eq(body.success, true, 'success is still true');
   eq(body.pending, true, 'still pending');
   eq(telegramAttempts, 2, 'a failed alert is retried exactly once');
@@ -265,7 +270,7 @@ console.log('\n[7] a stalled Telegram connection is retried and the alert still 
   telegramAttempts = 0;
   telegramMode = 'fail-once';
   const { status, body } = await place({ ...ORDER, idempotencyKey: 'outage-test-key-0004' }, { ip: '203.0.113.10' });
-  eq(status, 200, 'the order still confirms');
+  eq(status, 202, 'the order is still accepted as pending');
   eq(body.pending, true, 'still pending');
   eq(telegramAttempts, 2, 'two attempts were made');
   eq(alerts.length, 1, 'the second attempt delivered the alert');
@@ -279,6 +284,28 @@ console.log('\n[8] the alert text is safe and bounded');
   ok(Buffer.byteLength(text, 'utf8') <= 4096, 'stays inside the Telegram byte budget');
   ok(!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text), 'no control characters');
   ok(!/\n{3,}/.test(text), 'no runaway blank lines');
+}
+
+console.log('\n[9] public checkout rejects a cross-site origin and form content types');
+{
+  const foreign = makeReq(ORDER);
+  foreign.headers.origin = 'https://evil.example';
+  let res = makeRes();
+  await handler(foreign, res);
+  eq(res.statusCode, 403, 'a foreign Origin is refused before any order work');
+  eq(JSON.parse(res.body).error, 'Request origin is not allowed', 'the refusal is explicit');
+
+  const noOrigin = makeReq(ORDER);
+  delete noOrigin.headers.origin;
+  res = makeRes();
+  await handler(noOrigin, res);
+  eq(res.statusCode, 403, 'an absent Origin is refused too');
+
+  const formPost = makeReq(ORDER);
+  formPost.headers['content-type'] = 'application/x-www-form-urlencoded';
+  res = makeRes();
+  await handler(formPost, res);
+  eq(res.statusCode, 415, 'a cross-site form content type is refused');
 }
 
 globalThis.fetch = realFetch;

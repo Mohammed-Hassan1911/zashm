@@ -384,6 +384,26 @@ console.log('\n[1] static checks: JS is not a transaction coordinator');
     'partial-restore behaviour is documented');
   ok(/zshm_guard_coupon_delete/.test(sql),
     'coupon-delete guard is defined in the lifecycle migration');
+
+  const storeSrc = readFileSync(new URL('../src/store.js', import.meta.url), 'utf8');
+  ok(/status: newStatus, expectedStatus/.test(storeSrc),
+    'the store sends the status the admin screen actually read');
+  ok(/updateOrderStatus: async \(id, newStatus, explicitExpectedStatus\)/.test(storeSrc) &&
+     /explicitExpectedStatus \|\| order\.status/.test(storeSrc),
+    'an explicit precondition from the dialog wins over a freshly polled store row');
+
+  // The final-status dialog must carry the status it captured on open. Without
+  // this, the 10s order poll can refresh the store between "open dialog" and
+  // "confirm", and the stale click would pass the NEW status as the precondition.
+  const adminSrc = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
+  ok(/setStatusConfirm\(\{ order, status, expectedStatus: order\.status \}\)/.test(adminSrc),
+    'the dialog records the status on screen when it opens');
+  ok(/applyStatusChange\(order\.id, status, expectedStatus\)/.test(adminSrc),
+    'confirmStatusChange forwards the captured precondition');
+  ok(/updateOrderStatus\(id, status, expectedStatus\)/.test(adminSrc),
+    'applyStatusChange forwards it to the store');
+  ok(/current\.status !== statusConfirm\.expectedStatus/.test(adminSrc),
+    'a background refresh invalidates a stale confirmation dialog');
 }
 
 // ─── [2] concurrent cancel: stock + coupon move exactly once ────────────────
@@ -401,26 +421,57 @@ console.log('\n[2] SEC-04: two concurrent cancels');
   ok([a.status, b.status].includes(200), 'at least one request succeeded');
 }
 
-// ─── [3] stale concurrent request is rejected with 409 ──────────────────────
-console.log('\n[3] SEC-04: stale precondition');
+// ─── [3] the status the admin saw is the SQL precondition ───────────────────
+console.log('\n[3] C2/SEC-04: a stale admin tab is rejected with 409');
 {
   seed({ stock: 10, couponUsage: 3 });
-  // Move the order behind the handler's back after it read Pending.
-  const first = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Shipped' });
+  // Admin A moves Pending → Shipped from a freshly loaded screen.
+  const first = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Shipped', expectedStatus: 'Pending' });
   eq(first.status, 200, 'first transition succeeds');
-  const stale = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Cancelled' });
-  // The handler re-reads the row, so its expected status is now Shipped and the
-  // transition is legitimate (Shipped → Cancelled). This proves the RPC uses
-  // the freshly read status as its precondition.
-  eq(stale.status, 200, 'subsequent transition uses the fresh status');
+
+  // Admin B's tab still shows Pending. It must be refused — the handler may NOT
+  // use the freshly re-read row as the precondition, or the stale click wins.
+  const stale = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Cancelled', expectedStatus: 'Pending' });
+  eq(stale.status, 409, 'stale tab is rejected with 409');
+  eq(stale.body && stale.body.code, 'status_changed', 'the 409 has a machine-readable reason');
+  eq(state.orders.get('ZSH-TEST-1').status, 'Shipped', 'the order stays Shipped');
+  eq(state.products.get(1).stock, 10, 'no stock was restored by the stale request');
+  eq(state.coupons.get('SAVE10').usageCount, 3, 'no coupon was freed by the stale request');
+
+  // A tab that actually shows Shipped can still cancel legitimately.
+  const fresh = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Cancelled', expectedStatus: 'Shipped' });
+  eq(fresh.status, 200, 'a tab with the current status succeeds');
   eq(state.products.get(1).stock, 12, 'cancelling a Shipped order restores stock once');
 
-  // Direct RPC-level stale precondition (what a true race hits).
-  const rpc = await sb.rpc('atomic_set_order_status', {
-    p_id: 'ZSH-TEST-1', p_expected_status: 'Pending', p_new_status: 'Delivered', p_timestamps: {},
+  // Syntactically unusable precondition is refused before any RPC is attempted.
+  const invalid = await call('PATCH', {
+    id: 'ZSH-TEST-1', status: 'Processing', expectedStatus: 'bad\u0000value',
   });
-  eq(rpc.data.reason, 'status_changed', 'RPC rejects a stale expected status');
-  eq(state.products.get(1).stock, 12, 'rejected request did not touch stock');
+  eq(invalid.status, 422, 'a malformed expectedStatus is rejected');
+
+  // A wrong-but-well-formed value is a genuine stale precondition: the RPC,
+  // not a status whitelist, decides. This also covers legacy spellings that
+  // are not in ORDER_STATUSES but do exist on real rows.
+  const wrong = await call('PATCH', { id: 'ZSH-TEST-1', status: 'Processing', expectedStatus: 'Bogus' });
+  eq(wrong.status, 409, 'an unknown status name is treated as a stale precondition');
+}
+
+// ─── [3b] legacy / non-standard statuses stay editable ───────────────────────
+console.log('\n[3b] legacy row statuses still accept a matching precondition');
+{
+  seed({ stock: 10, couponUsage: 3, orderStatus: 'pending' });
+  const legacy = await call('PATCH', {
+    id: 'ZSH-TEST-1', status: 'Processing', expectedStatus: 'pending',
+  });
+  eq(legacy.status, 200, 'a lowercase legacy status is accepted as expectedStatus');
+  eq(state.orders.get('ZSH-TEST-1').status, 'Processing', 'the legacy row can be moved forward');
+
+  seed({ stock: 10, couponUsage: 3, orderStatus: 'Created' });
+  const legacyCancel = await call('PATCH', {
+    id: 'ZSH-TEST-1', status: 'Cancelled', expectedStatus: 'Created',
+  });
+  eq(legacyCancel.status, 200, 'a non-standard legacy status can be cancelled');
+  eq(state.products.get(1).stock, 12, 'legacy cancel restores stock once');
 }
 
 // ─── [4] cancel → un-cancel round trip returns to the original values ───────

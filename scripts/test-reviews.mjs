@@ -230,7 +230,7 @@ async function callAdmin(method, { query = {}, body = null } = {}) {
 
 async function invoke(fn, method, { query, body }) {
   currentBody = body;
-  const req = { method, query, headers: {}, body };
+  const req = { method, query, headers: { origin: 'https://za-shm.vercel.app' }, body };
   const res = makeRes();
   await fn(req, res);
   let parsed = null;

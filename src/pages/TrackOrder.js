@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api';
+import { readTrackCredential, saveTrackCredential } from '../lib/trackCredential.mjs';
 import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
 import SafeImage from '../components/ui/SafeImage';
 
@@ -48,6 +49,11 @@ export default function TrackOrder() {
     if (id) {
       setActiveOrderId(id);
       setInputOrderId(id);
+      // Keep the credential for this tab only. Once `tk` is stripped from the
+      // address bar, a refresh has nowhere else to read it from.
+      if (tk) saveTrackCredential(id, tk);
+      const stored = readTrackCredential(id);
+      if (stored) setSignedToken(stored);
     }
     if (tk) setSignedToken(tk);
     stripSensitiveTrackingParams();
@@ -109,9 +115,13 @@ export default function TrackOrder() {
     e.preventDefault(); // 🎯 منع تحديث الصفحة أو الاتصال الخارجي نهائياً
     const id = inputOrderId.trim();
     if (!id) return;
+    // The form is usable again when the secure link was opened in this tab: the
+    // token is restored from sessionStorage. An id typed on a fresh tab still
+    // has no credential and correctly asks for the secure link.
+    setSignedToken(readTrackCredential(id));
     setActiveOrderId(id);
     // حافظ على رقم الطلب في الرابط حتى لا يضيع عند التحديث. الـ tk اتخزن في
-    // الـ state واتشال من الرابط، فمش بيرجع للعنوان تاني.
+    // sessionStorage واتشال من الرابط، فمش بيرجع للعنوان تاني.
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('track', id);

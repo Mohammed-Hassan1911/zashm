@@ -136,6 +136,7 @@ function makeReq({ method = 'POST', body, headers = {}, ip } = {}) {
     method,
     headers: {
       'content-type': 'application/json',
+      origin: 'https://za-shm.vercel.app',
       'x-real-ip': ip || `198.51.100.${(ipCounter++ % 250) + 1}`,
       ...headers,
     },
@@ -213,6 +214,14 @@ console.log('\n[1] transport headers + rewrites');
   for (const source of ['/admin(.*)', '/checkout(.*)', '/cart(.*)', '/wishlist(.*)', '/track(.*)', '/api/(.*)']) {
     ok((headerFor(source, 'X-Robots-Tag') || '').includes('noindex'), `${source} is noindex`);
   }
+
+  // The SPA also treats `/?track=…&tk=…` as the tracking page; that URL must be
+  // noindexed at the edge too, not only the /track/... path.
+  const queryNoindex = all.filter((entry) => (entry.has || []).some((c) => c.type === 'query') &&
+    (entry.headers || []).some((h) => h.key.toLowerCase() === 'x-robots-tag' && /noindex/.test(h.value)));
+  const guardedKeys = queryNoindex.flatMap((entry) => (entry.has || []).map((c) => c.key));
+  ok(guardedKeys.includes('track'), 'tracking links with a ?track= query are noindex');
+  ok(guardedKeys.includes('tk'), 'tracking links with a ?tk= query are noindex');
 
   const rewrites = cfg.rewrites || [];
   const sources = rewrites.map((r) => r.source);
@@ -429,6 +438,27 @@ console.log('\n[5] every API handler uses the shared limiter');
   ok(/using per-instance fallback/.test(libSrc), 'Redis failure logs a fallback');
   ok(/RATE_BUCKET_MAX/.test(libSrc), 'the in-memory fallback map is bounded');
   ok(/AbortSignal|AbortController/.test(libSrc), 'Upstash calls are time-bounded');
+}
+
+// ─── [6] every public POST is guarded by Origin AND a JSON content type ──────
+console.log('\n[6] public POST CSRF boundary');
+{
+  const publicPosts = [
+    'api/orders.js', 'api/reviews.js', 'api/coupons/validate.js', 'api/_errors.js',
+  ];
+  for (const file of publicPosts) {
+    const src = read(file);
+    ok(/enforceMutationOrigin\(req, res\)/.test(src), `${file} enforces the Origin allow-list`);
+    ok(
+      src.indexOf('enforceMutationOrigin(req, res)') < src.indexOf('await readBody('),
+      `${file} checks Origin before reading the body`
+    );
+  }
+  const libSrc = read('api/_lib.js');
+  ok(/Content-Type must be application\/json/.test(libSrc) && /status: 415/.test(libSrc),
+    'readBody rejects explicitly non-JSON content types with 415');
+  ok(/Request origin is not allowed/.test(libSrc),
+    'the Origin guard has an explicit, non-leaking error message');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

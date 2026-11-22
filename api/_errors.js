@@ -29,6 +29,7 @@ const {
   json,
   applyCors,
   handleOptions,
+  enforceMutationOrigin,
   readBody,
   clientIp,
   rateLimitShared,
@@ -91,6 +92,10 @@ async function handler(req, res) {
   applyCors(req, res);
   if (req.method === 'OPTIONS') return handleOptions(req, res);
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
+
+  // The report endpoint is public but state-changing (it logs and alerts).
+  // Without this guard any site could post forged reports via a visitor's bag.
+  if (!enforceMutationOrigin(req, res)) return;
 
   const ip = clientIp(req);
   const limit = await rateLimitShared(`errors:${ip}`, 30, 10 * 60 * 1000);

@@ -141,7 +141,11 @@ async function place(items, rows, extra = {}) {
     status() { return this; }, json() { return this; },
     setHeader() { return this; }, end() { return this; },
   };
-  await handler({ method: 'POST', headers: {}, query: {} }, res);
+  await handler({
+    method: 'POST',
+    headers: { origin: 'https://za-shm.vercel.app', 'content-type': 'application/json' },
+    query: {},
+  }, res);
   return response;
 }
 

@@ -19,6 +19,7 @@ const {
   json,
   applyCors,
   handleOptions,
+  enforceMutationOrigin,
   readBody,
   clientIp,
   rateLimitShared,
@@ -130,6 +131,10 @@ async function handler(req, res) {
     res.setHeader('Allow', 'POST, OPTIONS');
     return json(res, 405, { error: 'Method not allowed' });
   }
+
+  // Advisory read, but still a public POST: require the same browser origin as
+  // checkout so a third-party page cannot probe coupon codes on a visitor.
+  if (!enforceMutationOrigin(req, res)) return;
 
   const check = await rateLimitShared(`couponvalidate:${clientIp(req)}`, RATE_MAX_ATTEMPTS, RATE_WINDOW_MS);
   if (!check.allowed) return tooMany(res, check.resetIn);

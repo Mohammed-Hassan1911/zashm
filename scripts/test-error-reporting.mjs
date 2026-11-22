@@ -64,7 +64,12 @@ function makeReq({ method = 'POST', body, raw, ip = '198.51.100.7', headers = {}
   const listeners = {};
   const req = {
     method,
-    headers: { 'x-real-ip': ip, 'content-type': 'application/json', ...headers },
+    headers: {
+      'x-real-ip': ip,
+      'content-type': 'application/json',
+      origin: 'https://za-shm.vercel.app',
+      ...headers,
+    },
     query: {},
     socket: { remoteAddress: ip },
     on(event, cb) {

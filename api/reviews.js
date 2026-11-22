@@ -30,6 +30,7 @@ const {
   json,
   applyCors,
   handleOptions,
+  enforceMutationOrigin,
   readBody,
   clientIp,
   rateLimitShared,
@@ -261,6 +262,9 @@ async function listReviews(req, res) {
 // ─── POST — submit a pending review ─────────────────────────────────────────
 
 async function submitReview(req, res) {
+  // Public write: no session cookie, so the Origin allow-list is the CSRF guard.
+  if (!enforceMutationOrigin(req, res)) return;
+
   const ip = clientIp(req);
   const check = await rateLimitShared(`reviewsubmit:${ip}`, RATE_MAX_ATTEMPTS, RATE_WINDOW_MS);
   if (!check.allowed) return tooMany(res, check.resetIn);

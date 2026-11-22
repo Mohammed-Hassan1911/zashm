@@ -11,6 +11,7 @@ const {
   tooMany,
   requirePerm,
   supabaseAdmin,
+  isHttpsUrl,
   validateProductPayload,
   removeReviewPhoto,
   isMissingColumnError,
@@ -111,6 +112,15 @@ async function createProducts(req, res) {
 
   const cleaned = [];
   for (const input of inputs) {
+    // `images[]` is filtered by validateProductPayload, but the single `image`
+    // field used by the form and by CSV imports bypassed it and was written
+    // verbatim. A plain http:// URL or a data: tracking pixel would then be
+    // rendered as the storefront's public hero image. Reject the whole row.
+    if (input && input.image !== undefined && input.image !== null && input.image !== '') {
+      if (!isHttpsUrl(String(input.image).trim())) {
+        return json(res, 422, { error: 'Image URL must use HTTPS' });
+      }
+    }
     const p = validateProductPayload(input || {});
     if (!p) return json(res, 422, { error: 'Invalid product data' });
     // import rows and form rows may carry tags (not part of the core validator)
@@ -127,7 +137,8 @@ async function createProducts(req, res) {
         ? Number(input.id)
         : generateProductId();
       const row = buildInsertRow(p, id);
-      if (input && input.image && !row.image) row.image = String(input.image).slice(0, 2000);
+      // Already checked above; keep the HTTPS-only value bounded.
+      if (input && input.image && !row.image) row.image = String(input.image).trim().slice(0, 2000);
       const { data, dropped } = await insertProduct(sb, row);
       if (dropped.includes('sizeRanges')) warnings.sizeRanges = 'column-missing';
       created.push({
@@ -171,6 +182,14 @@ async function updateProduct(req, res) {
   const id = body && body.id !== undefined ? body.id : (req.query && req.query.id);
   const updates = (body && body.updates) || {};
   if (id === undefined || id === null || id === '') return json(res, 400, { error: 'Product id is required' });
+  // Same HTTPS-only rule as the create/import path. `image` is a public
+  // storefront field: http:// URLs and data: pixels must never be persisted.
+  if (Object.prototype.hasOwnProperty.call(updates, 'image')) {
+    const imageUrl = String(updates.image == null ? '' : updates.image).trim();
+    if (imageUrl && !isHttpsUrl(imageUrl)) {
+      return json(res, 422, { error: 'Image URL must use HTTPS' });
+    }
+  }
 
   try {
     const sb = supabaseAdmin();
@@ -196,7 +215,11 @@ async function updateProduct(req, res) {
     }
     if (updates.images !== undefined && updates.image === undefined) {
       write.image = Array.isArray(normalized.images) ? (normalized.images[0] || '') : '';
-    } else if (updates.image !== undefined && !write.image && updates.images && updates.images.length) {
+    } else if (Object.prototype.hasOwnProperty.call(updates, 'image')) {
+      // `validateProductPayload` normalises `images[]` but not the single
+      // `image` column; persist the already-validated value here.
+      write.image = String(updates.image == null ? '' : updates.image).trim();
+    } else if (updates.images && updates.images.length) {
       write.image = Array.isArray(normalized.images) ? (normalized.images[0] || '') : '';
     }
     if (Object.keys(write).length === 0) return json(res, 400, { error: 'Nothing to update' });

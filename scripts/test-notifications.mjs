@@ -438,7 +438,7 @@ try {
     ok(body.text.startsWith('⚠️ ZASHM | تنبيه: الداتابيز معطّلة والأوردر لم يُسجَّل'), 'banner names the outage');
     ok(body.text.includes('🔖 المرجع: ZSH-MW9ME7DE-6BAD9BCF'), 'carries the same order reference');
     ok(body.text.includes('تعذر حفظ الأوردر في قاعدة البيانات'), 'carries the mapped reason');
-    ok(body.text.includes('❗ العميل شاف رسالة «تم تنفيذ طلبك»'), 'tells the owner the customer was reassured');
+    ok(body.text.includes('❗ العميل شاف رسالة «استلمنا طلبك وسنتأكد منه قريبًا»'), 'tells the owner the exact pending message the customer saw');
     ok(body.text.includes('الاسم: Fatima Ahmed'), 'carries the customer name');
     ok(body.text.includes('الهاتف: 01012345678'), 'carries the phone');
     ok(body.text.includes('العنوان: 12 Nile Street'), 'carries the address');
@@ -531,9 +531,11 @@ try {
     ok(orders.includes("acceptPending('save_failed')"), 'RPC failure accepts pending');
     ok(orders.includes("acceptPending('unexpected')"), 'unexpected failure accepts pending');
     ok(orders.includes('if (!orderStored && !responded)'), 'no false alert after a commit');
-    ok(orders.includes('{ success: true, pending: true, order }'), 'the customer gets a normal success shape');
+    ok(orders.includes('json(res, 202, {'), 'the customer gets an honest 202, not a fake confirmation');
+    ok(orders.includes('pending: true,'), 'the pending flag is returned to the client');
+    ok(orders.includes('messageAr:'), 'bilingual pending copy is returned to the client');
     ok(
-      orders.indexOf('json(res, 200, { success: true, pending: true, order });') <
+      orders.indexOf('json(res, 202, {') <
         orders.indexOf('await sendPendingOrderAlert('),
       'the customer is answered before Telegram is contacted'
     );

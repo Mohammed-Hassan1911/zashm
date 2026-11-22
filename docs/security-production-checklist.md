@@ -41,7 +41,7 @@ Applied and confirmed by behaviour:
   variant sum `27`, `Pant` stock `24` = variant sum `24`, and `reservedStock`
   is `0` on both.
 
-Current data baseline (2026-11-19):
+Current data baseline (owner-run 2026-11-22):
 
 - anon `GET /rest/v1/products_public?select=id` now returns **0** ids. The four
   previously visible ids — `1794943849613141`, `1794955384475152`,
@@ -50,11 +50,18 @@ Current data baseline (2026-11-19):
   `PATCH active=false` after a backup of the four rows was captured locally;
   the change is reversible with `PATCH active=true`. No rows were deleted and no
   prices or stock values were rewritten.
-- Live SQL counts (owner-run 2026-11-20, detailed below) are orders `8`, users
-  `2`, coupons `1`, products `4`, and two accounts with the `admin` role. The
-  earlier baseline (orders `1`, order `ZSH-MWLGRZ7M-EC96FF20`, coupon `ZAMALEK`,
-  admin `mohammed`) is historical and superseded. Admin identities and customer
-  PII are deliberately not copied into this document.
+- Live aggregate counts (owner-run 2026-11-22) are `admins=1`, `total_users=1`,
+  `total_orders=0`, `cancelled_orders=0`, `nonzero_reserved_stock=0`,
+  `total_products=1`, `active_products=1`, `inactive_products=0`,
+  `null_active_products=0`, `total_coupons=1`, `active_coupons=1`. The owner
+  confirmed that keeping a single admin/user is intentional. The earlier
+  2-admin / 8-order baseline (2026-11-20) and the audit's 3-admin / 9-order
+  figure are historical and superseded. No identities or customer PII are
+  copied into this document.
+- The owner deleted all orders on 2026-11-22 (pre-deletion count was `9`). Since
+  `atomic_delete_order` is the only path that reconciles stock and coupon usage,
+  a raw `DELETE FROM public.orders` leaves those values untouched; a read-only
+  drift check is recommended but was not requested.
 
 Production https://za-shm.vercel.app serves the bundle built from `b5543fc`
 (`index-CKR1oqUT.js` and `index-CP2InU7q.css`). The code deployment
@@ -182,6 +189,16 @@ the aggregated catalog queries in the Supabase SQL Editor and pasted every row:
   (`bucket_id <> 'products'`) that blocks browser-role listing while direct
   image downloads remain available.
 - rate-limit snapshot: 4 expired rows, 0 active.
+
+**Current aggregate verification (owner-run, read-only, 2026-11-22).** The owner
+ran the same count-only `SELECT` before and after deleting the orders and pasted
+both rows. The final row was `admins=1, total_users=1, total_orders=0,
+cancelled_orders=0, nonzero_reserved_stock=0, total_products=1,
+active_products=1, inactive_products=0, null_active_products=0,
+total_coupons=1, active_coupons=1`. The pre-deletion row differed only in
+`total_orders=9`. The owner explicitly confirmed the single admin account is
+intentional, resolving the C4 count conflict. This proves only the aggregate
+counts; RLS, grants, functions and storage were not re-verified in this pass.
 
 **Legacy policy cleanup (owner-approved, applied 2026-11-20).** The catalog
 still had a permissive `public_read_products` `SELECT` policy on base `products`

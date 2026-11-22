@@ -338,6 +338,21 @@ console.log('\n[4] secure order tracking');
   const cartSrc = read('src/pages/CartPage.js');
   ok(!/\/\?track=' \+ encodeURIComponent/.test(cartSrc), 'checkout does not fall back to an id-only tracking URL');
 
+  // C3: an outage answer is 202 and must never be dressed up as a stored order.
+  ok(/if \(!result\.pending\) clearCheckoutIdempotencyKey\(idempotencyKey\)/.test(cartSrc),
+    'a pending 202 keeps the idempotency key so a retry cannot duplicate the order');
+  ok(/success\.pending \? 'Temporary reference'/.test(cartSrc) &&
+     /success\.pending \? 'To be confirmed'/.test(cartSrc) &&
+     /success\.pending \? 'Estimated total'/.test(cartSrc),
+    'pending confirmations label the reference, delivery and total as provisional');
+  const pendingGate = cartSrc.lastIndexOf('{!success.pending && (');
+  ok(pendingGate >= 0 && cartSrc.slice(pendingGate, pendingGate + 1600).includes('TRACK YOUR ORDER'),
+    'a pending order gets no tracking button');
+  ok(/استلمنا طلبك وسنتأكد منه قريبًا/.test(cartSrc) &&
+     /We received your order and will confirm it shortly/.test(cartSrc) &&
+     !/تم تنفيذ طلبك/.test(cartSrc),
+    'the pending screen uses the exact honest bilingual copy');
+
   const trackPageSrc = read('src/pages/TrackOrder.js');
   ok(/setSignedToken\(tk\)/.test(trackPageSrc) &&
      /\[activeOrderId, signedToken\]/.test(trackPageSrc) &&
@@ -348,6 +363,13 @@ console.log('\n[4] secure order tracking');
      /history\.replaceState/.test(trackPageSrc) &&
      /searchParams\.set\('track', id\)/.test(trackPageSrc),
     'tk and wa are stripped from the address bar while the plain track id is kept');
+  ok(/saveTrackCredential\(id, tk\)/.test(trackPageSrc) &&
+     /readTrackCredential\(id\)/.test(trackPageSrc) &&
+     /setSignedToken\(readTrackCredential\(id\)\)/.test(trackPageSrc),
+    'the token survives a refresh in sessionStorage and the search form can restore it');
+  const credentialSrc = read('src/lib/trackCredential.mjs');
+  ok(/sessionStorage/.test(credentialSrc) && !/localStorage/.test(credentialSrc),
+    'the tracking credential is tab-scoped, not written to long-lived storage');
 }
 
 // ─── [5] SQL search_path ────────────────────────────────────────────────────
@@ -460,6 +482,19 @@ console.log('\n[8] production rollout decisions');
     Boolean(lastUpdated && verifiedOn && lastUpdated[1] === verifiedOn[1]),
     'the header date matches the production-state date'
   );
+
+  // The handoff is authoritative for rollout: the superseded optimistic-200
+  // contract must be clearly marked, and the current 202 contract documented.
+  const handoff = read('docs/production-remediation-handoff.md');
+  const oldSection = handoff.indexOf('### 13.9 Optimistic confirmation');
+  const currentSection = handoff.indexOf('### 13.12 Honest outage reply');
+  ok(oldSection >= 0 && /SUPERSEDED 2026-11-22/.test(handoff.slice(oldSection, oldSection + 400)),
+    'the old optimistic-confirmation section is marked historical');
+  ok(currentSection > oldSection &&
+     /202 Accepted/.test(handoff.slice(currentSection)) &&
+     /استلمنا طلبك وسنتأكد منه قريبًا/.test(handoff.slice(currentSection)) &&
+     /keeps the idempotency key/.test(handoff.slice(currentSection)),
+    'the handoff documents the current honest 202 contract');
 
   const sqlFiles = readdirSync(new URL('supabase/', root)).filter((f) => f.endsWith('.sql'));
   const writerSql = sqlFiles

@@ -834,18 +834,23 @@ export const useStore = create((set, get) => ({
     };
   },
 
-  updateOrderStatus: async (id, newStatus) => {
+  updateOrderStatus: async (id, newStatus, explicitExpectedStatus) => {
     const orders = get().orders;
     const order = orders.find(o => o.id === id);
     if (!order) return { success: false, error: 'Order not found' };
 
+    // The status the admin actually saw when they decided. The confirmation
+    // dialog passes the value it captured on open; a plain dropdown change
+    // passes the row's current status. Re-reading it here would defeat the
+    // precondition when a background refresh moved the row in between.
+    const expectedStatus = String(explicitExpectedStatus || order.status || '');
     const timestamps = { ...(order.timestamps || {}), [newStatus.toLowerCase()]: new Date().toISOString() };
 
     // تحديث محلي فوري ثم مزامنة السيرفر (السيرفر يعالج المخزون عند الإلغاء/الرجوع)
     set({ orders: orders.map(o => o.id === id ? { ...o, status: newStatus, timestamps } : o) });
 
     try {
-      await api.patch('/admin/orders', { id, status: newStatus });
+      await api.patch('/admin/orders', { id, status: newStatus, expectedStatus });
     } catch (err) {
       console.error('updateOrderStatus failed:', err.message);
       // Revert the optimistic change to server truth and report the failure.

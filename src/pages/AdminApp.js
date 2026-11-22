@@ -1051,12 +1051,15 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [copied, setCopied] = useState(false); // حالة لإشعار النسخ
-  const [statusConfirm, setStatusConfirm] = useState(null); // { order, status } for final statuses
+  // `expectedStatus` is the status the admin saw when they opened the dialog.
+  // It is captured here — NOT re-read from the store at confirmation time —
+  // because the 10s poll (see AdminApp root) can move the row underneath us.
+  const [statusConfirm, setStatusConfirm] = useState(null); // { order, status, expectedStatus }
   const [statusSaving, setStatusSaving] = useState(false);
   const statusDialogRef = useRef(null);
 
-  const applyStatusChange = async (id, status) => {
-    const res = await updateOrderStatus(id, status);
+  const applyStatusChange = async (id, status, expectedStatus) => {
+    const res = await updateOrderStatus(id, status, expectedStatus);
     if (res && res.success === false) {
       toast.error(`Order not updated. ${res.error || 'Please try again.'}`);
       return res;
@@ -1070,18 +1073,36 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const requestStatusChange = (order, status) => {
     if (!canEdit || !order || !status || status === order.status) return;
     if (FINAL_ORDER_STATUSES.includes(status)) {
-      setStatusConfirm({ order, status });
+      setStatusConfirm({ order, status, expectedStatus: order.status });
       return;
     }
-    applyStatusChange(order.id, status);
+    applyStatusChange(order.id, status, order.status);
   };
+
+  // The background poll can change the row while the dialog is open. If the
+  // decision is now stale, close it rather than applying an outdated cancel
+  // (which would restore stock/coupon usage against obsolete state).
+  useEffect(() => {
+    if (!statusConfirm || statusSaving) return;
+    const current = orders.find((o) => o.id === statusConfirm.order.id);
+    if (current && current.status !== statusConfirm.expectedStatus) {
+      setStatusConfirm(null);
+      toast.error('Order status changed while this dialog was open. Please review it again.');
+    }
+  }, [orders, statusConfirm, statusSaving]);
 
   const confirmStatusChange = async () => {
     if (!statusConfirm || statusSaving) return;
-    const { order, status } = statusConfirm;
+    const { order, status, expectedStatus } = statusConfirm;
+    const current = orders.find((o) => o.id === order.id);
+    if (current && current.status !== expectedStatus) {
+      setStatusConfirm(null);
+      toast.error('Order status changed while this dialog was open. Please review it again.');
+      return;
+    }
     setStatusSaving(true);
     try {
-      await applyStatusChange(order.id, status);
+      await applyStatusChange(order.id, status, expectedStatus);
     } finally {
       setStatusSaving(false);
       setStatusConfirm(null);

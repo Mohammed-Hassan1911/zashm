@@ -613,6 +613,11 @@ checklist.
 
 ### 13.9 Optimistic confirmation during a database outage (2026-11-10, uncommitted)
 
+> **SUPERSEDED 2026-11-22 — historical record only.** The owner reversed this
+> decision: a shopper must NOT be told an unsaved order was confirmed. The
+> current customer contract is in §13.12 below. Do not verify against this
+> section.
+
 **Owner decision (2026-11-10):** when the database is unreachable the shopper
 must see NOTHING broken. They press PLACE ORDER and get the normal
 "order placed / تم تنفيذ طلبك" confirmation. The Telegram alert still arrives
@@ -744,3 +749,54 @@ with the same order body plus a banner stating the order was NOT stored.
   wordmark with no overflow and no uncaught errors; a product card opened
   `/product/1794943849613141` (T-SHIRT, EGP 880, size M preselected,
   add-to-bag enabled).
+
+### 13.12 Honest outage reply, status precondition, public POST CSRF (2026-11-22, uncommitted)
+
+This supersedes §13.9. Products/catalogue data are explicitly outside this
+change and remain the owner's responsibility.
+
+- **C3 — outage reply.** `api/orders.js` `acceptPending(reason)` now answers
+  **202 Accepted** with `success: true, pending: true, order`, plus
+  `message: 'We received your order and will confirm it shortly.'` and
+  `messageAr: 'استلمنا طلبك وسنتأكد منه قريبًا.'`. No fake confirmation, no
+  tracking URL, no "confirmed" or "تم تنفيذ طلبك" string. The Telegram owner
+  alert now says the customer saw that exact pending line. `apiFetch` treats 202
+  as success; `src/store.js` persists `pending` on the confirmation; `CartPage`
+  shows a distinct pending receipt (temporary reference, "to be confirmed",
+  estimated total, no TRACK button) and **keeps the idempotency key** so a retry
+  reuses the same key and cannot create a duplicate once the DB returns.
+- **C2 — status precondition.** `src/store.js` captures the status on screen
+  (or the value captured when the final-status dialog opened in `AdminApp.js`)
+  and sends it as `expectedStatus`; `api/admin/orders.js` uses it as
+  `p_expected_status`. A stale tab now gets `409 { code: 'status_changed' }`
+  instead of overwriting a newer transition. Legacy callers that omit it still
+  fall back to the freshly read row. Non-standard legacy status strings are
+  accepted as preconditions (the RPC compares plain text); only syntactically
+  malformed values get 422.
+- **Public POST CSRF.** `enforceMutationOrigin(req, res)` (Origin allow-list)
+  runs before any body read on `/api/orders`, `/api/reviews`,
+  `/api/coupons/validate` and `/api/errors`; `readBody()` rejects explicit non-JSON
+  Content-Types with **415**. A cross-site form cannot drive these routes.
+  Production `ALLOWED_ORIGINS` must contain the exact customer-facing origin.
+- **Product images.** `api/admin/products.js` requires HTTPS for the single
+  `image` field on create, import and PATCH. `data:`/`javascript:`/`http://`
+  values are refused with 422. `images[]` was already filtered.
+- **Tracking.** The signed `tk` is stored in tab-scoped `sessionStorage` keyed
+  by order id so a refresh of the secure link still works; it is still stripped
+  from the address bar. `vercel.json` adds edge `noindex` for any `?track=` /
+  `?tk=` query URL (the SPA also serves tracking at `/`).
+- **Local proof (this session):** focused suites and full `npm test` pass with
+  **0 failed** (real PostgreSQL suite ran); `npx vite build` to a temp outDir
+  passes with no secret in the bundle. **No production verification was made.**
+- **C4 — RESOLVED (owner-run 2026-11-22).** The owner ran the read-only count
+  query and pasted the aggregate rows (no PII). Final state: `admins=1`,
+  `total_users=1`, `total_orders=0`, `cancelled_orders=0`,
+  `nonzero_reserved_stock=0`, `total_products=1`, `active_products=1`,
+  `total_coupons=1`, `active_coupons=1`. The owner deleted all orders on this
+  date (pre-deletion `total_orders=9`) and explicitly confirmed that keeping a
+  single admin is intentional. The old 2-admin / 8-order baseline and the
+  audit's 3-admin / 9-order figure are historical and superseded; see
+  `docs/security-production-checklist.md` for the updated baseline. Note: a raw
+  `DELETE FROM public.orders` does not reconcile stock or coupon usage — that
+  only happens inside `atomic_delete_order` — so a read-only drift check is
+  advisable if the deletion was not made through the RPC.

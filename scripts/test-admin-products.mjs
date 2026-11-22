@@ -351,8 +351,8 @@ console.log('\n[7] order status safety (final statuses need confirmation)');
   const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
   ok(/const FINAL_ORDER_STATUSES = \['Delivered', 'Cancelled'\]/.test(src),
     'Delivered and Cancelled are declared as final statuses');
-  ok(/const requestStatusChange = \(order, status\) => \{[\s\S]*?FINAL_ORDER_STATUSES\.includes\(status\)[\s\S]*?setStatusConfirm\(\{ order, status \}\)/.test(src),
-    'final statuses open a confirmation instead of applying immediately');
+  ok(/const requestStatusChange = \(order, status\) => \{[\s\S]*?FINAL_ORDER_STATUSES\.includes\(status\)[\s\S]*?setStatusConfirm\(\{ order, status, expectedStatus: order\.status \}\)/.test(src),
+    'final statuses open a confirmation carrying the status the admin saw');
   ok(/onChange=\{e => \{ const next = e\.target\.value; e\.target\.value = order\.status; requestStatusChange\(order, next\); \}\}/.test(src),
     'the table status dropdown resets itself and asks for confirmation');
   ok(/onClick=\{\(\) => requestStatusChange\(selected, s\)\}/.test(src),
@@ -503,6 +503,44 @@ console.log('\n[9] admin size-window editor wiring');
   ok(/supabase\/product_size_ranges\.sql/.test(src), 'the warning names the migration to apply');
   ok(/Clear/.test(src), 'each size window can be cleared');
   ok(/aria-label=\{`\$\{size\} \$\{field\.label\}`\}/.test(src), 'each window input is labelled for screen readers');
+}
+
+console.log('\n[10] public image URLs must be HTTPS');
+{
+  const base = {
+    name: 'Image Tee', category: 'Tees', price: 100, stock: 5,
+    sizes: ['M'], colors: ['Black'], variantStock: { 'M-Black': 5 },
+  };
+  const auth = { authorization: `Bearer ${tokenFor(admin)}` };
+
+  for (const bad of ['http://example.test/a.jpg', 'data:text/html;base64,PHNjcmlwdD4=', 'javascript:alert(1)']) {
+    const res = await call({
+      method: 'POST', headers: auth,
+      body: { product: { ...base, image: bad } },
+    });
+    eq(res.statusCode, 422, `POST rejects the unsafe image URL (${bad.slice(0, 18)})`);
+    eq(res.body.error, 'Image URL must use HTTPS', 'the reason is explicit');
+  }
+
+  const okCreate = await call({
+    method: 'POST', headers: auth,
+    body: { product: { ...base, image: 'https://example.test/hero.jpg' } },
+  });
+  eq(okCreate.statusCode, 200, 'an HTTPS image is accepted');
+  eq(okCreate.body.product.image, 'https://example.test/hero.jpg', 'the HTTPS image is stored');
+
+  const badPatch = await call({
+    method: 'PATCH', headers: auth,
+    body: { id: 10, updates: { image: 'http://example.test/track.gif' } },
+  });
+  eq(badPatch.statusCode, 422, 'PATCH rejects a plain http image too');
+
+  const okPatch = await call({
+    method: 'PATCH', headers: auth,
+    body: { id: 10, updates: { image: 'https://example.test/new.jpg' } },
+  });
+  eq(okPatch.statusCode, 200, 'PATCH accepts an HTTPS image');
+  eq(okPatch.body.product.image, 'https://example.test/new.jpg', 'the new image is persisted');
 }
 
 console.log(`\nadmin-products: ${pass} passed, ${fail} failed`);

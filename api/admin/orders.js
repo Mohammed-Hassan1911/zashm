@@ -174,8 +174,21 @@ async function updateOrder(req, res) {
 
   const id = getId(req, body);
   const newStatus = String((body && body.status) || '').trim();
+  // The status the admin's screen actually read before choosing the transition.
+  // Omitting it (legacy callers) still falls back to the freshly read row, but a
+  // stale tab that sends its old view now gets a 409 instead of silently
+  // re-applying an outdated cancel/restore decision.
+  const expectedStatus = String((body && body.expectedStatus) || '').trim();
   if (!id) return json(res, 400, { error: 'Order id is required' });
   if (!ORDER_STATUSES.includes(newStatus)) return json(res, 422, { error: 'Invalid status' });
+  // Do NOT require expectedStatus to be one of ORDER_STATUSES. Legacy rows can
+  // carry values such as `pending` or `Created`; the lifecycle RPC compares the
+  // precondition as plain text, so an unknown-but-real status must still be
+  // accepted. Only reject syntactically unusable values. A wrong-but-well-formed
+  // precondition is handled by the RPC as 409 status_changed.
+  if (expectedStatus.length > 60 || /[\u0000-\u001f\u007f]/.test(expectedStatus)) {
+    return json(res, 422, { error: 'Invalid expected status' });
+  }
 
   try {
     const sb = supabaseAdmin();
@@ -186,6 +199,7 @@ async function updateOrder(req, res) {
     if (!order) return json(res, 404, { error: 'Order not found' });
 
     const oldStatus = String(order.status || 'Pending');
+    const precondition = expectedStatus || oldStatus;
     const timestamps = {
       ...(parseOrderRow(order).timestamps || {}),
       [newStatus.toLowerCase()]: new Date().toISOString(),
@@ -197,7 +211,7 @@ async function updateOrder(req, res) {
     // stock restore happens.
     const { data, error: rpcErr } = await sb.rpc('atomic_set_order_status', {
       p_id: id,
-      p_expected_status: oldStatus,
+      p_expected_status: precondition,
       p_new_status: newStatus,
       p_timestamps: timestamps,
     });
@@ -213,6 +227,7 @@ async function updateOrder(req, res) {
       if (reason === 'status_changed') {
         return json(res, 409, {
           error: 'This order was changed by another operation. Please refresh and try again.',
+          code: 'status_changed',
           status: r.status || null,
         });
       }

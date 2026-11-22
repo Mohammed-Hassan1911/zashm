@@ -200,6 +200,20 @@ function requestOriginAllowed(req) {
   return getAllowedOrigin(req) === origin;
 }
 
+/**
+ * Shared CSRF guard for PUBLIC state-changing endpoints (guest checkout,
+ * reviews, coupon validation, client error reports). Those routes have no
+ * session cookie, so requirePerm()/CSRF double-submit does not cover them —
+ * the Origin allow-list is the only thing that stops a third-party page from
+ * posting on a visitor's behalf. Returns true when the request may continue;
+ * otherwise writes a 403 and returns false.
+ */
+function enforceMutationOrigin(req, res) {
+  if (requestOriginAllowed(req)) return true;
+  json(res, 403, { error: 'Request origin is not allowed' });
+  return false;
+}
+
 function csrfHeaderValid(req) {
   const cookies = parseCookies(req);
   const cookieToken = cookies[CSRF_COOKIE] || '';
@@ -218,6 +232,22 @@ function newCsrfToken() {
 
 function readBody(req, maxBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
+    // A cross-site <form> can POST with text/plain or x-www-form-urlencoded but
+    // cannot set application/json without a CORS preflight (which the Origin
+    // allow-list rejects). Refuse those content types here so the public POST
+    // routes cannot be driven by a drive-by form. A missing Content-Type is
+    // tolerated for internal/server callers; an explicitly non-JSON one is not.
+    const contentType = String((req && req.headers && req.headers['content-type']) || '').toLowerCase();
+    if (contentType && !contentType.startsWith('application/json')) {
+      reject(
+        Object.assign(
+          new Error('Content-Type must be application/json'),
+          { status: 415 }
+        )
+      );
+      return;
+    }
+
     let size = 0;
     let rejected = false;
     const chunks = [];
@@ -2129,11 +2159,12 @@ function buildOrderFeedbackActions(order = {}, trackingUrl) {
 /**
  * Owner alert for an order the database never received.
  *
- * Owner decision (2026-11-10): while the database is down the storefront still
- * confirms the order to the customer, so this message is the ONLY record of the
- * sale. It therefore carries the same body the owner normally forwards —
- * buildOrderTelegramMessage() — with a banner on top saying the order was not
- * stored and the customer was already told it was.
+ * Owner decision (2026-11-22, superseding 2026-11-10): while the database is
+ * down the storefront answers 202 "we received your order and will confirm it
+ * shortly", so this message is the ONLY record of the sale. It carries the same
+ * body the owner normally forwards — buildOrderTelegramMessage() — with a
+ * banner saying the order was not stored and the exact pending line the
+ * customer saw. No fake confirmation is ever shown to the shopper.
  *
  * When the database could not be read, the amounts are what the customer saw on
  * the checkout page. They are labelled as such and never used for charging: a
@@ -2150,7 +2181,7 @@ function buildPendingOrderMessage(order = {}, options = {}) {
   if (orderId) lines.push(`🔖 المرجع: ${orderId}`);
   if (whenText) lines.push(`🕒 الوقت: ${whenText}`);
   lines.push(`📌 السبب: ${reasonText}`);
-  lines.push('❗ العميل شاف رسالة «تم تنفيذ طلبك». اتصل بيه وأكّد الأوردر يدويًا.');
+  lines.push('❗ العميل شاف رسالة «استلمنا طلبك وسنتأكد منه قريبًا». اتصل بيه وأكّد الأوردر يدويًا.');
   if (amountsFromClient) {
     lines.push('💡 الأسعار اللي تحت جاية من شاشة العميل (الداتابيز مش متاحة) — راجعها معاه قبل الشحن.');
   }
@@ -2562,6 +2593,7 @@ module.exports = {
   clearCsrfCookie,
   newCsrfToken,
   requestOriginAllowed,
+  enforceMutationOrigin,
   SESSION_TTL_MS,
   SESSION_COOKIE,
   CSRF_COOKIE,
@@ -2576,6 +2608,7 @@ module.exports = {
   validateOrderPayload,
   validateOrderEditPayload,
   cairoDateString,
+  isHttpsUrl,
   validateProductPayload,
   validateCouponPayload,
   couponDiscountValue,
