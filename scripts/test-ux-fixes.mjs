@@ -681,6 +681,11 @@ try {
       assert.ok(/sizePillStyle/.test(product), 'both pills share one style object');
       assert.ok(/\[data-size-guide\],\s*\n\s*\[data-size-value\]/.test(css),
         'both pills shrink together at small widths');
+      assert.ok(/\{'Color'\}\{' '\}/.test(product), 'the colour label reads as two words when copied');
+      assert.ok(product.indexOf('className="product-stock') < product.indexOf('className="product-buy-row'),
+        'the stock reassurance sits above the buy row');
+      assert.ok(/\.product-stock \{[^}]*margin: 0 0 12px;/.test(css),
+        'the badge hugs the buy row above it');
     });
   }
 

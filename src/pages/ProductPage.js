@@ -39,16 +39,11 @@ const sizePillStyle = {
   transition: 'background 0.2s, border-color 0.2s',
 };
 
-// Every name wears one calm fabric ink; the chosen one swaps only its ink for
-// champagne gold and keeps the same crisp rim and halo. So the selected colour
-// reads as a single lit wordmark instead of a split one, and the bead still
-// carries the true fabric shade.
-function ColorName({ color, className = '', selected = false }) {
-  const style = selected
-    ? { ...getColorTextStyle(color), color: '#f0d9a8' }
-    : getColorTextStyle(color);
+// One calm ink for the whole name: the bead carries the true fabric colour,
+// while the lifted label ink keeps every shade readable on the dark canvas.
+function ColorName({ color, className = '' }) {
   return (
-    <span className={`product-color-name ${className}`.trim()} style={style}>
+    <span className={`product-color-name ${className}`.trim()} style={getColorTextStyle(color)}>
       {String(color || '')}
     </span>
   );
@@ -457,8 +452,8 @@ export default function ProductPage() {
             {/* Colors */}
             <div className="product-detail-block product-block" style={{ '--pp-i': 2 }}>
               <p className="product-meta-label">
-                {'Color'}
-                <ColorName color={selColor} className="product-meta-value" selected />
+                {'Color'}{' '}
+                <ColorName color={selColor} className="product-meta-value" />
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
@@ -475,7 +470,7 @@ export default function ProductPage() {
                       aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
                       title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}>
                       <span className="product-color-swatch" aria-hidden="true" style={{ background:getColorSwatch(c) }} />
-                      <ColorName color={c} selected={isSelected} />
+                      <ColorName color={c} />
                     </button>
                   );
                 })}
@@ -548,10 +543,28 @@ export default function ProductPage() {
               onOpenSizeGuide={() => setSizeGuideOpen(true)}
             />
 
+            {/* The reassurance reads before the action, so the buy row is the
+                last thing the eye lands on. */}
+            <p
+              role="status"
+              aria-live="polite"
+              className="product-stock product-detail-block"
+              data-tone={variantConfigInvalid || isOutOfStock ? 'out' : currentVariantStock > 5 ? 'ok' : 'low'}
+              style={{ '--pp-i': 4 }}
+            >
+              {variantConfigInvalid
+                ? 'This product is not available to order right now.'
+                : isOutOfStock
+                ? 'This size and colour is sold out.'
+                : currentVariantStock > 5
+                  ? 'In stock — ready to ship'
+                  : `Only ${currentVariantStock} left in this size and colour`}
+            </p>
+
             {/* Qty + Add */}
             <div
               className="product-buy-row product-detail-block"
-              style={{ '--pp-i': 4 }}
+              style={{ '--pp-i': 5 }}
             >
               <div className="product-qty" style={{ opacity: isOutOfStock ? 0.5 : 1, pointerEvents: isOutOfStock ? 'none' : 'auto' }}>
                 <button onClick={() => setQty(Math.max(1, qty - 1))}
@@ -590,22 +603,6 @@ export default function ProductPage() {
                 <Heart size={18} fill={isWished ? 'currentColor' : 'none'} />
               </motion.button>
             </div>
-
-            <p
-              role="status"
-              aria-live="polite"
-              className="product-stock product-detail-block"
-              data-tone={variantConfigInvalid || isOutOfStock ? 'out' : currentVariantStock > 5 ? 'ok' : 'low'}
-              style={{ '--pp-i': 5 }}
-            >
-              {variantConfigInvalid
-                ? 'This product is not available to order right now.'
-                : isOutOfStock
-                ? 'This size and colour is sold out.'
-                : currentVariantStock > 5 
-                  ? 'In stock — ready to ship' 
-                  : `Only ${currentVariantStock} left in this size and colour`}
-            </p>
 
             {/* Features */}
             <div className="product-perks product-detail-block" style={{ '--pp-i': 6 }}>

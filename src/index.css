@@ -4041,7 +4041,8 @@ main, [role="main"] {
   letter-spacing: 1px;
 }
 
-/* Small tracked labels that sit above a control ("Color", "Size"). */
+/* Small tracked labels that sit above a control ("Color", "Size"). The label
+   and its selected value are one single line at every width. */
 .product-meta-label {
   margin: 0 0 10px;
   color: var(--text3);
@@ -4050,14 +4051,16 @@ main, [role="main"] {
   font-weight: 600;
   letter-spacing: 2.2px;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .product-meta-value {
-  margin-left: 11px;
+  margin-left: 8px;
   color: var(--text);
   font-size: 15px;
   letter-spacing: 0.45px;
   text-transform: none;
   vertical-align: 1px;
+  white-space: nowrap;
 }
 
 .product-block { margin-bottom: 24px; }
@@ -4175,11 +4178,13 @@ main, [role="main"] {
 /* ─── Size selector ──────────────────────────────────────────────────────────
    The value and the size-guide action sit on one calm row; the chips below are
    small brushed plates that light up in gold when chosen. */
+/* The selected size and the Size Guide button stay on one shared line even on
+   the narrowest phone; both pills already keep their own text unwrapped. */
 .product-size-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px 12px;
   margin-bottom: 12px;
 }
@@ -4323,7 +4328,7 @@ main, [role="main"] {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 26px;
+  margin: 0 0 12px;
   padding: 9px 16px 9px 14px;
   border: 1px solid rgba(255, 248, 230, 0.14);
   border-radius: 4px;
