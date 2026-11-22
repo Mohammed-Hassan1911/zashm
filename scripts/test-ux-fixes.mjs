@@ -831,8 +831,8 @@ try {
       assert.ok(product.includes("whiteSpace: 'nowrap'"), 'the label cannot wrap');
       assert.ok(/@media \(max-width: 768px\)[\s\S]{0,600}\.product-buy-row\s*\{[\s\S]{0,200}display:\s*grid/.test(css),
         'the buy row becomes a grid on phones');
-      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,300}grid-column:\s*1 \/ -1[\s\S]{0,300}min-height:\s*50px/.test(css),
-        'the CTA spans the full row with a 50px target');
+      assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,300}grid-column:\s*1 \/ -1[\s\S]{0,300}min-height:\s*44px/.test(css),
+        'the CTA spans the full row with a 44px target');
       assert.ok(/\.product-buy-row > \.add-to-bag-btn\s*\{[\s\S]{0,400}font-size:\s*11\.5px/.test(css),
         'the label stays readable instead of shrinking to 10px');
       assert.ok(!product.includes('product-sticky-buy'), 'no sticky buy bar duplicates the CTA on scroll');
@@ -1305,8 +1305,8 @@ try {
     await step('no backdrop blur on phones where it would sample a moving page', () => {
       assert.ok(/\.label-badge,\s*\.product-card-labels \.label-badge,\s*\.product-card-label-row \.label-badge \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(touch),
         'badges over photos use solid glass');
-      assert.ok(/\.mobile-nav-inner \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;/.test(touch),
-        'the mobile dock is solid glass');
+      assert.ok(/\.mobile-nav-inner \{\s*-webkit-backdrop-filter: none;\s*backdrop-filter: none;\s*background: linear-gradient\(180deg, rgba\(32, 28, 24, 0\.88\) 0%, rgba\(14, 13, 12, 0\.92\) 100%\);/.test(touch),
+        'the mobile dock is lighter glass but still opaque enough to read');
       assert.ok(!/backdropFilter: 'blur\(8px\)'/.test(product),
         'the gallery controls no longer blur the photo they sit on');
     });

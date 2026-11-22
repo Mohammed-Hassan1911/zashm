@@ -39,6 +39,20 @@ const sizePillStyle = {
   transition: 'background 0.2s, border-color 0.2s',
 };
 
+// The first half of a colour name is champagne, the rest keeps the fabric ink.
+// Splitting by characters keeps every label the same width and rhythm, while
+// the two spans still read as one name for screen readers and tests.
+function ColorName({ color, className = '' }) {
+  const name = String(color || '');
+  const split = Math.max(1, Math.floor(name.length / 2));
+  return (
+    <span className={`product-color-name ${className}`.trim()} style={getColorTextStyle(color)}>
+      <span className="product-color-name-lead">{name.slice(0, split)}</span>
+      <span className="product-color-name-tail">{name.slice(split)}</span>
+    </span>
+  );
+}
+
 export default function ProductPage() {
   const { selectedProduct, addToCart, toggleWishlist, wishlist, products, productsLoading, productsLoadStatus, setPage, addRecentlyViewed } = useStore();
   const productId = resolveRoute().productId;
@@ -443,7 +457,7 @@ export default function ProductPage() {
             <div className="product-detail-block product-block" style={{ '--pp-i': 2 }}>
               <p className="product-meta-label">
                 {'Color'}
-                <span className="product-meta-value" style={getColorTextStyle(selColor)}>{selColor}</span>
+                <ColorName color={selColor} className="product-meta-value" />
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
@@ -460,7 +474,7 @@ export default function ProductPage() {
                       aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
                       title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}>
                       <span className="product-color-swatch" aria-hidden="true" style={{ background:getColorSwatch(c) }} />
-                      <span className="product-color-name" style={getColorTextStyle(c)}>{c}</span>
+                      <ColorName color={c} />
                     </button>
                   );
                 })}
@@ -572,7 +586,7 @@ export default function ProductPage() {
                   toast(isWished ? 'Removed from wishlist' : 'Added to wishlist', isWished ? 'error' : 'success');
                 }}
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.95 }}>
-                <Heart size={18} fill={isWished ? '#e74c3c' : 'none'} />
+                <Heart size={18} fill={isWished ? 'currentColor' : 'none'} />
               </motion.button>
             </div>
 

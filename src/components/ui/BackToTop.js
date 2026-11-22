@@ -27,6 +27,8 @@ function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
     .replace(/ *\n */g, '\n')
     .trim();
   const normalizedMessage = message.toLowerCase();
+  const isHeartbreak = type === 'error' && /removed from wishlist/.test(normalizedMessage);
+  const isWishlistSuccess = type === 'success' && /wishlist|favorite/.test(normalizedMessage);
   const Icon = type === 'success'
     ? (/wishlist|favorite/.test(normalizedMessage) ? Heart : /bag|cart/.test(normalizedMessage) ? ShoppingBag : CheckCircle)
     : type === 'error'
@@ -41,14 +43,14 @@ function ToastMessage({ toastItem, onDismiss, reduceMotion }) {
 
   return (
     <motion.div
-      className={`zashm-toast zashm-toast--${type}`}
+      className={`zashm-toast zashm-toast--${type}${isHeartbreak ? ' zashm-toast--heartbreak' : ''}`}
       role={type === 'error' ? 'alert' : 'status'}
       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -6 }}
       transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeOut' }}
     >
-      <Icon className="zashm-toast-icon" size={18} aria-hidden="true" />
+      <Icon className="zashm-toast-icon" size={18} aria-hidden="true" fill={isHeartbreak || isWishlistSuccess ? 'currentColor' : 'none'} />
       <span className="zashm-toast-message">{message}</span>
       <button
         type="button"

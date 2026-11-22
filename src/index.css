@@ -4052,11 +4052,12 @@ main, [role="main"] {
   text-transform: uppercase;
 }
 .product-meta-value {
-  margin-left: 6px;
+  margin-left: 11px;
   color: var(--text);
   font-size: 15px;
   letter-spacing: 0.45px;
   text-transform: none;
+  vertical-align: 1px;
 }
 
 .product-block { margin-bottom: 24px; }
@@ -4065,16 +4066,16 @@ main, [role="main"] {
    A lit well holding the fabric colour beside its own name: a brushed-glass
    pill with a diagonal sheen, a glossy bead for the swatch and a three-step
    halo on the ink. Selection adds a gold hairline ring and a soft gold bloom.
-   The name always wears the true fabric colour; the helper flips its rim on a
-   light canvas so the shape never changes between colours. */
+   The bead wears the true fabric colour; the helper lifts dark label inks
+   along their own hue so every name clears 4.5:1 on the dark canvas. */
 .product-color-option {
   position: relative;
   width: auto;
-  min-height: 48px;
-  padding: 0 16px 0 9px;
+  min-height: 40px;
+  padding: 0 12px 0 7px;
   display: inline-flex;
   align-items: center;
-  gap: 11px;
+  gap: 7px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background:
@@ -4116,9 +4117,9 @@ main, [role="main"] {
 
 .product-color-swatch {
   position: relative;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
   border-radius: 50%;
   overflow: hidden;
   box-shadow:
@@ -4150,7 +4151,7 @@ main, [role="main"] {
    brighten the rim when the ink would vanish into the canvas. */
 .product-color-name,
 .product-meta-value {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: 700;
   -webkit-text-stroke: var(--color-stroke, 0px) var(--color-rim, transparent);
   paint-order: stroke fill;
@@ -4163,11 +4164,18 @@ main, [role="main"] {
 }
 
 .product-color-name {
-  font-size: 15px;
-  letter-spacing: 0.45px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
   line-height: 1.1;
+  text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* Champagne first half, fabric ink second half: one crisp, tracked wordmark.
+   A creamier gold than the site-wide token keeps the split soft and expensive. */
+.product-color-name-lead { color: #f0d9a8; }
+.product-color-name-tail { color: inherit; }
 
 /* ─── Size selector ──────────────────────────────────────────────────────────
    The value and the size-guide action sit on one calm row; the chips below are
@@ -4188,8 +4196,8 @@ main, [role="main"] {
 }
 
 .product-size-option {
-  width: 52px;
-  height: 48px;
+  width: 46px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4198,9 +4206,9 @@ main, [role="main"] {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008));
   color: var(--text2);
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -4246,15 +4254,15 @@ main, [role="main"] {
 }
 
 .product-qty-btn {
-  width: 44px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 0;
   background: none;
   color: var(--text2);
-  font-size: 18px;
+  font-size: 17px;
   line-height: 1;
   cursor: pointer;
   transition: color 0.2s ease, background-color 0.2s ease;
@@ -4266,16 +4274,16 @@ main, [role="main"] {
 }
 
 .product-qty-value {
-  min-width: 34px;
+  min-width: 30px;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .add-to-bag-btn {
   flex: 1 1 180px;
-  min-height: 48px;
+  min-height: 44px;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 1.9px;
@@ -4293,8 +4301,8 @@ main, [role="main"] {
 
 .product-wish-btn {
   flex: 0 0 auto;
-  width: 50px;
-  height: 50px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4307,9 +4315,10 @@ main, [role="main"] {
 }
 
 .product-wish-btn[data-wished='true'] {
-  border-color: rgba(231, 76, 60, 0.7);
-  color: #e74c3c;
-  box-shadow: 0 0 14px rgba(231, 76, 60, 0.14);
+  border-color: var(--gold);
+  color: var(--gold-light);
+  background: linear-gradient(180deg, rgba(201, 168, 76, 0.18), rgba(201, 168, 76, 0.05));
+  box-shadow: 0 0 16px rgba(201, 168, 76, 0.22), inset 0 1px 0 rgba(255, 240, 200, 0.12);
 }
 
 /* Stock line: a status dot plus the message. The frame is the same champagne
@@ -4686,13 +4695,13 @@ main, [role="main"] {
   }
   .product-price-row { gap: 8px; margin-bottom: 22px; }
   .product-block { margin-bottom: 20px; }
-  .product-color-option { min-height: 48px; padding: 0 14px 0 8px; gap: 9px; }
-  .product-color-swatch { width: 28px; height: 28px; flex-basis: 28px; }
-  .product-color-name { font-size: 14px; }
+  .product-color-option { min-height: 38px; padding: 0 10px 0 6px; gap: 6px; }
+  .product-color-swatch { width: 20px; height: 20px; flex-basis: 20px; }
+  .product-color-name { font-size: 10px; letter-spacing: 0.5px; }
   .product-size-head { margin-bottom: 10px; }
   .product-size-row { gap: 7px; }
-  .product-size-option { width: 50px; height: 46px; font-size: 11.5px; }
-  .product-qty-btn { width: 40px; }
+  .product-size-option { width: 44px; height: 38px; font-size: 10.5px; }
+  .product-qty-btn { width: 38px; }
   .product-perks { padding: 4px 14px; border-radius: 10px; }
   .product-perk { font-size: 12px; padding: 13px 0; gap: 11px; }
   .product-perk-icon { width: 32px; height: 32px; }
@@ -4770,6 +4779,13 @@ main, [role="main"] {
   border-inline-start-color: #f07171;
 }
 
+/* Same frame, same gold edge and same copy tone as "Added to wishlist".
+   Only the heart is ink-black; a whisper of light keeps it from disappearing
+   into the dark card. */
+.zashm-toast--heartbreak {
+  border-inline-start-color: var(--gold-light);
+}
+
 .zashm-toast--warning {
   border-inline-start-color: #e8ad55;
 }
@@ -4791,6 +4807,11 @@ main, [role="main"] {
 .zashm-toast--error .zashm-toast-icon { color: #f07171; }
 .zashm-toast--warning .zashm-toast-icon { color: #e8ad55; }
 .zashm-toast--info .zashm-toast-icon { color: #68afe8; }
+/* Placed after the base tones so the ink-black heart wins the cascade. */
+.zashm-toast--heartbreak .zashm-toast-icon {
+  color: #111111;
+  filter: drop-shadow(0 0 1px rgba(240, 217, 168, 0.85)) drop-shadow(0 0 3px rgba(240, 217, 168, 0.4));
+}
 
 .zashm-toast--neutral .zashm-toast-icon { color: #b0b4bc; }
 
@@ -7445,7 +7466,7 @@ main, [role="main"] {
     grid-column: 1 / -1;
     grid-row: 2;
     width: 100%;
-    min-height: 50px;
+    min-height: 44px;
     padding: 0 16px !important;
     font-size: 11.5px !important;
     letter-spacing: 1.6px !important;
@@ -10117,6 +10138,6 @@ body.is-page-hidden *::after {
   .mobile-nav-inner {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: linear-gradient(180deg, rgba(32, 28, 24, 0.94) 0%, rgba(14, 13, 12, 0.96) 100%);
+    background: linear-gradient(180deg, rgba(32, 28, 24, 0.88) 0%, rgba(14, 13, 12, 0.92) 100%);
   }
 }
