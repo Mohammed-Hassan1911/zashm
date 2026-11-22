@@ -39,16 +39,17 @@ const sizePillStyle = {
   transition: 'background 0.2s, border-color 0.2s',
 };
 
-// The first half of a colour name is champagne, the rest keeps the fabric ink.
-// Splitting by characters keeps every label the same width and rhythm, while
-// the two spans still read as one name for screen readers and tests.
-function ColorName({ color, className = '' }) {
-  const name = String(color || '');
-  const split = Math.max(1, Math.floor(name.length / 2));
+// Every name wears one calm fabric ink; the chosen one swaps only its ink for
+// champagne gold and keeps the same crisp rim and halo. So the selected colour
+// reads as a single lit wordmark instead of a split one, and the bead still
+// carries the true fabric shade.
+function ColorName({ color, className = '', selected = false }) {
+  const style = selected
+    ? { ...getColorTextStyle(color), color: '#f0d9a8' }
+    : getColorTextStyle(color);
   return (
-    <span className={`product-color-name ${className}`.trim()} style={getColorTextStyle(color)}>
-      <span className="product-color-name-lead">{name.slice(0, split)}</span>
-      <span className="product-color-name-tail">{name.slice(split)}</span>
+    <span className={`product-color-name ${className}`.trim()} style={style}>
+      {String(color || '')}
     </span>
   );
 }
@@ -457,7 +458,7 @@ export default function ProductPage() {
             <div className="product-detail-block product-block" style={{ '--pp-i': 2 }}>
               <p className="product-meta-label">
                 {'Color'}
-                <ColorName color={selColor} className="product-meta-value" />
+                <ColorName color={selColor} className="product-meta-value" selected />
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(p.colors || []).map(c => {
@@ -474,7 +475,7 @@ export default function ProductPage() {
                       aria-label={`Color ${c}${isColorOOS ? ' (out of stock)' : ''}`}
                       title={`${c}${isColorOOS ? ' (Out of stock)' : ''}`}>
                       <span className="product-color-swatch" aria-hidden="true" style={{ background:getColorSwatch(c) }} />
-                      <ColorName color={c} />
+                      <ColorName color={c} selected={isSelected} />
                     </button>
                   );
                 })}

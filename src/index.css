@@ -4172,11 +4172,6 @@ main, [role="main"] {
   white-space: nowrap;
 }
 
-/* Champagne first half, fabric ink second half: one crisp, tracked wordmark.
-   A creamier gold than the site-wide token keeps the split soft and expensive. */
-.product-color-name-lead { color: #f0d9a8; }
-.product-color-name-tail { color: inherit; }
-
 /* ─── Size selector ──────────────────────────────────────────────────────────
    The value and the size-guide action sit on one calm row; the chips below are
    small brushed plates that light up in gold when chosen. */
