@@ -55,36 +55,16 @@ export function getColorSwatch(color) {
   return COLOR_SWATCHES[name.toLocaleLowerCase()] || COLOR_SWATCHES[name] || '#8a8a8a';
 }
 
-function parseHex(value) {
-  const match = /^#([\da-f]{3,8})$/i.exec(String(value || '').trim());
-  if (!match) return null;
-  let hex = match[1];
-  if (hex.length === 3 || hex.length === 4) hex = [...hex].map((n) => n + n).join('');
-  if (hex.length === 8) hex = hex.slice(0, 6);
-  if (hex.length !== 6) return null;
-  return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
-}
-
-function relativeLuminance([r, g, b]) {
-  const channels = [r, g, b].map((v) => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
-}
-
-// One identical treatment for every name: the true fabric colour, the same
-// bold contrasting rim and the same lit halo as Black. Only the rim colour
-// flips to black on a light canvas, so the shape never changes between colours.
-export function getColorTextStyle(color, background = '#0a0a0a') {
-  const ink = getColorSwatch(color);
-  const canvas = parseHex(background) || [10, 10, 10];
-  const [r, g, b] = relativeLuminance(canvas) < 0.18 ? [255, 255, 255] : [0, 0, 0];
+// Every name gets the identical painted treatment: its own fabric colour,
+// the same crisp white rim and the same three-step lit halo. Nothing here
+// varies per colour, so no swatch is singled out for special handling.
+export function getColorTextStyle(color) {
   return {
-    color: ink,
-    '--color-rim': `rgba(${r}, ${g}, ${b}, 0.92)`,
-    '--color-glow': `rgba(${r}, ${g}, ${b}, 0.42)`,
+    color: getColorSwatch(color),
+    '--color-rim': 'rgba(255, 255, 255, 0.95)',
+    '--color-glow': 'rgba(255, 255, 255, 0.65)',
+    '--color-halo': 'rgba(255, 255, 255, 0.3)',
     '--color-stroke': '0.5px',
-    '--color-glow-size': '12px',
+    '--color-glow-size': '16px',
   };
 }
