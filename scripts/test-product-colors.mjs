@@ -117,8 +117,12 @@ assert.ok(!/@keyframes color-name-glint/.test(css), 'no extra animation competes
 assert.match(css, /\.product-color-swatch::after \{[\s\S]*?radial-gradient\(circle at 32% 24%/);
 assert.match(css, /\.product-color-option\[data-selected='true'\] \.product-color-swatch \{/);
 assert.match(css, /0 0 0 4px rgba\(201, 168, 76, 0\.6\)/);
-// Sold-out labels stay readable; the fade lives on the bead instead.
-assert.match(css, /\.product-color-option\[data-oos='true'\] \{ opacity: 0\.85; \}/);
-assert.match(css, /\.product-color-option\[data-oos='true'\] \.product-color-swatch \{ opacity: 0\.5; \}/);
+// Sold-out colours keep their true colour: no fade turns white into grey.
+// Availability is a two-tone diagonal strike that reads on both white and black.
+assert.match(css, /\.product-color-option\[data-oos='true'\] \{ opacity: 1; \}/);
+assert.ok(!/\.product-color-option\[data-oos='true'\] \.product-color-swatch \{ opacity: 0\.5; \}/.test(css), 'the grey fade is gone');
+assert.match(css, /\.product-color-option\[data-oos='true'\] \.product-color-swatch::before \{[\s\S]*?linear-gradient\(\s*45deg,/);
+assert.match(css, /rgba\(255, 255, 255, 0\.9\) 46%/);
+assert.match(css, /rgba\(10, 10, 10, 0\.85\) 51%/);
 
 console.log('product-colors: 128 passed, 0 failed');
