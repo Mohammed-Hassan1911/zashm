@@ -101,7 +101,6 @@ export default function HomePage() {
                     <span className="hero-brand-letter-stars" aria-hidden="true">
                       <span className="hero-brand-letter-star hero-brand-letter-star--a" />
                       <span className="hero-brand-letter-star hero-brand-letter-star--b" />
-                      <span className="hero-brand-letter-star hero-brand-letter-star--c" />
                     </span>
                   </span>
                 ))}
@@ -111,8 +110,6 @@ export default function HomePage() {
               <span className="hero-brand-sparkle hero-brand-sparkle--three" aria-hidden="true" />
               <span className="hero-brand-sparkle hero-brand-sparkle--four" aria-hidden="true" />
               <span className="hero-brand-sparkle hero-brand-sparkle--five" aria-hidden="true" />
-              <span className="hero-brand-sparkle hero-brand-sparkle--six" aria-hidden="true" />
-              <span className="hero-brand-sparkle hero-brand-sparkle--seven" aria-hidden="true" />
             </span>
           </div>
 

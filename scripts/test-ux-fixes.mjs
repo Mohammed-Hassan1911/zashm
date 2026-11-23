@@ -1235,7 +1235,7 @@ try {
         'no halo came back; the per-letter stars are static spans, not extra clones');
 
       const heroLetterStars = (home.match(/hero-brand-letter-star--/g) || []).length;
-      assert.equal(heroLetterStars, 3, 'the hero letter template carries three star spans');
+      assert.equal(heroLetterStars, 2, 'the hero letter template carries two star spans');
       assert.ok(/'ZASHM'\.split\(''\)\.map[\s\S]{0,600}?hero-brand-letter-star--a/.test(home),
         'the stars sit inside the letter loop, so all five letters get them');
       const footerLetterStars = (app.match(/footer-wordmark-letter-star--/g) || []).length;
@@ -1250,7 +1250,7 @@ try {
         'stars waiting for their turn rest dim, so no letter flashes at load');
 
       const sparkleCount = (home.match(/hero-brand-sparkle--/g) || []).length;
-      assert.equal(sparkleCount, 7, 'seven stars sit on the hero wordmark');
+      assert.equal(sparkleCount, 5, 'five stars sit on the hero wordmark');
       const footerSparkleCount = (app.match(/footer-wordmark-sparkle--/g) || []).length;
       assert.equal(footerSparkleCount, 5, 'five stars sit on the footer wordmark');
       assert.ok(/\.footer-wordmark-sparkle \{[^}]*animation:\s*hero-brand-twinkle 3\.2s ease-in-out infinite;/.test(css),
@@ -1284,12 +1284,16 @@ try {
         'nothing reads scroll position on the home page');
       assert.ok(/className="hero-brand-letter"[\s\S]{0,160}data-letter=\{letter\}/.test(home),
         'the letters keep their data-letter clone');
-      assert.ok(/hero-brand-letter-star--a[\s\S]*?hero-brand-letter-star--b[\s\S]*?hero-brand-letter-star--c/.test(home),
-        'three star spans sit inside every hero letter');
+      assert.ok(/hero-brand-letter-star--a[\s\S]*?hero-brand-letter-star--b/.test(home),
+        'two star spans sit inside every hero letter');
+      assert.ok(!/hero-brand-letter-star--c/.test(home),
+        'the extra hero star is gone');
       assert.ok(/footer-wordmark-letter-star--a[\s\S]*?footer-wordmark-letter-star--b[\s\S]*?footer-wordmark-letter-star--c/.test(app),
-        'the footer letters carry the same three stars');
-      assert.ok(/hero-brand-sparkle--one[\s\S]*?hero-brand-sparkle--two[\s\S]*?hero-brand-sparkle--three[\s\S]*?hero-brand-sparkle--four[\s\S]*?hero-brand-sparkle--five[\s\S]*?hero-brand-sparkle--six[\s\S]*?hero-brand-sparkle--seven/.test(home),
-        'the seven stars are plain spans inside the lockup');
+        'the footer letters keep their three stars');
+      assert.ok(/hero-brand-sparkle--one[\s\S]*?hero-brand-sparkle--two[\s\S]*?hero-brand-sparkle--three[\s\S]*?hero-brand-sparkle--four[\s\S]*?hero-brand-sparkle--five/.test(home),
+        'the five stars are plain spans inside the lockup');
+      assert.ok(!/hero-brand-sparkle--six/.test(home) && !/hero-brand-sparkle--seven/.test(home),
+        'the two extra ambient stars are gone from the home page only');
       assert.ok(/footer-wordmark-sparkle--one[\s\S]*?footer-wordmark-sparkle--two[\s\S]*?footer-wordmark-sparkle--three[\s\S]*?footer-wordmark-sparkle--four[\s\S]*?footer-wordmark-sparkle--five/.test(app),
         'the footer stars are plain spans too');
     });
