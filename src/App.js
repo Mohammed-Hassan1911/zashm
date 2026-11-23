@@ -455,8 +455,18 @@ function Footer({ setModal }) {
                   style={{ '--letter-i': index, '--letter-index': index }}
                 >
                   {letter}
+                  <span className="footer-wordmark-letter-stars" aria-hidden="true">
+                    <span className="footer-wordmark-letter-star footer-wordmark-letter-star--a" />
+                    <span className="footer-wordmark-letter-star footer-wordmark-letter-star--b" />
+                    <span className="footer-wordmark-letter-star footer-wordmark-letter-star--c" />
+                  </span>
                 </span>
               ))}
+              <span className="footer-wordmark-sparkle footer-wordmark-sparkle--one" aria-hidden="true" />
+              <span className="footer-wordmark-sparkle footer-wordmark-sparkle--two" aria-hidden="true" />
+              <span className="footer-wordmark-sparkle footer-wordmark-sparkle--three" aria-hidden="true" />
+              <span className="footer-wordmark-sparkle footer-wordmark-sparkle--four" aria-hidden="true" />
+              <span className="footer-wordmark-sparkle footer-wordmark-sparkle--five" aria-hidden="true" />
             </div>
             <p className="footer-blurb">
               <Gem size={14} aria-hidden="true" />

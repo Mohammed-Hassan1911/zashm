@@ -575,9 +575,6 @@ select option { background: var(--bg3); }
    photo. */
 .product-card-image {
   container-type: inline-size;
-  /* The two photos a card can show sit below a calm mat, so the label welded
-     to the top-left corner lands on empty background instead of on the goods. */
-  --card-headroom: 24px;
 }
 
 /* A hairline of light inside the top of every photo, so the frame catches the
@@ -611,16 +608,6 @@ select option { background: var(--bg3); }
   transition:
     opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
     transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Only the first two photos in a card (primary and hover) get the top mat. The
-   frame keeps its 3:4 box and dark ground, so the strip reads as an intentional
-   mount rather than a gap in the layout. */
-.product-card-image > .product-card-img:nth-of-type(-n+2) {
-  top: var(--card-headroom, 24px);
-  bottom: auto;
-  height: calc(100% - var(--card-headroom, 24px));
-  object-position: center top;
 }
 
 .product-card-img[data-visible='false'] { opacity: 0; }
@@ -793,10 +780,6 @@ select option { background: var(--bg3); }
   }
 }
 
-@media (max-width: 768px) {
-  .product-card-image { --card-headroom: 20px; }
-}
-
 /* On the narrowest phones a 131px card has ~83px before the wishlist heart.
    The longest label ("Limited Edition") has to shed a little padding and
    tracking to clear it without truncating the word. */
@@ -805,10 +788,6 @@ select option { background: var(--bg3); }
     padding: 2px 2px;
     letter-spacing: 0;
   }
-}
-
-@media (max-width: 360px) {
-  .product-card-image { --card-headroom: 18px; }
 }
 
 .product-card-sold-out {
@@ -852,7 +831,7 @@ select option { background: var(--bg3); }
   color: transparent;
 }
 
-/* The footer rides the same travelling gold band as the hero, just a touch
+/* The footer rides the same letter-by-letter light as the hero, just a touch
    quieter. Light needs to be paler than the metal underneath it to be seen at
    all — a gold clone matching a gradient stop simply disappears into the word —
    so both wordmarks use a pale champagne highlight with a tight warm halo. */
@@ -873,8 +852,61 @@ select option { background: var(--bg3); }
   will-change: opacity;
   pointer-events: none;
   animation: hero-brand-letter-glint 5s ease-in-out infinite;
-  animation-delay: calc(var(--letter-index) * 0.32s);
+  animation-delay: calc(var(--letter-index) * 0.6s);
 }
+
+/* Five small stars around the footer word, sharing the hero's twinkle keyframe
+   so the page keeps exactly six loops. They are decorative and pointer-transparent,
+   so the wordmark's five-click shortcut still receives every click. */
+.footer-wordmark-sparkle {
+  position: absolute;
+  z-index: 2;
+  width: 5px;
+  aspect-ratio: 1;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  background: #fff4c2;
+  box-shadow: 0 0 5px rgba(245, 215, 127, 0.7);
+  pointer-events: none;
+  animation: hero-brand-twinkle 3.2s ease-in-out infinite;
+}
+
+.footer-wordmark-sparkle--one { top: -9px; left: 3%; }
+
+.footer-wordmark-sparkle--two { top: 4px; right: -4px; width: 4px; animation-delay: 1s; }
+
+.footer-wordmark-sparkle--three { bottom: -9px; left: 29%; width: 4px; animation-delay: 1.9s; }
+
+.footer-wordmark-sparkle--four { top: -6px; right: 24%; width: 3px; animation-delay: 0.5s; }
+
+.footer-wordmark-sparkle--five { bottom: -3px; right: 12%; width: 4px; animation-delay: 2.4s; }
+
+/* The footer repeats the hero's travelling light down to the small stars on
+   each glyph: one opacity layer per letter, timed to the same 0.6s hand-off. */
+.footer-wordmark-letter-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.12;
+  animation: hero-dust-twinkle 5s ease-in-out infinite;
+  animation-delay: calc(var(--letter-index) * 0.6s);
+  will-change: opacity;
+}
+
+.footer-wordmark-letter-star {
+  position: absolute;
+  width: 3px;
+  aspect-ratio: 1;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  background: #fff4c2;
+  box-shadow: 0 0 4px rgba(245, 215, 127, 0.65);
+}
+
+.footer-wordmark-letter-star--a { top: -45%; left: -18%; }
+
+.footer-wordmark-letter-star--b { top: 10%; right: -22%; width: 2px; }
+
+.footer-wordmark-letter-star--c { bottom: -45%; left: 34%; width: 2px; }
 
 /* ─── Footer frame ───────────────────────────────────────────────────────────
    One frame for the whole footer: a gold hairline that drifts along the top
@@ -1453,13 +1485,12 @@ select option { background: var(--bg3); }
   color: transparent;
 }
 
-/* A single soft band of gold travels across the word instead of five letters
-   flashing one by one. Each glyph carries the same warm clone, and the 0.32s
-   stagger simply decides when the band reaches it: a slow rise, one gentle peak,
-   a slow fall. The clone has to be paler than the metal beneath it or it just
-   vanishes into the gradient; the halo stays tight, so it reads as brushed gold
-   catching the room rather than a neon flash. Only `opacity` moves, so the
-   compositor runs it without re-rasterising the text on every frame. */
+/* One soft light walks across the word. Every glyph carries the same pale
+   clone; the 0.6s stagger hands the glow from Z to A to S to H to M. The rise
+   takes longer than the gap between two letters, so a neighbour is already
+   brightening while the previous one is still fading — the peaks overlap into
+   one smooth travelling light rather than five separate flashes. Only `opacity`
+   moves, so the champagne metal is never re-rasterised. */
 .hero-brand-letter::after {
   content: attr(data-letter);
   position: absolute;
@@ -1478,23 +1509,54 @@ select option { background: var(--bg3); }
   opacity: 0.08;
   will-change: opacity;
   animation: hero-brand-letter-glint 5s ease-in-out infinite;
-  animation-delay: calc(var(--letter-index) * 0.32s);
+  animation-delay: calc(var(--letter-index) * 0.6s);
 }
 
-/* One broad, symmetrical pass per cycle. Because every letter shares this
-   curve and only the delay differs, the five peaks join into a single band
-   moving from Z toward M. */
+/* Three tiny stars per glyph, brightening on the same beat as the light that
+   reaches it. One wrapper per letter owns a shared opacity loop, so the fifteen
+   stars cost five layers instead of fifteen, and no new keyframe is added. */
+.hero-brand-letter-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  /* Matches the twinkle's resting frame, so a letter waiting for its turn is
+     already dim instead of flashing bright when its delay starts. */
+  opacity: 0.12;
+  animation: hero-dust-twinkle 5s ease-in-out infinite;
+  animation-delay: calc(var(--letter-index) * 0.6s);
+  will-change: opacity;
+}
+
+.hero-brand-letter-star {
+  position: absolute;
+  width: 4px;
+  aspect-ratio: 1;
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  background: #fff4c2;
+  box-shadow: 0 0 5px rgba(245, 215, 127, 0.7);
+}
+
+.hero-brand-letter-star--a { top: -24%; left: -20%; }
+
+.hero-brand-letter-star--b { top: 8%; right: -24%; width: 3px; }
+
+.hero-brand-letter-star--c { bottom: -20%; left: 32%; width: 3px; }
+
+/* A long rise to the peak, then a long fall. At 5s per cycle the glow reaches
+   full strength at 0.9s and fades by 2.1s; with letters 0.6s apart, two or three
+   neighbours overlap, which is what makes the light read as one moving beam. */
 @keyframes hero-brand-letter-glint {
   0%, 100% { opacity: 0.08; }
-  50% { opacity: 0.9; }
+  18% { opacity: 0.95; }
+  42% { opacity: 0.08; }
 }
 
-/* Three small stars around the wordmark, and a handful of dust motes in the
-   hero air. The previous version put 28 motes plus a sparkle on every other
-   letter on the page; that was 40+ promoted layers. This one is deliberately
-   tiny: three stars and six motes inside one field, and every frame is
-   `opacity`/`transform` only, so the compositor runs it without repainting the
-   text, the gradients or the photo behind it. */
+/* Seven small stars around the wordmark, and six dust motes in the hero air.
+   The stars are static shapes with a shared twinkle; no new keyframe, no per-
+   letter sparkle, and every frame is `opacity`/`transform` only, so the
+   compositor runs it without repainting the text, the gradients or the photo
+   behind it. */
 .hero-brand-sparkle {
   position: absolute;
   z-index: 2;
@@ -1504,9 +1566,8 @@ select option { background: var(--bg3); }
   background: #fff4c2;
   box-shadow: 0 0 6px rgba(245, 215, 127, 0.75);
   pointer-events: none;
-  /* Four promoted layers in total (three stars, one dust field). Each is a
-     few pixels square, so the texture cost is nil, and the compositor can run
-     the whole twinkle without touching style, layout or paint on the page. */
+  /* Each star is a few pixels square, so the extra four cost no meaningful
+     texture memory; the six motes still share one dust field. */
   will-change: opacity, transform;
   animation: hero-brand-twinkle 3.2s ease-in-out infinite;
 }
@@ -1528,6 +1589,34 @@ select option { background: var(--bg3); }
   bottom: -2%;
   width: 5px;
   animation-delay: 2s;
+}
+
+.hero-brand-sparkle--four {
+  top: -10%;
+  left: 30%;
+  width: 4px;
+  animation-delay: 0.5s;
+}
+
+.hero-brand-sparkle--five {
+  top: 8%;
+  right: 30%;
+  width: 5px;
+  animation-delay: 1.6s;
+}
+
+.hero-brand-sparkle--six {
+  bottom: 5%;
+  left: 22%;
+  width: 4px;
+  animation-delay: 2.5s;
+}
+
+.hero-brand-sparkle--seven {
+  bottom: 1%;
+  right: 7%;
+  width: 6px;
+  animation-delay: 0.3s;
 }
 
 @keyframes hero-brand-twinkle {
@@ -3848,6 +3937,10 @@ main, [role="main"] {
   .zashm-header-logo::after,
   .hero-brand-letter::after,
   .footer-wordmark-letter::after,
+  .hero-brand-sparkle,
+  .footer-wordmark-sparkle,
+  .hero-brand-letter-stars,
+  .footer-wordmark-letter-stars,
   .admin-login-mote,
   .admin-login-backdrop {
     display: none;
@@ -4993,6 +5086,18 @@ main, [role="main"] {
 
   /* Keep a steady light on the footer wordmark when the glint is still. */
   .footer-wordmark-letter::after { opacity: 0.3; }
+
+  .footer-wordmark-sparkle {
+    animation: none;
+    opacity: 0.55;
+    transform: none;
+  }
+
+  .hero-brand-letter-stars,
+  .footer-wordmark-letter-stars {
+    animation: none;
+    opacity: 0.55;
+  }
 
   .site-footer a,
   .site-footer button,

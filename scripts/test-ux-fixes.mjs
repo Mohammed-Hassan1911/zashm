@@ -1201,10 +1201,14 @@ try {
         'the one kept keyframe is the letter glint');
     });
 
-    await step('the light is one soft travelling gold band on every size', () => {
+    await step('one light travels from letter to letter on every size', () => {
       const heroGlint = /\.hero-brand-letter::after\s*\{[^}]*\}/.exec(css);
       const footerGlint = /\.footer-wordmark-letter::after\s*\{[^}]*\}/.exec(css);
       assert.ok(heroGlint && footerGlint, 'both wordmarks still carry a lit clone');
+      assert.ok(/\.hero-brand-letter::after\s*\{[^}]*animation-delay:\s*calc\(var\(--letter-index\) \* 0\.6s\)/.test(css),
+        'the hero light is handed from Z to M');
+      assert.ok(/\.footer-wordmark-letter::after\s*\{[^}]*animation-delay:\s*calc\(var\(--letter-index\) \* 0\.6s\)/.test(css),
+        'the footer light follows the same hand-off');
       assert.ok(!/#fdf0c4|0 0 76px/.test(heroGlint[0] + footerGlint[0]),
         'the old near-white flare and its wide halo are gone');
       const lum = (hex) => {
@@ -1215,21 +1219,42 @@ try {
       const footerLight = /#([0-9a-f]{6})/i.exec(footerGlint[0])[1];
       assert.ok(lum(heroLight) > lum('fff0c4') && lum(footerLight) > lum('fff0c4'),
         'the light is paler than the brightest stop in the metal gradient, so it is visible');
-      assert.ok(/@keyframes hero-brand-letter-glint\s*\{\s*0%,\s*100%\s*\{\s*opacity:\s*0\.08;\s*\}\s*50%\s*\{\s*opacity:\s*0\.9;/.test(css),
-        'one slow, symmetrical pass per cycle');
+      assert.ok(/@keyframes hero-brand-letter-glint\s*\{\s*0%,\s*100%\s*\{\s*opacity:\s*0\.08;\s*\}\s*18%\s*\{\s*opacity:\s*0\.95;\s*\}\s*42%\s*\{\s*opacity:\s*0\.08;/.test(css),
+        'one long rise and fall, so neighbours overlap into a moving light');
+      assert.ok(0.42 * 5 > 0.6,
+        'the fall lasts past the next letter, so the glow never blinks off between glyphs');
       const mobileBlocks = css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [];
       assert.ok(!mobileBlocks.some((block) => /\.hero-brand-letter::after,\s*\n\s*\.footer-wordmark-letter::after\s*\{\s*display:\s*none/.test(block)),
-        'phones keep the band instead of hiding it');
+        'phones keep the travelling light instead of hiding it');
     });
 
     await step('the wordmark stars and hero dust are tiny and compositor-only', () => {
       assert.ok(!/hero-brand-lockup::before/.test(css), 'the hero cloud behind the word is gone');
       assert.ok(!/\.footer-wordmark::before/.test(css), 'the footer cloud behind the word is gone');
       assert.ok(!/hero-brand-halo/.test(css) && !/hero-brand-letter-sparkle/.test(css),
-        'no halo and no per-letter sparkle came back');
+        'no halo came back; the per-letter stars are static spans, not extra clones');
+
+      const heroLetterStars = (home.match(/hero-brand-letter-star--/g) || []).length;
+      assert.equal(heroLetterStars, 3, 'the hero letter template carries three star spans');
+      assert.ok(/'ZASHM'\.split\(''\)\.map[\s\S]{0,600}?hero-brand-letter-star--a/.test(home),
+        'the stars sit inside the letter loop, so all five letters get them');
+      const footerLetterStars = (app.match(/footer-wordmark-letter-star--/g) || []).length;
+      assert.equal(footerLetterStars, 3, 'the footer letter template carries three star spans');
+      assert.ok(/'ZASHM'\.split\(''\)\.map[\s\S]{0,600}?footer-wordmark-letter-star--a/.test(app),
+        'the same loop gives every footer letter its stars');
+      assert.ok(/\.hero-brand-letter-stars \{[^}]*animation:\s*hero-dust-twinkle 5s ease-in-out infinite;/.test(css)
+        && /\.footer-wordmark-letter-stars \{[^}]*animation:\s*hero-dust-twinkle 5s ease-in-out infinite;/.test(css),
+        'one shared opacity loop per letter, no new keyframe');
+      assert.ok(/\.hero-brand-letter-stars \{[^}]*opacity:\s*0\.12;/.test(css)
+        && /\.footer-wordmark-letter-stars \{[^}]*opacity:\s*0\.12;/.test(css),
+        'stars waiting for their turn rest dim, so no letter flashes at load');
 
       const sparkleCount = (home.match(/hero-brand-sparkle--/g) || []).length;
-      assert.equal(sparkleCount, 3, 'exactly three stars sit on the wordmark');
+      assert.equal(sparkleCount, 7, 'seven stars sit on the hero wordmark');
+      const footerSparkleCount = (app.match(/footer-wordmark-sparkle--/g) || []).length;
+      assert.equal(footerSparkleCount, 5, 'five stars sit on the footer wordmark');
+      assert.ok(/\.footer-wordmark-sparkle \{[^}]*animation:\s*hero-brand-twinkle 3\.2s ease-in-out infinite;/.test(css),
+        'the footer stars reuse the hero twinkle instead of adding a loop');
       const dustCount = (home.match(/left: '\d+%', top: '\d+%', size:/g) || []).length;
       assert.equal(dustCount, 6, 'exactly six dust motes sit in the hero air');
       assert.ok(/className="hero-dust-field"/.test(home) && !/animationDelay/.test(home),
@@ -1246,8 +1271,10 @@ try {
         && !/transform|background|box-shadow|filter/.test(dustLoop.slice(0, 220)),
         'the dust loop animates opacity only');
       assert.ok(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.hero-brand-sparkle\s*\{\s*animation:\s*none;/.test(css)
-        && /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.hero-dust-field\s*\{\s*animation:\s*none;/.test(css),
-        'reduced motion freezes both at a steady glow');
+        && /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.hero-dust-field\s*\{\s*animation:\s*none;/.test(css)
+        && /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.footer-wordmark-sparkle\s*\{\s*animation:\s*none;/.test(css)
+        && /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.hero-brand-letter-stars,[\s\S]{0,80}\.footer-wordmark-letter-stars\s*\{\s*animation:\s*none;/.test(css),
+        'reduced motion freezes every decoration at a steady glow');
     });
 
     await step('the home hero is plain markup with no scroll work', () => {
@@ -1255,11 +1282,16 @@ try {
         'the hero no longer mounts Framer Motion nodes');
       assert.ok(!/useScroll|useTransform|scrollYProgress/.test(home),
         'nothing reads scroll position on the home page');
-      assert.ok(/className="hero-brand-letter"[\s\S]{0,160}data-letter=\{letter\}/.test(home)
-        && !/hero-brand-letter-sparkle/.test(home),
-        'the letters keep their data-letter clone and lose the per-letter sparkle');
-      assert.ok(/hero-brand-sparkle--one[\s\S]*?hero-brand-sparkle--two[\s\S]*?hero-brand-sparkle--three/.test(home),
-        'the three stars are plain spans inside the lockup');
+      assert.ok(/className="hero-brand-letter"[\s\S]{0,160}data-letter=\{letter\}/.test(home),
+        'the letters keep their data-letter clone');
+      assert.ok(/hero-brand-letter-star--a[\s\S]*?hero-brand-letter-star--b[\s\S]*?hero-brand-letter-star--c/.test(home),
+        'three star spans sit inside every hero letter');
+      assert.ok(/footer-wordmark-letter-star--a[\s\S]*?footer-wordmark-letter-star--b[\s\S]*?footer-wordmark-letter-star--c/.test(app),
+        'the footer letters carry the same three stars');
+      assert.ok(/hero-brand-sparkle--one[\s\S]*?hero-brand-sparkle--two[\s\S]*?hero-brand-sparkle--three[\s\S]*?hero-brand-sparkle--four[\s\S]*?hero-brand-sparkle--five[\s\S]*?hero-brand-sparkle--six[\s\S]*?hero-brand-sparkle--seven/.test(home),
+        'the seven stars are plain spans inside the lockup');
+      assert.ok(/footer-wordmark-sparkle--one[\s\S]*?footer-wordmark-sparkle--two[\s\S]*?footer-wordmark-sparkle--three[\s\S]*?footer-wordmark-sparkle--four[\s\S]*?footer-wordmark-sparkle--five/.test(app),
+        'the footer stars are plain spans too');
     });
 
     await step('Framer Motion movement is off everywhere; fades only', () => {

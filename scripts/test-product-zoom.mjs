@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
@@ -99,22 +100,27 @@ console.log('[2] the lightbox itself is modal, navigable and zoomable');
   });
 }
 
-console.log('[3] only the two card photos get the top mat');
+console.log('[3] the card photo is full-bleed: no mat, no sampler, no extra request');
 {
   check('the card still has only the primary and hover photo slots', () => {
     assert.equal((card.match(/className="product-card-img"/g) || []).length, 2);
     assert.ok(!/data-card-photo/.test(card), 'the selector lives in CSS, not in the markup');
   });
-  check('the mat targets only those two photos and leaves the badge welded to the corner', () => {
-    assert.ok(/--card-headroom: 24px;/.test(css));
-    assert.ok(/\.product-card-image > \.product-card-img:nth-of-type\(-n\+2\) \{[^}]*top: var\(--card-headroom/.test(css));
-    assert.ok(/\.product-card-image > \.product-card-img:nth-of-type\(-n\+2\) \{[^}]*height: calc\(100% - var\(--card-headroom/.test(css));
-    assert.ok(/\.product-card-image > \.product-card-img:nth-of-type\(-n\+2\) \{[^}]*object-position: center top;/.test(css));
+  check('the reserved top strip is gone at every breakpoint', () => {
+    assert.ok(!/--card-headroom/.test(css), 'no headroom variable survives');
+    assert.ok(!/nth-of-type\(-n\+2\)/.test(css), 'no photo offset rule survives');
+    assert.ok(!/object-position:\s*center top/.test(css), 'photos no longer start below a strip');
+  });
+  check('both photo layers fill the 3:4 box', () => {
+    assert.ok(/\.product-card-img \{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*cover;[^}]*object-position:\s*center;/s.test(css));
+  });
+  check('the badge stays welded to the photo corner', () => {
     assert.ok(/\.product-card-labels \{[^}]*top:\s*0;[^}]*left:\s*0;[^}]*padding:\s*0;/.test(css));
   });
-  check('phones get a smaller mat, never no mat', () => {
-    assert.ok(/@media \(max-width: 768px\) \{\s*\.product-card-image \{ --card-headroom: 20px; \}/.test(css));
-    assert.ok(/@media \(max-width: 360px\) \{\s*\.product-card-image \{ --card-headroom: 18px; \}/.test(css));
+  check('no colour sampler can add a second image request', () => {
+    assert.ok(!/imageMatColor|sampleImageMatColor|matColor/.test(card), 'the card loads no sampled copy');
+    assert.equal(existsSync(new URL('src/lib/imageMatColor.mjs', root)), false, 'the sampler file is gone');
+    assert.ok(!/test-card-mat/.test(pkg.scripts.test), 'the sampler suite is out of the test chain');
   });
 }
 
