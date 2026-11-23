@@ -381,7 +381,10 @@ export default function ProductPage() {
                 if (imageSwipedRef.current) { imageSwipedRef.current = false; return; }
                 openZoom();
               }}
-              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'zoom-in', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+              // The catalogue prints are 3:4 (1086x1448). The card grid and the
+              // bag already use that box; matching it here with a cover fit fills
+              // the plate edge to edge instead of leaving black bars on the sides.
+              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '3 / 4', overflow: 'hidden', cursor: 'zoom-in', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               {/* Every photo owns one full frame of a horizontal strip. Choosing
                   another photo slides the strip by exactly one frame, so the new
@@ -410,7 +413,7 @@ export default function ProductPage() {
                         loading={i === 0 ? 'eager' : 'lazy'}
                         decoding="async"
                         style={{
-                          display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center',
+                          display: 'block', width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center',
                         }}
                       />
                     </div>

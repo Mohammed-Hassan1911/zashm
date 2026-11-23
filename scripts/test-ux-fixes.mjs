@@ -1101,7 +1101,9 @@ try {
     });
 
     await step('product page layout and tabs stay accessible', () => {
-      assert.ok(product.includes("aspectRatio: '4 / 5'"), 'the gallery matches the 4:5 catalogue images');
+      assert.ok(product.includes("aspectRatio: '3 / 4'"), 'the gallery matches the 3:4 catalogue images');
+      assert.ok(/objectFit: 'cover', objectPosition: 'center'/.test(product),
+        'the main print fills the plate with no black side bars');
       assert.ok(!/Back to Products/.test(product), 'the duplicate back button is gone');
       assert.ok(/role="tablist"/.test(product) && /role="tab"/.test(product) && /role="tabpanel"/.test(product),
         'tabs expose the full ARIA pattern');
