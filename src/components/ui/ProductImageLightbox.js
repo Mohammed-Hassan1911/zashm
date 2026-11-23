@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import SafeImage from './SafeImage';
 import { focusFirstElement, redirectOutsideFocus, trapTabKey } from '../../lib/focus-trap';
+import {
+  MIN_ZOOM, MAX_ZOOM, clampZoom, clampPan,
+  pointDistance, pointMidpoint, settleZoom,
+} from '../../lib/zoomGesture.mjs';
 
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.5;
 
 /**
@@ -32,6 +34,12 @@ export default function ProductImageLightbox({
 
   const dialogRef = useRef(null);
   const dragRef = useRef(null);
+  // Every active pointer is tracked so a two-finger pinch can zoom and pan the
+  // stage with the same maths as the in-place gallery. touch-action: none on the
+  // stage means the browser never steals the gesture for page zoom.
+  const pointersRef = useRef(new Map());
+  const pinchRef = useRef(null);
+  const scaleRef = useRef(MIN_ZOOM);
   const onCloseRef = useRef(onClose);
   const onIndexChangeRef = useRef(onIndexChange);
   onCloseRef.current = onClose;
@@ -39,6 +47,7 @@ export default function ProductImageLightbox({
 
   const [scale, setScale] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  scaleRef.current = scale;
 
   const resetView = () => {
     setScale(MIN_ZOOM);
@@ -52,7 +61,7 @@ export default function ProductImageLightbox({
   };
 
   const zoomBy = (delta) => {
-    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round((scale + delta) * 10) / 10));
+    const next = clampZoom(Math.round((scale + delta) * 10) / 10);
     setScale(next);
     if (next === MIN_ZOOM) setPan({ x: 0, y: 0 });
   };
@@ -154,11 +163,41 @@ export default function ProductImageLightbox({
 
   const limit = 180 * (scale - 1);
   const onPointerDown = (event) => {
-    if (scale <= MIN_ZOOM) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    // The second finger turns the drag into a pinch, anchored on the midpoint
+    // between the two fingers. A new photo always starts this at 100%.
+    if (pointersRef.current.size === 2) {
+      const [a, b] = [...pointersRef.current.values()];
+      pinchRef.current = {
+        startDist: Math.max(1, pointDistance(a, b)),
+        startMid: pointMidpoint(a, b),
+        startScale: scaleRef.current,
+        startPan: { ...pan },
+      };
+      dragRef.current = null;
+      return;
+    }
+    if (scale <= MIN_ZOOM) return;
     dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
   };
   const onPointerMove = (event) => {
+    if (!pointersRef.current.has(event.pointerId)) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const pinch = pinchRef.current;
+    if (pinch && pointersRef.current.size >= 2) {
+      const [a, b] = [...pointersRef.current.values()];
+      const nextScale = clampZoom(pinch.startScale * (pointDistance(a, b) / pinch.startDist));
+      const mid = pointMidpoint(a, b);
+      const rect = event.currentTarget.getBoundingClientRect();
+      const nextPan = clampPan({
+        x: pinch.startPan.x + (mid.x - pinch.startMid.x),
+        y: pinch.startPan.y + (mid.y - pinch.startMid.y),
+      }, nextScale, rect.width, rect.height);
+      setScale(nextScale);
+      setPan(nextPan);
+      return;
+    }
     const drag = dragRef.current;
     if (!drag || drag.id !== event.pointerId) return;
     setPan({
@@ -167,6 +206,15 @@ export default function ProductImageLightbox({
     });
   };
   const onPointerUp = (event) => {
+    pointersRef.current.delete(event.pointerId);
+    if (pinchRef.current && pointersRef.current.size < 2) {
+      pinchRef.current = null;
+      const settled = settleZoom({ scale: scaleRef.current, x: pan.x, y: pan.y });
+      if (settled.scale === MIN_ZOOM) {
+        setScale(MIN_ZOOM);
+        setPan({ x: 0, y: 0 });
+      }
+    }
     if (dragRef.current?.id === event.pointerId) dragRef.current = null;
   };
 
