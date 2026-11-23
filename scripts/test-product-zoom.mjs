@@ -39,7 +39,7 @@ console.log('[1] the gallery opens an accessible zoom stage');
     assert.ok(/returnTo=\{zoomOpenerRef\.current\}/.test(page));
   });
   check('the image and a labelled button both open it', () => {
-    assert.ok(/cursor: galleryZoom\.scale > 1 \? 'grab' : 'zoom-in'/.test(page));
+    assert.ok(/cursor: 'zoom-in'/.test(page));
     assert.ok(/aria-label="Zoom image"/.test(page));
     assert.ok(/aria-haspopup="dialog"/.test(page));
     assert.ok(/onClick=\{\(event\) => \{\s*event\.stopPropagation\(\); openZoom\(event\.currentTarget\); \}\}/.test(page));
@@ -54,7 +54,7 @@ console.log('[1] the gallery opens an accessible zoom stage');
     assert.ok(/if \(imageSwipedRef\.current\) \{ imageSwipedRef\.current = false; return; \}/.test(page));
   });
   check('changing product closes the stage', () => {
-    assert.ok(/setGalleryZoom\(\{ scale: 1, x: 0, y: 0 \}\);\s*setZoomOpen\(false\);/.test(page));
+    assert.ok(/setImgIdx\(0\);\s*setZoomOpen\(false\);/.test(page));
   });
 }
 
@@ -127,7 +127,7 @@ console.log('[4] the zoom chrome fits the brand and stays below floating actions
     assert.ok(/\.product-zoom-toolbar button:focus-visible/.test(css));
   });
   check('the stage shares the existing dark lightbox ground', () => {
-    assert.ok(/className="photo-lightbox product-zoom-lightbox"/.test(lightbox));
+    assert.ok(/className=\{`photo-lightbox product-zoom-lightbox/.test(lightbox));
     assert.ok(/\.photo-lightbox \{[^}]*z-index: 12000;/.test(css));
   });
   check('reduced motion drops the easing but not the zoom', () => {
@@ -162,56 +162,28 @@ console.log('[5] shared pinch maths are bounded and anchored');
   });
 }
 
-console.log('[6] the gallery pinches in place without a button');
+console.log('[6] the gallery stays calm: zoom belongs to the full-screen stage');
 {
-  check('the shared gesture maths are imported by the gallery', () => {
-    assert.ok(/from '\.\.\/lib\/zoomGesture\.mjs'/.test(page));
-    for (const fn of ['clampPan', 'clampZoom', 'pointDistance', 'pointMidpoint', 'settleZoom']) {
-      assert.ok(page.includes(fn), fn);
-    }
-  });
-  check('live zoom state and a pinch anchor are kept outside the render', () => {
-    assert.ok(/const galleryMainRef = useRef\(null\)/.test(page));
-    assert.ok(/const \[galleryZoom, setGalleryZoom\] = useState\(\{ scale: 1, x: 0, y: 0 \}\)/.test(page));
-    assert.ok(/const galleryZoomRef = useRef\(galleryZoom\)/.test(page));
-    assert.ok(/galleryZoomRef\.current = galleryZoom/.test(page));
-    assert.ok(/const pinchRef = useRef\(null\)/.test(page));
-  });
-  check('a native non-passive touchmove prevents the browser page zoom', () => {
-    assert.ok(/el\.addEventListener\('touchstart', onTouchStart, \{ passive: true \}\)/.test(page));
-    assert.ok(/el\.addEventListener\('touchmove', onTouchMove, \{ passive: false \}\)/.test(page));
-    assert.ok(/event\.preventDefault\(\);/.test(page));
-    assert.ok(/el\.addEventListener\('touchend', onTouchEnd, \{ passive: true \}\)/.test(page));
-    assert.ok(/el\.addEventListener\('touchcancel', onTouchEnd, \{ passive: true \}\)/.test(page));
-  });
-  check('two touches scale from their distance and pan from their midpoint', () => {
-    assert.ok(/if \(event\.touches\.length !== 2\) return;/.test(page));
-    // Touch has clientX/clientY, not x/y: passing the raw Touch would be NaN.
-    assert.ok(/const first = \{ x: a\.clientX, y: a\.clientY \}/.test(page));
-    assert.ok(/const second = \{ x: b\.clientX, y: b\.clientY \}/.test(page));
-    assert.ok(/pinch\.startScale \* \(pointDistance\(first, second\) \/ pinch\.startDist\)/.test(page));
-    assert.ok(/pinch\.startPan\.x \+ \(mid\.x - pinch\.startMid\.x\)/.test(page));
-    assert.ok(/clampPan\(\{/.test(page));
-    assert.ok(/setGalleryZoom\(\(view\) => settleZoom\(view\)\)/.test(page));
-  });
-  check('a pinch never becomes a swipe or opens the stage on release', () => {
-    assert.ok(/imageSwipeStartRef\.current = null;\s*imageSwipedRef\.current = true;/.test(page));
-    assert.ok(/if \(!start \|\| start\.pointerId !== event\.pointerId \|\| pinchRef\.current\) return;/.test(page));
-    assert.ok(/if \(pinchRef\.current\) return;/.test(page));
-    assert.ok(/productImages\.length < 2 \|\| galleryZoomRef\.current\.scale > 1\) return;/.test(page));
-  });
-  check('the print, not the strip, carries the zoom transform', () => {
-    assert.ok(/data-zoomed=\{galleryZoom\.scale > 1 \? 'true' : 'false'\}/.test(page));
-    assert.ok(/translate\(\$\{galleryZoom\.x\}px, \$\{galleryZoom\.y\}px\) scale\(\$\{galleryZoom\.scale\}\)/.test(page));
-    assert.ok(/transformOrigin: 'center center'/.test(page));
+  check('no in-place zoom or browser page-zoom listeners remain', () => {
+    assert.ok(!/galleryZoom|galleryMainRef|pinchRef/.test(page));
+    assert.ok(!/zoomGesture/.test(page));
+    assert.ok(!/addEventListener\(['"]touch/.test(page));
     assert.ok(/touchAction: 'pan-y'/.test(page), 'one finger can still scroll the page');
   });
-  check('a new photo or product resets the in-place zoom', () => {
-    assert.ok(/setGalleryZoom\(\{ scale: 1, x: 0, y: 0 \}\);\s*setImgIdx/.test(page));
-    assert.ok(/setImgIdx\(0\);\s*setGalleryZoom\(\{ scale: 1, x: 0, y: 0 \}\);/.test(page));
+  check('one finger swipes the strip while a vertical scroll still wins', () => {
+    assert.ok(/if \(!start \|\| start\.pointerId !== event\.pointerId\) return;/.test(page));
+    assert.ok(/Math\.abs\(deltaX\) < 8 \|\| Math\.abs\(deltaX\) <= Math\.abs\(deltaY\)/.test(page));
+    assert.ok(/if \(productImages\.length < 2\) return;/.test(page));
+    assert.ok(/cursor: 'zoom-in'/.test(page));
   });
-  check('a zoomed print signals a pan affordance', () => {
-    assert.ok(/cursor: galleryZoom\.scale > 1 \? 'grab' : 'zoom-in'/.test(page));
+  check('a tap on the photo or the + button opens the same viewer', () => {
+    assert.ok(/if \(imageSwipedRef\.current\) \{ imageSwipedRef\.current = false; return; \}/.test(page));
+    assert.ok(/openZoom\(\);/.test(page));
+    assert.ok(/aria-label="Zoom image"/.test(page));
+  });
+  check('the zoom indicator now belongs to the stage, not the gallery', () => {
+    assert.ok(/data-zoomed=\{scale > MIN_ZOOM \? 'true' : 'false'\}/.test(lightbox));
+    assert.ok(!/data-zoomed/.test(page));
   });
 }
 
@@ -219,7 +191,7 @@ console.log('[7] the lightbox also accepts a two-finger pinch');
 {
   check('all active pointers are tracked on the touch-action:none stage', () => {
     assert.ok(/const pointersRef = useRef\(new Map\(\)\)/.test(lightbox));
-    assert.ok(/pointersRef\.current\.set\(event\.pointerId, \{ x: event\.clientX, y: event\.clientY \}\)/.test(lightbox));
+    assert.ok(/pointersRef\.current\.set\(event\.pointerId, \{[\s\S]{0,120}?x: event\.clientX,[\s\S]{0,80}?y: event\.clientY,/.test(lightbox));
     assert.ok(/touch-action: none;/.test(css));
   });
   check('the second finger anchors a pinch instead of panning', () => {
@@ -233,6 +205,31 @@ console.log('[7] the lightbox also accepts a two-finger pinch');
     assert.ok(/const nextPan = clampPan\(\{/.test(lightbox));
     assert.ok(/const settled = settleZoom\(\{ scale: scaleRef\.current, x: pan\.x, y: pan\.y \}\)/.test(lightbox));
     assert.ok(/pointersRef\.current\.delete\(event\.pointerId\)/.test(lightbox));
+  });
+  check('the viewer eases in and out instead of blinking', () => {
+    assert.ok(/\.product-zoom-lightbox \{[^}]*opacity: 0;[^}]*transition: opacity 260ms/.test(css));
+    assert.ok(/\.product-zoom-lightbox\.is-entered \{ opacity: 1; \}/.test(css));
+    assert.ok(/\.product-zoom-lightbox\.is-closing/.test(css));
+    assert.ok(/\.product-zoom-frame \{[^}]*transform: translateY\(14px\) scale\(0\.965\)/.test(css));
+    assert.ok(/const CLOSE_MS = 220/.test(lightbox));
+    assert.ok(/is-entered/.test(lightbox) && /is-closing/.test(lightbox));
+    assert.ok(/closeRequestRef\.current\(\)/.test(lightbox));
+  });
+  check('photos crossfade and zoom eases, but never while a finger moves it', () => {
+    assert.ok(/\.product-zoom-img \{[^}]*opacity: 0;/.test(css));
+    assert.ok(/\.product-zoom-img\.is-visible \{ opacity: 1; \}/.test(css));
+    assert.ok(/key=\{current\}/.test(lightbox));
+    assert.ok(/className=\{`product-zoom-img\$\{photoVisible \? ' is-visible' : ''\}`\}/.test(lightbox));
+    assert.ok(/transition: opacity 280ms ease-out, transform 320ms cubic-bezier\(0\.22, 1, 0\.36, 1\)/.test(css));
+    assert.ok(/\.product-zoom-img\[data-interacting='true'\] \{ transition: none; \}/.test(css));
+    assert.ok(/data-interacting=\{interacting \? 'true' : 'false'\}/.test(lightbox));
+    assert.ok(/setInteracting\(true\)/.test(lightbox) && /setInteracting\(false\)/.test(lightbox));
+  });
+  check('double-tap zooms about the tapped point', () => {
+    assert.ok(/const DOUBLE_TAP_ZOOM = 2\.4/.test(lightbox));
+    assert.ok(/toggleZoomAt\(event\.clientX, event\.clientY\)/.test(lightbox));
+    assert.ok(/zoomTo\(DOUBLE_TAP_ZOOM, \{ x, y \}\)/.test(lightbox));
+    assert.ok(/ignoreDblClickRef/.test(lightbox));
   });
   check('no runtime dependency was added for the gesture', () => {
     for (const name of ['react', 'react-dom', 'framer-motion', 'lucide-react', 'zustand', '@supabase/supabase-js', 'papaparse', 'recharts']) {

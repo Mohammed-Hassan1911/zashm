@@ -14,7 +14,6 @@ import { discountPercent, effectivePrice, hasInvalidVariantConfig, hasVariantSto
 import { GARMENT, garmentKind } from '../lib/fit';
 import { resolveRoute } from '../lib/routes';
 import { getColorSwatch, getColorTextStyle } from '../lib/productColors.mjs';
-import { clampPan, clampZoom, pointDistance, pointMidpoint, settleZoom } from '../lib/zoomGesture.mjs';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E';
 
@@ -72,14 +71,6 @@ export default function ProductPage() {
   const zoomButtonRef = useRef(null);
   const imageSwipeStartRef = useRef(null);
   const imageSwipedRef = useRef(false);
-  // Two-finger zoom happens in place on the gallery, so a shopper never has to
-  // hunt for a button on a phone. A ref feeds the touch handlers the live view
-  // without rebinding native listeners on every animation frame.
-  const galleryMainRef = useRef(null);
-  const [galleryZoom, setGalleryZoom] = useState({ scale: 1, x: 0, y: 0 });
-  const galleryZoomRef = useRef(galleryZoom);
-  galleryZoomRef.current = galleryZoom;
-  const pinchRef = useRef(null);
   // A shopper who asked for reduced motion can still swipe between photos,
   // but nothing drifts under the finger or springs back on release.
   const reduceMotion = useReducedMotion();
@@ -146,78 +137,18 @@ export default function ProductPage() {
   // تأمين مصفوفة الصور لتجنب الكراش في حال عدم وجود صور للمنتج
   const productImages = p?.images && p.images.length > 0 ? p.images : ['data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="400"%3E%3Crect fill="%23222" width="300" height="400"/%3E%3C/svg%3E'];
   const changeImage = (direction) => {
-    setGalleryZoom({ scale: 1, x: 0, y: 0 });
     setImgIdx(index => (index + direction + productImages.length) % productImages.length);
   };
   const openZoom = (opener) => {
-    // The image itself is not focusable; always hand focus back to the labelled
-    // zoom button so keyboard and screen-reader users land on a real control.
+    // Zoom belongs to the full-screen stage, not to the gallery: a tap on the
+    // photo (or the + button) opens the same calm viewer luxury storefronts use.
+    // Nothing scales under the finger here, so swiping and page scroll stay
+    // predictable. The image itself is not focusable; always hand focus back to
+    // the labelled zoom button so keyboard and screen-reader users land on a
+    // real control.
     zoomOpenerRef.current = opener || zoomButtonRef.current;
     setZoomOpen(true);
   };
-
-  // Pinch lives on the gallery itself: two fingers scale the photo and drag its
-  // midpoint to pan, with no button and no modal to open. `touch-action: pan-y`
-  // still lets a single finger scroll the page; only the two-finger move is
-  // prevented from becoming the browser's own page zoom. A native non-passive
-  // listener is required because React's synthetic touch handlers are passive.
-  useEffect(() => {
-    const el = galleryMainRef.current;
-    if (!el) return undefined;
-
-    const onTouchStart = (event) => {
-      if (event.touches.length !== 2) return;
-      const [a, b] = [event.touches[0], event.touches[1]];
-      const first = { x: a.clientX, y: a.clientY };
-      const second = { x: b.clientX, y: b.clientY };
-      const view = galleryZoomRef.current;
-      pinchRef.current = {
-        startDist: Math.max(1, pointDistance(first, second)),
-        startMid: pointMidpoint(first, second),
-        startScale: view.scale,
-        startPan: { x: view.x, y: view.y },
-      };
-      // A pinch is not a swipe: drop the one-finger gesture and make sure the
-      // click that follows touch-release cannot open the full-screen stage.
-      imageSwipeStartRef.current = null;
-      imageSwipedRef.current = true;
-      galleryDragX.set(0);
-    };
-
-    const onTouchMove = (event) => {
-      const pinch = pinchRef.current;
-      if (!pinch || event.touches.length !== 2) return;
-      event.preventDefault();
-      const [a, b] = [event.touches[0], event.touches[1]];
-      const first = { x: a.clientX, y: a.clientY };
-      const second = { x: b.clientX, y: b.clientY };
-      const scale = clampZoom(pinch.startScale * (pointDistance(first, second) / pinch.startDist));
-      const mid = pointMidpoint(first, second);
-      const rect = el.getBoundingClientRect();
-      const pan = clampPan({
-        x: pinch.startPan.x + (mid.x - pinch.startMid.x),
-        y: pinch.startPan.y + (mid.y - pinch.startMid.y),
-      }, scale, rect.width, rect.height);
-      setGalleryZoom({ scale, x: pan.x, y: pan.y });
-    };
-
-    const onTouchEnd = (event) => {
-      if (!pinchRef.current || event.touches.length >= 2) return;
-      pinchRef.current = null;
-      setGalleryZoom((view) => settleZoom(view));
-    };
-
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    el.addEventListener('touchcancel', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-      el.removeEventListener('touchcancel', onTouchEnd);
-    };
-  }, [galleryDragX]);
 
   const handleImagePointerDown = (event) => {
     imageSwipedRef.current = false;
@@ -230,28 +161,12 @@ export default function ProductPage() {
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      lastX: event.clientX,
-      lastY: event.clientY,
       following: false,
     };
   };
   const handleImagePointerMove = (event) => {
     const start = imageSwipeStartRef.current;
-    if (!start || start.pointerId !== event.pointerId || pinchRef.current) return;
-    // Once zoomed, one finger moves the enlarged photo instead of flipping it.
-    const view = galleryZoomRef.current;
-    if (view.scale > 1) {
-      const rect = galleryMainRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const pan = clampPan({
-        x: view.x + (event.clientX - start.lastX),
-        y: view.y + (event.clientY - start.lastY),
-      }, view.scale, rect.width, rect.height);
-      start.lastX = event.clientX;
-      start.lastY = event.clientY;
-      setGalleryZoom({ scale: view.scale, x: pan.x, y: pan.y });
-      return;
-    }
+    if (!start || start.pointerId !== event.pointerId) return;
     if (productImages.length < 2) return;
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
@@ -274,8 +189,7 @@ export default function ProductPage() {
     // Releasing lets the spring unwind slowly back to centre, whether or not
     // the gesture was long enough to change the photo.
     galleryDragX.set(0);
-    if (pinchRef.current) return;
-    if (productImages.length < 2 || galleryZoomRef.current.scale > 1) return;
+    if (productImages.length < 2) return;
 
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
@@ -326,7 +240,6 @@ export default function ProductPage() {
       }
       setQty(1);
       setImgIdx(0);
-      setGalleryZoom({ scale: 1, x: 0, y: 0 });
       setZoomOpen(false);
     }
   }, [p]);
@@ -458,9 +371,7 @@ export default function ProductPage() {
               </div>
             )}
             <div
-              ref={galleryMainRef}
               className="product-card-image product-gallery-main"
-              data-zoomed={galleryZoom.scale > 1 ? 'true' : 'false'}
               onPointerDown={handleImagePointerDown}
               onPointerMove={handleImagePointerMove}
               onPointerUp={handleImagePointerUp}
@@ -470,7 +381,7 @@ export default function ProductPage() {
                 if (imageSwipedRef.current) { imageSwipedRef.current = false; return; }
                 openZoom();
               }}
-              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: galleryZoom.scale > 1 ? 'grab' : 'zoom-in', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'zoom-in', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               {/* Every photo owns one full frame of a horizontal strip. Choosing
                   another photo slides the strip by exactly one frame, so the new
@@ -500,12 +411,6 @@ export default function ProductPage() {
                         decoding="async"
                         style={{
                           display: 'block', width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center',
-                          // A pinch scales only the print, never the sliding strip,
-                          // so all frames stay aligned and the mat does not move.
-                          transform: `translate(${galleryZoom.x}px, ${galleryZoom.y}px) scale(${galleryZoom.scale})`,
-                          transformOrigin: 'center center',
-                          transition: 'none',
-                          willChange: galleryZoom.scale > 1 ? 'transform' : 'auto',
                         }}
                       />
                     </div>
