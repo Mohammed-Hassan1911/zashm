@@ -575,6 +575,9 @@ select option { background: var(--bg3); }
    photo. */
 .product-card-image {
   container-type: inline-size;
+  /* The two photos a card can show sit below a calm mat, so the label welded
+     to the top-left corner lands on empty background instead of on the goods. */
+  --card-headroom: 24px;
 }
 
 /* A hairline of light inside the top of every photo, so the frame catches the
@@ -608,6 +611,16 @@ select option { background: var(--bg3); }
   transition:
     opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
     transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Only the first two photos in a card (primary and hover) get the top mat. The
+   frame keeps its 3:4 box and dark ground, so the strip reads as an intentional
+   mount rather than a gap in the layout. */
+.product-card-image > .product-card-img:nth-of-type(-n+2) {
+  top: var(--card-headroom, 24px);
+  bottom: auto;
+  height: calc(100% - var(--card-headroom, 24px));
+  object-position: center top;
 }
 
 .product-card-img[data-visible='false'] { opacity: 0; }
@@ -780,6 +793,10 @@ select option { background: var(--bg3); }
   }
 }
 
+@media (max-width: 768px) {
+  .product-card-image { --card-headroom: 20px; }
+}
+
 /* On the narrowest phones a 131px card has ~83px before the wishlist heart.
    The longest label ("Limited Edition") has to shed a little padding and
    tracking to clear it without truncating the word. */
@@ -788,6 +805,10 @@ select option { background: var(--bg3); }
     padding: 2px 2px;
     letter-spacing: 0;
   }
+}
+
+@media (max-width: 360px) {
+  .product-card-image { --card-headroom: 18px; }
 }
 
 .product-card-sold-out {
@@ -4150,20 +4171,29 @@ main, [role="main"] {
 }
 
 /* One shared treatment for the swatch label and the selected-value label: the
-   same weight and halo everywhere. The inline variables only thicken and
-   brighten the rim when the ink would vanish into the canvas. */
+   letters themselves are cut from tinted glass, with a narrow champagne light
+   set into the gradient. No stroke, no outer bloom, no white cloud — the ink is
+   the colour, the shine is inside the glyph. The light is painted once: tiny
+   labels do not need another animation loop competing with the wordmark. */
 .product-color-name,
 .product-meta-value {
+  --color-ink: currentColor;
   font-family: var(--font-body);
   font-weight: 700;
-  -webkit-text-stroke: var(--color-stroke, 0px) var(--color-rim, transparent);
-  paint-order: stroke fill;
-  text-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.72),
-    0 0 2px var(--color-rim, transparent),
-    0 0 4px rgba(255, 255, 255, 0.4),
-    0 0 var(--color-glow-size, 6px) var(--color-glow, transparent),
-    0 0 30px var(--color-halo, transparent);
+  color: var(--color-ink);
+  background-image: linear-gradient(
+    105deg,
+    color-mix(in srgb, var(--color-ink) 88%, #0a0a0a) 0%,
+    var(--color-ink) 32%,
+    color-mix(in srgb, var(--color-ink) 45%, #fff8e6) 50%,
+    var(--color-ink) 68%,
+    color-mix(in srgb, var(--color-ink) 88%, #0a0a0a) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 50% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .product-color-name {
@@ -5040,6 +5070,10 @@ main, [role="main"] {
     transition: none !important;
     transform: none !important;
   }
+
+  /* The zoom transform is the feature itself, not decoration: keep it, but
+     drop the easing so the image jumps straight to the requested scale. */
+  .product-zoom-img { transition: none !important; }
 
   .size-finder-trigger,
   .size-finder-trigger-arrow,
@@ -5959,6 +5993,95 @@ main, [role="main"] {
 .photo-lightbox-close:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
+}
+
+/* Product photo zoom: a small affordance on the gallery, then the same dark
+   stage the review photos use with room for zoom and gallery controls. */
+.product-zoom-trigger {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(232, 200, 112, 0.4);
+  border-radius: 50%;
+  background: rgba(12, 11, 9, 0.88);
+  color: var(--gold-light);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.product-zoom-trigger:hover { background: rgba(201, 168, 76, 0.22); }
+.product-zoom-trigger:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.product-zoom-frame { width: 100%; }
+.product-zoom-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  cursor: zoom-in;
+  touch-action: none;
+}
+.product-zoom-stage[data-zoomed='true'] { cursor: grab; }
+.product-zoom-stage[data-zoomed='true']:active { cursor: grabbing; }
+.product-zoom-img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(92vw, 980px);
+  max-height: calc(100dvh - 180px);
+  object-fit: contain;
+  border: 1px solid rgba(201, 168, 76, 0.34);
+  border-radius: 6px;
+  background: #0b0b0b;
+  transform-origin: center center;
+  transition: transform 0.2s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.product-zoom-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.product-zoom-toolbar button {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 50%;
+  background: rgba(12, 11, 9, 0.88);
+  color: var(--gold-light);
+  cursor: pointer;
+}
+.product-zoom-toolbar button:hover:not(:disabled) { background: rgba(201, 168, 76, 0.22); }
+.product-zoom-toolbar button:disabled { opacity: 0.35; cursor: not-allowed; }
+.product-zoom-toolbar button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.product-zoom-level,
+.product-zoom-counter {
+  min-width: 46px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--text3);
+  text-align: center;
 }
 
 .review-photo-preview-bar {

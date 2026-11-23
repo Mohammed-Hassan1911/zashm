@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
-import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler } from 'lucide-react';
+import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler, ZoomIn } from 'lucide-react';
 import { useStore } from '../store';
 import ProductCard from '../components/shop/ProductCard';
 import ProductReviews from '../components/shop/ProductReviews';
 import SizeFinder from '../components/shop/SizeFinder';
 import SafeImage from '../components/ui/SafeImage';
+import ProductImageLightbox from '../components/ui/ProductImageLightbox';
 import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
@@ -65,7 +66,11 @@ export default function ProductPage() {
   // ستايت التحكم في مودال المخزون ومودال دليل المقاسات
   const [stockModal, setStockModal] = useState({ open: false, message: '' });
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const zoomOpenerRef = useRef(null);
+  const zoomButtonRef = useRef(null);
   const imageSwipeStartRef = useRef(null);
+  const imageSwipedRef = useRef(false);
   // A shopper who asked for reduced motion can still swipe between photos,
   // but nothing drifts under the finger or springs back on release.
   const reduceMotion = useReducedMotion();
@@ -134,7 +139,14 @@ export default function ProductPage() {
   const changeImage = (direction) => {
     setImgIdx(index => (index + direction + productImages.length) % productImages.length);
   };
+  const openZoom = (opener) => {
+    // The image itself is not focusable; always hand focus back to the labelled
+    // zoom button so keyboard and screen-reader users land on a real control.
+    zoomOpenerRef.current = opener || zoomButtonRef.current;
+    setZoomOpen(true);
+  };
   const handleImagePointerDown = (event) => {
+    imageSwipedRef.current = false;
     if (event.pointerType === 'mouse') return;
     // Only one finger owns the plate. A second finger must never replace the
     // active gesture: its release would otherwise clear the ref and leave the
@@ -176,6 +188,9 @@ export default function ProductPage() {
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
     if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
+    // A swipe ends with a click on the photo; suppress that click so changing
+    // picture does not open the zoom stage on the way past.
+    imageSwipedRef.current = true;
     changeImage(deltaX < 0 ? 1 : -1);
   };
   const handleImagePointerCancel = (event) => {
@@ -219,6 +234,7 @@ export default function ProductPage() {
       }
       setQty(1);
       setImgIdx(0);
+      setZoomOpen(false);
     }
   }, [p]);
 
@@ -354,7 +370,12 @@ export default function ProductPage() {
               onPointerMove={handleImagePointerMove}
               onPointerUp={handleImagePointerUp}
               onPointerCancel={handleImagePointerCancel}
-              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'default', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+              onClick={(event) => {
+                if (event.target instanceof Element && event.target.closest('button')) return;
+                if (imageSwipedRef.current) { imageSwipedRef.current = false; return; }
+                openZoom();
+              }}
+              style={{ position: 'relative', width: '100%', minWidth: 0, aspectRatio: '4 / 5', overflow: 'hidden', cursor: 'zoom-in', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
             >
               {/* Every photo owns one full frame of a horizontal strip. Choosing
                   another photo slides the strip by exactly one frame, so the new
@@ -411,6 +432,17 @@ export default function ProductPage() {
                   </span>
                 </>
               )}
+              <button
+                ref={zoomButtonRef}
+                type="button"
+                className="product-zoom-trigger"
+                aria-label="Zoom image"
+                aria-haspopup="dialog"
+                aria-expanded={zoomOpen}
+                onClick={(event) => { event.stopPropagation(); openZoom(event.currentTarget); }}
+              >
+                <ZoomIn size={18} aria-hidden="true" />
+              </button>
             </div>
             <div className="product-thumbs" style={{ display: 'flex', gap: 10, marginTop: 12, overflowX: 'auto', paddingBottom: 2 }}>
               {productImages.length > 1 && productImages.map((img, i) => (
@@ -916,6 +948,18 @@ export default function ProductPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {zoomOpen && (
+        <ProductImageLightbox
+          images={productImages}
+          index={imgIdx}
+          name={p?.name}
+          fallback={FALLBACK_IMG}
+          returnTo={zoomOpenerRef.current}
+          onIndexChange={setImgIdx}
+          onClose={() => setZoomOpen(false)}
+        />
+      )}
 
     </div>
   );

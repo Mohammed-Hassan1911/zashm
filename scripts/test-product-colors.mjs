@@ -10,8 +10,8 @@ assert.equal(getColorSwatch('#123abc'), '#123abc');
 assert.equal(getColorSwatch('unlisted color'), '#8a8a8a');
 
 // The bead keeps the exact fabric colour; the label keeps the same hue but
-// dark inks are lit until they clear 4.5:1 on the dark pill. The painted
-// treatment stays identical: one rim, one glow, one halo, one stroke.
+// dark inks are lit until they clear 4.5:1 on the dark pill. The glass and its
+// travelling shine are shared CSS — each colour only contributes its ink.
 const samples = ['Black', 'White', 'Navy', 'Yellow', 'Gold', '#123abc', 'unlisted color'];
 const treatments = samples.map((c) => getColorTextStyle(c));
 const luminance = (hex) => {
@@ -26,14 +26,12 @@ const contrastOnPill = (hex) => (luminance(hex) + 0.05) / (0.0103 + 0.05);
 for (const [i, style] of treatments.entries()) {
   assert.equal(style.color, getColorTextInk(getColorSwatch(samples[i])));
   assert.ok(contrastOnPill(style.color) >= 4.4, `${samples[i]} label is legible`);
-  assert.equal(style['--color-stroke'], '0.5px');
-  assert.equal(style['--color-rim'], 'rgba(255, 255, 255, 0.95)');
-  assert.equal(style['--color-glow'], 'rgba(255, 255, 255, 0.65)');
-  assert.equal(style['--color-halo'], 'rgba(255, 255, 255, 0.3)');
-  assert.equal(style['--color-glow-size'], '16px');
+  assert.equal(style['--color-ink'], style.color);
+  assert.deepEqual(Object.keys(style).sort(), ['--color-ink', 'color'],
+    'no colour gets its own rim, glow or halo');
 }
-// Nothing is singled out: strip the colour and every treatment is the same.
-const lighting = ({ color, ...rest }) => rest;
+// Nothing is singled out: strip the ink and every treatment is the same.
+const lighting = ({ color, '--color-ink': ink, ...rest }) => rest;
 for (const style of treatments) assert.deepEqual(lighting(style), lighting(treatments[0]));
 assert.deepEqual(getColorTextStyle('White', '#ffffff'), getColorTextStyle('White'));
 // Dark inks are lifted, light ones are left alone, and the hue survives.
@@ -104,13 +102,18 @@ assert.match(backToTop, /isHeartbreak = type === 'error' && \/removed from wishl
 assert.match(backToTop, /isWishlistSuccess = type === 'success' && \/wishlist\|favorite\//);
 assert.match(backToTop, /zashm-toast--heartbreak/);
 assert.match(backToTop, /fill=\{isHeartbreak \|\| isWishlistSuccess \? 'currentColor' : 'none'\}/);
-assert.match(css, /-webkit-text-stroke: var\(--color-stroke, 0px\) var\(--color-rim, transparent\);/);
-assert.match(css, /text-shadow:[\s\S]*?0 0 var\(--color-glow-size, 6px\) var\(--color-glow, transparent\),/);
-// The richer lighting is part of the contract: three ink layers, a specular
-// bead, and a gold ring on the selected swatch.
-assert.match(css, /text-shadow:[\s\S]*?0 1px 1px rgba\(0, 0, 0, 0\.72\)/);
-assert.match(css, /text-shadow:[\s\S]*?0 0 4px rgba\(255, 255, 255, 0\.4\)/);
-assert.match(css, /text-shadow:[\s\S]*?0 0 30px var\(--color-halo, transparent\)/);
+const treatmentMatch = /(\.product-color-name,\s*\.product-meta-value \{[\s\S]*?\n\})/.exec(css);
+assert.ok(treatmentMatch, 'the shared colour-name treatment exists');
+const nameTreatment = treatmentMatch[1];
+assert.ok(!/-webkit-text-stroke/.test(nameTreatment), 'the white rim is gone');
+assert.ok(!/text-shadow/.test(nameTreatment), 'the white cloud and shadow are gone');
+assert.match(nameTreatment, /background-image: linear-gradient\(/);
+assert.match(nameTreatment, /color-mix\(in srgb, var\(--color-ink\) 45%, #fff8e6\) 50%/);
+assert.match(nameTreatment, /-webkit-background-clip: text;/);
+assert.match(nameTreatment, /-webkit-text-fill-color: transparent;/);
+assert.ok(!/animation|@keyframes/.test(nameTreatment), 'the shine is painted once, not looped');
+assert.ok(!/@keyframes color-name-glint/.test(css), 'no extra animation competes with the wordmark');
+// The bead keeps its specular light and the selected swatch keeps its gold ring.
 assert.match(css, /\.product-color-swatch::after \{[\s\S]*?radial-gradient\(circle at 32% 24%/);
 assert.match(css, /\.product-color-option\[data-selected='true'\] \.product-color-swatch \{/);
 assert.match(css, /0 0 0 4px rgba\(201, 168, 76, 0\.6\)/);

@@ -136,16 +136,13 @@ export function getColorTextInk(swatch) {
   return `#ffffff${parsed.alpha}`;
 }
 
-// Every name gets the identical painted treatment: the same crisp white rim
-// and the same three-step lit halo. Only the ink itself is lifted for dark
-// colours; no swatch is singled out for special handling.
+// Every name keeps its own fabric hue, lifted only enough to stay readable.
+// The glass and the travelling shine live in CSS; the ink is the one value the
+// swatch contributes, so no colour gets a private cloud, rim or halo.
 export function getColorTextStyle(color) {
+  const ink = getColorTextInk(getColorSwatch(color));
   return {
-    color: getColorTextInk(getColorSwatch(color)),
-    '--color-rim': 'rgba(255, 255, 255, 0.95)',
-    '--color-glow': 'rgba(255, 255, 255, 0.65)',
-    '--color-halo': 'rgba(255, 255, 255, 0.3)',
-    '--color-stroke': '0.5px',
-    '--color-glow-size': '16px',
+    color: ink,
+    '--color-ink': ink,
   };
 }
