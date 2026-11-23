@@ -631,8 +631,11 @@ console.log('\n[11] reload resilience and footer polish');
   const auth = read('src/lib/auth.js');
   const css = read('src/index.css');
 
-  ok(/vite:preloadError/.test(entry) && /preventDefault\(\)/.test(entry) && /reloadForChunkError/.test(entry),
-    'stale Vite preloads are intercepted before the error reaches the UI');
+  ok(!/addEventListener\(\s*['"]vite:preloadError/.test(entry) && !/preventDefault\(\)/.test(entry),
+    'the entry never cancels Vite preload errors; cancelling makes lazy imports resolve undefined');
+  ok(/ensureModule\(await importer\(\)\)/.test(recovery) &&
+     /if \(!module \|\| typeof module !== 'object'\) throw new Error\(CHUNK_ERROR\)/.test(recovery),
+    'lazyWithRetry refuses an undefined module instead of handing it to React.lazy');
   ok(/RELOAD_KEY[\s\S]*?RELOAD_WINDOW_MS = 10000/.test(recovery) &&
      /Date\.now\(\) - readLastReload\(\) < RELOAD_WINDOW_MS/.test(recovery),
     'chunk reloads are rate-limited so a broken deployment cannot loop');

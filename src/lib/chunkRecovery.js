@@ -12,6 +12,15 @@ import React from 'react';
 const RELOAD_KEY = 'zashm:chunk-reload-at';
 const RELOAD_WINDOW_MS = 10000;
 const RETRY_DELAY_MS = 400;
+const CHUNK_ERROR = 'Unable to load this ZASHM page.';
+
+function ensureModule(module) {
+  // Vite resolves a dynamic import with `undefined` if a preload error event is
+  // cancelled by any listener. React.lazy would accept that as a valid module
+  // and crash later on `module.default`. Never let it get that far.
+  if (!module || typeof module !== 'object') throw new Error(CHUNK_ERROR);
+  return module;
+}
 
 function readLastReload() {
   try {
@@ -54,11 +63,11 @@ const delay = (ms) => new Promise((resolve) => { window.setTimeout(resolve, ms);
 export function lazyWithRetry(importer) {
   return React.lazy(async () => {
     try {
-      return await importer();
+      return ensureModule(await importer());
     } catch (firstError) {
       await delay(RETRY_DELAY_MS);
       try {
-        return await importer();
+        return ensureModule(await importer());
       } catch (error) {
         if (reloadForChunkError()) {
           // Keep the Suspense fallback on screen while the browser navigates.
