@@ -932,6 +932,40 @@ function intInRange(v, min, max) {
   return n;
 }
 
+const ADMIN_LIST_MAX_PAGE_SIZE = 200;
+
+// Optional paging for admin list endpoints. With no `page`/`pageSize` query
+// params the caller keeps the legacy "return every row" contract, which the
+// dashboard, analytics, notifications and CSV export still depend on.
+// Invalid values are clamped to safe defaults instead of rejecting the request,
+// matching the existing `limit` handling in api/admin/reviews.js.
+function parseListPagination(query, fallbackPageSize) {
+  const q = query || {};
+  if (q.page === undefined && q.pageSize === undefined) return null;
+  const fallback = intInRange(fallbackPageSize, 1, ADMIN_LIST_MAX_PAGE_SIZE);
+  const size = fallback === null ? 50 : fallback;
+  const rawPage = intInRange(q.page === undefined ? 1 : q.page, 1, 100000);
+  const rawSize = intInRange(q.pageSize === undefined ? size : q.pageSize, 1, ADMIN_LIST_MAX_PAGE_SIZE);
+  return {
+    page: rawPage === null ? 1 : rawPage,
+    pageSize: rawSize === null ? size : rawSize,
+  };
+}
+
+function paginationMeta(page, pageSize, count) {
+  const total = Number.isFinite(count) && count >= 0 ? Math.trunc(count) : 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  return {
+    page: safePage,
+    pageSize,
+    total,
+    totalPages,
+    hasPrev: safePage > 1,
+    hasNext: safePage < totalPages,
+  };
+}
+
 function numInRange(v, min, max) {
   const n = Number(v);
   if (!Number.isFinite(n) || n < min || n > max) return null;
@@ -2661,4 +2695,7 @@ module.exports = {
   EMAIL_RE,
   EGYPT_PHONE_RE,
   COUPON_CODE_RE,
+  ADMIN_LIST_MAX_PAGE_SIZE,
+  parseListPagination,
+  paginationMeta,
 };

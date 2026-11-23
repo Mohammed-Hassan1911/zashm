@@ -17,6 +17,8 @@ const {
   isMissingColumnError,
   pathsFromProductImageFields,
   cleanupUnreferencedProductImages,
+  parseListPagination,
+  paginationMeta,
 } = require('../_lib');
 
 // Columns proven to exist (insert path). `label`/`tags`/`active` are sent when
@@ -289,12 +291,35 @@ async function listProducts(req, res) {
   const check = await rateLimitShared(`adminread:${ip}`, 120, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
+  // Optional paging. No params → the full snapshot used by the dashboard and
+  // store admin state. With params → one bounded page plus its total.
+  const paging = parseListPagination(req.query, 16);
+
   try {
     const sb = supabaseAdmin();
-    const { data, error } = await sb
+    let page = 1;
+    let pageSize = 16;
+    let total = 0;
+    if (paging) {
+      const { count, error: countError } = await sb
+        .from('products')
+        .select('id', { count: 'exact', head: true });
+      if (countError) throw countError;
+      total = Number(count) || 0;
+      const meta = paginationMeta(paging.page, paging.pageSize, total);
+      page = meta.page;
+      pageSize = meta.pageSize;
+    }
+
+    let query = sb
       .from('products')
       .select('*')
       .order('id', { ascending: false });
+    if (paging) {
+      const offset = (page - 1) * pageSize;
+      query = query.range(offset, offset + pageSize - 1);
+    }
+    const { data, error } = await query;
     if (error) throw error;
 
     const products = (Array.isArray(data) ? data : []).map((p) => ({
@@ -303,7 +328,9 @@ async function listProducts(req, res) {
       active: p.active === undefined || p.active === null ? true : Boolean(p.active),
     }));
 
-    return json(res, 200, { success: true, count: products.length, products });
+    const body = { success: true, count: paging ? total : products.length, products };
+    if (paging) body.pagination = paginationMeta(page, pageSize, total);
+    return json(res, 200, body);
   } catch (err) {
     safeLogError('Product list failed', err);
     return json(res, 500, { error: 'Could not load products' });

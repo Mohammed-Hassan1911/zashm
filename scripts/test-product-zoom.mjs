@@ -235,7 +235,10 @@ console.log('[7] the lightbox also accepts a two-finger pinch');
     for (const name of ['react', 'react-dom', 'framer-motion', 'lucide-react', 'zustand', '@supabase/supabase-js', 'papaparse', 'recharts']) {
       assert.ok(pkg.dependencies[name], name);
     }
-    assert.equal(Object.keys(pkg.dependencies).length, 8);
+    // Observation-only SDK approved by the owner; the gesture itself still
+    // uses no dependency (src/lib/zoomGesture.mjs is plain math).
+    assert.equal(Object.keys(pkg.dependencies).length, 9);
+    assert.ok(pkg.dependencies['@vercel/speed-insights']);
   });
 }
 

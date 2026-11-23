@@ -800,3 +800,49 @@ change and remain the owner's responsibility.
   `DELETE FROM public.orders` does not reconcile stock or coupon usage — that
   only happens inside `atomic_delete_order` — so a read-only drift check is
   advisable if the deletion was not made through the RPC.
+
+### 13.13 Growth readiness — paged admin API, Speed Insights, local load test (2026-11-23, uncommitted)
+
+Owner-approved scope: lists-only pagination (analytics/notifications keep full
+snapshots), Speed Insights via the `@vercel/speed-insights` SDK, and a load test
+on isolated local data only. **Nothing here was committed, pushed or deployed.**
+
+- `GET /api/admin/products` and `GET /api/admin/orders` accept optional
+  `page`/`pageSize`. With no params the legacy full-list response is unchanged
+  (dashboard, 10s poll, notifications, CSV and KPIs depend on it). With params
+  the handlers issue one exact head count plus one `.range()` query and return
+  `pagination: { page, pageSize, total, totalPages, hasPrev, hasNext }` shaped
+  like the UI's existing `paginate()` helper. Params are clamped; raw DB errors
+  are never echoed. Orders sort by `date DESC, id DESC` so equal timestamps
+  cannot duplicate or skip a row across pages. The exact head count and the
+  page query are two statements, so a concurrent insert/delete can make the
+  displayed `totalPages` briefly stale; the page itself stays valid and the
+  pager clamps out-of-range pages. Regression proof:
+  `scripts/test-admin-pagination.mjs` (51 assertions), plus the existing
+  products/PII-limit suites.
+- Speed Insights is injected once from `src/index.js`. `src/lib/speedInsights.mjs`
+  drops datapoints for `/admin`, `/cart`, `/checkout`, `/wishlist`, `/track` and
+  `?track=`/`?tk=` URLs. `vercel.json` CSP now allows `va.vercel-scripts.com`
+  (script) and `vitals.vercel-insights.com` (fallback intake) only. The SDK is
+  available on all Vercel plans; querying metrics through `vercel metrics`
+  still requires a Speed Insights Plus subscription. Proof:
+  `scripts/test-speed-insights.mjs` (20 assertions), `npm run build`, bundle
+  scan showing only the public anon JWT.
+- Local load test (not production): PostgreSQL 17.10, 8 vCPU Mac, synthetic
+  2,000 products / 5,000 orders, pgbench mixed read/write script, 60 s per
+  level. 50 clients: 13,075 TPS, p50 1.94 ms, p95 10.56 ms, p99 27.50 ms.
+  100 clients: 5,904 TPS, p50 8.11 ms, p95 64.54 ms, p99 138.72 ms.
+  300 clients: 4,556 TPS, p50 24.92 ms, p95 286.58 ms, p99 473.64 ms.
+  Zero failed transactions at every level. This measures the database layer
+  only (no HTTP/Vercel/PostgREST/Auth), and the local cluster allowed 400
+  direct connections — the live project reports `max_connections = 60`, so a
+  real 300-client burst must go through the Supavisor pooler.
+- Full `npm test` (including the real PostgreSQL concurrency suite) and
+  `npm run build` pass; `npm audit --omit=dev` reports 0 vulnerabilities.
+  Supabase plan label is not exposed by the Management API here, but the live
+  entitlements (1-day logs, no backups/HA/read replicas, 50 MB max upload,
+  `max_connections = 60`) match the Free tier. Measured usage is far below the
+  official Free quotas; **no Supabase upgrade is justified by current evidence**.
+- Deployment approval is still required before the CSP/SDK changes take effect
+  in production; after deployment, verify the injected script and that private
+  routes emit no Speed Insights events.

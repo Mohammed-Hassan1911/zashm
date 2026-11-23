@@ -135,6 +135,13 @@ function startServer() {
       return send(200, 'application/json', '{}');
     }
 
+    // Vercel serves these in production; the local harness must not answer with
+    // index.html (the SDK would parse HTML as JavaScript).
+    if (url.pathname.startsWith('/_vercel/speed-insights/') ||
+        (url.pathname.endsWith('/script.js') && !existsSync(path.join(BUILD_DIR, url.pathname)))) {
+      return send(200, 'text/javascript; charset=utf-8', '/* local E2E stub */');
+    }
+
     let file = path.join(BUILD_DIR, decodeURIComponent(url.pathname));
     if (existsSync(file) && statSync(file).isDirectory()) file = path.join(file, 'index.html');
     if (!existsSync(file)) file = path.join(BUILD_DIR, 'index.html');

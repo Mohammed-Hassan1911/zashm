@@ -25,6 +25,8 @@ const {
   shouldNotifyStatusChange,
   buildOrderEditMessage,
   buildOrderTelegramActions,
+  parseListPagination,
+  paginationMeta,
 } = require('../_lib');
 
 function getId(req, body) {
@@ -132,9 +134,41 @@ async function listOrders(req, res) {
   const check = await rateLimitShared(`adminorderread:${ip}`, 120, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
+  // Optional paging for the orders table. The 10s poll and dashboard analytics
+  // still call this without params so they keep receiving the full snapshot.
+  const paging = parseListPagination(req.query, 15);
+
   try {
     const sb = supabaseAdmin();
-    const { data, error } = await sb.from('orders').select('*').order('date', { ascending: false });
+    let page = 1;
+    let pageSize = 15;
+    let total = 0;
+    if (paging) {
+      const { count, error: countError } = await sb
+        .from('orders')
+        .select('id', { count: 'exact', head: true });
+      if (countError) {
+        safeLogError('Orders count failed', countError);
+        return json(res, 500, { error: 'Could not load orders' });
+      }
+      total = Number(count) || 0;
+      const meta = paginationMeta(paging.page, paging.pageSize, total);
+      page = meta.page;
+      pageSize = meta.pageSize;
+    }
+
+    // `date` is not unique (bulk-created/legacy rows). The id tie-breaker keeps
+    // page boundaries stable so a row is never repeated or skipped.
+    let query = sb
+      .from('orders')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('id', { ascending: false });
+    if (paging) {
+      const offset = (page - 1) * pageSize;
+      query = query.range(offset, offset + pageSize - 1);
+    }
+    const { data, error } = await query;
     if (error) {
       safeLogError('Orders list failed', error);
       return json(res, 500, { error: 'Could not load orders' });
@@ -144,7 +178,13 @@ async function listOrders(req, res) {
       order.tracking_url = trackingUrlFor(row.id);
       return order;
     });
-    return json(res, 200, { orders });
+    const body = { orders };
+    if (paging) {
+      body.success = true;
+      body.count = total;
+      body.pagination = paginationMeta(page, pageSize, total);
+    }
+    return json(res, 200, body);
   } catch (err) {
     safeLogError('Orders list error', err);
     return json(res, 500, { error: 'Could not load orders' });
