@@ -44,13 +44,13 @@ export default function ShopPage() {
   const [labelFilter, setLabelFilter] = useState('All');
   const sortRef = useRef(null);
   // Remembers how the picker was opened so only a pointer-driven choice blurs.
-  // Keyboard arrow choices must keep focus and the gold fill until the user
-  // moves away, otherwise the first ArrowDown ends the interaction.
+  // Keyboard arrow choices must keep focus until the user moves away, otherwise
+  // the first ArrowDown ends the interaction.
   const sortPointerRef = useRef(false);
 
   // The native picker does not always fire blur when it closes. Clear the
-  // focused sort on the first tap elsewhere (and on Escape) so its gold fill
-  // leaves with the picker instead of hanging around on the toolbar.
+  // focused sort on the first tap elsewhere (and on Escape) so its focus
+  // styling leaves with the picker instead of hanging around on the toolbar.
   useEffect(() => {
     const clearSortFocus = (event) => {
       const select = sortRef.current;

@@ -124,20 +124,32 @@ returned `allowed: true` at count 120 and `allowed: false` at count 121
 (`resetIn` 26s). No limiter code change was needed; the HTTP burst simply could
 not exercise one per-IP bucket from a rotating-IP client.
 
-All code-side Low work is now deployed: reduced-motion gallery, deferred hover
-image fetch, route-scoped idle preload, refreshable `/og-image.jpg` cache,
-validated `x-real-ip`, fail-closed Origin on unsafe methods, sanitised server
-error logs, signed-token cleanup on the tracking page, minimal `?wa=1` prefill,
-and immutable cache headers on new Storage uploads.
+All previously listed code-side Low work was deployed with the baseline above:
+reduced-motion gallery, deferred hover image fetch, route-scoped idle preload,
+refreshable `/og-image.jpg` cache, validated `x-real-ip`, fail-closed Origin on
+unsafe methods, sanitised server error logs, signed-token cleanup on the
+tracking page, minimal `?wa=1` prefill, and immutable cache headers on new
+Storage uploads. Owner decision 2026-11-24 replaces the minimal prefill with the
+FULL Telegram confirmation text in the verified WhatsApp redirect; the owner
+approved direct Production deployment of that change to Cloudflare Worker
+`zashm` — see `docs/production-remediation-handoff.md` §13.14 for version IDs
+and rollback. The button URL itself still carries only the signed order id
+(no PII); the final `wa.me` URL carries the customer details by design. The
+same approval covered the neutral `Newest` sort press state in §13.15; no
+Supabase, Vercel, DNS or production secret setting was changed.
 
-Final local proof for this tree: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 30
-suites / 3451 assertions, 0 failures; the SQL suite really ran (490 passed on
-temporary PostgreSQL 17). `npm run build` → `index-CKR1oqUT.js` +
-`index-CP2InU7q.css`, shop shell written, an empty
-`build/prerendered-products.json` published from a successful live
-`products_public` read, and a clean secret scan. One earlier local build hit a
-transient `fetch failed` and deliberately published no manifest; the re-run
-succeeded, and the sitemap's fail-closed fallback is unchanged.
+The baseline deployment's local proof was `ZSHM_REQUIRE_SQL_TESTS=1 npm test`
+→ 30 suites / 3451 assertions, 0 failures (SQL: 490 passed), and `npm run build`
+→ `index-CKR1oqUT.js` + `index-CP2InU7q.css` with an empty
+`build/prerendered-products.json`. One earlier local build hit a transient
+`fetch failed` and deliberately published no manifest; the re-run succeeded, and
+the sitemap's fail-closed fallback is unchanged. For the combined §13.14/§13.15
+change, the tree verifies `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 37 scripts /
+4112 passed / 0 failed (the real PostgreSQL 17 suite ran: 495 passed) and
+`npm run build` → `index-9KxDlqjO.js` + `index-CMXKf8h2.css` with 2 prerendered
+product pages and a clean secret scan. The final Production asset build uses
+the real public origin and anon key; an earlier prepared-origin build with a
+placeholder anon key was superseded before the last deployment.
 
 Until real products are added, the catalogue is intentionally empty and the
 store is **not** ready for sale.

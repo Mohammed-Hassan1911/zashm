@@ -925,19 +925,28 @@ try {
         'the sort paint lives in CSS, matching the unselected chip surface');
       assert.ok(/\.shop-sort \{[^}]*transition: none;[^}]*touch-action: manipulation;/.test(css),
         'the select has no CSS transition of its own to lag behind the picker');
-      assert.ok(/\.shop-sort:active,\s*\n\.shop-sort:focus,\s*\n\.shop-sort:focus-visible \{[^}]*border-color: rgba\(255, 240, 202, 0\.3\);[^}]*background: linear-gradient\(135deg, #9a7a2e 0%, #c9a84c 46%, #e8c870 100%\);[^}]*color: #14110b;/.test(css),
-        'pressing or focusing the sort fills it with the same gold as an active chip');
-      assert.ok(/\.shop-sort-wrap:active \.shop-sort-chevron,\s*\n\.shop-sort-wrap:focus-within \.shop-sort-chevron \{[^}]*color: #14110b;/.test(css),
-        'the chevron switches to dark ink while the sort is gold');
+      assert.ok(/\.shop-sort:active,\s*\n\.shop-sort:focus,\s*\n\.shop-sort:focus-visible \{[^}]*border-color: rgba\(255, 255, 255, 0\.32\);[^}]*background: linear-gradient\(180deg, rgba\(255, 255, 255, 0\.08\), rgba\(255, 255, 255, 0\.02\)\), var\(--bg3\);[^}]*color: var\(--text\);/.test(css),
+        'pressing or focusing the sort keeps the dark surface instead of a gold fill');
+      const sortActiveBlock = (css.match(/\.shop-sort:active,[\s\S]*?\n\}/) || [''])[0];
+      assert.ok(!/linear-gradient\(135deg/.test(sortActiveBlock) &&
+         !/#14110b/.test(sortActiveBlock) &&
+         !/\.shop-sort-wrap:active \.shop-sort-chevron/.test(css),
+        'the old gold fill and its dark-ink chevron swap are gone');
+      assert.ok(/\.shop-sort:focus-visible \{[^}]*box-shadow:[^}]*0 0 0 2px rgba\(255, 255, 255, 0\.35\)/.test(css),
+        'keyboard focus keeps a visible neutral ring');
+      const sortRingBlock = (css.match(/\.shop-sort:focus-visible \{[\s\S]*?\n\}/) || [''])[0];
+      assert.ok(sortActiveBlock && sortRingBlock &&
+         css.indexOf(sortRingBlock) > css.indexOf(sortActiveBlock),
+        'the focus-visible ring follows the combined press rule so its box-shadow wins the cascade');
       assert.ok(/onPointerDown=\{\(\) => \{ sortPointerRef\.current = true; \}\}/.test(shop) &&
          /if \(sortPointerRef\.current\) event\.currentTarget\.blur\(\);/.test(shop) &&
          /event\.key === 'Escape'\)/.test(shop) &&
          /document\.addEventListener\('pointerdown', clearSortFocus, true\)/.test(shop) &&
          /event\.target !== select\) select\.blur\(\)/.test(shop),
-        'pointer choices, Escape, and tapping away clear the gold; keyboard choices do not');
+        'pointer choices, Escape, and tapping away clear focus; keyboard choices do not');
       assert.ok(/\['ArrowDown', 'ArrowUp', 'Home', 'End'\]\.includes\(event\.key\)\)\s*\{\s*sortPointerRef\.current = false;\s*\}/.test(shop) &&
          /onBlur=\{\(\) => \{ sortPointerRef\.current = false; \}\}/.test(shop),
-        'arrow keys clear the pointer flag so the select keeps focus and its gold fill');
+        'arrow keys clear the pointer flag so the select keeps focus after keyboard choices');
       assert.ok(/isEditable[\s\S]{0,320}?element\.matches\('textarea'\)/.test(nav) &&
          !/isEditable[\s\S]{0,320}?element\.matches\('textarea, select'\)/.test(nav),
         'opening the native sort picker does not count as a keyboard, so the bottom nav stays');

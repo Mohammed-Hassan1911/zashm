@@ -49,7 +49,6 @@ const lib = require('../api/_lib.js');
 const {
   sendTelegramNotification,
   buildOrderTelegramMessage,
-  buildOrderHandoffPrefill,
   buildOrderStatusMessage,
   buildOrderFeedbackMessage,
   buildOrderFeedbackActions,
@@ -376,16 +375,26 @@ try {
     process.env.SESSION_SECRET = secret;
     ok(!JSON.stringify(unsigned).includes('wa=1'), 'unsigned hand-off button is dropped');
 
-    // The signed wa=1 hand-off is a browser redirect, so its query string is
-    // visible to the browser and messaging app: it carries only id + link.
-    const handoff = buildOrderHandoffPrefill(ORDER, TRACKING_URL);
-    ok(handoff.startsWith(`• رقم الطلب: ${ORDER.id}\n`), 'hand-off prefill starts with the order id');
-    ok(handoff.includes(`• رابط التتبع: ${TRACKING_URL}`), 'hand-off prefill carries the signed tracking link');
+    // The signed wa=1 button URL stays short and non-PII: the full customer
+    // confirmation is built server-side only AFTER the token is verified, then
+    // handed to WhatsApp as the pre-filled text (owner decision 2026-11-24).
+    const handoff = new URL(whatsapp.url);
+    eq(handoff.searchParams.get('track'), ORDER.id, 'hand-off URL carries the order id');
+    ok(lib.verifyTrackToken(ORDER.id, handoff.searchParams.get('tk')), 'hand-off URL carries a valid token');
+    eq(handoff.searchParams.get('wa'), '1', 'hand-off URL requests the WhatsApp prefill');
     for (const pii of [ORDER.customer, ORDER.email, ORDER.address, ORDER.phone,
       ORDER.notes, ORDER.city, 'Silk Abaya', 'EGP 1,615']) {
-      ok(!handoff.includes(pii), `hand-off prefill omits ${pii}`);
+      ok(!whatsapp.url.includes(pii), `wa hand-off URL omits ${pii}`);
+      ok(!whatsapp.url.includes(encodeURIComponent(pii)), `wa hand-off URL omits encoded ${pii}`);
     }
-    ok(handoff.split('\n').length === 2, 'hand-off prefill has exactly two lines');
+
+    const fullMessage = buildOrderTelegramMessage(ORDER, TRACKING_URL);
+    for (const pii of [ORDER.customer, ORDER.email, ORDER.phoneAlt, ORDER.address,
+      ORDER.notes, ORDER.city, 'Silk Abaya', 'EGP 1,615']) {
+      ok(fullMessage.includes(pii), `full WhatsApp prefill includes ${pii}`);
+    }
+    ok(fullMessage.includes(TRACKING_URL), 'full WhatsApp prefill carries the tracking link');
+    ok(fullMessage.includes(ORDER.id), 'full WhatsApp prefill carries the order id');
   });
 
   await section('[7] pathological carts are clamped to the Telegram byte budget', async () => {

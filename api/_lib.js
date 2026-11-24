@@ -2012,18 +2012,6 @@ function whatsAppDeepLink(phone, text) {
   return `https://wa.me/${number}${suffix}`;
 }
 
-/** Minimal, non-PII prefill for the signed ?wa=1 tracking hand-off. It carries
- * only the order id and the canonical tracking link — never name, email,
- * address, phone, items or totals, which stay out of the wa.me query string. */
-function buildOrderHandoffPrefill(order = {}, trackingUrl) {
-  const id = safeLineText(order.id, 48);
-  const link = safeLineText(trackingUrl || order.tracking_url || order.trackingUrl, 500);
-  const lines = [];
-  if (id) lines.push(`• رقم الطلب: ${id}`);
-  if (link) lines.push(`• رابط التتبع: ${link}`);
-  return lines.join('\n');
-}
-
 /** Pre-filled WhatsApp message. Carries the customer confirmation in a form
  * that fits Telegram's 2048-character button-URL limit, so the button opens
  * the WhatsApp app directly with the message already typed — no browser
@@ -2131,9 +2119,9 @@ function buildOrderTelegramActions(order = {}, trackingUrl, { includeWhatsApp = 
   const primary = [];
   if (includeWhatsApp) {
     // Use the signed redirect so the FULL customer message (identical to the
-    // one sent on Telegram, minus the WhatsApp field) is pre-filled. A direct
-    // wa.me link cannot carry the full message (Telegram caps a button URL at
-    // 2048 chars) and would have to be truncated.
+    // one sent on Telegram) is pre-filled. Owner decision 2026-11-24 restored
+    // this behaviour; a direct wa.me button URL cannot carry the full message
+    // (Telegram caps it at 2048 chars).
     const confirmLink = whatsAppConfirmLink(order.id);
     if (confirmLink) primary.push({ text: '💬 واتساب بالرسالة جاهزة', url: confirmLink });
   }
@@ -2660,7 +2648,6 @@ module.exports = {
   sendTelegramNotification,
   buildOrderTelegramMessage,
   buildWhatsAppPrefillMessage,
-  buildOrderHandoffPrefill,
   buildOrderStatusMessage,
   buildOrderFeedbackMessage,
   buildOrderFeedbackActions,

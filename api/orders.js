@@ -17,7 +17,6 @@ const {
   parseOrderRow,
   sendTelegramNotification,
   buildOrderTelegramMessage,
-  buildOrderHandoffPrefill,
   buildOrderTelegramActions,
   sendPendingOrderAlert,
   trackingUrlFor,
@@ -709,14 +708,19 @@ async function trackOrder(req, res) {
     if (!data) return json(res, 200, { found: false });
 
     const order = parseOrderRow(data);
-    order.tracking_url = trackingUrlFor(trackId);
+    // Keep the STORED tracking_url: minting a fresh token here would change the
+    // tracking line and break byte-for-byte parity with the Telegram message.
+    // Legacy rows without a stored link still get a signed fallback.
+    if (!order.tracking_url) order.tracking_url = trackingUrlFor(trackId);
 
-    // ?wa=1 opens WhatsApp with only the order id and its canonical signed
-    // tracking link. Never put customer PII in a wa.me query string. The token
-    // in that link remains the credential, exactly like the tracking page.
+    // ?wa=1 opens WhatsApp with the EXACT customer confirmation that was sent
+    // to Telegram, so the owner does not have to copy or rebuild it. Owner
+    // decision 2026-11-24 supersedes the 2026-11-20 minimal-handoff hardening:
+    // the Telegram button URL stays short and token-only; the full text is
+    // built here after the token is verified, and the redirect is never cached.
     if (String((req.query && req.query.wa) || '') === '1') {
-      const prefill = buildOrderHandoffPrefill(order, order.tracking_url);
-      const target = whatsAppDeepLink(order.phone, prefill);
+      const message = buildOrderTelegramMessage(order, order.tracking_url);
+      const target = whatsAppDeepLink(order.phone, message);
       if (!target) return redirect(res, order.tracking_url);
       return redirect(res, target);
     }

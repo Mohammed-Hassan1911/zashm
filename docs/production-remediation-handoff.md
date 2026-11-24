@@ -846,3 +846,88 @@ on isolated local data only. **Nothing here was committed, pushed or deployed.**
 - Deployment approval is still required before the CSP/SDK changes take effect
   in production; after deployment, verify the injected script and that private
   routes emit no Speed Insights events.
+
+### 13.14 WhatsApp button pre-fills the full order message (2026-11-24)
+
+Owner reported that tapping the Telegram WhatsApp button opened a chat with only
+the order number and tracking link, not the confirmation text that arrived in
+Telegram. The old minimal `?wa=1` prefill from the 2026-11-20 hardening is
+therefore superseded for the verified hand-off only.
+
+- `api/orders.js`: after `verifyTrackToken` succeeds, the `?wa=1` branch builds
+  `buildOrderTelegramMessage(order, order.tracking_url)` — byte-identical to the
+  Telegram body, including the STORED tracking link and its original token — and
+  redirects to `whatsAppDeepLink(order.phone, message)`. The read path no longer
+  mints a fresh `tracking_url` (it only supplies one for legacy rows without a
+  stored link). The redirect remains `Cache-Control: no-store`, the button URL
+  remains short and token-only, and no message content is logged. This applies
+  to both Vercel and the Cloudflare Worker because the Worker reuses
+  `api/orders.js`.
+- `api/_lib.js`: removed the now-unused `buildOrderHandoffPrefill` helper.
+  `buildWhatsAppPrefillMessage` stays in use for the database-outage alert.
+- Security trade-off accepted by the owner: the final `wa.me` URL necessarily
+  contains the customer details because WhatsApp prefill has no out-of-band
+  channel. They stay out of the Telegram button URL, server logs and cached
+  responses; the signed token is still the only credential for the redirect.
+- Regression proof: `scripts/test-notifications.mjs` asserts the button URL has
+  no PII while the full confirmation does; `scripts/test-final-hardening.mjs`
+  asserts the decoded `?wa=1` redirect equals the exact Telegram message and
+  still requires a valid token, one DB lookup and a no-store response.
+- **Deployment (owner-approved 2026-11-24, direct Production only):** deployed
+  to Cloudflare Worker `zashm` with
+  `wrangler deploy --config wrangler.production.toml --tag wa-full-prefill-20261124`.
+  New Version `290b79bc-79a9-4601-96f9-b20518ca1610` is active at 100% in
+  deployment `0ccec3c5-0bad-46d2-993a-0347b8d73dff`
+  (`2026-11-24T19:19:59.778466Z`). The previous rollback target remains Version
+  `e0c390f5-7e70-49a0-ac73-200a3da4eec6` / deployment
+  `daaea4fe-f226-4fb2-a27f-2f71ceabe268`. No assets changed (46 files reused),
+  no secret rotated and no Vercel/Supabase/DNS change. A read-only fetch of the
+  live Worker script confirms the new `if (!order.tracking_url)` guard and
+  full-message hand-off are present and the
+  old minimal helper is absent. GET-only smoke: 13 routes returned the expected
+  statuses (pages 200, unknown 404, admin API 401, unauthenticated track
+  200 `{found:false}`) with noindex on every response. No commercial test order
+  was placed, so the live full-message prefill itself was not exercised; it is
+  proven by the handler tests and the deployed script check.
+
+### 13.15 Newest sort keeps a neutral pressed state (2026-11-24)
+
+Owner reported that the `Newest` sort beside `Filter` turned yellow/gold when
+pressed. `src/index.css` now keeps the smoked-glass dark surface on
+`:active`/`:focus`/`:focus-visible`, brightens the border/text, and adds a
+neutral white keyboard focus ring; the champagne fill and dark-chevron swap are
+gone. The small gold chevron remains by design (it is not a fill). Sorting,
+focus/blur behaviour and the stored selection are unchanged. `ShopPage.js`
+only updates stale comments; static and browser tests were updated to reject a
+gold fill.
+
+Verification: `node scripts/test-ux-fixes.mjs` → 115 passed / 0 failed,
+`node scripts/test-e2e.mjs` → 36 passed / 0 failed (real headless Chrome),
+`ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 37 scripts / 4112 passed / 0 failed with
+the real PostgreSQL 17 suite running (495 passed), `npm run build` →
+`index-9KxDlqjO.js` + `index-CMXKf8h2.css`, and `git diff --check` clean.
+Browser inspection on the local shop page confirmed the focused control kept
+`rgb(21, 21, 21)` with a white overlay and neutral border while the chevron
+stayed gold. Reviewer sign-off was APPROVE with no Blocker/High/Medium finding;
+the one Low test-strength note (focus-ring cascade order) was fixed.
+
+- **Deployment (owner-approved 2026-11-24, direct Production only):** the final
+  Worker version is `1392dfc3-2454-484d-8e88-e05e54c7b86a`, active at 100% in
+  deployment `fc0f7712-6354-423b-ac08-30d4aa950332`
+  (`2026-11-24T19:55:24.139763Z`, tag `sort-neutral-final-20261124`). The first
+  deployment with this change (`502b2feb-614c-4b6f-b014-42f1785489e9` /
+  `2ca10c45-052f-42e4-85bf-07479161c31c`) was immediately superseded because
+  `build:production:prep` had baked a placeholder anon key and
+  `production-prep.invalid` sitemap origin. The final build used the real
+  Production public origin and anon key at build time, with no service-role
+  secret in the bundle; live asset checks confirmed the real sitemap URL, new
+  hashed assets, neutral press CSS, absence of the old gold fill, and retained
+  WhatsApp markers. GET-only smoke covered 13 routes with the expected statuses
+  (pages 200, unknown 404, admin API 401, unauthenticated track 200) and noindex
+  on every applicable response.
+- **Rollback:** prefer the last known-good stable version
+  `290b79bc-79a9-4601-96f9-b20518ca1610` / deployment
+  `0ccec3c5-0bad-46d2-993a-0347b8d73dff` (§13.14). The immediate preceding
+  version `2ca10c45-052f-42e4-85bf-07479161c31c` is not a recommended rollback
+  target because its assets came from the placeholder prepared build. No
+  Supabase, Vercel, DNS or secret setting was changed.

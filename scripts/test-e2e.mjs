@@ -442,7 +442,7 @@ try {
   ok(await evaluate(cdp, 'getComputedStyle(document.body).fontFamily.includes("Montserrat")'), 'the self-hosted body face is applied');
   eq(await evaluate(cdp, 'document.documentElement.scrollWidth <= innerWidth + 1'), true, 'no horizontal overflow at 390px');
 
-  console.log('\n[3b] sort keeps keyboard focus but clears pointer focus');
+  console.log('\n[3b] sort keeps keyboard focus without a gold fill, and clears pointer focus');
   await goto(cdp, '/shop');
   await waitFor(cdp, '!!document.querySelector(".shop-sort")', 'the shop sort');
   const sort = await evaluate(cdp, `
@@ -474,7 +474,7 @@ try {
     })()
   `);
   eq(sort.focused.active, true, 'the sort receives focus');
-  eq(sort.focused.gold, true, 'focus fills the sort with champagne gold');
+  eq(sort.focused.gold, false, 'focus does not fill the sort with champagne gold');
   eq(sort.keyboard.active, true, 'a keyboard change keeps focus on the select');
   ok(sort.keyboard.value !== sort.focused.value, 'the keyboard change actually changed the sort');
   eq(sort.pointer.active, false, 'a pointer change clears focus');

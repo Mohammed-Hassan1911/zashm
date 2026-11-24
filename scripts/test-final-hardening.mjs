@@ -228,6 +228,14 @@ console.log('\n[4] secure order tracking');
 
   delete process.env.TRACKING_TOKEN_TTL_HOURS;
   const token = lib.trackToken(orderId);
+  // The stored link uses a legacy token, so any regeneration at read time is
+  // visible instead of being masked by a fresh token with the same timestamp.
+  const legacyTk = crypto.createHmac('sha256', process.env.SESSION_SECRET)
+    .update(`track:${orderId}`).digest('hex').slice(0, 32);
+  const storedUrl = new URL(lib.trackingUrlFor(orderId));
+  storedUrl.searchParams.set('tk', legacyTk);
+  const storedTrackingUrl = storedUrl.toString();
+  db.orders[0].tracking_url = storedTrackingUrl;
   ok(/^v1\.\d{1,16}\.[0-9a-f]{32}$/.test(token), 'new tracking token is versioned by default');
   const defaultExpiry = Number(token.split('.')[1]);
   ok(defaultExpiry > Date.now() && defaultExpiry <= Date.now() + 30 * 24 * 60 * 60 * 1000 + 5000,
@@ -289,8 +297,9 @@ console.log('\n[4] secure order tracking');
   eq(r.body.order.notes, 'secret note', 'notes included for the token holder');
   eq(db.queries.length, 1, 'valid token performs exactly one lookup');
 
-  // ?wa=1 hands off to WhatsApp with only the order id and a signed tracking
-  // link. No customer identifying field belongs in a wa.me query string.
+  // ?wa=1 opens WhatsApp with the EXACT Telegram customer confirmation, so the
+  // owner never has to retype or copy it (owner decision 2026-11-24). The signed
+  // button URL stays short; the full text is built only after token verification.
   db.queries = [];
   r = await track({ track: orderId, tk: token, wa: '1' });
   eq(r.status, 302, 'wa hand-off redirects');
@@ -298,16 +307,21 @@ console.log('\n[4] secure order tracking');
   ok(location.startsWith('https://wa.me/201012345678?text='), 'wa link targets the normalised phone');
   eq(r.headers['cache-control'], 'no-store', 'hand-off is never cached');
   const prefill = decodeURIComponent(location.split('?text=')[1] || '');
-  ok(prefill.startsWith(`• رقم الطلب: ${orderId}\n`), 'prefill starts with the order id only');
-  const trackLine = prefill.split('\n').find((line) => line.startsWith('• رابط التتبع: ')) || '';
-  const trackUrl = trackLine.slice('• رابط التتبع: '.length);
-  const signedLink = (() => { try { return new URL(trackUrl); } catch (e) { return null; } })();
+  const trackLine = prefill.split('\n').find((line) => line.startsWith('https://')) || '';
+  const signedLink = (() => { try { return new URL(trackLine); } catch (e) { return null; } })();
   eq(signedLink && signedLink.searchParams.get('track'), orderId, 'prefill carries the canonical track id');
+  eq(signedLink && signedLink.searchParams.get('tk'), legacyTk,
+    'prefill keeps the stored tracking token verbatim');
   ok(signedLink && lib.verifyTrackToken(orderId, signedLink.searchParams.get('tk')),
     'the prefill link keeps its signed tracking token');
+  const fullOrder = lib.parseOrderRow(db.orders[0]);
+  eq(prefill, lib.buildOrderTelegramMessage(fullOrder, ''),
+    'wa prefill is the exact message delivered to Telegram');
+  ok(prefill.includes(storedTrackingUrl), 'prefill uses the stored URL, not a freshly minted one');
+  ok(!prefill.includes(token), 'prefill does not replace the stored token with a new v1 token');
   for (const pii of ['Alice', 'alice@example.com', '1 Street', 'secret note', 'Cairo',
     '01012345678', 'EGP', 'الشحن', 'السلام']) {
-    ok(!prefill.includes(pii), `wa prefill omits ${pii}`);
+    ok(prefill.includes(pii), `wa prefill includes ${pii}`);
   }
   ok(!prefill.includes('/admin'), 'no admin link inside the prefilled text');
   ok(!prefill.includes('/api/orders?'), 'no hand-off link inside the prefilled text');
