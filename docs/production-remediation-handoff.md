@@ -931,3 +931,50 @@ the one Low test-strength note (focus-ring cascade order) was fixed.
   version `2ca10c45-052f-42e4-85bf-07479161c31c` is not a recommended rollback
   target because its assets came from the placeholder prepared build. No
   Supabase, Vercel, DNS or secret setting was changed.
+
+### 13.16 Public tracking checkmarks reuse the admin status colours (2026-11-24)
+
+Owner liked the coloured checkmarks in the admin order status timeline and asked
+for the public Track Order page to use the same colour style. The supplied
+screenshot is a Display P3 capture; converting its sampled node colours to sRGB
+gives exactly the `AdminApp.js` palette: Pending `#f39c12`, Confirmed `#3498db`,
+Processing `#9b59b6`, Shipped `#c9a84c`, Delivered `#27ae60`.
+
+- `src/pages/TrackOrder.js`: `Delivered` is aligned from `#2ecc71` to the admin
+  `#27ae60`; every timeline step publishes `--step-color` and a matching
+  `--step-glow` from `STATUS_COLORS[step]`. No tracking, token or API logic
+  changed.
+- `src/index.css`: reached nodes are now filled with their step colour and use
+  a white tick instead of the champagne gradient/dark tick; reached and current
+  labels use the same colour, and the current ring uses the step colour. The
+  gold rail between steps is unchanged, matching the admin timeline.
+- Regression proof: `node scripts/test-ux-fixes.mjs` → 116 passed / 0 failed,
+  including a new assertion that all six `STATUS_COLORS` equal the admin values
+  and that no gold gradient survives on a reached node. `node scripts/test-e2e.mjs`
+  → 42 passed / 0 failed in real headless Chrome: a signed tracking fixture
+  renders Pending/Confirmed/Processing as `rgb(243,156,18)`,
+  `rgb(52,152,219)` and `rgb(155,89,182)` with no horizontal overflow.
+
+The first full run failed only because the stale `build-production/` artifact
+from §13.15 lacked the baked `noindex` meta tag. It was rebuilt with
+`ZASHM_STOREFRONT_NOINDEX=1`, the real Production public origin and anon key,
+and the product prerender; the bundle verification then reported no problems.
+Final verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 37 scripts / 4119
+passed / 0 failed (real PostgreSQL 17 suite ran: 495 passed), `npm run build` →
+`index-B4VjJ2E2.js` + `index-DWikO4B4.css`, `git diff --check` clean, and a
+secret scan found no staging ref, placeholder key, service-role name, session
+secret or Telegram token in the 36-file artifact.
+
+- **Deployment (owner-approved 2026-11-24, direct Production only):** Cloudflare
+  Worker `zashm`, tag `track-status-colors-20261124`. Active version
+  `f06cfd8e-ac68-4550-9269-9ba0c42f3b4a` at 100% in deployment
+  `79e44e77-a0b7-4c7d-8958-1fd0da8309ab`
+  (`2026-11-24T21:08:28.613717Z`). Live asset checks confirmed the new hashed
+  JS/CSS, `--step-color`/`--step-glow`, `#27ae60`, no old `#2ecc71`, the baked
+  `noindex` meta, the real canonical sitemap and no placeholder/staging values.
+  GET-only smoke covered 13 routes with the expected statuses and `noindex` on
+  every response.
+- **Rollback:** redeploy version `1392dfc3-2454-484d-8e88-e05e54c7b86a` /
+  deployment `fc0f7712-6354-423b-ac08-30d4aa950332` (§13.15). No Supabase,
+  Vercel, DNS or secret setting was changed, no commercial test order was
+  placed, and no commit or push was made for this change.

@@ -61,6 +61,20 @@ const PIXEL =
   'data:image/svg+xml;charset=utf-8,' +
   encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="3" height="4"><rect width="3" height="4" fill="#1a1a1a"/></svg>');
 
+// A read-only fixture for the signed tracking page; it never leaves the machine.
+const TRACK_ORDER = {
+  id: 'ZSH-E2E-TRACK',
+  status: 'Processing',
+  customer: 'E2E Customer',
+  address: 'Cairo',
+  city: 'Cairo',
+  date: '2026-11-24',
+  items: [],
+  subtotal: 100,
+  discount: 0,
+  total: 100,
+};
+
 const PRODUCTS = [
   {
     id: 'e2e-tee',
@@ -131,7 +145,16 @@ function startServer() {
 
     if (url.pathname.startsWith('/api/')) {
       requests.api += 1;
-      if (url.pathname === '/api/orders') requests.orders += 1;
+      if (url.pathname === '/api/orders') {
+        requests.orders += 1;
+        if (url.searchParams.get('track') === TRACK_ORDER.id) {
+          return send(200, 'application/json', JSON.stringify({
+            found: true,
+            access: 'full',
+            order: TRACK_ORDER,
+          }));
+        }
+      }
       return send(200, 'application/json', '{}');
     }
 
@@ -639,6 +662,26 @@ try {
   eq(validation.payment.label, 'Cash on Delivery', 'the only payment method is Cash on Delivery');
   eq(validation.payment.radios, 0, 'no selectable payment radios are rendered');
   eq(validation.payment.soon, false, 'no "coming soon" payment placeholder is rendered');
+
+  console.log('\n[7b] tracking checkmarks reuse the admin status colours');
+  await goto(cdp, `/track?track=${TRACK_ORDER.id}&tk=e2e-token`);
+  await waitFor(cdp, 'document.querySelectorAll(".track-step").length === 5', 'the tracking timeline');
+  const trackStyles = await evaluate(cdp, `
+    (() => Array.from(document.querySelectorAll('.track-step')).map((step) => ({
+      label: step.querySelector('.track-step-label').textContent,
+      reached: step.classList.contains('is-reached'),
+      bg: getComputedStyle(step.querySelector('.track-node')).backgroundColor,
+      fg: getComputedStyle(step.querySelector('.track-step-label')).color,
+    })))()
+  `);
+  eq(trackStyles.map((s) => s.reached), [true, true, true, false, false],
+    'Processing marks the first three steps as reached');
+  eq(trackStyles[0].bg, 'rgb(243, 156, 18)', 'Pending checkmark is the admin gold');
+  eq(trackStyles[1].bg, 'rgb(52, 152, 219)', 'Confirmed checkmark is the admin blue');
+  eq(trackStyles[2].bg, 'rgb(155, 89, 182)', 'Processing checkmark is the admin purple');
+  eq(trackStyles[0].fg, 'rgb(243, 156, 18)', 'reached labels carry the same colour');
+  eq(await evaluate(cdp, 'document.documentElement.scrollWidth <= innerWidth + 1'), true,
+    'the tracking page has no horizontal overflow');
 
   console.log('\n[8] unknown routes are real 404s');
   await goto(cdp, '/this-route-does-not-exist');

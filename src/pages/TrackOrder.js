@@ -5,12 +5,14 @@ import { readTrackCredential, saveTrackCredential } from '../lib/trackCredential
 import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
 import SafeImage from '../components/ui/SafeImage';
 
+// Mirrors the admin status timeline in AdminApp.js: customers and staff must
+// see the same checkmark colours for every step of the same order.
 const STATUS_COLORS = {
   Pending: '#f39c12',
   Confirmed: '#3498db',
   Processing: '#9b59b6',
   Shipped: '#c9a84c',
-  Delivered: '#2ecc71',
+  Delivered: '#27ae60',
   Cancelled: '#e74c3c'
 };
 
@@ -227,6 +229,7 @@ export default function TrackOrder() {
                   const currentIndex = STATUS_FLOW.indexOf(currentOrder.status);
                   const reached = currentIndex >= index;
                   const isCurrent = currentOrder.status === step;
+                  const stepColor = STATUS_COLORS[step];
 
                   return (
                     <li
@@ -236,6 +239,10 @@ export default function TrackOrder() {
                         reached ? 'is-reached' : '',
                         isCurrent ? 'is-current' : '',
                       ].filter(Boolean).join(' ')}
+                      style={{
+                        '--step-color': stepColor,
+                        '--step-glow': `${stepColor}26`,
+                      }}
                       aria-current={isCurrent ? 'step' : undefined}
                     >
                       <span className="track-node" aria-hidden="true">

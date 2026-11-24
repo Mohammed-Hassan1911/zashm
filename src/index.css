@@ -10118,14 +10118,16 @@ main, [role="main"] {
   line-height: 1;
 }
 
+/* Reached steps borrow the same per-status colour as the admin timeline; the
+   white tick and the label stay in that colour instead of turning gold. */
 .track-step.is-reached .track-node {
-  border-color: rgba(240, 212, 146, 0.8);
-  background: linear-gradient(160deg, #e8c870, #c9a84c);
-  color: #14110b;
+  border-color: var(--step-color, var(--gold));
+  background: var(--step-color, var(--gold));
+  color: #fff;
 }
 
 .track-step.is-current .track-node {
-  box-shadow: 0 0 0 4px rgba(201, 168, 76, 0.14);
+  box-shadow: 0 0 0 4px var(--step-glow, rgba(201, 168, 76, 0.14));
 }
 
 .track-step-label {
@@ -10136,10 +10138,12 @@ main, [role="main"] {
   white-space: nowrap;
 }
 
-.track-step.is-reached .track-step-label { color: var(--text2); }
+.track-step.is-reached .track-step-label {
+  color: var(--step-color, var(--text2));
+}
 
 .track-step.is-current .track-step-label {
-  color: var(--gold-light);
+  color: var(--step-color, var(--gold-light));
   font-weight: 600;
 }
 

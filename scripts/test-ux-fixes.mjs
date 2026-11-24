@@ -1621,6 +1621,34 @@ try {
         'the page box includes its padding, so it cannot overflow at 320px');
     });
 
+    await step('tracking checkmarks reuse the admin status palette', () => {
+      const admin = read('src/pages/AdminApp.js');
+      const adminPalette = (admin.match(/const STATUS_COLORS = \{[^}]*\}/) || [''])[0];
+      const trackPalette = (track.match(/const STATUS_COLORS = \{[^}]*\}/) || [''])[0];
+      const colorOf = (source, status) =>
+        ((source.match(new RegExp(`${status}:\\s*'(#[0-9a-f]{6})'`)) || [])[1] || '').toLowerCase();
+      for (const status of ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled']) {
+        const adminColor = colorOf(adminPalette, status);
+        const trackColor = colorOf(trackPalette, status);
+        assert.match(adminColor, /^#[0-9a-f]{6}$/, `${status} has a readable admin hex colour`);
+        assert.equal(trackColor, adminColor, `${status} uses the admin timeline colour`);
+      }
+      assert.ok(/'--step-color': stepColor/.test(track),
+        'each timeline step carries its own status colour');
+      assert.ok(/'--step-glow': `\$\{stepColor\}26`/.test(track),
+        'the current ring derives its alpha from the same step colour');
+      assert.ok(/\.track-step\.is-reached \.track-node \{[\s\S]{0,220}?background: var\(--step-color[\s\S]{0,120}?color: #fff/.test(css),
+        'reached nodes keep the white tick on the step colour');
+      assert.ok(/\.track-step\.is-reached \.track-node \{[\s\S]{0,220}?background: var\(--step-color/.test(css),
+        'reached nodes are filled with the step colour, not gold');
+      assert.ok(!/\.track-step\.is-reached \.track-node \{[\s\S]{0,220}?linear-gradient/.test(css),
+        'the old champagne gradient is gone from reached nodes');
+      assert.ok(/\.track-step\.is-reached \.track-step-label \{[\s\S]{0,160}?color: var\(--step-color/.test(css),
+        'reached labels use the same colour');
+      assert.ok(/\.track-step\.is-current \.track-node \{[\s\S]{0,180}?var\(--step-glow/.test(css),
+        'the current-step ring uses the step colour');
+    });
+
     await step('the two long tracking explanations are gone but the secure-link rule remains', () => {
       assert.ok(!/Open the secure tracking link sent with your order confirmation/.test(track),
         'the first unread tracking paragraph is removed');

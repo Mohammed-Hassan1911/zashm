@@ -149,7 +149,11 @@ change, the tree verifies `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 37 scripts /
 `npm run build` → `index-9KxDlqjO.js` + `index-CMXKf8h2.css` with 2 prerendered
 product pages and a clean secret scan. The final Production asset build uses
 the real public origin and anon key; an earlier prepared-origin build with a
-placeholder anon key was superseded before the last deployment.
+placeholder anon key was superseded before the last deployment. A later
+owner-approved change made the public tracking checkmarks reuse the admin status
+palette (§13.16); its Production build was rebaked with
+`ZASHM_STOREFRONT_NOINDEX=1` so the temporary noindex directive stays in both the
+HTML and the response headers.
 
 Until real products are added, the catalogue is intentionally empty and the
 store is **not** ready for sale.
