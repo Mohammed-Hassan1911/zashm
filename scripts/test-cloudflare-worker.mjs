@@ -4,6 +4,9 @@ import {
   PRODUCTION_ENV_FLAG,
   PRODUCTION_SUPABASE_REF,
   STAGING_SUPABASE_REF,
+  STAGING_WORKER_HOST,
+  TEMP_WORKERS_DEV_FLAG,
+  TEMP_WORKERS_DEV_ORIGIN,
   productionConfigProblems,
 } from '../src/lib/production-env.mjs';
 import {
@@ -20,7 +23,7 @@ import {
   SECURITY_HEADERS,
   VERCEL_TELEMETRY_SHIMS,
   VercelResponse,
-} from '../worker.mjs';
+} from '../src/lib/worker-runtime.mjs';
 
 let passed = 0;
 let failed = 0;
@@ -156,8 +159,13 @@ try {
 }
 
 section(3, 'api route coverage');
-const workerSource = await read('worker.mjs');
-ok(!workerSource.includes('ptegprcbtfylqhbnbkih'), 'worker.mjs has no hard-coded Production Supabase ref');
+const workerSource = await read('src/lib/worker-runtime.mjs');
+const workerEntry = await read('worker.mjs');
+ok(!workerSource.includes('ptegprcbtfylqhbnbkih'), 'worker runtime has no hard-coded Production Supabase ref');
+ok(!/^export\s+(const|let|var|function|async function|class)\s/m.test(workerEntry),
+  'runtime entry has no named exports that workerd would reject');
+ok(workerEntry.includes("import { handleRequest } from './src/lib/worker-runtime.mjs'"),
+  'runtime entry delegates to the shared handler module');
 ok(!wrangler.includes('supabase.co'), 'wrangler.toml pins no Supabase host');
 for (const file of [
   'api/orders.js',
@@ -950,6 +958,29 @@ const blockedProd = await handleRequest(
 eq(blockedProd.status, 503, 'the guard blocks API requests before configuration is copied');
 ok((blockedProd.headers.get('X-Robots-Tag') || '').includes('noindex'), 'guard response is private');
 ok(!(await blockedProd.text()).includes('is missing'), 'guard response hides problem details');
+
+const tempBase = {
+  [PRODUCTION_ENV_FLAG]: 'production',
+  VITE_SUPABASE_URL: `https://${PRODUCTION_SUPABASE_REF}.supabase.co`,
+  VITE_SUPABASE_ANON_KEY: 'anon',
+  SUPABASE_SERVICE_ROLE_KEY: 'service',
+  SESSION_SECRET: 'session',
+  ALLOWED_ORIGINS: 'https://zashm.example',
+};
+ok(productionConfigProblems({ ...tempBase, PUBLIC_BASE_URL: TEMP_WORKERS_DEV_ORIGIN })
+  .some((line) => line.includes('workers.dev')),
+'the temporary workers.dev origin stays blocked without the explicit opt-in flag');
+ok(!productionConfigProblems({
+  ...tempBase,
+  PUBLIC_BASE_URL: TEMP_WORKERS_DEV_ORIGIN,
+  [TEMP_WORKERS_DEV_FLAG]: '1',
+}).length, 'the exact opted-in workers.dev origin passes the guard for local testing');
+ok(productionConfigProblems({
+  ...tempBase,
+  PUBLIC_BASE_URL: `https://${STAGING_WORKER_HOST}`,
+  [TEMP_WORKERS_DEV_FLAG]: '1',
+}).some((line) => line.includes('workers.dev')),
+'the Staging workers.dev host is never allowed by the temporary opt-in');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

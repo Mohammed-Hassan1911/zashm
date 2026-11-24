@@ -474,8 +474,8 @@ created, Workers Paid was not subscribed, and Vercel/Supabase Production and
   to Supabase; no product fixture is copied. `robots.txt`, JSON-LD and Speed
   Insights use the prepared origin instead of the legacy Vercel domain.
 - `src/lib/production-env.mjs` is the shared fail-closed contract. When
-  `ZASHM_ENVIRONMENT = "production"`, `worker.mjs` returns a cached `noindex`
-  503 **before copying any binding or reaching an API handler** unless every
+  `ZASHM_ENVIRONMENT = "production"`, `src/lib/worker-runtime.mjs` returns a
+  cached `noindex` 503 **before copying any binding or reaching an API handler** unless every
   required production binding is present, non-placeholder, points at
   `ptegprcbtfylqhbnbkih`, uses an approved https public origin, and keeps
   server-only names out of `VITE_*`/`REACT_APP_*`. Staging has no such flag and
@@ -521,6 +521,59 @@ created, Workers Paid was not subscribed, and Vercel/Supabase Production and
   `$0.25/GB` ingestion and `$0.10/GB-month` storage, shared account-wide with
   Traces/Containers/R2/AI Gateway/Issues. No Logpush is enabled and no fixed
   log cost is assumed.
+
+## Phase 3 — brand-named temporary workers.dev preparation (2026-11-24)
+
+Owner-approved scope: local protected testing only. The ZASHM-branded temporary
+origin is `https://zashm-production.mohammedhassanmail1.workers.dev`. It was used
+**only** in a deleted, uncommitted local env file. No public activation, DNS,
+Custom Domain, Route, Zone, Cutover, Vercel change, Production secret change or
+Production data change occurred.
+
+- The workerd startup error (`Incorrect type for map entry 'CSP'`) was fixed in
+  source, not with a wrapper: `worker.mjs` now exports only the default handler,
+  and all named test helpers live in `src/lib/worker-runtime.mjs`. Node suites
+  import the helpers from the shared module. A regression assertion prevents
+  named exports from returning to the runtime entrypoint.
+- `src/lib/production-env.mjs` permits the exact temporary origin **only** when
+  the non-secret opt-in `ZASHM_TEMP_WORKERS_DEV=1` is present. Without that flag
+  a `workers.dev` canonical is still rejected; the Staging host
+  `zashm.mohammedhassanmail1.workers.dev` is never accepted even with the flag.
+- Direct `wrangler dev --local --config wrangler.production.toml` now starts
+  without any wrapper. Local env used the temporary origin as
+  `PUBLIC_BASE_URL`, added it to `SITEMAP_ALLOWED_ORIGINS` together with the
+  prepared build origin so canonical URLs could be rewritten, and set the opt-in
+  flag. The temp file and local state directory were deleted afterwards.
+- GET-only evidence from `127.0.0.1:8793`: `/` and `/shop` returned 200 with
+  canonical URLs on the temporary ZASHM workers.dev origin; `/sitemap.xml` and
+  `/api/sitemap` returned 200 with two `loc` entries on that origin and no
+  Vercel/Staging/placeholder origin; private/admin routes returned `noindex`;
+  unauthenticated `/api/admin/*` GETs returned 401; `/does-not-exist` stayed a
+  real 404; CSP and all baseline security headers were present and CSP allowed
+  only the Production Supabase origin. 28 GET lines and 0 non-GET lines appear
+  in the dev log.
+- Secret scan: 0 hits in `build-production/`, 0 in all local response bodies,
+  0 in the dev log. No secret value was printed.
+- Remote boundary unchanged: `workers_dev = false`, zero Routes, zero Custom
+  Domains, zero Zones, workers.dev still `404 / error code: 1042`, no new Worker
+  version, active version still `3c9e2bdd-038e-46e8-80d9-cd8d1127f06e`.
+
+### Separate owner approval required to activate temporary workers.dev
+
+1. Obtain explicit owner approval for public activation. Nothing below has been
+   executed.
+2. Change `wrangler.production.toml` to `workers_dev = true` **only at that
+   point**; keep zero Routes/Custom Domains/Zones.
+3. Inject the non-secret bindings `PUBLIC_BASE_URL` = the temporary ZASHM
+   workers.dev origin, `SITEMAP_ALLOWED_ORIGINS` = that origin (plus the prepared
+   build origin if the prep artifact is reused), and
+   `ZASHM_TEMP_WORKERS_DEV = 1`. Do not alter existing secret values.
+4. Deploy with `wrangler deploy --config wrangler.production.toml`, record the
+   new Version ID, then verify the public workers.dev URL, canonical, sitemap,
+   CSP/security headers, admin 401s, and the continued absence of Routes,
+   Custom Domains and Zones.
+5. Rollback: restore `workers_dev = false` and redeploy the previous retained
+   version. No DNS or database rollback is involved.
 
 ## Rollback
 

@@ -14,6 +14,11 @@ export const PRODUCTION_ENV_VALUE = 'production';
 export const PRODUCTION_SUPABASE_REF = 'ptegprcbtfylqhbnbkih';
 export const STAGING_SUPABASE_REF = 'sfenutmgfawuhmvwkmhv';
 export const STAGING_WORKER_HOST = 'zashm.mohammedhassanmail1.workers.dev';
+// Temporary, brand-named canonical origin used only while the paid domain is
+// purchased. It stays rejected by the guard unless the explicit opt-in flag is
+// present, and the Staging host is never allowed even with the flag.
+export const TEMP_WORKERS_DEV_ORIGIN = 'https://zashm-production.mohammedhassanmail1.workers.dev';
+export const TEMP_WORKERS_DEV_FLAG = 'ZASHM_TEMP_WORKERS_DEV';
 
 export const REQUIRED_PRODUCTION_BINDINGS = [
   'VITE_SUPABASE_URL',
@@ -88,9 +93,12 @@ export function productionConfigProblems(env = {}) {
   }
 
   const publicOrigin = httpsOrigin(env.PUBLIC_BASE_URL);
+  const tempOriginAllowed = String(env[TEMP_WORKERS_DEV_FLAG] || '') === '1' &&
+    publicOrigin === TEMP_WORKERS_DEV_ORIGIN;
   if (!publicOrigin) {
     problems.push('PUBLIC_BASE_URL must be an explicit https origin');
-  } else if (publicOrigin.includes(STAGING_WORKER_HOST) || publicOrigin.includes('.workers.dev')) {
+  } else if (publicOrigin.includes(STAGING_WORKER_HOST) ||
+             (publicOrigin.includes('.workers.dev') && !tempOriginAllowed)) {
     problems.push('PUBLIC_BASE_URL must not be a workers.dev origin');
   } else if (publicOrigin.includes('vercel.app')) {
     problems.push('PUBLIC_BASE_URL must not be the old vercel.app origin');

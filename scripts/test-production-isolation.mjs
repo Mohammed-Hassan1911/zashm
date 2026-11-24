@@ -26,7 +26,7 @@ import {
   isProductionEnv,
   productionConfigProblems,
 } from '../src/lib/production-env.mjs';
-import { handleRequest } from '../worker.mjs';
+import { handleRequest } from '../src/lib/worker-runtime.mjs';
 
 let passed = 0;
 let failed = 0;
