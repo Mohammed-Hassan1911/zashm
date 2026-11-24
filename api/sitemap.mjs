@@ -29,7 +29,7 @@ function httpsOrigin(value) {
   }
 }
 
-function approvedSiteOrigins() {
+export function approvedSiteOrigins() {
   const origins = new Set([DEFAULT_SITE_ORIGIN]);
   // Prefer a dedicated sitemap allow-list so a future CORS-only origin cannot
   // silently become canonical. ALLOWED_ORIGINS remains the fallback for the
@@ -40,6 +40,39 @@ function approvedSiteOrigins() {
     if (origin) origins.add(origin);
   }
   return origins;
+}
+
+/**
+ * Origins that may be rewritten inside generated HTML shells. This deliberately
+ * excludes ALLOWED_ORIGINS: that list can contain CORS-only or storage origins
+ * and must never cause image/schema URLs to be repointed at the site origin.
+ */
+export function siteOriginsForRewrite() {
+  const origins = new Set([DEFAULT_SITE_ORIGIN]);
+  for (const value of env('SITEMAP_ALLOWED_ORIGINS').split(',')) {
+    const origin = httpsOrigin(value);
+    if (origin) origins.add(origin);
+  }
+  const resolved = resolveSiteOrigin();
+  if (resolved.valid) origins.add(resolved.origin);
+  return origins;
+}
+
+/**
+ * Resolve the canonical site origin from approved configuration. `valid` is
+ * false when PUBLIC_BASE_URL is present but unapproved; canonical-URL callers
+ * must then fail closed. The Worker adapter also uses this to rewrite
+ * build-time origins in served HTML shells.
+ */
+export function resolveSiteOrigin() {
+  const configuredSiteUrl = env('PUBLIC_BASE_URL');
+  if (!configuredSiteUrl) return { origin: DEFAULT_SITE_ORIGIN, valid: true };
+
+  const origin = httpsOrigin(configuredSiteUrl);
+  if (!origin || !approvedSiteOrigins().has(origin)) {
+    return { origin: DEFAULT_SITE_ORIGIN, valid: false };
+  }
+  return { origin, valid: true };
 }
 
 function getOrigins() {
@@ -53,20 +86,15 @@ function getOrigins() {
     throw new Error('Public Supabase URL must use HTTPS');
   }
 
-  const configuredSiteUrl = env('PUBLIC_BASE_URL');
-  let siteOrigin = DEFAULT_SITE_ORIGIN;
-  if (configuredSiteUrl) {
-    const origin = httpsOrigin(configuredSiteUrl);
-    if (!origin || !approvedSiteOrigins().has(origin)) {
-      throw new Error('PUBLIC_BASE_URL must match an approved site origin');
-    }
-    siteOrigin = origin;
+  const siteOrigin = resolveSiteOrigin();
+  if (!siteOrigin.valid) {
+    throw new Error('PUBLIC_BASE_URL must match an approved site origin');
   }
 
   return {
     supabaseOrigin: parsedSupabaseUrl.origin,
     anonKey,
-    siteOrigin,
+    siteOrigin: siteOrigin.origin,
   };
 }
 
@@ -192,8 +220,8 @@ export default async function sitemapHandler(req, res) {
     siteOrigin = config.siteOrigin;
     if (req && Object.prototype.hasOwnProperty.call(req, 'prerenderedIds')) {
       // A platform adapter can supply the manifest from local assets. An
-      // unreadable manifest is an explicit empty set: fail closed without a
-      // self-fetch to the Worker's public URL.
+      // unreadable manifest is an explicit empty set plus a failure flag: fail
+      // closed without a self-fetch, log it and use the short degraded cache.
       const supplied = req.prerenderedIds;
       prerenderedIds = supplied instanceof Set
         ? supplied
@@ -206,6 +234,9 @@ export default async function sitemapHandler(req, res) {
       // Fail closed on the manifest: if we cannot prove a product has a static
       // shell, omit product URLs instead of pointing crawlers at home metadata.
       prerenderedIds = await fetchPrerenderedIds(siteOrigin);
+    }
+    if (req.prerenderedManifestFailed) {
+      throw new Error('prerender manifest unavailable');
     }
     products = await fetchPublicProducts(config);
   } catch (error) {

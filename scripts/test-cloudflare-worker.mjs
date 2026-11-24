@@ -637,5 +637,221 @@ try {
   console.error = oldConsoleError;
 }
 
+section(15, 'prerendered product shells and API sitemap parity');
+const prerenderLookups = [];
+const prerenderAssets = {
+  async fetch(request) {
+    const assetPath = new URL(request.url).pathname;
+    prerenderLookups.push(assetPath);
+    if (assetPath === '/product/123/index.html') {
+      return new Response(
+        '<html><head><title>Jacket — ZASHM</title>' +
+          '<script type="application/ld+json" id="zashm-product-jsonld">{}</script></head></html>',
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
+    if (assetPath === '/prerendered-products.json') {
+      return new Response(JSON.stringify({ ids: ['123'] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('<html>zashm shell</html>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  },
+};
+const prerenderedProduct = await handleRequest(
+  new Request('https://zashm.example/product/123'),
+  { ASSETS: prerenderAssets }
+);
+const prerenderedBody = await prerenderedProduct.text();
+eq(prerenderedProduct.status, 200, 'a prerendered product still returns 200');
+ok(prerenderedBody.includes('Jacket — ZASHM'), 'product deep link serves product-specific metadata');
+ok(prerenderedBody.includes('id="zashm-product-jsonld"'), 'the shipped Product JSON-LD survives');
+eq(prerenderedProduct.headers.get('Cache-Control'), 'public, max-age=0, must-revalidate',
+  'prerendered product HTML is revalidated');
+ok((prerenderedProduct.headers.get('Content-Security-Policy') || '').length > 20,
+  'prerendered product HTML keeps the CSP');
+ok(prerenderLookups.includes('/product/123/index.html'), 'the build product shell was read from ASSETS');
+prerenderLookups.length = 0;
+await handleRequest(new Request('https://zashm.example/product/not-a-number'), { ASSETS: prerenderAssets });
+ok(!prerenderLookups.includes('/product/not-a-number/index.html'),
+  'a non-numeric product id cannot address a prerendered asset path');
+
+const apiSitemapEnvNames = [
+  'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'PUBLIC_BASE_URL',
+  'ALLOWED_ORIGINS', 'SITEMAP_ALLOWED_ORIGINS',
+];
+const oldApiSitemapEnv = Object.fromEntries(apiSitemapEnvNames.map((name) => [name, process.env[name]]));
+for (const name of apiSitemapEnvNames) delete process.env[name];
+const sitemapFetchTargets = [];
+const originalApiSitemapFetch = globalThis.fetch;
+const originalApiSitemapError = console.error;
+const sitemapErrors = [];
+globalThis.fetch = async (url) => {
+  const target = String(url);
+  sitemapFetchTargets.push(target);
+  if (target.includes('/rest/v1/products_public')) {
+    return new Response(JSON.stringify([{ id: '123', stock: 1 }]), { status: 200 });
+  }
+  return new Response('unexpected self-fetch', { status: 500 });
+};
+console.error = (...args) => sitemapErrors.push(args.join(' '));
+let apiSitemapResponse;
+try {
+  apiSitemapResponse = await handleRequest(
+    new Request('https://zashm.example/api/sitemap'),
+    {
+      ASSETS: prerenderAssets,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'public-anon-test-key',
+      PUBLIC_BASE_URL: 'https://zashm.example',
+      ALLOWED_ORIGINS: 'https://zashm.example',
+    }
+  );
+} finally {
+  globalThis.fetch = originalApiSitemapFetch;
+  console.error = originalApiSitemapError;
+  for (const name of apiSitemapEnvNames) {
+    if (oldApiSitemapEnv[name] === undefined) delete process.env[name];
+    else process.env[name] = oldApiSitemapEnv[name];
+  }
+}
+const apiSitemapBody = await apiSitemapResponse.text();
+eq(apiSitemapResponse.status, 200, '/api/sitemap on the Worker returns 200');
+ok(apiSitemapBody.includes('<loc>https://zashm.example/product/123</loc>'),
+  '/api/sitemap gets the same local prerender manifest as /sitemap.xml');
+ok(!apiSitemapBody.includes('za-shm.vercel.app'),
+  '/api/sitemap never falls back to the retired Vercel canonical origin');
+ok(sitemapFetchTargets.every((target) => !target.includes('prerendered-products.json')),
+  '/api/sitemap reads the manifest from ASSETS without a self-fetch');
+ok(sitemapErrors.every((line) => !line.includes('Could not generate product URLs')),
+  '/api/sitemap does not log a source failure on a healthy staging origin');
+
+section(16, 'build-time shell origins and degraded sitemap cache');
+const shellOriginEnvNames = [
+  'PUBLIC_BASE_URL', 'ALLOWED_ORIGINS', 'SITEMAP_ALLOWED_ORIGINS',
+  'SUPABASE_URL', 'SUPABASE_ANON_KEY',
+];
+const oldShellOriginEnv = Object.fromEntries(
+  shellOriginEnvNames.map((name) => [name, process.env[name]])
+);
+for (const name of shellOriginEnvNames) delete process.env[name];
+const staleShell =
+  '<html><head>' +
+  '<link rel="canonical" href="https://za-shm.vercel.app/product/123"/>' +
+  '<meta property="og:url" content="https://za-shm.vercel.app/product/123"/>' +
+  '<meta property="og:image" content="https://za-shm.vercel.app/og-image.jpg"/>' +
+  '<img src="https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/test.jpg"/>' +
+  '<script type="application/ld+json" id="zashm-product-jsonld">' +
+  '{"@context":"https://schema.org","offers":{"availability":"https://schema.org/InStock",' +
+  '"url":"https://za-shm.vercel.app/product/123"}}</script>' +
+  '</head></html>';
+const shellOriginAssets = {
+  async fetch(request) {
+    const assetPath = new URL(request.url).pathname;
+    if (assetPath === '/product/123/index.html' || assetPath === '/index.html') {
+      return new Response(staleShell, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
+    if (assetPath === '/shop/index.html') {
+      return new Response(
+        '<html><head><link rel="canonical" href="https://za-shm.vercel.app/shop"/>' +
+          '<meta property="og:url" content="https://za-shm.vercel.app/shop"/></head></html>',
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
+    return new Response('missing', { status: 404 });
+  },
+};
+try {
+  process.env.PUBLIC_BASE_URL = 'https://zashm.example';
+  // A CORS-only storage origin must not become a rewrite target.
+  process.env.ALLOWED_ORIGINS =
+    'https://zashm.example, https://ptegprcbtfylqhbnbkih.supabase.co';
+
+  const rewrittenProduct = await handleRequest(
+    new Request('https://zashm.example/product/123'),
+    { ASSETS: shellOriginAssets }
+  );
+  const rewrittenProductBody = await rewrittenProduct.text();
+  ok(rewrittenProductBody.includes('href="https://zashm.example/product/123"'),
+    'product canonical is rewritten to the approved site origin');
+  ok(!rewrittenProductBody.includes('za-shm.vercel.app'),
+    'product metadata no longer advertises the build-time Vercel origin');
+  ok(rewrittenProductBody.includes('https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/test.jpg'),
+    'CORS-only Supabase image URLs are never rewritten');
+  ok(rewrittenProductBody.includes('"availability":"https://schema.org/InStock"'),
+    'schema.org URLs are never rewritten');
+
+  const rewrittenShell = await handleRequest(
+    new Request('https://zashm.example/'),
+    { ASSETS: shellOriginAssets }
+  );
+  const rewrittenShellBody = await rewrittenShell.text();
+  ok(rewrittenShellBody.includes('href="https://zashm.example/product/123"'),
+    'SPA shells get the same canonical-origin rewrite');
+  ok(rewrittenShellBody.includes('content="https://zashm.example/og-image.jpg"'),
+    'social image URLs follow the approved origin too');
+  ok(!rewrittenShellBody.includes('za-shm.vercel.app'),
+    'SPA shells no longer advertise the build-time Vercel origin');
+
+  const rewrittenShop = await handleRequest(
+    new Request('https://zashm.example/shop'),
+    { ASSETS: shellOriginAssets }
+  );
+  const rewrittenShopBody = await rewrittenShop.text();
+  ok(rewrittenShopBody.includes('href="https://zashm.example/shop"'),
+    '/shop serves its own generated shell instead of the root canonical');
+  ok(!rewrittenShopBody.includes('za-shm.vercel.app'),
+    '/shop metadata no longer advertises the build-time Vercel origin');
+} finally {
+  for (const name of shellOriginEnvNames) {
+    if (oldShellOriginEnv[name] === undefined) delete process.env[name];
+    else process.env[name] = oldShellOriginEnv[name];
+  }
+}
+
+const originalSitemapError = console.error;
+const degradedErrors = [];
+console.error = (...args) => degradedErrors.push(args.join(' '));
+try {
+  process.env.PUBLIC_BASE_URL = 'https://zashm.example';
+  process.env.ALLOWED_ORIGINS = 'https://zashm.example';
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+
+  const failedManifestAssets = {
+    async fetch(request) {
+      if (new URL(request.url).pathname === '/prerendered-products.json') {
+        return new Response('missing', { status: 404 });
+      }
+      return new Response('unexpected', { status: 500 });
+    },
+  };
+  const degraded = await handleRequest(
+    new Request('https://zashm.example/api/sitemap'),
+    { ASSETS: failedManifestAssets }
+  );
+  const degradedBody = await degraded.text();
+  eq(degraded.status, 200, 'an unreadable manifest still yields a valid sitemap');
+  ok((degraded.headers.get('Cache-Control') || '').includes('s-maxage=300'),
+    'an unreadable manifest uses the short degraded cache');
+  ok(degradedErrors.some((line) => line.includes('prerender manifest unavailable')),
+    'an unreadable manifest is logged as a source failure');
+  ok(!degradedBody.includes('<loc>https://zashm.example/product/'),
+    'an unreadable manifest omits product URLs instead of guessing them');
+} finally {
+  console.error = originalSitemapError;
+  for (const name of shellOriginEnvNames) {
+    if (oldShellOriginEnv[name] === undefined) delete process.env[name];
+    else process.env[name] = oldShellOriginEnv[name];
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

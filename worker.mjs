@@ -4,7 +4,7 @@
 
 import ordersHandler from './api/orders.js';
 import authHandler from './api/auth.js';
-import sitemapHandler from './api/sitemap.mjs';
+import sitemapHandler, { resolveSiteOrigin, siteOriginsForRewrite } from './api/sitemap.mjs';
 import couponValidateHandler from './api/coupons/validate.js';
 import reviewsHandler from './api/reviews.js';
 import adminProductsHandler from './api/admin/products.js';
@@ -17,6 +17,7 @@ import productExists from './src/lib/product-exists.cjs';
 
 const {
   isCrawler,
+  isProductId,
   productIdFromPath,
   checkProductExists,
   buildNotFoundResponse,
@@ -72,6 +73,30 @@ export const SECURITY_HEADERS = {
   'Content-Security-Policy': CSP,
 };
 
+// Static shells are generated at build time with DEFAULT_BASE baked into their
+// canonical/OG/JSON-LD URLs. Keep them consistent with the sitemap by rewriting
+// only canonical/site origins (DEFAULT_BASE, SITEMAP_ALLOWED_ORIGINS and the
+// approved PUBLIC_BASE_URL). CORS-only ALLOWED_ORIGINS values, Supabase image
+// URLs, schema.org URLs and unrelated origins are never touched. An unapproved
+// PUBLIC_BASE_URL fails closed and leaves the shipped shell unchanged.
+async function rewriteShellOrigins(response) {
+  const resolved = resolveSiteOrigin();
+  if (!resolved.valid) return response;
+
+  const html = await response.text();
+  let rewritten = html;
+  for (const origin of siteOriginsForRewrite()) {
+    if (origin !== resolved.origin) {
+      rewritten = rewritten.split(origin).join(resolved.origin);
+    }
+  }
+  return new Response(rewritten, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
 const API_ROUTES = new Map([
   ['/api/orders', { handler: ordersHandler }],
   ['/api/auth', { handler: authHandler }],
@@ -84,7 +109,7 @@ const API_ROUTES = new Map([
   ['/api/admin/users', { handler: adminUsersHandler }],
   ['/api/admin/reviews', { handler: adminReviewsHandler }],
   ['/api/admin/upload', { handler: adminUploadHandler }],
-  ['/api/sitemap', { handler: sitemapHandler }],
+  ['/api/sitemap', { handler: sitemapHandler, path: '/api/sitemap' }],
 ]);
 
 export class VercelResponse {
@@ -347,14 +372,19 @@ export async function handleRequest(request, env) {
           );
           if (manifestResponse.ok) {
             const manifest = await manifestResponse.json();
-            req.prerenderedIds = Array.isArray(manifest && manifest.ids)
-              ? manifest.ids
-              : null;
+            if (Array.isArray(manifest && manifest.ids)) {
+              req.prerenderedIds = manifest.ids;
+            } else {
+              req.prerenderedIds = [];
+              req.prerenderedManifestFailed = true;
+            }
           } else {
-            req.prerenderedIds = null;
+            req.prerenderedIds = [];
+            req.prerenderedManifestFailed = true;
           }
         } catch {
-          req.prerenderedIds = null;
+          req.prerenderedIds = [];
+          req.prerenderedManifestFailed = true;
         }
       }
 
@@ -384,6 +414,55 @@ export async function handleRequest(request, env) {
         return applySecurityHeaders(notFound, path, url);
       }
     }
+    // npm run build writes build/product/<id>/index.html with product-specific
+    // metadata, JSON-LD and a noscript shell. Vercel serves that file directly;
+    // serve it here too so crawlers and social previews keep the same markup.
+    if (id !== null && isProductId(id) && env && env.ASSETS) {
+      let prerendered = null;
+      try {
+        prerendered = await env.ASSETS.fetch(
+          new Request(new URL(`/product/${id}/index.html`, url.origin).href)
+        );
+      } catch {
+        prerendered = null;
+      }
+      if (prerendered && prerendered.ok) {
+        const headers = new Headers(prerendered.headers);
+        headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
+        return applySecurityHeaders(
+          await rewriteShellOrigins(
+            new Response(prerendered.body, { status: prerendered.status, headers })
+          ),
+          path,
+          url
+        );
+      }
+    }
+  }
+
+  // npm run build also writes build/shop/index.html with its own canonical and
+  // metadata. Vercel serves that file for /shop; do the same here instead of
+  // falling through to the generic root shell.
+  if (path === '/shop' && env && env.ASSETS) {
+    let shopShell = null;
+    try {
+      shopShell = await env.ASSETS.fetch(
+        new Request(new URL('/shop/index.html', url.origin).href)
+      );
+    } catch {
+      shopShell = null;
+    }
+    if (shopShell && shopShell.ok) {
+      const headers = new Headers(shopShell.headers);
+      headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
+      return applySecurityHeaders(
+        await rewriteShellOrigins(
+          new Response(shopShell.body, { status: shopShell.status, headers })
+        ),
+        path,
+        url
+      );
+    }
   }
 
   const assetError = () => {
@@ -409,7 +488,9 @@ export async function handleRequest(request, env) {
     const headers = new Headers(assetResponse.headers);
     headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
     return applySecurityHeaders(
-      new Response(assetResponse.body, { status: assetResponse.status, headers }),
+      await rewriteShellOrigins(
+        new Response(assetResponse.body, { status: assetResponse.status, headers })
+      ),
       path,
       url
     );
