@@ -10,7 +10,8 @@ migration branch in a separate commit; the branch is **not merged** and was
 **not deployed to production**.
 
 Staging Worker: `https://zashm.mohammedhassanmail1.workers.dev`
-Current version: `f966967d-0d23-480d-af3a-33f246f62038`
+Current version: `161d42a0-0224-4a49-9225-a3ac983491a7` (deployed from commit
+`611eafbbf28469178c857f2d2c49159f0591de7a`; Worker tag `611eafb`)
 Owner Cloudflare account: `9fe493bc12463ea71e52fd2f040c5171`
 
 ## What changed
@@ -118,7 +119,8 @@ and stays fail-closed.
   failed (Cloudflare worker **173/0**, sitemap **52/0**).
 - `npm run build` → exit 0; `index-L2XyCp3w.js`, byte-identical hash to the live
   Vercel bundle. `wrangler deploy` → version
-  `f966967d-0d23-480d-af3a-33f246f62038` after the parity fixes below.
+  `f966967d-0d23-480d-af3a-33f246f62038` after the parity fixes below, then
+  version `161d42a0-0224-4a49-9225-a3ac983491a7` from commit `611eafb`.
 - A staging/Vercel parity pass found and fixed two real gaps: the Worker now
   serves `build/product/<id>/index.html` (product title, canonical, OG/Twitter,
   Product JSON-LD, `<noscript>`) instead of the generic SPA shell, and
@@ -184,6 +186,49 @@ and stays fail-closed.
   a fake coupon probe can increment the operational `zshm_rate_limits` counter,
   but no catalog or customer record was touched.
 
+## Stage 2 verification (commit `611eafb` only)
+
+- Deployed **only** the migration branch commit `611eafb` to Cloudflare Workers
+  staging with `wrangler deploy --tag 611eafb --message "…611eafb…"`. The
+  resulting version `161d42a0-0224-4a49-9225-a3ac983491a7` is active at 100% in
+  deployment `e9fdd587-b44c-45bd-aeda-e442a0aec73f`; `wrangler versions list`
+  shows the commit tag and full commit SHA in the version annotations.
+- Vercel Production was **not** changed. Read-only `vercel alias ls` confirms
+  `za-shm.vercel.app` and `zashm-git-main-zashm.vercel.app` still point to
+  `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` (READY). The GitHub integration created a
+  branch preview alias `zashm-git-cloudflare-migration-zashm.vercel.app` →
+  `dpl_96ed4MLnZmgu3Ut4Nr5yDrL8k9LV`; it is not Production and was not deleted.
+- Live smoke after the commit deploy: 18 GET cases (17 application routes/APIs
+  plus one Googlebot case) matched status and the six compared security headers
+  on staging vs Vercel, except the intentional Vercel-only telemetry URL. The
+  staging telemetry shim returns a no-op with `no-store`/`noindex`; Vercel's
+  platform-served real script uses long cache and no extra robots/CSP headers.
+  CSP remained 564 characters on every application response.
+- Canonicals on `/`, `/shop` and the product are all `workers.dev`; zero
+  `za-shm.vercel.app` occurrences in HTML or sitemap. Supabase image URLs and
+  `schema.org` URLs remain unchanged. `/api/sitemap` and `/sitemap.xml` each
+  return 4 staging URLs with the healthy 3600 s cache.
+- Browser smoke on home, shop, product, cart and checkout: 0 console errors,
+  correct titles/canonicals, no horizontal overflow at the desktop viewport.
+- Isolated test harness: throwaway PostgreSQL 17 cluster (auto-destroyed), fake
+  Supabase clients, dummy env values and a temporary egress guard that blocked
+  all non-loopback DNS/TCP/TLS/`fetch`. Under that guard:
+  `test-sessions-admin` 93/0, `test-admin-products` 97/0,
+  `test-order-lifecycle` 106/0, `test-order-pricing` 126/0,
+  `test-checkout-idempotency` 8/0, `test-coupons` 97/0,
+  `test-order-edit` 131/0 and `test-sql-concurrency` 495/0. Zero egress-block
+  events. This proves login/session creation, 4h expiry, tamper rejection,
+  logout revocation, admin order edit/status/delete RPC contracts and atomic
+  order/coupon/stock behaviour on isolated data — **not** against the live
+  Supabase project.
+- Local Supabase stack could not be started: `supabase status` reports Docker or
+  Podman missing. A cloud staging Supabase project was not created because that
+  would require new credentials and production-adjacent configuration changes.
+- The store is Cash on Delivery only (`src/pages/CartPage.js:1415`); there is no
+  payment gateway or sandbox integration in the shipped code. A gateway
+  sandbox test therefore cannot be run without a separate approved feature and
+  credentials.
+
 ## Residual gap before cutover
 
 - Owner decision (2026-11-24): **no custom domain is being purchased now**. The
@@ -206,15 +251,25 @@ and stays fail-closed.
   approved scope.
 - Order success page cannot be reached without placing a real order; it was
   intentionally not submitted.
-- Owner's required pre-cutover tests (not yet performed): admin write paths in
-  an isolated staging environment; successful login, session creation and
-  expiry; a full order cycle with sandbox payment and test-only data; explicit
-  proof that staging data is isolated from real customers and orders; a pass on
-  a physical device; and a rollback-plan review confirming the target is the
-  last known-good production deployment.
+- Admin write paths, successful login/session creation, 4h expiry, logout
+  revocation and the full order lifecycle were proved in the isolated local
+  harness above (zero egress). They were **not** repeated against a hosted
+  staging Supabase because none exists and creating one needs separate approval.
+- No sandbox payment test is possible: the current store is Cash on Delivery
+  only. `docs/launch-returns-and-payments-playbook-ar.md` describes a future
+  payment design, not shipped code.
+- A physical-device pass was not performed from this environment. The available
+  evidence remains the 32 route×width browser/iframe measurements.
+- Rollback review: current Vercel Production (`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`)
+  is READY and still owns the alias; previous production
+  `dpl_EqWWhqzsVDXuLMFnkA6UWUtMUNoY` is also READY and is the documented
+  rollback target. Because no DNS cutover happened, the current rollback action
+  is simply to keep Vercel serving. `vercel rollback` was previously rejected
+  by the plan, so a failed future Vercel deploy must be reverted by redeploying
+  the last known-good build; no rollback was executed here.
 - No DNS, Vercel or Supabase production setting may be changed, and no real
-  order or customer record may be created, until those tests are approved and
-  completed in a separate step.
+  order or customer record may be created, until the remaining hosted/device
+  tests are approved and completed in a separate step.
 
 ## Rollback
 
