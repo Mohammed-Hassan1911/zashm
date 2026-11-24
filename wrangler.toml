@@ -1,0 +1,18 @@
+name = "zashm"
+main = "worker.mjs"
+compatibility_date = "2026-11-24"
+workers_dev = true
+
+# Node built-ins (Buffer, crypto, stream-shaped req shim) are used by api/_lib.js.
+# Dates >= 2026-08-04 enable nodejs_compat + nodejs_compat_v2 by default.
+# Dates >= 2025-04-01 also populate process.env from Worker vars/secrets.
+
+[assets]
+directory = "./build"
+binding = "ASSETS"
+html_handling = "none"
+# Unknown routes stay real 404s (served from build/404.html).
+not_found_handling = "404-page"
+# The Worker adds the shared security headers, noindex and SPA rewrites, so it
+# must see every request before static assets are served.
+run_worker_first = true

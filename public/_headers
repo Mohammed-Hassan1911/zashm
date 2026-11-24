@@ -1,0 +1,56 @@
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/media/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/og-image.jpg
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com https://va.vercel-scripts.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' https://ptegprcbtfylqhbnbkih.supabase.co https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://vitals.vercel-insights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/api/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/admin
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/admin/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/checkout
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/checkout/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/cart
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/cart/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/wishlist
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/wishlist/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/track
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/track/*
+  X-Robots-Tag: noindex, nofollow, noarchive

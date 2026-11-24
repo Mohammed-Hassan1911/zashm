@@ -5,4 +5,6 @@ dist/
 build/
 .DS_Store
 .vercel
+.dev.vars
+.wrangler/
 backups/

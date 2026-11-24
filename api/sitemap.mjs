@@ -17,6 +17,31 @@ function env(...names) {
   return '';
 }
 
+function httpsOrigin(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:' || url.username || url.password ||
+        url.pathname !== '/' || url.search || url.hash) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function approvedSiteOrigins() {
+  const origins = new Set([DEFAULT_SITE_ORIGIN]);
+  // Prefer a dedicated sitemap allow-list so a future CORS-only origin cannot
+  // silently become canonical. ALLOWED_ORIGINS remains the fallback for the
+  // current Vercel/Worker configuration.
+  const source = env('SITEMAP_ALLOWED_ORIGINS') || env('ALLOWED_ORIGINS');
+  for (const value of source.split(',')) {
+    const origin = httpsOrigin(value);
+    if (origin) origins.add(origin);
+  }
+  return origins;
+}
+
 function getOrigins() {
   const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL', 'REACT_APP_SUPABASE_URL');
   const anonKey = env('SUPABASE_ANON_KEY', 'VITE_SUPABASE_ANON_KEY', 'REACT_APP_SUPABASE_ANON_KEY');
@@ -31,22 +56,11 @@ function getOrigins() {
   const configuredSiteUrl = env('PUBLIC_BASE_URL');
   let siteOrigin = DEFAULT_SITE_ORIGIN;
   if (configuredSiteUrl) {
-    let siteUrl;
-    try {
-      siteUrl = new URL(configuredSiteUrl);
-    } catch {
-      throw new Error('PUBLIC_BASE_URL is invalid');
+    const origin = httpsOrigin(configuredSiteUrl);
+    if (!origin || !approvedSiteOrigins().has(origin)) {
+      throw new Error('PUBLIC_BASE_URL must match an approved site origin');
     }
-    if (siteUrl.protocol !== 'https:' ||
-        siteUrl.username ||
-        siteUrl.password ||
-        siteUrl.pathname !== '/' ||
-        siteUrl.search ||
-        siteUrl.hash ||
-        siteUrl.origin !== DEFAULT_SITE_ORIGIN) {
-      throw new Error('PUBLIC_BASE_URL must match the canonical production origin');
-    }
-    siteOrigin = siteUrl.origin;
+    siteOrigin = origin;
   }
 
   return {
@@ -176,9 +190,23 @@ export default async function sitemapHandler(req, res) {
   try {
     const config = getOrigins();
     siteOrigin = config.siteOrigin;
-    // Fail closed on the manifest: if we cannot prove a product has a static
-    // shell, omit product URLs instead of pointing crawlers at home metadata.
-    prerenderedIds = await fetchPrerenderedIds(siteOrigin);
+    if (req && Object.prototype.hasOwnProperty.call(req, 'prerenderedIds')) {
+      // A platform adapter can supply the manifest from local assets. An
+      // unreadable manifest is an explicit empty set: fail closed without a
+      // self-fetch to the Worker's public URL.
+      const supplied = req.prerenderedIds;
+      prerenderedIds = supplied instanceof Set
+        ? supplied
+        : new Set(
+            (Array.isArray(supplied) ? supplied : [])
+              .map((id) => String(id).trim())
+              .filter(Boolean)
+          );
+    } else {
+      // Fail closed on the manifest: if we cannot prove a product has a static
+      // shell, omit product URLs instead of pointing crawlers at home metadata.
+      prerenderedIds = await fetchPrerenderedIds(siteOrigin);
+    }
     products = await fetchPublicProducts(config);
   } catch (error) {
     sourceAvailable = false;

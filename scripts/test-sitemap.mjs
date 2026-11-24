@@ -383,5 +383,109 @@ console.log('\n[9] an unavailable manifest fails closed');
   ok(response.headers['Cache-Control'].includes('s-maxage=300'), 'the fallback uses the short cache window');
 }
 
+console.log('\n[10] staging origin through the server-side allow-list');
+{
+  const stagingOrigin = 'https://zashm-staging.workers.dev';
+  const oldEnv = {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
+  };
+  const oldFetch = globalThis.fetch;
+  const oldConsoleError = console.error;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  process.env.PUBLIC_BASE_URL = stagingOrigin;
+  process.env.ALLOWED_ORIGINS = `${stagingOrigin}, http://localhost:3000`;
+  globalThis.fetch = withManifest(['p1'], async () =>
+    new Response(JSON.stringify([{ id: 'p1', stock: 2 }]), { status: 200 })
+  );
+  console.error = () => {};
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = oldFetch;
+    console.error = oldConsoleError;
+    for (const [name, value] of Object.entries(oldEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+  ok(response.body.includes(`<loc>${stagingOrigin}/product/p1</loc>`),
+    'an approved Worker origin emits its own canonical product URLs');
+  ok(!response.body.includes('za-shm.vercel.app'),
+    'an approved Worker origin does not emit the retired Vercel origin');
+  ok(response.headers['Cache-Control'].includes('s-maxage=3600'),
+    'an approved staging origin keeps the successful cache policy');
+}
+
+console.log('\n[11] an unapproved origin stays non-canonical');
+{
+  const oldEnv = {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
+  };
+  const oldFetch = globalThis.fetch;
+  const oldConsoleError = console.error;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  process.env.PUBLIC_BASE_URL = 'https://attacker.example';
+  process.env.ALLOWED_ORIGINS = 'https://za-shm.vercel.app';
+  globalThis.fetch = async () => { throw new Error('Sitemap must reject an unapproved origin before fetching'); };
+  console.error = () => {};
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = oldFetch;
+    console.error = oldConsoleError;
+    for (const [name, value] of Object.entries(oldEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+  ok(response.body.includes(`<loc>${origin}/</loc>`) && !response.body.includes('attacker.example'),
+    'an origin absent from ALLOWED_ORIGINS falls back to the known canonical origin');
+  eq((response.body.match(/<loc>/g) || []).length, 2, 'the fallback still omits unverified products');
+}
+
+console.log('\n[12] a dedicated sitemap allow-list overrides CORS config');
+{
+  const oldEnv = {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
+    SITEMAP_ALLOWED_ORIGINS: process.env.SITEMAP_ALLOWED_ORIGINS,
+  };
+  const oldFetch = globalThis.fetch;
+  const oldConsoleError = console.error;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  process.env.PUBLIC_BASE_URL = 'https://cors-only.example';
+  process.env.ALLOWED_ORIGINS = 'https://staging.example, https://cors-only.example';
+  process.env.SITEMAP_ALLOWED_ORIGINS = 'https://staging.example';
+  globalThis.fetch = async () => { throw new Error('Sitemap must reject a CORS-only origin before fetching'); };
+  console.error = () => {};
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    globalThis.fetch = oldFetch;
+    console.error = oldConsoleError;
+    for (const [name, value] of Object.entries(oldEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+  ok(response.body.includes(`<loc>${origin}/</loc>`) && !response.body.includes('cors-only.example'),
+    'an origin present only in ALLOWED_ORIGINS is not treated as canonical');
+  eq((response.body.match(/<loc>/g) || []).length, 2, 'the sitemap still emits the safe static fallback');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
