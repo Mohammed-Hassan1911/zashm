@@ -1,8 +1,10 @@
-# Production ↔ Staging schema comparison (prepared, not executed)
+# Production ↔ Staging schema comparison
 
-**Status:** Prepared only. No Production connection was used. No Production SQL
-was executed. No schema, data, grants, policies, secrets, DNS, or deployment was
-changed.
+**Status:** Executed with read-only access on 24 November 2026. Every statement
+ran inside `BEGIN READ ONLY` and ended with `ROLLBACK`. No schema, data, grants,
+policies, secrets, DNS, or deployment was changed in either project. The local
+Supabase link was temporarily pointed at Staging for its snapshot and restored
+to Production immediately afterwards.
 
 ## Purpose
 
@@ -63,14 +65,44 @@ Treat any of these as a blocker and stop before cutover:
    Production or real Production data copied into Staging.
 7. Different order lifecycle constraint definitions between the two projects.
 
-## Interpretation once both snapshots exist
+## Execution result (24 November 2026)
+
+Both snapshots were captured through the Supabase CLI against the Management
+API, one statement at a time, each wrapped in `BEGIN READ ONLY` / `ROLLBACK`.
+
+**Production passed every application-critical invariant:**
+
+- all 20 expected functions exist with matching signatures/volatility/security;
+- all 9 expected relations exist with the expected kinds;
+- all 32 checked columns exist with the expected types;
+- `products_public` has the explicit allow-list, `active IS TRUE`, and
+  `security_barrier=true, security_invoker=false`;
+- grants on `products`, `users`, `orders`, and `coupons` expose no
+  `anon`/`authenticated` privileges;
+- the expected stock, reserved-stock, variant-shape, active-boolean, and
+  coupon-code constraints exist;
+- `nonzero_reserved_stock = 0` and `negative_reserved_stock = 0`.
+
+**Differences found in Staging (Production was not changed):**
+
+| Difference | Production | Staging | Assessment |
+|---|---|---|---|
+| `products` RLS | enabled | disabled | Browser roles have no grants on the base table in either project, and the public view is `security_barrier` with an allow-list. Still a hardening gap in Staging; align before treating Staging as a full mirror. |
+| `products.createdAt` | present | missing | Not used by the verified journeys; does not affect Production. |
+| `coupons.coupons_code_key` | `UNIQUE (code)` | missing | Staging could accept duplicate coupon codes; Production is protected. |
+| `products_public` column order | different | different | Same allow-list and same `WHERE active IS TRUE`; `security_barrier=true, security_invoker=false` in both. Cosmetic only. |
+
+Data counts differ as expected (Production: 1 admin / 1 order / 1 coupon / 2
+products; Staging: 2 admin / 2 order / 1 coupon / 3 products). No unexpected
+Production count or reserved-stock value was found.
+
+## Interpretation
 
 - The **identity**, data-count, and project-ref rows are expected to differ.
-- Function presence/signature, relation kind, RLS flags, policy names/expressions,
-  grants, and constraints should match.
-- If a difference appears only in a policy expression due to a renamed fixture
-  role or Supabase-managed policy, report it rather than patching Production.
-
-No comparison result can be stated yet because the Production read-only
-connection/token is not available from this environment. Owner approval and
-read-only access are required before running the Production snapshot.
+- Function presence/signature, grants, `products_public` filter/options, and
+  all stock/order constraints match.
+- The three structural differences above are Staging-side only. They do not
+  invalidate Production readiness, but they must be recorded before any future
+  decision to make Staging a byte-for-byte schema mirror.
+- No Production schema, data, or configuration was modified to obtain this
+  result. Cutover remains approval-gated.

@@ -81,14 +81,17 @@ WITH expected(tablename, columnname) AS (
   VALUES
     ('products', 'id'), ('products', 'active'), ('products', 'stock'),
     ('products', 'variantStock'), ('products', 'reservedStock'),
-    ('products', 'sizes'), ('products', 'colors'),
+    ('products', 'sizes'), ('products', 'colors'), ('products', 'createdAt'),
     ('orders', 'id'), ('orders', 'items'), ('orders', 'status'),
-    ('orders', 'total'), ('orders', 'createdAt'), ('orders', 'timestamps'),
-    ('coupons', 'code'), ('coupons', 'usage'), ('coupons', 'usageCount'),
-    ('coupons', 'expiresAt'), ('coupons', 'minOrder'), ('coupons', 'maxDiscount'),
+    ('orders', 'total'), ('orders', 'date'), ('orders', 'timestamps'),
+    ('orders', 'idempotency_key'),
+    ('coupons', 'code'), ('coupons', 'usageCount'), ('coupons', 'active'),
+    ('coupons', 'startDate'), ('coupons', 'endDate'), ('coupons', 'usageLimit'),
+    ('coupons', 'minOrderAmount'), ('coupons', 'maxDiscount'),
     ('users', 'id'), ('users', 'email'), ('users', 'role'), ('users', 'session_version'),
     ('product_reviews', 'id'), ('product_reviews', 'productId'),
-    ('product_reviews', 'rating'), ('product_reviews', 'status')
+    ('product_reviews', 'rating'), ('product_reviews', 'status'),
+    ('product_reviews', 'publishedAt')
 )
 SELECT e.tablename,
        e.columnname,
@@ -103,7 +106,8 @@ ORDER BY e.tablename, e.columnname;
 
 \echo '== products_public definition =='
 SELECT c.relname,
-       COALESCE(pg_get_viewdef(c.oid, true), '') AS definition
+       COALESCE(pg_get_viewdef(c.oid, true), '') AS definition,
+       COALESCE(array_to_string(c.reloptions, ', '), '') AS options
 FROM pg_class c
 WHERE c.relnamespace = 'public'::regnamespace
   AND c.relname = 'products_public';
@@ -142,7 +146,7 @@ SELECT conrelid::regclass AS table_name,
        pg_get_constraintdef(oid) AS definition
 FROM pg_constraint
 WHERE connamespace = 'public'::regnamespace
-  AND conrelid::regclass::text IN ('public.orders', 'public.coupons', 'public.products')
+  AND conrelid IN ('public.orders'::regclass, 'public.coupons'::regclass, 'public.products'::regclass)
 ORDER BY 1, 2;
 
 \echo '== data-shape warnings (read-only) =='

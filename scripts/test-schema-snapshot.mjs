@@ -57,7 +57,7 @@ console.log('\n[3] the comparison procedure is explicit');
   ok(/STAGING_READONLY_URL/.test(doc) && /PRODUCTION_READONLY_URL/.test(doc),
     'the doc requires separate read-only connections');
   ok(/diff -u/.test(doc), 'the doc provides a deterministic diff command');
-  ok(/Prepared only/.test(doc) && /No Production SQL\s+was executed/.test(doc),
+  ok(/No Production schema, data, or configuration was modified/.test(doc),
     'the doc records that Production was not touched');
   ok(/Expected differences/.test(doc) && /not.*acceptable/i.test(doc),
     'the doc separates expected fixture/data differences from schema blockers');
