@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import {
+  PRODUCTION_ENV_FLAG,
+  PRODUCTION_SUPABASE_REF,
+  STAGING_SUPABASE_REF,
+  productionConfigProblems,
+} from '../src/lib/production-env.mjs';
+import {
   applySecurityHeaders,
   configuredSupabaseOrigin,
   contentSecurityPolicy,
@@ -133,8 +139,10 @@ eq(configuredSupabaseOrigin({
   REACT_APP_SUPABASE_URL: 'https://react-dummy.supabase.co/',
 }), STAGING_ORIGIN, 'VITE_SUPABASE_URL wins when two project URLs are configured');
 const viteSource = await read('vite.config.js');
-ok(/const supabaseUrl = env\.VITE_SUPABASE_URL \|\| env\.REACT_APP_SUPABASE_URL \|\| env\.SUPABASE_URL/.test(viteSource),
+ok(/const supabaseUrl = buildEnv\.VITE_SUPABASE_URL \|\| buildEnv\.REACT_APP_SUPABASE_URL \|\| buildEnv\.SUPABASE_URL/.test(viteSource),
   'the build uses the same Supabase env precedence as the Worker');
+ok(/const separateBuild = Boolean\(process\.env\.ZASHM_BUILD_DIR\)/.test(viteSource),
+  'a separate build directory clears inherited REACT_APP_* values');
 // Header helpers without an explicit env stay at the Supabase-free baseline
 // even when the shell happens to export a Supabase URL (e.g. during a build).
 const ambient = process.env.REACT_APP_SUPABASE_URL;
@@ -910,6 +918,38 @@ try {
     else process.env[name] = oldShellOriginEnv[name];
   }
 }
+
+section('9', 'Production fail-closed guard');
+ok(productionConfigProblems({}).length === 0, 'a Worker without the Production flag has no Production guard');
+const incompleteProd = productionConfigProblems({ [PRODUCTION_ENV_FLAG]: 'production' });
+ok(incompleteProd.length > 0, 'an incomplete Production Worker is rejected');
+ok(incompleteProd.some((line) => line.includes('VITE_SUPABASE_URL')), 'the missing Supabase URL is reported');
+const badProject = productionConfigProblems({
+  [PRODUCTION_ENV_FLAG]: 'production',
+  VITE_SUPABASE_URL: `https://${STAGING_SUPABASE_REF}.supabase.co`,
+  VITE_SUPABASE_ANON_KEY: 'anon',
+  SUPABASE_SERVICE_ROLE_KEY: 'service',
+  SESSION_SECRET: 'session',
+  PUBLIC_BASE_URL: 'https://zashm.example',
+  ALLOWED_ORIGINS: 'https://zashm.example',
+});
+ok(badProject.some((line) => line.includes('not the Production Supabase project')), 'Staging Supabase cannot be used by Production');
+ok(!productionConfigProblems({
+  [PRODUCTION_ENV_FLAG]: 'production',
+  VITE_SUPABASE_URL: `https://${PRODUCTION_SUPABASE_REF}.supabase.co`,
+  VITE_SUPABASE_ANON_KEY: 'anon',
+  SUPABASE_SERVICE_ROLE_KEY: 'service',
+  SESSION_SECRET: 'session',
+  PUBLIC_BASE_URL: 'https://zashm.example',
+  ALLOWED_ORIGINS: 'https://zashm.example',
+}).length, 'a complete Production environment passes the guard');
+const blockedProd = await handleRequest(
+  new Request('https://zashm.example/api/orders'),
+  { [PRODUCTION_ENV_FLAG]: 'production' }
+);
+eq(blockedProd.status, 503, 'the guard blocks API requests before configuration is copied');
+ok((blockedProd.headers.get('X-Robots-Tag') || '').includes('noindex'), 'guard response is private');
+ok(!(await blockedProd.text()).includes('is missing'), 'guard response hides problem details');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

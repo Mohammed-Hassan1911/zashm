@@ -17,6 +17,7 @@ import {
   absoluteImageUrl,
   baseUrlFromEnv,
   escapeHtml,
+  loadCatalogue,
   renderProductHtml,
   renderShopHtml,
   prerenderCatalogue,
@@ -322,6 +323,26 @@ console.log('\n[12] a failed catalogue read never publishes an empty manifest');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+{
+  // Production preparation must not make even a read request to another
+  // environment's Supabase project.
+  let fetched = false;
+  const offline = await loadCatalogue({
+    env: {
+      ZASHM_SKIP_CATALOGUE_FETCH: '1',
+      VITE_SUPABASE_URL: 'https://ptegprcbtfylqhbnbkih.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'dummy-anon-value',
+    },
+    fetchImpl: async () => {
+      fetched = true;
+      throw new Error('catalogue fetch must be disabled');
+    },
+  });
+  eq(offline.available, false, 'offline preparation reports an unavailable catalogue');
+  eq(fetched, false, 'no Supabase request is made during preparation');
+  ok(offline.reason.includes('ZASHM_SKIP_CATALOGUE_FETCH'), 'the skip reason is explicit in the build log');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

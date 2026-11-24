@@ -453,6 +453,75 @@ Supabase Production, secret rotation or Cutover was performed.
   order or customer record may be created, until the remaining hosted/device
   tests are approved and completed in a separate step.
 
+## Phase 1 — independent Production preparation (2026-11-24)
+
+Owner-approved scope: **preparation only**. No Worker was created or deployed,
+no Production secret was entered or copied, no Zone/Custom Domain/DNS was
+created, Workers Paid was not subscribed, and Vercel/Supabase Production and
+`main` were untouched. The Staging Worker remains at
+`bdc45ae7-f8bd-4f4f-9591-c8b57fc8aa61`.
+
+- `wrangler.production.toml` is a distinct Worker configuration:
+  `name = "zashm-production"`, `workers_dev = false`, **no `route`,
+  `routes`, `pattern`, `zone_id`, `zone_name` or `custom_domain`**. It serves
+  `./build-production`, keeps `not_found_handling = "404-page"`, and mirrors the
+  reviewed Staging `run_worker_first` patterns exactly. It contains no
+  Supabase project URL, no secret name/value, and no Staging host.
+- `build:production:prep` writes a separate, ignored `build-production/` using
+  the Production project ref only for CSP/preconnect, a **non-credential
+  placeholder** anon key, and the non-public `production-prep.invalid`
+  canonical origin. `ZASHM_SKIP_CATALOGUE_FETCH=1` prevents even a read request
+  to Supabase; no product fixture is copied. `robots.txt`, JSON-LD and Speed
+  Insights use the prepared origin instead of the legacy Vercel domain.
+- `src/lib/production-env.mjs` is the shared fail-closed contract. When
+  `ZASHM_ENVIRONMENT = "production"`, `worker.mjs` returns a cached `noindex`
+  503 **before copying any binding or reaching an API handler** unless every
+  required production binding is present, non-placeholder, points at
+  `ptegprcbtfylqhbnbkih`, uses an approved https public origin, and keeps
+  server-only names out of `VITE_*`/`REACT_APP_*`. Staging has no such flag and
+  is unaffected.
+- `scripts/verify-production-readiness.mjs` provides config-only, env-only and
+  bundle-only gates; `scripts/test-production-isolation.mjs` adds 49 regression
+  assertions. The full gate is intentionally **BLOCKED** in this environment
+  (9 problems: no real Production bindings). That is the required fail-closed
+  behaviour, not a deployment failure.
+- Deterministic SHA-256 of the 36 prepared public files (relative path +
+  content, sorted) at verification time:
+  `de91fdda0c32bb0a6a546ab7db4ac81f8817414a265c2e38d06e8a284dee2510`.
+  A scan of `build-production/` found **0** Staging refs, **0** Vercel
+  Production refs, **0** JWT/Telegram/Upstash values and **0** server-only
+  secret names.
+- `npm run build` succeeds. Its plain invocation uses the ambient local env,
+  so that generated, ignored `build/` was **removed** rather than kept as
+  Staging evidence or reused for a deploy. The deployed Staging bundle is
+  unchanged.
+- `wrangler deploy --dry-run --config wrangler.production.toml` succeeded with
+  40 files from `build-production` (1159.10 KiB / 211.65 KiB gzip) and only
+  `ASSETS` plus the non-secret `ZASHM_ENVIRONMENT` binding. This is a local
+  bundle check; no public endpoint exists.
+
+### Cost correction carried into the plan
+
+- At the stated operating assumption of **75,000 Worker requests/day** the
+  monthly usage is 2.25M requests and 4.5M CPU-ms, both inside Paid's included
+  10M/30M, so the correct cost is **$5.00/month on Paid** ($0 on Free while
+  under the daily cap). Free usage is 75% of 100k/day, leaving exactly **25k
+  requests/day = 25% headroom** before error 1027.
+- **$6.80/month is not the expected bill at 75k/day.** It applies only to the
+  extreme sensitivity case of 100k full page views/day × 5 Worker calls × 3 ms
+  CPU: 15M requests and 45M CPU-ms per 30-day month ⇒
+  `$5 + 5M × $0.30/M + 15M × $0.02/M = $6.80`.
+- Spending Limit is **account-wide and shared by every Worker/environment**,
+  not a Production-project cap; it covers requests and CPU after included
+  usage, excludes the $5 subscription, rejects new invocations with **1103**,
+  and leaves Worker-free static assets available.
+- If launch is on/after **2026-12-01**, Workers Logs uses Cloudflare
+  Observability pricing: Free 0.5 GB ingestion/day with 7-day retention;
+  Paid 50 GB ingestion + 10 GB-month storage per billing cycle, then
+  `$0.25/GB` ingestion and `$0.10/GB-month` storage, shared account-wide with
+  Traces/Containers/R2/AI Gateway/Issues. No Logpush is enabled and no fixed
+  log cost is assumed.
+
 ## Rollback
 
 - Keep Vercel deployment `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and its alias.

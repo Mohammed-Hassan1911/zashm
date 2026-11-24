@@ -5,6 +5,14 @@ import react from '@vitejs/plugin-react';
 
 const SUPABASE_ORIGIN_PLACEHOLDER = '__ZASHM_SUPABASE_ORIGIN__';
 
+// A separate Production artifact is built into `build-production`. The default
+// stays `build/` so the Staging/Vercel pipeline is unchanged. Reject path-like
+// values instead of letting an env typo write outside the project root.
+const BUILD_DIR = process.env.ZASHM_BUILD_DIR || 'build';
+if (!/^[A-Za-z0-9_-]+$/.test(BUILD_DIR)) {
+  throw new Error('Invalid ZASHM_BUILD_DIR: use a plain directory name');
+}
+
 function supabaseOriginFromUrl(url) {
   try {
     const parsed = new URL(url);
@@ -38,12 +46,12 @@ function supabasePreconnect(url) {
 // `public/_headers` is an environment-neutral template. Fill its Supabase
 // placeholder from the exact URL used for this build so the static CSP can
 // never grant an unintended project (for example Production) to Staging assets.
-function supabaseHeadersOrigin(origin) {
+function supabaseHeadersOrigin(origin, outDir) {
   return {
     name: 'zashm-supabase-headers',
     apply: 'build',
     closeBundle() {
-      const file = fileURLToPath(new URL('./build/_headers', import.meta.url));
+      const file = fileURLToPath(new URL(`./${outDir}/_headers`, import.meta.url));
       if (!existsSync(file)) return;
       const text = readFileSync(file, 'utf8');
       const next = text
@@ -78,19 +86,51 @@ function siteOriginPlugin(origin) {
   };
 }
 
+// `public/robots.txt` is copied verbatim by Vite. For a separate Production
+// artifact its sitemap URL must follow the deployment origin, not the old
+// Vercel domain. Staging builds keep the committed value unchanged.
+function robotsOriginPlugin(origin, enabled) {
+  return {
+    name: 'zashm-robots-origin',
+    apply: 'build',
+    closeBundle() {
+      if (!enabled) return;
+      const file = fileURLToPath(new URL(`./${BUILD_DIR}/robots.txt`, import.meta.url));
+      if (!existsSync(file)) return;
+      const text = readFileSync(file, 'utf8');
+      const next = text.split('https://za-shm.vercel.app').join(origin);
+      if (next !== text) writeFileSync(file, next, 'utf8');
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  // A separate artifact must never inherit legacy REACT_APP_* values from a
+  // local .env: those names can point at Staging even when VITE_* is set for
+  // Production. Clear every ambient fallback for non-default build directories.
+  const separateBuild = Boolean(process.env.ZASHM_BUILD_DIR);
+  const buildEnv = separateBuild
+    ? {
+      ...env,
+      REACT_APP_SUPABASE_URL: '',
+      REACT_APP_SUPABASE_ANON_KEY: '',
+      REACT_APP_GA_ID: '',
+      SUPABASE_URL: '',
+    }
+    : env;
   // Keep the same precedence as configuredSupabaseOrigin() in worker.mjs so the
   // build-time _headers CSP and the request-time Worker CSP name one project.
-  const supabaseUrl = env.VITE_SUPABASE_URL || env.REACT_APP_SUPABASE_URL || env.SUPABASE_URL || '';
-  const siteOrigin = siteOriginFromEnv(env);
+  const supabaseUrl = buildEnv.VITE_SUPABASE_URL || buildEnv.REACT_APP_SUPABASE_URL || buildEnv.SUPABASE_URL || '';
+  const siteOrigin = siteOriginFromEnv(buildEnv);
 
   return {
     plugins: [
       react(),
       siteOriginPlugin(siteOrigin),
+      robotsOriginPlugin(siteOrigin, separateBuild),
       supabasePreconnect(supabaseUrl),
-      supabaseHeadersOrigin(supabaseOriginFromUrl(supabaseUrl)),
+      supabaseHeadersOrigin(supabaseOriginFromUrl(supabaseUrl), BUILD_DIR),
     ],
     esbuild: {
       loader: 'jsx',
@@ -107,9 +147,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: {
-      'import.meta.env.REACT_APP_SUPABASE_URL': JSON.stringify(env.REACT_APP_SUPABASE_URL || ''),
-      'import.meta.env.REACT_APP_SUPABASE_ANON_KEY': JSON.stringify(env.REACT_APP_SUPABASE_ANON_KEY || ''),
-      'import.meta.env.REACT_APP_GA_ID': JSON.stringify(env.REACT_APP_GA_ID || ''),
+      // Node test runners keep the Vercel fallback; the browser bundle gets
+      // the origin chosen for this build so no legacy domain leaks into SEO.
+      __ZASHM_SITE_ORIGIN__: JSON.stringify(siteOrigin),
+      'import.meta.env.REACT_APP_SUPABASE_URL': JSON.stringify(buildEnv.REACT_APP_SUPABASE_URL || ''),
+      'import.meta.env.REACT_APP_SUPABASE_ANON_KEY': JSON.stringify(buildEnv.REACT_APP_SUPABASE_ANON_KEY || ''),
+      'import.meta.env.REACT_APP_GA_ID': JSON.stringify(buildEnv.REACT_APP_GA_ID || ''),
     },
     // `vercel dev` starts its own proxy on --listen and expects the dev
     // command to read the port it assigns through PORT. Without this, the
@@ -120,7 +163,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
     },
     build: {
-      outDir: 'build',
+      outDir: BUILD_DIR,
       rollupOptions: {
         output: {
           manualChunks(id) {

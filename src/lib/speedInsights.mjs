@@ -3,7 +3,9 @@
 // router) is the source of truth. `beforeSend` receives the event URL; returning
 // null drops the datapoint entirely.
 const PRIVATE_PATHS = ['/admin', '/cart', '/checkout', '/wishlist', '/track'];
-const BASE_URL = 'https://za-shm.vercel.app';
+const BASE_URL = (typeof __ZASHM_SITE_ORIGIN__ !== 'undefined' && __ZASHM_SITE_ORIGIN__)
+  ? __ZASHM_SITE_ORIGIN__
+  : 'https://za-shm.vercel.app';
 
 export function shouldReportVital(rawUrl) {
   const value = String(rawUrl || '').trim();

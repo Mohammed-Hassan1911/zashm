@@ -39,7 +39,11 @@ const require = createRequire(import.meta.url);
 const { isProductId } = require('../src/lib/product-exists.cjs');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BUILD_DIR = resolve(ROOT, 'build');
+const BUILD_NAME = process.env.ZASHM_BUILD_DIR || 'build';
+if (!/^[A-Za-z0-9_-]+$/.test(BUILD_NAME)) {
+  throw new Error('Invalid ZASHM_BUILD_DIR: use a plain directory name');
+}
+const BUILD_DIR = resolve(ROOT, BUILD_NAME);
 const TEMPLATE_FILE = resolve(BUILD_DIR, 'index.html');
 const DEFAULT_BASE = 'https://za-shm.vercel.app';
 const SHOP_TITLE = 'Shop — ZASHM';
@@ -287,6 +291,12 @@ export function renderProductHtml(template, product, { baseUrl = DEFAULT_BASE } 
 }
 
 async function fetchProducts({ env = process.env, fetchImpl = fetch } = {}) {
+  // Preparation builds must not make even a read request to the other
+  // environment. This keeps `build-production` completely offline: the SPA
+  // shell and shop page are still generated, but no catalogue is fetched.
+  if (env.ZASHM_SKIP_CATALOGUE_FETCH === '1') {
+    return { skipped: 'catalogue fetch disabled for this build (ZASHM_SKIP_CATALOGUE_FETCH=1)' };
+  }
   const supabaseUrl = firstEnv(env, ['VITE_SUPABASE_URL', 'REACT_APP_SUPABASE_URL', 'SUPABASE_URL']);
   const anonKey = firstEnv(env, ['VITE_SUPABASE_ANON_KEY', 'REACT_APP_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY']);
   if (!supabaseUrl || !anonKey) return { skipped: 'Supabase URL/anon key not configured' };

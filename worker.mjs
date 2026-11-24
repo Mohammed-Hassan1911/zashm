@@ -14,6 +14,7 @@ import adminUsersHandler from './api/admin/users.js';
 import adminReviewsHandler from './api/admin/reviews.js';
 import adminUploadHandler from './api/admin/upload.js';
 import productExists from './src/lib/product-exists.cjs';
+import { isProductionEnv, productionConfigProblems, productionGuardResponse } from './src/lib/production-env.mjs';
 
 const {
   isCrawler,
@@ -361,6 +362,14 @@ export function applySecurityHeaders(response, path, url, env = {}) {
 export async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = normalizePath(url.pathname);
+
+  // A Production Worker must never serve with missing, placeholder, or
+  // Staging configuration. This runs before any env value is copied into
+  // process.env and before any Supabase/API handler can be reached.
+  if (isProductionEnv(env)) {
+    const problems = productionConfigProblems(env);
+    if (problems.length) return productionGuardResponse();
+  }
 
   // The API helpers read process.env, while Workers deliver configuration on
   // the env binding. Copy the string bindings explicitly so the existing

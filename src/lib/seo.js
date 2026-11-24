@@ -92,9 +92,12 @@ export function setSiteJsonLd() {
     el.id = id;
     document.head.appendChild(el);
   }
+  const fallbackOrigin = typeof __ZASHM_SITE_ORIGIN__ !== 'undefined' && __ZASHM_SITE_ORIGIN__
+    ? __ZASHM_SITE_ORIGIN__
+    : 'https://za-shm.vercel.app';
   const origin = typeof window !== 'undefined'
     ? window.location.origin
-    : 'https://za-shm.vercel.app';
+    : fallbackOrigin;
   const base = origin.replace(/\/+$/, '');
   const data = {
     '@context': 'https://schema.org',

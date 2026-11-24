@@ -1,0 +1,56 @@
+# ZASHM PRODUCTION — PREPARATION CONFIGURATION ONLY.
+#
+# This file is deliberately NOT deployable to a public endpoint yet:
+#   * workers_dev = false
+#   * no route / routes / pattern / zone binding
+#   * no custom domain
+# It exists so the Production artifact can be validated with
+# `wrangler deploy --dry-run --config wrangler.production.toml`.
+#
+# A real deployment requires separate owner approval, real secrets injected as
+# Worker secrets (never committed), and a separately approved route/domain.
+# The Worker refuses every request until its Production bindings are complete.
+
+name = "zashm-production"
+main = "worker.mjs"
+compatibility_date = "2026-11-24"
+workers_dev = false
+
+# Non-secret marker that activates the runtime fail-closed guard in worker.mjs.
+# All other configuration is injected as Worker secrets at deployment time.
+[vars]
+ZASHM_ENVIRONMENT = "production"
+
+[assets]
+directory = "./build-production"
+binding = "ASSETS"
+html_handling = "none"
+# Unknown routes stay real 404s (served from build-production/404.html).
+not_found_handling = "404-page"
+# Keep every security control on dynamic/API/canonical/404 paths while immutable
+# static files are served directly by Cloudflare Assets. Negative patterns have
+# precedence over the catch-all, exactly as in the Staging config.
+run_worker_first = [
+  "/*",
+  "!/assets/*",
+  "!/fonts/*",
+  "!/media/*",
+  "!/*.css",
+  "!/*.woff",
+  "!/*.woff2",
+  "!/*.ttf",
+  "!/*.otf",
+  "!/*.webp",
+  "!/*.avif",
+  "!/*.jpg",
+  "!/*.jpeg",
+  "!/*.png",
+  "!/*.svg",
+  "!/*.gif",
+  "!/*.ico",
+  "!/*.json",
+  "!/*.txt",
+  "!/*.map",
+  "!/_headers",
+  "!/_redirects",
+]

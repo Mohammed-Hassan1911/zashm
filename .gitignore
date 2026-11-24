@@ -3,6 +3,7 @@ node_modules/
 !.env.example
 dist/
 build/
+build-production/
 .DS_Store
 .vercel
 .dev.vars
