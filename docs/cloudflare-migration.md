@@ -3,6 +3,8 @@
 Status: **staging deployed, not cut over**. Vercel remains the live rollback
 target (`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`, alias `za-shm.vercel.app`).
 No Supabase data, grants, RLS, Vercel settings or DNS were changed.
+Migration changes are committed as `4c0e2ef` on `cloudflare-migration` and
+pushed to `origin`; the branch is not merged or deployed to production.
 
 Staging Worker: `https://zashm.mohammedhassanmail1.workers.dev`
 Current version: `05ee31cc-02ea-4a93-b0eb-e5aff789296e`
