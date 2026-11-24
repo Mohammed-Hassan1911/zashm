@@ -1,7 +1,13 @@
-name = "zashm"
+name = "zashm-staging"
 main = "worker.mjs"
 compatibility_date = "2026-11-24"
 workers_dev = true
+
+# Temporary workers.dev staging is fully noindex while remaining testable.
+# Origin/secrets stay out of the repo: PUBLIC_BASE_URL, ALLOWED_ORIGINS and
+# SITEMAP_ALLOWED_ORIGINS are still supplied on the deploy command.
+[vars]
+ZASHM_STOREFRONT_NOINDEX = "1"
 
 # Node built-ins (Buffer, crypto, stream-shaped req shim) are used by api/_lib.js.
 # Dates >= 2026-08-04 enable nodejs_compat + nodejs_compat_v2 by default.

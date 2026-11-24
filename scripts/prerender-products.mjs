@@ -99,7 +99,10 @@ export function escapeHtml(value) {
  * Inject shop metadata into the built SPA shell. Unlike product pages this
  * needs no network data, so it always runs — even when Supabase is unreachable.
  */
-export function renderShopHtml(template, { baseUrl = DEFAULT_BASE } = {}) {
+export function renderShopHtml(template, {
+  baseUrl = DEFAULT_BASE,
+  robots = 'index, follow',
+} = {}) {
   if (typeof template !== 'string' || !template.includes('<div id="root"></div>')) return null;
 
   const origin = baseUrl.replace(/\/+$/, '');
@@ -117,7 +120,7 @@ export function renderShopHtml(template, { baseUrl = DEFAULT_BASE } = {}) {
   html = setMeta(html, 'property', 'og:url', url);
   html = setMeta(html, 'name', 'twitter:title', SHOP_TITLE);
   html = setMeta(html, 'name', 'twitter:description', SHOP_DESCRIPTION);
-  html = setMeta(html, 'name', 'robots', 'index, follow');
+  html = setMeta(html, 'name', 'robots', robots);
 
   // A shell inherited from a product render must not keep Product JSON-LD.
   html = html.replace(/\s*<script type="application\/ld\+json"[^>]*>[\s\S]*?<\/script>/g, '');
@@ -402,9 +405,10 @@ export function writeProductPages(products, template, {
 export function writeShopPage(template, {
   buildDir = BUILD_DIR,
   baseUrl = DEFAULT_BASE,
+  robots = 'index, follow',
   dryRun: planOnly = false,
 } = {}) {
-  const html = renderShopHtml(template, { baseUrl });
+  const html = renderShopHtml(template, { baseUrl, robots });
   if (!html) return false;
   if (!planOnly) {
     const target = resolve(buildDir, 'shop', 'index.html');
@@ -442,10 +446,13 @@ async function main() {
   }
   const template = readFileSync(TEMPLATE_FILE, 'utf8');
   const baseUrl = baseUrlFromEnv();
+  const robots = process.env.ZASHM_STOREFRONT_NOINDEX === '1'
+    ? 'noindex, nofollow, noarchive'
+    : 'index, follow';
 
   // The shop shell needs no catalogue data, so it is never skipped with the
   // product pages. Without it crawlers would see the home title on /shop.
-  if (writeShopPage(template, { baseUrl, dryRun })) {
+  if (writeShopPage(template, { baseUrl, robots, dryRun })) {
     console.log(`prerender: ${dryRun ? 'would write' : 'wrote'} the shop page`);
   }
 

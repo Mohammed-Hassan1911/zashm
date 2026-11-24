@@ -1,25 +1,31 @@
-# ZASHM PRODUCTION — PREPARATION CONFIGURATION ONLY.
+# ZASHM PRODUCTION — TEMPORARY workers.dev LAUNCH CONFIGURATION.
 #
-# This file is deliberately NOT deployable to a public endpoint yet:
-#   * workers_dev = false
-#   * no route / routes / pattern / zone binding
-#   * no custom domain
-# It exists so the Production artifact can be validated with
-# `wrangler deploy --dry-run --config wrangler.production.toml`.
+# Owner-approved launch stage: the public endpoint is the default Cloudflare
+# workers.dev hostname only. There is deliberately no route/routes/pattern,
+# no zone binding and no custom domain. A paid domain and DNS cutover remain
+# separate, unapproved stages.
 #
-# A real deployment requires separate owner approval, real secrets injected as
-# Worker secrets (never committed), and a separately approved route/domain.
-# The Worker refuses every request until its Production bindings are complete.
+# Server-only credentials are Worker secrets (never committed here). The Worker
+# still refuses every request until its Production bindings are complete.
 
-name = "zashm-production"
+name = "zashm"
 main = "worker.mjs"
 compatibility_date = "2026-11-24"
-workers_dev = false
+workers_dev = true
+# Avoid additional hashed public endpoints: only the canonical workers.dev
+# hostname above should be reachable. This is not a Route, Zone or Custom Domain.
+preview_urls = false
 
-# Non-secret marker that activates the runtime fail-closed guard in worker.mjs.
-# All other configuration is injected as Worker secrets at deployment time.
+# Non-secret bindings. The temporary workers.dev opt-in and canonical origin are
+# validated by the fail-closed guard; the storefront noindex flag keeps every
+# visitor-accessible page out of search indices until the real domain is bought.
 [vars]
 ZASHM_ENVIRONMENT = "production"
+PUBLIC_BASE_URL = "https://zashm.za-shm.workers.dev"
+ALLOWED_ORIGINS = "https://zashm.za-shm.workers.dev"
+SITEMAP_ALLOWED_ORIGINS = "https://zashm.za-shm.workers.dev"
+ZASHM_TEMP_WORKERS_DEV = "1"
+ZASHM_STOREFRONT_NOINDEX = "1"
 
 [assets]
 directory = "./build-production"

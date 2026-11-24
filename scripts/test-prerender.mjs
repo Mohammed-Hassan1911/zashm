@@ -253,6 +253,12 @@ console.log('\n[10] shop page has its own static metadata');
   ok(html.includes('<div id="root"></div>'), 'the React root is untouched');
   ok(html.includes('src="/assets/index-abc.js"'), 'the module entry still loads');
   ok(html.includes('<h1 style="font-size:28px'), 'a no-JS heading describes the page');
+  const noindexHtml = renderShopHtml(TEMPLATE, {
+    baseUrl: origin,
+    robots: 'noindex, nofollow, noarchive',
+  });
+  ok(noindexHtml.includes('<meta name="robots" content="noindex, nofollow, noarchive"/>'),
+    'temporary launch robots directive can replace the shop default');
 
   const dir = mkdtempSync(join(tmpdir(), 'zashm-shop-prerender-'));
   try {

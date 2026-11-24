@@ -7,8 +7,9 @@
  *
  *   node scripts/test-production-isolation.mjs
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   checkProductionBundle,
   checkProductionConfig,
@@ -23,6 +24,8 @@ import {
   PRODUCTION_SUPABASE_REF,
   STAGING_SUPABASE_REF,
   STAGING_WORKER_HOST,
+  TEMP_WORKERS_DEV_FLAG,
+  TEMP_WORKERS_DEV_ORIGIN,
   isProductionEnv,
   productionConfigProblems,
 } from '../src/lib/production-env.mjs';
@@ -64,16 +67,22 @@ const COMPLETE_ENV = {
 
 section(1, 'separate Worker configuration');
 eq(checkProductionConfig(), [], 'production and staging configs pass every isolation rule');
-ok(configText.includes('name = "zashm-production"'), 'Production Worker has its own name');
-ok(!/^\s*name\s*=\s*"zashm"\s*$/m.test(configText), 'Production config never uses the Staging name');
-ok(/^workers_dev\s*=\s*false\s*$/m.test(configText), 'workers.dev endpoint is disabled');
+ok(configText.includes('name = "zashm"'), 'Production Worker has its own name');
+ok(!/^\s*name\s*=\s*"zashm-staging"\s*$/m.test(configText), 'Production config never uses the Staging name');
+ok(/^workers_dev\s*=\s*true\s*$/m.test(configText), 'the approved temporary workers.dev endpoint is enabled');
 ok(!/^\s*(route|routes|pattern|zone_id|zone_name|custom_domain)\s*=/m.test(configText), 'no route, zone or custom domain is declared');
+ok(configText.includes(`${TEMP_WORKERS_DEV_FLAG} = "1"`), 'the temporary workers.dev opt-in is configured');
+ok(configText.includes(`PUBLIC_BASE_URL = "${TEMP_WORKERS_DEV_ORIGIN}"`), 'the canonical origin is the temporary ZASHM workers.dev address');
+ok(configText.includes('ZASHM_STOREFRONT_NOINDEX = "1"'), 'storefront noindex is enabled until the paid domain is bought');
+ok(/^preview_urls\s*=\s*false\s*$/m.test(configText), 'additional preview URLs are disabled');
 ok(configText.includes('directory = "./build-production"'), 'Production assets are a separate directory');
 ok(configText.includes('ZASHM_ENVIRONMENT = "production"'), 'runtime fail-closed guard is activated');
 ok(!configText.includes(STAGING_SUPABASE_REF) && !configText.includes(STAGING_WORKER_HOST), 'Production config has no Staging reference');
 ok(!configText.includes('SESSION_SECRET') && !configText.includes('SERVICE_ROLE'), 'Production config carries no secret value');
-ok(stagingText.includes('name = "zashm"') && /^workers_dev\s*=\s*true\s*$/m.test(stagingText), 'Staging config is unchanged');
+ok(stagingText.includes('name = "zashm-staging"') && /^workers_dev\s*=\s*true\s*$/m.test(stagingText), 'Staging keeps its distinct name and workers.dev setting');
 ok(stagingText.includes('directory = "./build"'), 'Staging still builds from build/');
+ok(stagingText.includes('ZASHM_STOREFRONT_NOINDEX = "1"'), 'Staging storefront noindex is pinned in config');
+ok(!stagingText.includes(TEMP_WORKERS_DEV_ORIGIN), 'Staging config never carries the Production workers.dev origin');
 
 section(2, 'environment fail-closed');
 const emptyProblems = checkProductionEnv({});
@@ -129,12 +138,38 @@ const headers = bundleFile('_headers');
 ok(shell.includes(`https://${PRODUCTION_SUPABASE_REF}.supabase.co`), 'CSP preconnect uses the Production project');
 ok(!shell.includes(STAGING_SUPABASE_REF), 'shell has no Staging Supabase ref');
 ok(!shell.includes('za-shm.vercel.app'), 'shell has no Vercel Production canonical');
-ok(shell.includes('production-prep.invalid'), 'canonical uses the non-public preparation placeholder');
+ok(shell.includes(TEMP_WORKERS_DEV_ORIGIN), 'canonical uses the approved temporary workers.dev origin');
 ok(headers.includes(`https://${PRODUCTION_SUPABASE_REF}.supabase.co`), 'static CSP allows only the Production Supabase origin');
 ok(!headers.includes('__ZASHM_SUPABASE_ORIGIN__'), 'Supabase placeholder was filled for this build');
+ok(shell.includes('content="noindex, nofollow, noarchive"'), 'storefront shell carries the temporary noindex directive');
+ok(headers.includes('X-Robots-Tag: noindex, nofollow, noarchive'), 'temporary noindex response header is in the artifact');
 ok(!existsSync(resolve(ROOT, PRODUCTION_BUILD, '_redirects')), 'no redirects can send Production traffic elsewhere');
 for (const name of ['.env', '.dev.vars']) {
   ok(!existsSync(resolve(ROOT, PRODUCTION_BUILD, name)), `${name} was not copied into the artifact`);
+}
+
+section(5, 'public JWT allow-list');
+const encodeJwtPart = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+const dummyJwt = (role) => [
+  encodeJwtPart({ alg: 'HS256', typ: 'JWT' }),
+  encodeJwtPart({ iss: 'supabase', ref: PRODUCTION_SUPABASE_REF, role }),
+  'signature-value',
+].join('.');
+const anonJwt = dummyJwt('anon');
+const serviceJwt = dummyJwt('service_role');
+const scanDir = mkdtempSync(join(tmpdir(), 'zashm-secret-scan-'));
+try {
+  writeFileSync(join(scanDir, '_headers'), `/*\n  Content-Security-Policy default-src https://${PRODUCTION_SUPABASE_REF}.supabase.co\n  X-Robots-Tag: noindex, nofollow, noarchive\n`);
+  writeFileSync(join(scanDir, 'index.html'), '<head><meta name="robots" content="noindex, nofollow, noarchive"/></head>');
+  writeFileSync(join(scanDir, 'public.js'), `export const key = '${anonJwt}';`);
+  writeFileSync(join(scanDir, 'private.js'), `export const key = '${serviceJwt}';`);
+  const scanned = checkProductionBundle(scanDir, { VITE_SUPABASE_ANON_KEY: anonJwt });
+  ok(scanned.problems.some((p) => p.includes('private.js') && p.includes('JWT')),
+    'a non-anon JWT in the public bundle is blocked');
+  ok(!scanned.problems.some((p) => p.includes('public.js')),
+    'the exact Production anon JWT is allowed in the public bundle');
+} finally {
+  rmSync(scanDir, { recursive: true, force: true });
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

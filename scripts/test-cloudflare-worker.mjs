@@ -57,7 +57,8 @@ const { readBody, signSession } = require('../api/_lib.js');
 
 section(1, 'wrangler configuration');
 const wrangler = await read('wrangler.toml');
-ok(wrangler.includes('name = "zashm"'), 'worker keeps the zashm project name');
+ok(wrangler.includes('name = "zashm-staging"'), 'worker keeps the zashm-staging project name');
+ok(wrangler.includes('ZASHM_STOREFRONT_NOINDEX = "1"'), 'staging config pins the temporary noindex flag');
 ok(wrangler.includes('main = "worker.mjs"'), 'entrypoint is worker.mjs');
 ok(wrangler.includes('directory = "./build"'), 'static assets come from build/');
 ok(wrangler.includes('binding = "ASSETS"'), 'ASSETS binding is declared');
@@ -242,6 +243,16 @@ for (const [name, expected] of Object.entries(SECURITY_HEADERS)) {
 }
 const apiNoindex = applySecurityHeaders(new Response('ok'), '/api/orders', new URL('https://zashm.example/api/orders'));
 eq(apiNoindex.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive', 'API responses keep noindex on the Worker path');
+const tempNoindex = applySecurityHeaders(
+  new Response('ok'),
+  '/shop',
+  new URL('https://zashm.example/shop'),
+  { ZASHM_STOREFRONT_NOINDEX: '1' }
+);
+eq(tempNoindex.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive', 'temporary storefront flag adds noindex to public pages');
+eq(tempNoindex.status, 200, 'noindex does not block visitor access');
+const indexableShop = applySecurityHeaders(new Response('ok'), '/shop', new URL('https://zashm.example/shop'));
+eq(indexableShop.headers.get('X-Robots-Tag'), null, 'public pages stay indexable without the temporary flag');
 
 section(6, 'request routing');
 const assets = {
@@ -256,6 +267,13 @@ const spaResponse = await handleRequest(new Request('https://zashm.example/admin
 eq(spaResponse.status, 200, 'SPA route returns 200');
 eq(spaResponse.headers.get('Cache-Control'), 'public, max-age=0, must-revalidate', 'index.html is revalidated');
 eq(spaResponse.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive', '/admin gets noindex on the Worker path');
+const noindexEnv = { ASSETS: assets, ZASHM_STOREFRONT_NOINDEX: '1' };
+const shopShellResponse = await handleRequest(new Request('https://zashm.example/shop'), noindexEnv);
+eq(shopShellResponse.status, 200, 'temporary noindex does not block /shop');
+eq(shopShellResponse.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive', '/shop shell gets noindex through handleRequest');
+const rootShellResponse = await handleRequest(new Request('https://zashm.example/'), noindexEnv);
+eq(rootShellResponse.status, 200, 'temporary noindex does not block /');
+eq(rootShellResponse.headers.get('X-Robots-Tag'), 'noindex, nofollow, noarchive', 'root shell gets noindex through handleRequest');
 const productResponse = await handleRequest(new Request('https://zashm.example/product/123'), { ASSETS: assets });
 eq(productResponse.status, 200, 'product deep link returns the SPA');
 const apiGuard = await handleRequest(new Request('https://zashm.example/api/sitemap', { method: 'POST' }), {});

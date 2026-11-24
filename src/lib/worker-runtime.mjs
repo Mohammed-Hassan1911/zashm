@@ -345,7 +345,10 @@ export function applySecurityHeaders(response, path, url, env = {}) {
   for (const [name, value] of Object.entries(securityHeaders(env))) {
     if (!headers.has(name)) headers.set(name, value);
   }
-  if (isPrivatePath(path, url)) {
+  // Temporary launch control: paid-domain canonical URLs are not ready, so all
+  // visitor-facing pages carry noindex while checkout stays fully usable.
+  const temporaryNoindex = String(env?.ZASHM_STOREFRONT_NOINDEX || '') === '1';
+  if (temporaryNoindex || isPrivatePath(path, url)) {
     headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   }
   const body = response.status === 204 || response.status === 205
@@ -503,7 +506,8 @@ export async function handleRequest(request, env) {
           new Response(shopShell.body, { status: shopShell.status, headers })
         ),
         path,
-        url
+        url,
+        env
       );
     }
   }
@@ -535,7 +539,8 @@ export async function handleRequest(request, env) {
         new Response(assetResponse.body, { status: assetResponse.status, headers })
       ),
       path,
-      url
+      url,
+      env
     );
   }
 

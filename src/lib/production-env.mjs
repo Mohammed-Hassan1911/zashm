@@ -6,18 +6,18 @@
  * scripts use the same rules so a build cannot quietly inherit Staging values.
  *
  * The guard only activates when the Worker binding ZASHM_ENVIRONMENT is exactly
- * "production". Staging (`zashm`) has no such binding and is unaffected.
+ * "production". Staging (`zashm-staging`) has no such binding and is unaffected.
  */
 
 export const PRODUCTION_ENV_FLAG = 'ZASHM_ENVIRONMENT';
 export const PRODUCTION_ENV_VALUE = 'production';
 export const PRODUCTION_SUPABASE_REF = 'ptegprcbtfylqhbnbkih';
 export const STAGING_SUPABASE_REF = 'sfenutmgfawuhmvwkmhv';
-export const STAGING_WORKER_HOST = 'zashm.mohammedhassanmail1.workers.dev';
+export const STAGING_WORKER_HOST = 'zashm-staging.za-shm.workers.dev';
 // Temporary, brand-named canonical origin used only while the paid domain is
 // purchased. It stays rejected by the guard unless the explicit opt-in flag is
 // present, and the Staging host is never allowed even with the flag.
-export const TEMP_WORKERS_DEV_ORIGIN = 'https://zashm-production.mohammedhassanmail1.workers.dev';
+export const TEMP_WORKERS_DEV_ORIGIN = 'https://zashm.za-shm.workers.dev';
 export const TEMP_WORKERS_DEV_FLAG = 'ZASHM_TEMP_WORKERS_DEV';
 
 export const REQUIRED_PRODUCTION_BINDINGS = [

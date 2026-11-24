@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -62,6 +63,39 @@ function supabaseHeadersOrigin(origin, outDir) {
   };
 }
 
+// Temporary workers.dev launch: static HTML is served by Cloudflare Assets
+// before the Worker runs, so the runtime noindex header alone cannot cover the
+// storefront. Bake the same directive into the built shells and _headers for
+// either Worker that sets ZASHM_STOREFRONT_NOINDEX=1 (Production and Staging).
+function storefrontNoindexPlugin(enabled, outDir) {
+  const directive = '<meta name="robots" content="noindex, nofollow, noarchive"/>';
+  return {
+    name: 'zashm-storefront-noindex',
+    apply: 'build',
+    closeBundle() {
+      if (!enabled) return;
+      const root = fileURLToPath(new URL(`./${outDir}`, import.meta.url));
+      for (const relative of ['index.html', 'shop/index.html']) {
+        const file = join(root, relative);
+        if (!existsSync(file)) continue;
+        const text = readFileSync(file, 'utf8');
+        const next = /<meta name="robots"/.test(text)
+          ? text.replace(/<meta name="robots" content="[^"]*"\s*\/?>/, directive)
+          : text.replace('</head>', `  ${directive}\n</head>`);
+        if (next !== text) writeFileSync(file, next, 'utf8');
+      }
+      const headersFile = join(root, '_headers');
+      if (!existsSync(headersFile)) return;
+      const headers = readFileSync(headersFile, 'utf8');
+      const marker = '# ZASHM_TEMP_STOREFRONT_NOINDEX';
+      if (!headers.includes(marker)) {
+        writeFileSync(headersFile,
+          `${headers.trimEnd()}\n\n${marker}\n/*\n  X-Robots-Tag: noindex, nofollow, noarchive\n`, 'utf8');
+      }
+    },
+  };
+}
+
 function siteOriginFromEnv(env) {
   const raw = env.PUBLIC_BASE_URL || env.VITE_PUBLIC_BASE_URL || 'https://za-shm.vercel.app';
   try {
@@ -86,9 +120,9 @@ function siteOriginPlugin(origin) {
   };
 }
 
-// `public/robots.txt` is copied verbatim by Vite. For a separate Production
-// artifact its sitemap URL must follow the deployment origin, not the old
-// Vercel domain. Staging builds keep the committed value unchanged.
+// `public/robots.txt` is copied verbatim by Vite. A separate Production build
+// or a noindex-enabled Staging build must advertise its own deployment origin,
+// never the old Vercel domain.
 function robotsOriginPlugin(origin, enabled) {
   return {
     name: 'zashm-robots-origin',
@@ -128,9 +162,13 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       siteOriginPlugin(siteOrigin),
-      robotsOriginPlugin(siteOrigin, separateBuild),
+      robotsOriginPlugin(siteOrigin, separateBuild || process.env.ZASHM_STOREFRONT_NOINDEX === '1'),
       supabasePreconnect(supabaseUrl),
       supabaseHeadersOrigin(supabaseOriginFromUrl(supabaseUrl), BUILD_DIR),
+      storefrontNoindexPlugin(
+        process.env.ZASHM_STOREFRONT_NOINDEX === '1',
+        BUILD_DIR
+      ),
     ],
     esbuild: {
       loader: 'jsx',

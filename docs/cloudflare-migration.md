@@ -1,22 +1,19 @@
 # Cloudflare Workers migration
 
-Status: **staging deployed, not cut over**. Vercel remains the live rollback
-target (`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`, alias `za-shm.vercel.app`).
-No Supabase catalog/customer data, grants, RLS, Vercel settings or DNS were changed.
-A fake coupon probe may increment the operational `zshm_rate_limits` counter.
+Status: **temporary production launch active on Cloudflare Workers**. Vercel
+remains the untouched rollback target (`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`,
+alias `za-shm.vercel.app`). No Supabase catalog/customer data, grants, RLS,
+DNS or net Vercel settings were changed. A fake coupon probe may increment the
+operational `zshm_rate_limits` counter.
 The base migration is committed as `4c0e2ef`/`25bb149` on `cloudflare-migration`
 and pushed to `origin`. The later parity/review fixes are committed on this same
-migration branch in a separate commit; the branch is **not merged** and was
-**not deployed to production**.
+migration branch in a separate commit; the branch is **not merged**.
 
-Staging Worker: `https://zashm.mohammedhassanmail1.workers.dev`
-Current version: `49cfc0f5-aa93-4846-af1a-8c60b6a35f7b` (Worker tag
-`staging-data-isolation-v2`, deployed from the uncommitted tree at HEAD
-`8f73b7a9146115ea83ea1789576014246849a265`). The immediately preceding
-Staging-only version `95ff1385-838b-42f4-8da8-39c7b4271c2f`
-(`staging-data-isolation-v1`) has the same Staging-only bundle and secrets and is
-the safe rollback target. The pristine baseline `c4bd9005-...` is **not** an
-acceptable rollback now: its static assets still contain the Production ref.
+Production Worker: `https://zashm.za-shm.workers.dev`
+Staging Worker: `https://zashm-staging.za-shm.workers.dev`
+Retained, untouched legacy Worker: `https://zashm-stage3.za-shm.workers.dev`
+All three URLs follow the account subdomain change documented in Phase 5; the
+former `*.mohammedhassanmail1.workers.dev` URLs are retired.
 Owner Cloudflare account: `9fe493bc12463ea71e52fd2f040c5171`
 
 ## What changed
@@ -112,8 +109,8 @@ Non-secret vars are deployed with every release:
 
 ```bash
 npx wrangler deploy \
-  --var PUBLIC_BASE_URL:https://zashm.mohammedhassanmail1.workers.dev \
-  --var ALLOWED_ORIGINS:https://zashm.mohammedhassanmail1.workers.dev,http://localhost:3000
+  --var PUBLIC_BASE_URL:https://zashm-staging.za-shm.workers.dev \
+  --var ALLOWED_ORIGINS:https://zashm-staging.za-shm.workers.dev,http://localhost:3000
 ```
 
 `PUBLIC_BASE_URL` is a bare https origin; the sitemap prefers a dedicated
@@ -251,7 +248,7 @@ Supabase Production, secret rotation or Cutover was performed.
   untouched; no Production secret was rotated.
 - Staging Worker vars (non-secret, passed on the deploy command only, not added to
   `wrangler.toml`): `PUBLIC_BASE_URL`, `SITEMAP_ALLOWED_ORIGINS` and
-  `ALLOWED_ORIGINS` all equal `https://zashm.mohammedhassanmail1.workers.dev`.
+  `ALLOWED_ORIGINS` all equal `https://zashm-staging.za-shm.workers.dev`.
   Without them the sitemap fell back to the old `za-shm.vercel.app` origin and the
   API rejected the Staging Origin; the v2 deploy fixed both. A future Production
   Worker must receive its own vars and secrets; none are inherited from Staging.
@@ -462,7 +459,7 @@ created, Workers Paid was not subscribed, and Vercel/Supabase Production and
 `bdc45ae7-f8bd-4f4f-9591-c8b57fc8aa61`.
 
 - `wrangler.production.toml` is a distinct Worker configuration:
-  `name = "zashm-production"`, `workers_dev = false`, **no `route`,
+  `name = "zashm-production"` (superseded by `zashm` in Phase 5), `workers_dev = false`, **no `route`,
   `routes`, `pattern`, `zone_id`, `zone_name` or `custom_domain`**. It serves
   `./build-production`, keeps `not_found_handling = "404-page"`, and mirrors the
   reviewed Staging `run_worker_first` patterns exactly. It contains no
@@ -525,7 +522,8 @@ created, Workers Paid was not subscribed, and Vercel/Supabase Production and
 ## Phase 3 — brand-named temporary workers.dev preparation (2026-11-24)
 
 Owner-approved scope: local protected testing only. The ZASHM-branded temporary
-origin is `https://zashm-production.mohammedhassanmail1.workers.dev`. It was used
+origin was `https://zashm-production.mohammedhassanmail1.workers.dev`; Phase 5
+replaced it with `https://zashm.za-shm.workers.dev`. It was used
 **only** in a deleted, uncommitted local env file. No public activation, DNS,
 Custom Domain, Route, Zone, Cutover, Vercel change, Production secret change or
 Production data change occurred.
@@ -538,7 +536,7 @@ Production data change occurred.
 - `src/lib/production-env.mjs` permits the exact temporary origin **only** when
   the non-secret opt-in `ZASHM_TEMP_WORKERS_DEV=1` is present. Without that flag
   a `workers.dev` canonical is still rejected; the Staging host
-  `zashm.mohammedhassanmail1.workers.dev` is never accepted even with the flag.
+  `zashm-staging.za-shm.workers.dev` is never accepted even with the flag.
 - Direct `wrangler dev --local --config wrangler.production.toml` now starts
   without any wrapper. Local env used the temporary origin as
   `PUBLIC_BASE_URL`, added it to `SITEMAP_ALLOWED_ORIGINS` together with the
@@ -574,6 +572,174 @@ Production data change occurred.
    Custom Domains and Zones.
 5. Rollback: restore `workers_dev = false` and redeploy the previous retained
    version. No DNS or database rollback is involved.
+
+## Phase 4 — temporary workers.dev launch (2026-11-24)
+
+Owner approval was explicit: publish the Production Worker (then named
+`zashm-production`, renamed to `zashm` in Phase 5) on its default Cloudflare
+workers.dev hostname only, with no paid domain, no DNS change, no Route, no Zone,
+no Custom Domain, no Workers Paid subscription, no secret rotation, and no change
+to Vercel Production, Supabase Production or `main`.
+
+- `wrangler.production.toml` now sets `workers_dev = true` for
+  `zashm`, with zero routes/domains/zones and `preview_urls = false`
+  so no extra hashed public endpoint is created. Staging `wrangler.toml`
+  keeps its reviewed settings (`zashm-staging`, `workers_dev = true`, `./build`).
+- Non-secret `[vars]`: `PUBLIC_BASE_URL`, `ALLOWED_ORIGINS` and
+  `SITEMAP_ALLOWED_ORIGINS` are all the temporary canonical origin
+  `https://zashm.za-shm.workers.dev` (the Phase 4 value was
+  `https://zashm-production.mohammedhassanmail1.workers.dev`; see Phase 5);
+  `ZASHM_TEMP_WORKERS_DEV = "1"` satisfies the fail-closed guard; and
+  `ZASHM_STOREFRONT_NOINDEX = "1"` adds `X-Robots-Tag: noindex, nofollow,
+  noarchive` to Worker-handled routes and bakes the same header plus
+  `<meta name="robots" content="noindex, nofollow, noarchive">` into the static
+  Cloudflare Assets shells, while leaving checkout and purchasing fully usable.
+  Private/admin/API paths keep their existing noindex header.
+- The launch artifact is built from Production Supabase settings and the real
+  public anon key into `build-production/`; no preparation placeholder or
+  Vercel/Staging origin remains. Server-only credentials stay as Worker secrets.
+- `scripts/verify-production-readiness.mjs` now accepts workers.dev **only** when
+  the exact temporary origin, opt-in flag, sitemap allow-list and storefront
+  noindex flag are present. Any Route, Zone, Custom Domain or Staging reference
+  still fails the gate.
+- Rollback: set `workers_dev = false`, redeploy the retained previous version,
+  or point traffic back to the untouched Vercel Production deployment
+  `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`. No DNS rollback is involved.
+
+## Phase 5 — workers.dev rename and account subdomain (2026-11-24)
+
+Owner request: expose the temporary storefront as
+`https://zashm.za-shm.workers.dev` and Staging as
+`https://zashm-staging.za-shm.workers.dev` with no extra cutover, no change to
+`main`, and no destructive Worker recreation. Target availability was checked
+first (`GET /accounts/{account_id}/workers/subdomains/za-shm` returned 404 with
+"available but not configured"), and the complete pre-change inventory was
+captured: 3 Workers, 0 Custom Domains, 0 Zones and no Routes in either config.
+
+Renames used the beta Workers API `PATCH /accounts/{account_id}/workers/workers/{id}`
+with only `{"name": ...}`. No Worker or version was deleted or recreated, and no
+secret value was read, printed or rotated.
+
+- Staging: Worker ID `f58073be25504ac097a464f6dd885a15` was renamed from
+  `zashm` to `zashm-staging` (PATCH 200). Its ID, 32 retained versions, latest
+  version `bdc45ae7-f8bd-4f4f-9591-c8b57fc8aa61` and four secret bindings were
+  unchanged. It briefly served `...mohammedhassanmail1.workers.dev` before the
+  account subdomain change, then the final `za-shm` URL.
+- Account subdomain: `PUT /workers/subdomain` alone returned 409
+  "Account already has an associated subdomain." The supported sequence was
+  `DELETE /workers/subdomain` (204) followed by
+  `PUT {"subdomain":"za-shm"}` (200). The previous value
+  `mohammedhassanmail1` was the rollback target and was not needed; a GET now
+  confirms `za-shm`. All three Workers acquired the new hostname automatically.
+- Production: Worker ID `b7fd1d0db3314691bc9c46a9319bbcda` was renamed from
+  `zashm-production` to `zashm` (PATCH 200). Its ID, 13 retained versions,
+  latest version `14bb7766-60ff-4a13-a21d-d0d69a9792d3`, eight secret bindings
+  and `preview_urls = false` were unchanged.
+- Retained legacy Worker `zashm-stage3` (ID
+  `6f485b23dfc247c5b810fe1e4d1f356d`, 11 versions) was not renamed or
+  redeployed; only its account-derived URL changed.
+
+Post-rename deploys reused the same Worker IDs and added versions without
+removing rollback history:
+
+- Production `wrangler deploy --config wrangler.production.toml` produced
+  version `e0c390f5-7e70-49a0-ac73-200a3da4eec6` at 12:08:14Z and deployment
+  `daaea4fe-f226-4fb2-a27f-2f71ceabe268`. Its non-secret bindings are now all
+  `https://zashm.za-shm.workers.dev`, and the eight secret names are unchanged.
+  Rollback targets remain version `14bb7766-...` and deployment `bd834a36-...`.
+- Staging was rebuilt from its own public catalogue and anon key into `build/`
+  (0 Production refs), then redeployed with `PUBLIC_BASE_URL` and
+  `SITEMAP_ALLOWED_ORIGINS` set to
+  `https://zashm-staging.za-shm.workers.dev` and `ALLOWED_ORIGINS` set to that
+  origin plus `http://localhost:3000`. That first post-rename deploy produced
+  version `409a8e6e-6010-4484-b3b5-bdadbcf2e513` at 12:17:07Z and deployment
+  `f32f5f56-c966-4774-9a6c-fdbc3904633f`. Its four secret names are unchanged;
+  rollback targets are version `bdc45ae7-...` and deployment `e23f08c6-...`.
+- Owner then required Staging to be fully `noindex` while remaining usable for
+  tests. `wrangler.toml` now pins `ZASHM_STOREFRONT_NOINDEX = "1"` as a runtime
+  binding, and the static artifact must additionally be built with the same
+  build-time flag, because Cloudflare Assets can serve prerendered HTML before
+  the Worker runs:
+
+  ```bash
+  ZASHM_STOREFRONT_NOINDEX=1 npm run build
+  npx wrangler deploy \
+    --var PUBLIC_BASE_URL:https://zashm-staging.za-shm.workers.dev \
+    --var ALLOWED_ORIGINS:https://zashm-staging.za-shm.workers.dev,http://localhost:3000 \
+    --var SITEMAP_ALLOWED_ORIGINS:https://zashm-staging.za-shm.workers.dev \
+    --var ZASHM_STOREFRONT_NOINDEX:1
+  ```
+
+  This added version `62420756-a496-43e6-a69c-ee1a3d3f0cac` at 18:14:58Z and
+  deployment `baa63ee3-1462-49f8-b41b-c2380ec7c328`, without deleting any
+  previous version. Canonical, OG, sitemap, robots and CSP stay on the Staging
+  origin, and every Staging route now carries
+  `noindex, nofollow, noarchive` via both baked meta/header and Worker runtime.
+  Pages and APIs still return their normal testable statuses; only crawler
+  directives changed. Rollback remains version `409a8e6e-...` / deployment
+  `f32f5f56-...` or the older `bdc45ae7-...` / `e23f08c6-...`.
+
+Verification:
+
+- `npm test` with `ZSHM_REQUIRE_SQL_TESTS=1`: 37 scripts, 4109 assertions,
+  0 failed. The real PostgreSQL 17 suite ran in a temporary cluster and was
+  auto-destroyed; no suite was skipped. Telegram-notification "skipped" lines
+  are expected unit-test fixtures, not skipped suites.
+- `git diff --check` exited 0. The full `npm run verify:production` gate with
+  local env returned `READY: 0 problem(s)` for config, environment and the
+  39-file Production bundle.
+- `wrangler deploy --dry-run` passed for both configurations before each deploy.
+- GET-only Cloudflare smoke after the final Staging deploy: 31 checks,
+  0 failures. Production `/`, `/shop`, product, `/cart`, `/checkout`,
+  `/wishlist`, `/track`, `/admin`, sitemap, robots and 404 all used the new
+  canonical/origin and carried `noindex, nofollow, noarchive`; `/api/orders`
+  returned `{"found":false}` and `/api/admin/products` returned 401. Staging
+  showed the same read-only/admin behaviour with Staging-only refs, and all
+  Staging public pages, sitemap, robots, API responses and 404s now carry the
+  same noindex directive while still returning normal testable statuses.
+  There were no 429/5xx responses, no old-subdomain or Vercel origin in
+  response bodies, and the former `*.mohammedhassanmail1.workers.dev` hosts no
+  longer serve a storefront. The first smoke attempt had one transient TLS
+  error (`curl` exit 35) on Staging `/`; a clean rerun passed all 31 checks.
+- Final API state: account subdomain `za-shm`; the same 3 Worker IDs;
+  0 Custom Domains; 0 Zones; no Route in either config; Production
+  `previews_enabled = false`; Staging `previews_enabled = true`. Retained
+  versions: Production 14, Staging 34, legacy `zashm-stage3` 11. Secret values
+  cannot be read back through the API, so preservation was proven by unchanged
+  binding names, IDs, versions and settings, not by comparing values.
+
+No Vercel deployment/settings, Supabase data/settings, DNS, paid resources or
+`main` were changed on net. Vercel rollback deployment
+`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and every retained Cloudflare version remain
+available.
+
+### Closure verification (2026-11-24)
+
+- Vercel automatic Git preview remains active: before this closure commit, alias
+  `zashm-git-cloudflare-migration-zashm.vercel.app` pointed to READY deployment
+  `dpl_ELetHqCEu3Wg6SaCaRsLUYmzRNNM`, whose Git metadata records branch
+  `cloudflare-migration` and commit `5cd6fe8`. Production alias still points to
+  `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`. A new preview is expected to be generated
+  automatically from the closure commit; no manual Vercel deployment was made.
+- Vercel SSO deployment protection is `all_except_custom_domains` and Git fork
+  protection is enabled. A read-only preview probe with `vercel curl`
+  auto-created two automation-bypass secrets; the owner approved restoring the
+  prior state, both were removed, and the final project has
+  `protectionBypass = 0` with no `VERCEL_PROTECTION_BYPASS` env var. No Vercel
+  deployment was created, promoted or deleted during this work.
+- The committed worker configs and prepared artifacts match what is deployed:
+  both live home pages carry the same canonical, OG URL and noindex markers as
+  `build-production/index.html` and `build/index.html`, and the live Staging
+  Worker version reports the exact origin/noindex bindings from
+  `wrangler.toml`.
+- Supabase isolation was checked with GET-only REST calls to `products_public`:
+  the Production anon key returns 200 only on Production ref
+  `ptegprcbtfylqhbnbkih` and 401 on Staging; the Staging anon key returns 200
+  only on Staging ref `sfenutmgfawuhmvwkmhv` and 401 on Production. No SQL,
+  schema, RLS, data, order or customer record was changed.
+- Every rollback artifact remains available: Cloudflare version counts are
+  Production 14, Staging 34 and legacy `zashm-stage3` 11; the Vercel rollback
+  deployment and its alias are untouched.
 
 ## Rollback
 
