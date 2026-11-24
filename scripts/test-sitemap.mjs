@@ -487,5 +487,57 @@ console.log('\n[12] a dedicated sitemap allow-list overrides CORS config');
   eq((response.body.match(/<loc>/g) || []).length, 2, 'the sitemap still emits the safe static fallback');
 }
 
+console.log('\n[13] SSO-safe bundled manifest on Vercel');
+{
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'zashm-sitemap-'));
+  mkdirSync(join(dir, 'build'));
+  writeFileSync(join(dir, 'build', 'prerendered-products.json'), JSON.stringify({ ids: [' bundled-1 ', 'bundled-2'] }));
+
+  const oldEnv = {
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL,
+    VERCEL: process.env.VERCEL,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
+  };
+  const oldCwd = process.cwd();
+  const oldFetch = globalThis.fetch;
+  const oldConsoleError = console.error;
+  process.chdir(dir);
+  process.env.VERCEL = '1';
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_ANON_KEY = 'public-anon-test-key';
+  const previewOrigin = 'https://zashm-git-cloudflare-migration-zashm.vercel.app';
+  process.env.PUBLIC_BASE_URL = previewOrigin;
+  process.env.ALLOWED_ORIGINS = previewOrigin;
+  let fetches = 0;
+  globalThis.fetch = async () => {
+    fetches += 1;
+    return new Response(JSON.stringify([{ id: 'bundled-1', stock: 2 }, { id: 'bundled-2', stock: 2 }]), { status: 200 });
+  };
+  console.error = () => {};
+  const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; }, end(body) { this.body = body; } };
+  try {
+    await sitemapHandler({ method: 'GET' }, response);
+  } finally {
+    process.chdir(oldCwd);
+    globalThis.fetch = oldFetch;
+    console.error = oldConsoleError;
+    for (const [name, value] of Object.entries(oldEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  }
+  eq(fetches, 1, 'the bundled manifest replaces the blocked self-fetch');
+  ok(response.body.includes('bundled-1') || response.body.includes('bundled-2'),
+    'the bundled manifest supplies product ids for the sitemap');
+  ok(!response.body.includes('za-shm.vercel.app'),
+    'a Preview sitemap does not emit the Production canonical domain');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

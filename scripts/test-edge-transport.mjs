@@ -461,5 +461,37 @@ console.log('\n[6] public POST CSRF boundary');
     'the Origin guard has an explicit, non-leaking error message');
 }
 
+console.log('\n[7] per-deployment Preview isolation');
+{
+  const cfg = JSON.parse(read('vercel.json'));
+  const globalEntry = cfg.headers.find((h) => h.source === '/(.*)' && !h.has);
+  const csp = globalEntry.headers.find((h) => h.key === 'Content-Security-Policy').value;
+  ok(!csp.includes('supabase.co'), 'committed static CSP has no hard-coded Supabase origin');
+  ok(!csp.includes('ptegprcbtfylqhbnbkih'), 'committed static CSP cannot allow Production Supabase');
+
+  const index = read('index.html');
+  ok(!index.includes('za-shm.vercel.app'), 'committed shell has no hard-coded canonical origin');
+  ok(index.includes('PLACEHOLDER_SITE_ORIGIN'), 'committed shell carries a build-time origin placeholder');
+
+  const { contentSecurityPolicy, configuredSupabaseOrigin } = await import('../src/lib/csp.mjs');
+  const staging = 'https://sfenutmgfawuhmvwkmhv.supabase.co';
+  const preview = contentSecurityPolicy({ VITE_SUPABASE_URL: staging });
+  ok(preview && preview.includes(`connect-src 'self' ${staging}`), 'Preview CSP allows only its configured staging Supabase');
+  ok(!preview.includes('ptegprcbtfylqhbnbkih'), 'Preview CSP cannot include the Production Supabase origin');
+  eq(configuredSupabaseOrigin({ SUPABASE_URL: 'https://ok.supabase.co/' }), 'https://ok.supabase.co',
+    'a valid configured Supabase URL resolves to its origin');
+  eq(configuredSupabaseOrigin({ SUPABASE_URL: 'https://user:pass@evil.example/' }), '',
+    'a URL with credentials is rejected');
+  eq(contentSecurityPolicy({}), null, 'missing Supabase config fails closed');
+  eq(contentSecurityPolicy({ VITE_SUPABASE_URL: 'http://localhost:54321' }), null,
+    'a non-https Supabase config fails closed');
+
+  const viteConfig = read('vite.config.js');
+  ok(/zashm-site-origin/.test(viteConfig) && /PLACEHOLDER_SITE_ORIGIN/.test(viteConfig),
+    'Vite replaces the canonical placeholder from PUBLIC_BASE_URL at build time');
+  ok(/PUBLIC_BASE_URL/.test(viteConfig) && /za-shm\.vercel\.app/.test(viteConfig),
+    'the site origin plugin uses the configured origin with a production fallback');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

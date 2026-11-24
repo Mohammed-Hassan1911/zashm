@@ -78,7 +78,7 @@ function firstEnv(env, names) {
 
 /** The public origin the canonical/OG URLs point at. Never a secret. */
 export function baseUrlFromEnv(env = process.env) {
-  const raw = firstEnv(env, ['PUBLIC_BASE_URL', 'VITE_SITE_URL', 'SITE_URL']) || DEFAULT_BASE;
+  const raw = firstEnv(env, ['PUBLIC_BASE_URL', 'VITE_PUBLIC_BASE_URL', 'VITE_SITE_URL', 'SITE_URL']) || DEFAULT_BASE;
   return raw.replace(/\/+$/, '') || DEFAULT_BASE;
 }
 

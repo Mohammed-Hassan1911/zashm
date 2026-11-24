@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { canonicalUrl, productRoutePath } from '../src/lib/product-url.mjs';
 
 const PAGE_SIZE = 1000;
@@ -132,8 +135,38 @@ async function fetchPublicProducts({ supabaseOrigin, anonKey }) {
  * Product shells are written at build time. Only advertise ids that received
  * one, otherwise a product created after the last deploy would enter the
  * sitemap while its URL still served the generic home metadata.
+ *
+ * Prefer the manifest bundled with this deployment. Vercel SSO blocks a
+ * Preview function from fetching its own static assets, so the build output is
+ * included in the sitemap function via `functions.includeFiles` in vercel.json.
+ * The self-fetch remains a fallback for local/dev and Worker adapters.
  */
+function readBundledPrerenderedIds() {
+  // Local tests exercise the network path with injected manifests; only a real
+  // Vercel runtime should prefer the deployment-bundled file.
+  if (String(process.env.VERCEL || '') !== '1') return null;
+  const functionDir = dirname(fileURLToPath(import.meta.url));
+  for (const candidate of [
+    resolve(process.cwd(), 'build', 'prerendered-products.json'),
+    resolve(process.cwd(), 'prerendered-products.json'),
+    resolve(functionDir, '..', 'build', 'prerendered-products.json'),
+    resolve(functionDir, 'build', 'prerendered-products.json'),
+  ]) {
+    try {
+      const manifest = JSON.parse(readFileSync(candidate, 'utf8'));
+      if (manifest && Array.isArray(manifest.ids)) {
+        return new Set(manifest.ids.map((id) => String(id).trim()).filter(Boolean));
+      }
+    } catch {
+      /* try the next location; a missing manifest is not a source failure */
+    }
+  }
+  return null;
+}
+
 async function fetchPrerenderedIds(siteOrigin) {
+  const bundled = readBundledPrerenderedIds();
+  if (bundled) return bundled;
   const url = new URL(PRERENDER_MANIFEST_PATH, siteOrigin);
   const response = await fetch(url, {
     headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },

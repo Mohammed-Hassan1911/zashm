@@ -77,9 +77,15 @@ const vercelHeaders = Object.fromEntries(
   (vercelWildcard ? vercelWildcard.headers : []).map(({ key, value }) => [key, value])
 );
 for (const [name, expected] of Object.entries(SECURITY_HEADERS)) {
+  if (name === 'Content-Security-Policy') continue; // Vercel injects its Supabase origin at request time.
   eq(staticHeaders[name], expected, `_headers ${name} matches the Worker byte-for-byte`);
   eq(vercelHeaders[name], expected, `vercel.json ${name} matches the Worker byte-for-byte`);
 }
+// Vercel's static policy is intentionally Supabase-free; Routing Middleware
+// adds only the Supabase origin configured for the active deployment.
+const withoutSupabase = (value) => String(value).replace(/https:\/\/[^ ]+\.supabase\.co /g, '');
+eq(vercelHeaders['Content-Security-Policy'], withoutSupabase(SECURITY_HEADERS['Content-Security-Policy']),
+  'vercel.json CSP matches the Worker apart from the deployment-specific Supabase origin');
 const cspLine = headersFile.split('\n').map((line) => line.trimStart()).find((line) => line.startsWith('Content-Security-Policy:'));
 ok(Boolean(cspLine), 'CSP is present in _headers');
 ok(!/script-src[^;]*'unsafe-inline'/.test(cspLine || ''), 'script-src has no unsafe-inline');

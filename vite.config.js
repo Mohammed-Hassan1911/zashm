@@ -20,12 +20,37 @@ function supabasePreconnect(url) {
   };
 }
 
+function siteOriginFromEnv(env) {
+  const raw = env.PUBLIC_BASE_URL || env.VITE_PUBLIC_BASE_URL || 'https://za-shm.vercel.app';
+  try {
+    const url = new URL(raw);
+    if (url.protocol === 'https:' && !url.username && !url.password &&
+        url.pathname === '/' && !url.search && !url.hash) return url.origin;
+  } catch {
+    /* fall through to the known production origin */
+  }
+  return 'https://za-shm.vercel.app';
+}
+
+// Canonical/OG URLs must follow the deployment origin. The committed shell has
+// a placeholder so no branch inherits the production domain; Vite replaces it
+// from PUBLIC_BASE_URL at build time (default: the known production origin).
+function siteOriginPlugin(origin) {
+  return {
+    name: 'zashm-site-origin',
+    transformIndexHtml(html) {
+      return String(html).split('PLACEHOLDER_SITE_ORIGIN').join(origin);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const supabaseUrl = env.VITE_SUPABASE_URL || env.REACT_APP_SUPABASE_URL || '';
+  const siteOrigin = siteOriginFromEnv(env);
 
   return {
-    plugins: [react(), supabasePreconnect(supabaseUrl)],
+    plugins: [react(), siteOriginPlugin(siteOrigin), supabasePreconnect(supabaseUrl)],
     esbuild: {
       loader: 'jsx',
       include: /src\/.*\.js$/,

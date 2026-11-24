@@ -154,19 +154,19 @@ console.log('\n[4] 404 response');
 console.log('\n[5] middleware wiring and dev server');
 {
   const middleware = read('middleware.ts');
-  ok(/export const config = \{\s*matcher: \['\/product\/:path\*'\],[\s\S]*?runtime: 'nodejs',\s*\};/.test(middleware),
-    'the middleware only runs on product detail paths (Node.js runtime)');
+  ok(/export const config = \{\s*matcher: \[[^\]]*\],[\s\S]*?runtime: 'nodejs',\s*\};/.test(middleware) &&
+     /\/product\/:path\*/.test(middleware),
+    'the middleware runs on product detail pages and the SPA shell (Node.js runtime)');
   ok(/from '\.\/src\/lib\/product-exists\.cjs'/.test(middleware), 'the middleware reuses the tested helpers');
   ok(middleware.indexOf('isCrawler(') < middleware.indexOf('checkProductExists('),
     'crawlers are detected before any database request');
   ok(/if \(exists === false\) return buildNotFoundResponse\(request\);/.test(middleware),
     'only a confirmed missing product becomes a 404');
-  ok(/headers: \{ 'x-middleware-next': '1' \}/.test(middleware),
+  ok(/headers\.set\('x-middleware-next', '1'\)/.test(middleware),
     'passthrough returns the documented continuation header');
-  ok(/if \(id === null\) return continueRequest\(\);/.test(middleware),
-    'non-detail product paths continue the chain');
-  ok(/if \(!isCrawler\([\s\S]*?\) return continueRequest\(\);/.test(middleware),
-    'non-crawler requests continue the chain');
+  ok(/if \(id !== null && isCrawler\([\s\S]*?\)\)/.test(middleware) &&
+     /return continueRequest\(contentSecurityPolicy\(\)\);/.test(middleware),
+    'non-crawler and non-detail requests continue with the request-time CSP');
   ok(!/^\s*return;\s*$/m.test(middleware),
     'the middleware never returns undefined (that drops the response body)');
 
