@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import {
   applySecurityHeaders,
+  configuredSupabaseOrigin,
+  contentSecurityPolicy,
   CSP,
   createVercelReqRes,
   finalizeVercelResponse,
@@ -52,7 +54,20 @@ ok(wrangler.includes('directory = "./build"'), 'static assets come from build/')
 ok(wrangler.includes('binding = "ASSETS"'), 'ASSETS binding is declared');
 eq(/not_found_handling = "([^"]+)"/.exec(wrangler)?.[1], '404-page', 'unknown routes stay real 404s');
 eq(/html_handling = "([^"]+)"/.exec(wrangler)?.[1], 'none', 'no trailing-slash HTML redirects');
-eq(/run_worker_first = (true|false)/.exec(wrangler)?.[1], 'true', 'worker sees requests before static assets');
+// Selective routing keeps the Worker in front of every dynamic/API route but
+// lets Cloudflare Assets serve immutable files directly. Negative patterns
+// have precedence, so the catch-all `/*` still covers private SPA routes,
+// generated sitemaps and unknown 404s.
+const workerFirst = /run_worker_first = \[([\s\S]*?)\]/.exec(wrangler)?.[1];
+ok(!!workerFirst, 'run_worker_first uses selective route patterns');
+const workerFirstPatterns = (workerFirst || '').match(/"[^"]+"/g)?.map((s) => s.slice(1, -1)) || [];
+ok(workerFirstPatterns.includes('/*'), 'worker keeps the catch-all for dynamic routes');
+for (const pattern of ['!/assets/*', '!/fonts/*', '!/*.css', '!/*.woff2', '!/*.webp', '!/*.jpg', '!/*.json']) {
+  ok(workerFirstPatterns.includes(pattern), `static assets bypass the Worker (${pattern})`);
+}
+ok(!workerFirstPatterns.some((p) => /^!\/(api|sitemap|cart|checkout|wishlist|track|admin|product|_vercel)(\/|$)/.test(p)), 'no dynamic, private or telemetry route is excluded from the Worker');
+// A broad `!/*.js` would swallow the Worker-generated Vercel telemetry shim.
+ok(!workerFirstPatterns.includes('!/*.js'), 'the generated /_vercel telemetry shim still reaches the Worker');
 const compatDate = /compatibility_date = "([^"]+)"/.exec(wrangler)?.[1] || '';
 ok(compatDate >= '2025-04-01', `modern nodejs_compat date is pinned (${compatDate})`);
 
@@ -88,6 +103,8 @@ eq(vercelHeaders['Content-Security-Policy'], withoutSupabase(SECURITY_HEADERS['C
   'vercel.json CSP matches the Worker apart from the deployment-specific Supabase origin');
 const cspLine = headersFile.split('\n').map((line) => line.trimStart()).find((line) => line.startsWith('Content-Security-Policy:'));
 ok(Boolean(cspLine), 'CSP is present in _headers');
+ok((headersFile || '').includes('__ZASHM_SUPABASE_ORIGIN__'), '_headers keeps the environment-neutral Supabase placeholder');
+ok(!(headersFile || '').includes('supabase.co'), '_headers has no hard-coded Supabase project');
 ok(!/script-src[^;]*'unsafe-inline'/.test(cspLine || ''), 'script-src has no unsafe-inline');
 ok((cspLine || '').includes("frame-ancestors 'none'"), 'frame-ancestors stays none');
 for (const route of ['/api/*', '/admin', '/admin/*', '/checkout', '/cart', '/wishlist', '/track']) {
@@ -97,8 +114,43 @@ for (const route of ['/api/*', '/admin', '/admin/*', '/checkout', '/cart', '/wis
 ok(headersFile.includes('X-Robots-Tag: noindex, nofollow, noarchive'), 'private routes keep noindex');
 ok(headersFile.includes('Cache-Control: public, max-age=31536000, immutable'), 'assets stay immutable-cached');
 
+section('2b', 'deployment-specific Supabase isolation');
+const STAGING_ORIGIN = 'https://sfenutmgfawuhmvwkmhv.supabase.co';
+eq(configuredSupabaseOrigin({ REACT_APP_SUPABASE_URL: `${STAGING_ORIGIN}/` }), STAGING_ORIGIN,
+  'a configured Supabase URL resolves to its exact origin');
+eq(configuredSupabaseOrigin({ SUPABASE_URL: 'https://user:pass@evil.example/' }), '',
+  'a URL with credentials is rejected instead of becoming a CSP source');
+eq(configuredSupabaseOrigin({}), '', 'missing Supabase config resolves to no origin');
+const stagingCsp = contentSecurityPolicy({ REACT_APP_SUPABASE_URL: STAGING_ORIGIN });
+ok(stagingCsp.includes(`connect-src 'self' ${STAGING_ORIGIN} `), 'Staging Worker CSP allows the Staging Supabase origin');
+ok(!stagingCsp.includes('ptegprcbtfylqhbnbkih'), 'Staging Worker CSP never allows the Production Supabase origin');
+eq(contentSecurityPolicy({}), CSP, 'missing Worker config fails closed to the Supabase-free baseline');
+ok(!CSP.includes('supabase.co'), 'the shared Worker CSP baseline contains no Supabase host');
+// Build-time and request-time resolvers must privilege the same variable, or a
+// static asset and a Worker response could allow different Supabase projects.
+eq(configuredSupabaseOrigin({
+  VITE_SUPABASE_URL: `${STAGING_ORIGIN}/`,
+  REACT_APP_SUPABASE_URL: 'https://react-dummy.supabase.co/',
+}), STAGING_ORIGIN, 'VITE_SUPABASE_URL wins when two project URLs are configured');
+const viteSource = await read('vite.config.js');
+ok(/const supabaseUrl = env\.VITE_SUPABASE_URL \|\| env\.REACT_APP_SUPABASE_URL \|\| env\.SUPABASE_URL/.test(viteSource),
+  'the build uses the same Supabase env precedence as the Worker');
+// Header helpers without an explicit env stay at the Supabase-free baseline
+// even when the shell happens to export a Supabase URL (e.g. during a build).
+const ambient = process.env.REACT_APP_SUPABASE_URL;
+process.env.REACT_APP_SUPABASE_URL = STAGING_ORIGIN;
+try {
+  eq(applySecurityHeaders(new Response('ok'), '/admin', new URL('https://zashm.example/admin')).headers.get('Content-Security-Policy'),
+    CSP, 'header helpers ignore ambient process.env when no env is passed');
+} finally {
+  if (ambient === undefined) delete process.env.REACT_APP_SUPABASE_URL;
+  else process.env.REACT_APP_SUPABASE_URL = ambient;
+}
+
 section(3, 'api route coverage');
 const workerSource = await read('worker.mjs');
+ok(!workerSource.includes('ptegprcbtfylqhbnbkih'), 'worker.mjs has no hard-coded Production Supabase ref');
+ok(!wrangler.includes('supabase.co'), 'wrangler.toml pins no Supabase host');
 for (const file of [
   'api/orders.js',
   'api/auth.js',

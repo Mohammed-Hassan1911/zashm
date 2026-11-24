@@ -20,7 +20,7 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Cross-Origin-Opener-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com https://va.vercel-scripts.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' https://ptegprcbtfylqhbnbkih.supabase.co https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://vitals.vercel-insights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://www.googletagmanager.com https://va.vercel-scripts.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; font-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' __ZASHM_SUPABASE_ORIGIN__ https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://vitals.vercel-insights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
 
 /api/*
   X-Robots-Tag: noindex, nofollow, noarchive

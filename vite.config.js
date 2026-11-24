@@ -1,5 +1,20 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const SUPABASE_ORIGIN_PLACEHOLDER = '__ZASHM_SUPABASE_ORIGIN__';
+
+function supabaseOriginFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'https:' && !parsed.username && !parsed.password &&
+        parsed.pathname === '/' && !parsed.search && !parsed.hash) return parsed.origin;
+  } catch {
+    /* invalid configuration is treated as no origin, never a Production fallback */
+  }
+  return '';
+}
 
 // Warm the TLS connection to Supabase before the first catalogue/image request.
 // The product image is the LCP element on /product/:id and the products query is
@@ -16,6 +31,25 @@ function supabasePreconnect(url) {
       if (!origin) return html;
       const tag = `<link rel="preconnect" href="${origin}" crossorigin/>`;
       return html.replace('</head>', `  ${tag}\n</head>`);
+    },
+  };
+}
+
+// `public/_headers` is an environment-neutral template. Fill its Supabase
+// placeholder from the exact URL used for this build so the static CSP can
+// never grant an unintended project (for example Production) to Staging assets.
+function supabaseHeadersOrigin(origin) {
+  return {
+    name: 'zashm-supabase-headers',
+    apply: 'build',
+    closeBundle() {
+      const file = fileURLToPath(new URL('./build/_headers', import.meta.url));
+      if (!existsSync(file)) return;
+      const text = readFileSync(file, 'utf8');
+      const next = text
+        .split(SUPABASE_ORIGIN_PLACEHOLDER).join(origin)
+        .replace("connect-src 'self'  ", "connect-src 'self' ");
+      if (next !== text) writeFileSync(file, next, 'utf8');
     },
   };
 }
@@ -46,11 +80,18 @@ function siteOriginPlugin(origin) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const supabaseUrl = env.VITE_SUPABASE_URL || env.REACT_APP_SUPABASE_URL || '';
+  // Keep the same precedence as configuredSupabaseOrigin() in worker.mjs so the
+  // build-time _headers CSP and the request-time Worker CSP name one project.
+  const supabaseUrl = env.VITE_SUPABASE_URL || env.REACT_APP_SUPABASE_URL || env.SUPABASE_URL || '';
   const siteOrigin = siteOriginFromEnv(env);
 
   return {
-    plugins: [react(), siteOriginPlugin(siteOrigin), supabasePreconnect(supabaseUrl)],
+    plugins: [
+      react(),
+      siteOriginPlugin(siteOrigin),
+      supabasePreconnect(supabaseUrl),
+      supabaseHeadersOrigin(supabaseOriginFromUrl(supabaseUrl)),
+    ],
     esbuild: {
       loader: 'jsx',
       include: /src\/.*\.js$/,

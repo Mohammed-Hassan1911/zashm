@@ -47,6 +47,28 @@ export const VERCEL_TELEMETRY_SHIMS = new Set([
 // is rejected by readBody() before parsing, so it never needs to be buffered.
 export const MAX_BUFFERED_BODY_BYTES = 8 * 1024 * 1024;
 
+// The Worker must allow exactly the Supabase project configured for this
+// deployment. Staging and a future Production cutover run the same code with
+// different secrets, so the origin is resolved per Worker version and never
+// hard-coded. A missing or invalid URL falls back to the Supabase-free policy:
+// stricter than allowing an unintended project, and never a silent Production.
+export function configuredSupabaseOrigin(env = {}) {
+  // Must match the build-time precedence in vite.config.js exactly: the same
+  // project has to drive the static _headers CSP and the Worker CSP.
+  const raw = env?.VITE_SUPABASE_URL || env?.REACT_APP_SUPABASE_URL || env?.SUPABASE_URL || '';
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== 'https:' || url.username || url.password ||
+        url.pathname !== '/' || url.search || url.hash) return '';
+    return url.origin;
+  } catch {
+    return '';
+  }
+}
+
+// Supabase-free baseline. It matches vercel.json and the committed _headers
+// template; the request-time policy inserts the configured origin only.
 export const CSP = [
   "default-src 'self';",
   "script-src 'self' https://www.googletagmanager.com https://va.vercel-scripts.com;",
@@ -55,7 +77,7 @@ export const CSP = [
   "style-src-elem 'self';",
   "font-src 'self';",
   'img-src \'self\' data: blob: https:;',
-  "connect-src 'self' https://ptegprcbtfylqhbnbkih.supabase.co https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://vitals.vercel-insights.com;",
+  "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://vitals.vercel-insights.com;",
   "object-src 'none';",
   "base-uri 'self';",
   "form-action 'self';",
@@ -63,15 +85,27 @@ export const CSP = [
   'upgrade-insecure-requests',
 ].join(' ');
 
-export const SECURITY_HEADERS = {
+export function contentSecurityPolicy(env = {}) {
+  const origin = configuredSupabaseOrigin(env);
+  if (!origin) return CSP;
+  return CSP.replace("connect-src 'self' ", `connect-src 'self' ${origin} `);
+}
+
+const BASE_SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Content-Security-Policy': CSP,
 };
+
+// Kept for static parity tests; live responses use securityHeaders(env).
+export const SECURITY_HEADERS = { ...BASE_SECURITY_HEADERS, 'Content-Security-Policy': CSP };
+
+export function securityHeaders(env = {}) {
+  return { ...BASE_SECURITY_HEADERS, 'Content-Security-Policy': contentSecurityPolicy(env) };
+}
 
 // Static shells are generated at build time with DEFAULT_BASE baked into their
 // canonical/OG/JSON-LD URLs. Keep them consistent with the sitemap by rewriting
@@ -306,9 +340,9 @@ export function isPrivatePath(path, url) {
   return false;
 }
 
-export function applySecurityHeaders(response, path, url) {
+export function applySecurityHeaders(response, path, url, env = {}) {
   const headers = new Headers(response.headers);
-  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+  for (const [name, value] of Object.entries(securityHeaders(env))) {
     if (!headers.has(name)) headers.set(name, value);
   }
   if (isPrivatePath(path, url)) {
@@ -343,7 +377,7 @@ export async function handleRequest(request, env) {
         'Content-Type': 'application/javascript; charset=utf-8',
         'Cache-Control': 'no-store',
       },
-    }), path, url);
+    }), path, url, env);
     shim.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
     return shim;
   }
@@ -398,7 +432,7 @@ export async function handleRequest(request, env) {
         res.end(JSON.stringify({ error: 'Server error' }));
       }
     }
-    return applySecurityHeaders(finalizeVercelResponse(res), path, url);
+    return applySecurityHeaders(finalizeVercelResponse(res), path, url, env);
   }
 
   if (path.startsWith('/product/')) {
@@ -411,7 +445,7 @@ export async function handleRequest(request, env) {
         const notFound = await buildNotFoundResponse(request, {
           fetchImpl: (input) => env.ASSETS.fetch(new Request(String(input))),
         });
-        return applySecurityHeaders(notFound, path, url);
+        return applySecurityHeaders(notFound, path, url, env);
       }
     }
     // npm run build writes build/product/<id>/index.html with product-specific
@@ -434,7 +468,8 @@ export async function handleRequest(request, env) {
             new Response(prerendered.body, { status: prerendered.status, headers })
           ),
           path,
-          url
+          url,
+          env
         );
       }
     }
@@ -473,7 +508,7 @@ export async function handleRequest(request, env) {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-store',
       },
-    }), path, url);
+    }), path, url, env);
   };
 
   if (SPA_PATHS.has(path) || path.startsWith('/product/')) {
@@ -484,7 +519,7 @@ export async function handleRequest(request, env) {
     } catch {
       return assetError();
     }
-    if (!assetResponse.ok) return applySecurityHeaders(assetResponse, path, url);
+    if (!assetResponse.ok) return applySecurityHeaders(assetResponse, path, url, env);
     const headers = new Headers(assetResponse.headers);
     headers.set('Cache-Control', 'public, max-age=0, must-revalidate');
     return applySecurityHeaders(
@@ -498,7 +533,7 @@ export async function handleRequest(request, env) {
 
   try {
     const assetResponse = await env.ASSETS.fetch(request);
-    return applySecurityHeaders(assetResponse, path, url);
+    return applySecurityHeaders(assetResponse, path, url, env);
   } catch {
     return assetError();
   }

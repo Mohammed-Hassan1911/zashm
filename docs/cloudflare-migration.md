@@ -10,22 +10,30 @@ migration branch in a separate commit; the branch is **not merged** and was
 **not deployed to production**.
 
 Staging Worker: `https://zashm.mohammedhassanmail1.workers.dev`
-Current version: `161d42a0-0224-4a49-9225-a3ac983491a7` (deployed from commit
-`611eafbbf28469178c857f2d2c49159f0591de7a`; Worker tag `611eafb`)
+Current version: `49cfc0f5-aa93-4846-af1a-8c60b6a35f7b` (Worker tag
+`staging-data-isolation-v2`, deployed from the uncommitted tree at HEAD
+`8f73b7a9146115ea83ea1789576014246849a265`). The immediately preceding
+Staging-only version `95ff1385-838b-42f4-8da8-39c7b4271c2f`
+(`staging-data-isolation-v1`) has the same Staging-only bundle and secrets and is
+the safe rollback target. The pristine baseline `c4bd9005-...` is **not** an
+acceptable rollback now: its static assets still contain the Production ref.
 Owner Cloudflare account: `9fe493bc12463ea71e52fd2f040c5171`
 
 ## What changed
 
 - `wrangler.toml` — Worker entrypoint, `build/` static assets, `ASSETS` binding,
   `not_found_handling = "404-page"` (unknown routes stay real 404s),
-  `html_handling = "none"`, `run_worker_first = true`.
+  `html_handling = "none"`, and selective `run_worker_first` patterns: `/*`
+  keeps API/dynamic/private/telemetry routes Worker-first, while negative
+  patterns let immutable CSS/JS/font/image files be served directly by Cloudflare
+  Assets with the unchanged `public/_headers` CSP/cache rules.
 - `worker.mjs` — translates Worker `(Request) => Response` into the existing
   Vercel-style `(req, res)` handlers in `api/`. Adds the shared security headers,
   `noindex` for private routes, SPA rewrites, `/api/errors` rewrite and
   `/sitemap.xml` routing. No API handler was rewritten.
 - `public/_headers` — static-asset parity with `vercel.json` (CSP, HSTS,
   immutable cache, `noindex`).
-- `scripts/test-cloudflare-worker.mjs` — 173 assertions for config parity,
+- `scripts/test-cloudflare-worker.mjs` — 196 assertions for config parity,
   route coverage, adapter behaviour, headers, 404/SPA routing, prerendered
   product shells, `/api/sitemap` manifest parity, sitemap origin, lazy chunk-wise
   bounded body handling, crawler 404 parity, Origin/CSRF gates, Set-Cookie
@@ -116,7 +124,7 @@ and stays fail-closed.
 
 - `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → exit 0; SQL harness **495 passed,
   0 failed** on a real temporary PostgreSQL 17 cluster; all other suites 0
-  failed (Cloudflare worker **173/0**, sitemap **52/0**).
+  failed (Cloudflare worker **196/0**, sitemap **55/0**).
 - `npm run build` → exit 0; `index-L2XyCp3w.js`, byte-identical hash to the live
   Vercel bundle. `wrangler deploy` → version
   `f966967d-0d23-480d-af3a-33f246f62038` after the parity fixes below, then
@@ -133,7 +141,7 @@ and stays fail-closed.
   `ALLOWED_ORIGINS`), and `/shop` now gets its own generated shell;
   (2) an unreadable manifest silently produced a 2-URL sitemap with a 1-hour
   cache — it is now logged and uses the 300 s degraded cache; (3) docs drift.
-  All are covered by the 173 Worker assertions and re-verified live.
+  All are covered by the 196 Worker assertions and re-verified live.
 - Headers (curl): `/`, `/shop`, `/product/:id` → 200 with no `X-Robots-Tag`;
   `/admin`, `/cart`, `/checkout`, `/wishlist`, `/track`, `/track?tk=…`,
   `/api/*` and the telemetry shim → `noindex, nofollow, noarchive`;
@@ -185,6 +193,180 @@ and stays fail-closed.
   row was created or changed. The only persistence was the browser-local bag;
   a fake coupon probe can increment the operational `zshm_rate_limits` counter,
   but no catalog or customer record was touched.
+
+## Workers Free optimization (uncommitted Staging draft)
+
+Baseline commit `8f73b7a` was first deployed unchanged to the Staging Worker as
+`c4bd9005-a19c-4701-973b-453a4d9cc422` (tag `8f73b7a-baseline`, message contains
+the full SHA). Only then was selective routing applied as an **uncommitted**
+draft and deployed as `73eb468a-81d8-44b7-bebf-1e1491edb07a`
+(tag `routing-selective-v2`). No commit, push, DNS, domain, Vercel Production,
+Supabase Production, secret rotation or Cutover was performed.
+
+- Controlled same-origin replay on the exact browser asset graph: home
+  **15 → 2** Worker invocations (document + telemetry shim), shop **18 → 2**,
+  product **19 → 3** (adds `/api/reviews`). That is an **84–89% reduction** in
+  Worker calls per full page view. Dynamic product HTML, canonical/OG, CSP, real
+  404, sitemap, private `noindex`, API method guards and the telemetry no-op all
+  still return 200/404/405 with the same headers.
+- CPU per important route (Staging tail, one controlled request each): document
+  0–1 ms, `/api/sitemap` 2 ms, `/sitemap.xml` 3 ms, `/api/reviews` 21 ms,
+  `/admin`/`/cart` 0 ms, unknown order 1 ms. Worker code was not modified.
+- GET-only load mix (5/15/30 concurrent clients, 25 s each): baseline p95
+  **442/1229/2787 ms** vs optimized **304/1063/2136 ms**; all responses **200**,
+  **0 × 429**, **0 × 5xx**, 0 client errors. Cloudflare GraphQL observed 1310
+  Worker requests / 1.13 s CPU / 1535 subrequests / 0 errors for the baseline
+  window, vs 856 / 0.97 s / 1178 / 0 for the optimized window. GraphQL aggregates
+  undercount the all-static baseline, so the exact request graph above is the
+  primary invocation evidence.
+- Free planning: Workers Free allows **100,000 requests/day**. At 2–3 invocations
+  per full page view the break-even is only **~33k–50k full page views/day**;
+  with a 30% safety margin, plan for **~23k–35k/day**. If the store genuinely
+  expects up to 100,000 full page views/day, Workers Paid will be required even
+  after this optimization; Free only fits a materially smaller store.
+- Staging data separation: the previous Production-backed Staging bundle was
+  replaced. `npm run build` is now run with `REACT_APP_SUPABASE_URL` /
+  `REACT_APP_SUPABASE_ANON_KEY` (and their `VITE_*` equivalents) set to
+  `sfenutmgfawuhmvwkmhv`, `PUBLIC_BASE_URL` set to the `workers.dev` origin and
+  `ALLOWED_ORIGINS` / `SITEMAP_ALLOWED_ORIGINS` set to the same Staging origin.
+  The prerender therefore contains only the two Staging fixtures
+  (`9900000000001`, `9900000000002`) and no Production Storage image URLs. A
+  scan of `build/` finds zero occurrences of the Production project ref; the
+  built `_headers`, bundle, preconnect and product shells all resolve to the
+  Staging ref. No catalog/order/coupon/user row was copied from Production.
+- Environment-specific CSP: `worker.mjs` no longer hard-codes any Supabase host.
+  `configuredSupabaseOrigin()` resolves the exact origin from the deployment's
+  `REACT_APP_SUPABASE_URL` / `SUPABASE_URL` binding and inserts it into
+  `connect-src`; an invalid or missing value yields the Supabase-free baseline
+  rather than a Production fallback. `public/_headers` is an environment-neutral
+  template with `__ZASHM_SUPABASE_ORIGIN__`, replaced at build time by
+  `vite.config.js` from the same URL. Static assets bypassing the Worker and
+  Worker-generated responses therefore describe the same project.
+- Staging Worker secrets (`zashm`, Staging only): `REACT_APP_SUPABASE_URL`,
+  `REACT_APP_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` were replaced with
+  the Staging project values with `wrangler secret put`. The anon key was checked
+  by SHA-256 prefix against the key embedded in the rebuilt bundle before upload;
+  no service-role JWT or literal secret appears in `build/`, the Worker source or
+  any log. `SESSION_SECRET` and the existing notification credentials were left
+  untouched; no Production secret was rotated.
+- Staging Worker vars (non-secret, passed on the deploy command only, not added to
+  `wrangler.toml`): `PUBLIC_BASE_URL`, `SITEMAP_ALLOWED_ORIGINS` and
+  `ALLOWED_ORIGINS` all equal `https://zashm.mohammedhassanmail1.workers.dev`.
+  Without them the sitemap fell back to the old `za-shm.vercel.app` origin and the
+  API rejected the Staging Origin; the v2 deploy fixed both. A future Production
+  Worker must receive its own vars and secrets; none are inherited from Staging.
+- Future Production cutover configuration stays separate: the same code is
+  deployed with Production's URL/anon/service-role bindings supplied in the
+  production Worker environment, and `npm run build` is run with Production's
+  env values. This is a distinct, owner-approved step; no Production ref is
+  baked into the committed source or the Staging bundle.
+
+## Staging data-isolation deploy verification (2026-11-24)
+
+- Pre-deploy guard: `wrangler domains`/zone/route lookups found **zero** custom
+  domains, routes and zones attached to this account, so `zashm` is reachable
+  only on `workers.dev`. Only Worker `zashm` was deployed; Vercel and Supabase
+  Production, DNS, main and paid plans were untouched. No commit or push was made.
+- Deployment: `95ff1385-...` (v1) published the Staging-only build and secrets;
+  `49cfc0f5-...` (v2) added the three Staging-only origin vars. Both are 100%.
+- Published asset scan: every fetchable file under `build/` was downloaded from
+  the live Worker: 0 Production refs, 0 `service_role` JWTs, 0 non-2xx responses.
+  `build/_headers` is a Cloudflare config file and is intentionally not fetchable.
+- Live route/header/metadata probe: 83/0 assertions — all pages and APIs return
+  the expected status, every CSP allows only the Staging Supabase origin,
+  canonical/OG/sitemap use the workers.dev origin, private paths are `noindex`,
+  unknown paths are a real 404, and `STAGE3TEST10` returns `valid:true`.
+- Browser network capture on `/`, `/shop` and a Staging product: the only
+  Supabase request is `GET https://sfenutmgfawuhmvwkmhv.supabase.co/rest/v1/products_public`,
+  zero Production hosts; the shop shows exactly 2 Staging fixtures. A pre-existing
+  `zashm_cart` entry in the test browser profile (created during the earlier
+  Production-backed Staging build) did request one old Production Storage image.
+  After removing that local-only test state and reloading, the cart was empty and
+  the network capture was again 100% Staging/workers.dev. No source change was
+  needed; this is client-side residue, not a shipped bundle reference.
+- Admin sessions through the Worker: 11/11 (anonymous 401, admin/support login,
+  secure HttpOnly/SameSite cookie + CSRF, role deny 403, logout + revocation).
+- COD/idempotency/stock: 20/20 assertions directly against Staging Postgres via
+  the same `atomic_place_order` / `atomic_delete_order` RPCs the API calls. The
+  order inserted at the server price, the replay returned the same order id with
+  no second stock decrement, and `atomic_delete_order` restored stock to 8 and
+  removed the test row. This was deliberately not triggered through the Worker
+  HTTP path because this Worker's pre-existing Telegram destination cannot be
+  verified as a staging-only chat; no test notification was sent anywhere.
+- CPU/invocations: a 23-request replay produced 10 Worker invocations (13 static
+  assets bypassed the Worker). Cloudflare GraphQL over the following 20 minutes
+  recorded 1,523 requests, 2,095 subrequests, 0 errors, CPU P50 1,043 µs,
+  P95 3,306 µs and P99 12,509 µs. Free allows 10 ms CPU **per request**; P95 is
+  well inside it but P99 needs monitoring for `exceededCpu`. Load replay at 5/15/30
+  clients completed with 0 × 429 and 0 × 5xx; p95 532/964/3,147 ms in the clean
+  run (one earlier run had a single transient client-side `fetch failed`).
+- Free remains sufficient for an initial launch at ~23k–35k full page views/day
+  with a 30% margin; ~33k–50k/day is the hard break-even at 2–3 invocations per
+  page view. 100,000 full page views/day requires Workers Paid.
+
+## Owner follow-up verification (2026-11-24)
+
+- **CPU limit check.** GraphQL `workersInvocationsAdaptive` with the `status`
+  dimension over the last 6 hours returned **only `success`**: 6,646 requests,
+  0 errors, no `exceededCpu`, no `exception`/`error`/`canceled` bucket. Filtering
+  the exact 1,523-request window by `status=error`, `exception`, `canceled` and
+  `exceededCpu` returned empty sets in every case, so the count of hard CPU
+  failures (Cloudflare error 1102) is **0 of 1,523**. Cloudflare's GraphQL API
+  exposes CPU only as quantiles (P50/P75/P90/P95/P99), not as a per-invocation
+  count above 10 ms, and `wrangler tail` is sampled to ~8–10 events per session
+  here; an exact "N over 10 ms" figure is therefore not available from this
+  environment. The percentile bounds for that window (P95 3,306 µs, P99
+  12,438 µs) put the number above 10 ms between ~1% and ~5% (≈16–81 requests),
+  with **zero** failed invocations. A wider 90-minute window (8,210 requests)
+  was healthier: P50 706 µs, P75 1,225 µs, P90 1,907 µs, P95 2,615 µs, P99
+  6,623 µs. Controlled replay attributes the meaningful CPU to API routes only
+  (`/api/reviews` ≈2 ms, `/api/sitemap` ≈1 ms, `/sitemap.xml` ≈1 ms; document
+  routes and static assets 0–1 ms). No code change was justified: there is no
+  error to fix, and P95 stayed >3× inside the 10 ms limit.
+- **Full order POST through the deployed Worker** (`verify-http-order.mjs`,
+  26/0). The deployed Staging Worker still has `TELEGRAM_BOT_TOKEN` and
+  `TELEGRAM_CHAT_ID` bound (`wrangler secret list` shows the names only; no value
+  was read). Unsetting them is a Staging secret change plus a deploy, which needs
+  owner approval and was **not** done. Instead the test exercised only the two
+  code paths that deliberately skip notification: (a) success through the
+  documented idempotent-duplicate branch — the order was first written in
+  Staging Postgres with the same idempotency key, then `POST /api/orders` was
+  sent to the live workers.dev origin with deliberately wrong client totals
+  (`1`); (b) fresh 422 refusals. The Worker returned 200 `duplicate:true` with
+  server figures subtotal 200, coupon discount 20, Cairo shipping 65, total 245;
+  stock stayed at 6 and coupon usage at 2. Fresh 422 paths rejected qty 9
+  (stock message) and an invalid coupon. `atomic_delete_order` restored stock to
+  8 and coupon usage to 1 and removed the test row. The Worker tail contained no
+  `telegram`, no `api.telegram.org` and no Production ref; no secret was read or
+  changed and Staging is the only project involved. **Residual:** a brand-new
+  successful order on this Worker would still attempt a Telegram notification
+  while those bindings exist; no such order was placed. If the owner requires the
+  bindings literally removed rather than merely unused, approve a Staging-only
+  secret deletion plus redeploy.
+- **Stale cart from a previous environment.** Reproduced on the currently
+  deployed bundle: a persisted cart line whose product is absent from the
+  Staging catalogue still carried an old Production Storage URL and did issue
+  that request when its lazy image loaded. Fixed locally in `src/store.js`:
+  persisted image URLs are filtered to the current Supabase origin (data/blob/
+  same-origin URLs remain) at load and at save, and a line with no live catalog
+  product now raises a blocking `missing_product` issue with a Remove action.
+  `scripts/test-stale-cart-isolation.mjs` (32/0) covers the guard; a local
+  preview of the rebuilt Staging bundle with the hostile cart showed zero
+  Production/Storage requests, an inline SVG fallback and the blocking message.
+  **This fix is not deployed**: it is part of the uncommitted diff awaiting owner
+  approval. The currently live version still has the old behaviour.
+  A senior review of the diff found one Medium issue — a stale snapshot/cache
+  catalogue could falsely block a valid line — now gated on
+  `productsSource === 'live'` and executed in test section `[4]`. The two
+  Supabase env resolvers (build-time and Worker) now share one precedence, and
+  the CSP helpers default to `{}` so ambient build env cannot skew assertions.
+- **Final local proof for this follow-up.** `ZSHM_REQUIRE_SQL_TESTS=1 npm test`
+  → exit 0, **4,024 passed, 0 failed** (SQL harness actually ran, not skipped);
+  `node scripts/test-cloudflare-worker.mjs` → **196/0** with and without an
+  ambient `REACT_APP_SUPABASE_URL`; `node scripts/test-stale-cart-isolation.mjs`
+  → **32/0**; `npm run build` with the Staging env → exit 0 and **zero**
+  occurrences of the Production project ref in `build/`. `git rev-parse HEAD`
+  is unchanged at `8f73b7a9146115ea83ea1789576014246849a265`.
 
 ## Stage 2 verification (commit `611eafb` only)
 

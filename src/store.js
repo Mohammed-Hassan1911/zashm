@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db, trackEvent } from './lib/security';
-import { fetchPublicProducts } from './lib/supabase'; // قراءة الكتالوج العام فقط
+import { fetchPublicProducts, SUPABASE_URL } from './lib/supabase'; // قراءة الكتالوج العام فقط
 import { api } from './lib/api';
 import { fetchCatalogSnapshot } from './lib/resilience';
 import { pageUrl, resolveRoute, syncLocationToStore } from './lib/routes';
@@ -12,6 +12,42 @@ import { sanitizeSizeRanges } from './lib/fit';
 function getLocalTodayDate() {
   const tzOffset = (new Date()).getTimezoneOffset() * 60000;
   return (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
+}
+
+// A cart survives deploys, so it can contain a product image from a previous
+// Supabase project. Never render or echo back an absolute image URL that is not
+// on the project this bundle was built for. Data/blob/same-origin URLs stay.
+function allowedCartImage(value, origin) {
+  const src = typeof value === 'string' ? value.trim() : '';
+  if (!src) return '';
+  if (/^(data:image\/|blob:)/i.test(src)) return src;
+  // A single leading slash is a same-origin asset; `//host/...` is protocol-
+  // relative and would still hit a foreign origin, so it must be rejected.
+  if (src.startsWith('/') && !src.startsWith('//')) return src;
+  if (!origin) return '';
+  try {
+    return new URL(src).origin === origin ? src : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function sanitizeCartImages(cart) {
+  let origin = '';
+  try { origin = new URL(SUPABASE_URL).origin; } catch (e) { origin = ''; }
+  return (Array.isArray(cart) ? cart : []).map((item) => {
+    const product = item && item.product;
+    if (!product) return item;
+    const images = Array.isArray(product.images)
+      ? product.images.map((src) => allowedCartImage(src, origin)).filter(Boolean)
+      : [];
+    const image = allowedCartImage(product.image || item.image, origin);
+    return {
+      ...item,
+      image: allowedCartImage(item.image, origin),
+      product: { ...product, images, image },
+    };
+  });
 }
 
 // Safe array reader for persisted state. Malformed or blocked (opaque to JS)
@@ -419,10 +455,10 @@ export const useStore = create((set, get) => ({
 
   // ─── CART ──────────────────────────────────────────────────────────────────
   // Persisted in localStorage so the bag survives tab close / reload.
-  cart: safeParseArray('zashm_cart', typeof localStorage !== 'undefined' ? localStorage : null),
+  cart: sanitizeCartImages(safeParseArray('zashm_cart', typeof localStorage !== 'undefined' ? localStorage : null)),
   _saveCart: (cart) => {
     try {
-      const safeCart = (cart || []).filter(item => item && item.product && item.key);
+      const safeCart = sanitizeCartImages((cart || []).filter(item => item && item.product && item.key));
       localStorage.setItem('zashm_cart', JSON.stringify(safeCart));
       return safeCart;
     } catch(e) {
@@ -531,17 +567,36 @@ export const useStore = create((set, get) => ({
   // reaches the server: an undeclared variation, an out-of-stock variation or an
   // invalid variant configuration. blocking: true means the order cannot succeed,
   // so the line is marked and offers Remove — the bag is never edited silently.
-  // Lines whose product is missing from the catalogue are skipped: when the list
-  // has not loaded (or failed), the server stays the only authority.
+  // Only a LIVE catalogue is complete enough to declare a line unavailable.
+  // On a snapshot/cache fallback (or before load) the server stays the only
+  // authority, so a legitimately orderable product is never falsely blocked.
   cartLineIssues: () => {
     const cart = get().cart || [];
     const products = get().products || [];
     if (cart.length === 0 || products.length === 0) return [];
+    const catalogueIsLive = get().productsSource === 'live';
 
     const issues = [];
     for (const item of cart) {
       const live = products.find(p => p.id == item.product?.id);
-      if (!live) continue;
+      if (!live) {
+        if (!catalogueIsLive) continue;
+        // A leftover line from another catalogue must never reach checkout.
+        // Keep it visible so the shopper can remove it, but block the order.
+        issues.push({
+          key: item.key,
+          productId: item.product?.id ?? item.productId ?? 0,
+          name: item.product?.name || 'this item',
+          size: item.size || '',
+          color: item.color || '',
+          requested: Number(item.qty) || 0,
+          available: 0,
+          blocking: true,
+          reason: 'missing_product',
+          message: 'This piece is no longer available in the collection. Please remove it from your bag.',
+        });
+        continue;
+      }
 
       const size = item.size || '';
       const color = item.color || '';
