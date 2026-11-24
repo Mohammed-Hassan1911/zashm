@@ -106,3 +106,40 @@ Production count or reserved-stock value was found.
   decision to make Staging a byte-for-byte schema mirror.
 - No Production schema, data, or configuration was modified to obtain this
   result. Cutover remains approval-gated.
+
+## Staging parity applied (24 November 2026)
+
+Owner-approved, **Staging only**. `supabase/staging_schema_parity.sql` was syntax
+and idempotency tested on a throwaway local PostgreSQL 17 cluster, then run once
+against `sfenutmgfawuhmvwkmhv`. The local Supabase link was restored to
+`ptegprcbtfylqhbnbkih` immediately afterwards. Production was not connected for
+write and was not changed.
+
+Applied:
+
+- `ALTER TABLE public.products ENABLE ROW LEVEL SECURITY` (still zero policies,
+  so no browser-role exposure of the base table);
+- `products."createdAt" timestamptz DEFAULT now()` added to match Production;
+- `coupons_code_key UNIQUE (code)` added after proving there were no duplicate
+  codes;
+- `products_public` rebuilt with Production's exact column order and
+  `security_barrier=true, security_invoker=false`. Supabase default privileges
+  initially granted `anon`/`authenticated` ALL on the new view, so the migration
+  explicitly revokes every privilege except `SELECT`.
+
+A fresh read-only snapshot of both projects now matches on functions (20),
+relations/RLS (9), columns (32), `products_public` definition/options, policies,
+grants (14), and all stock/order constraints. Staging counts are unchanged:
+3 products / 1 coupon / 2 users / 2 orders.
+
+**Newly discovered residual differences (not changed — outside the approved
+four-item scope):**
+
+| Area | Production | Staging |
+|---|---|---|
+| `coupons_pkey` | `PRIMARY KEY (id)` | `PRIMARY KEY (code)` (the new `UNIQUE (code)` is therefore redundant here) |
+| Coupon column defaults | `type='percentage'`, `value=0`, `active=true`, `createdAt=now()`, etc. | mostly no defaults |
+
+These require a separate owner decision because changing a primary key is more
+invasive than the four agreed parity items. Neither affects the verified
+Production invariants or the Preview/Staging journeys.
