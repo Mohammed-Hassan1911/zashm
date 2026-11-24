@@ -132,14 +132,23 @@ relations/RLS (9), columns (32), `products_public` definition/options, policies,
 grants (14), and all stock/order constraints. Staging counts are unchanged:
 3 products / 1 coupon / 2 users / 2 orders.
 
-**Newly discovered residual differences (not changed — outside the approved
-four-item scope):**
+**Coupon parity (owner-approved follow-up, 24 November 2026):** the two
+differences above were closed on **Staging only** by
+`supabase/staging_coupons_parity.sql`: `coupons_pkey` is now `PRIMARY KEY (id)`,
+`UNIQUE (code)` is retained, `createdAt timestamptz DEFAULT now()` and
+`description text` were added, and the defaults for `type`, `value`, `active`
+and `usageLimit` now match Production. The migration performs **no DML**; the
+existing test coupon `9900001 / STAGE3TEST10` and its order/stock fixtures were
+verified unchanged before and after. Before execution, the target ref was
+confirmed outside SQL as `sfenutmgfawuhmvwkmhv` (`zashm-staging-20261124`), and a
+restorable `pg_dump` of Staging's `public` schema (schema + data) was captured.
+The file was tested on a throwaway PostgreSQL 17 cluster: first run, safe refusal
+on rerun, rollback, forward-after-rollback, and a NULL-id guard.
 
-| Area | Production | Staging |
-|---|---|---|
-| `coupons_pkey` | `PRIMARY KEY (id)` | `PRIMARY KEY (code)` (the new `UNIQUE (code)` is therefore redundant here) |
-| Coupon column defaults | `type='percentage'`, `value=0`, `active=true`, `createdAt=now()`, etc. | mostly no defaults |
+The read-only snapshot now also compares every coupon column's name, type,
+nullability and default, so the comparison is complete rather than limited to a
+curated column list.
 
-These require a separate owner decision because changing a primary key is more
-invasive than the four agreed parity items. Neither affects the verified
-Production invariants or the Preview/Staging journeys.
+**Residual, non-blocking:** Staging's physical coupon column order still differs
+from Production's (the new columns were appended). Reordering would rewrite the
+table and was deliberately not done; the snapshot compares columns by name.

@@ -149,6 +149,15 @@ WHERE connamespace = 'public'::regnamespace
   AND conrelid IN ('public.orders'::regclass, 'public.coupons'::regclass, 'public.products'::regclass)
 ORDER BY 1, 2;
 
+\echo '== coupon columns and defaults =='
+SELECT column_name,
+       data_type,
+       is_nullable,
+       COALESCE(column_default, '<none>') AS column_default
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'coupons'
+ORDER BY column_name;
+
 \echo '== data-shape warnings (read-only) =='
 SELECT
   (SELECT COUNT(*) FROM public.products WHERE COALESCE("reservedStock", 0) <> 0) AS nonzero_reserved_stock,

@@ -50,6 +50,8 @@ console.log('\n[2] the snapshot covers the required schema surface');
   ok(/aclexplode/.test(sql), 'relation grants are captured');
   ok(/nonzero_reserved_stock/.test(sql) && /negative_reserved_stock/.test(sql),
     'reservedStock invariants are checked without modification');
+  ok(/coupon columns and defaults/.test(sql) && /COALESCE\(column_default/.test(sql),
+    'every coupon column and default is compared');
 }
 
 console.log('\n[3] the comparison procedure is explicit');
