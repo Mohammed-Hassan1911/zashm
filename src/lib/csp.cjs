@@ -5,8 +5,13 @@
 // Production keeps its own origin, Preview gets staging, and no code path can
 // fall back to a hard-coded Production host.
 //
+// This is CommonJS because Vercel compiles root `middleware.ts` to CommonJS;
+// requiring an `.mjs` module there fails with ERR_REQUIRE_ESM at runtime.
+//
 // Cloudflare Staging (`worker.mjs` / `public/_headers`) is deliberately
 // untouched: it uses its own static header set and is not part of this fix.
+
+'use strict';
 
 const DIRECTIVES = [
   "default-src 'self'",
@@ -15,7 +20,7 @@ const DIRECTIVES = [
   "style-src 'self' 'unsafe-inline'",
   "style-src-elem 'self'",
   "font-src 'self'",
-  'img-src \'self\' data: blob: https:',
+  "img-src 'self' data: blob: https:",
   'connect-src', // marker: the origin list is inserted here
   "object-src 'none'",
   "base-uri 'self'",
@@ -33,7 +38,7 @@ const CONNECT_SUFFIX = [
 ];
 
 /** Only a valid https Supabase project origin is accepted; never a wildcard. */
-export function configuredSupabaseOrigin(env = process.env) {
+function configuredSupabaseOrigin(env = process.env) {
   for (const name of ['VITE_SUPABASE_URL', 'REACT_APP_SUPABASE_URL', 'SUPABASE_URL']) {
     const raw = env && env[name];
     if (typeof raw !== 'string' || !raw.trim()) continue;
@@ -50,7 +55,7 @@ export function configuredSupabaseOrigin(env = process.env) {
 }
 
 /** Return the request-time CSP, or null when no safe Supabase origin exists. */
-export function contentSecurityPolicy(env = process.env) {
+function contentSecurityPolicy(env = process.env) {
   const origin = configuredSupabaseOrigin(env);
   if (!origin) return null;
   const connectSrc = ["'self'", origin, ...CONNECT_SUFFIX].join(' ');
@@ -58,3 +63,5 @@ export function contentSecurityPolicy(env = process.env) {
     .map((directive) => (directive === 'connect-src' ? `connect-src ${connectSrc};` : `${directive};`))
     .join(' ');
 }
+
+module.exports = { configuredSupabaseOrigin, contentSecurityPolicy };

@@ -11,7 +11,7 @@ import {
   isCrawler,
   productIdFromPath,
 } from './src/lib/product-exists.cjs';
-import { contentSecurityPolicy } from './src/lib/csp.mjs';
+import { contentSecurityPolicy } from './src/lib/csp.cjs';
 
 // `next()` from `@vercel/functions` is the documented continuation response;
 // building its wire format here keeps a transitive dependency out of the app.

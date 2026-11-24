@@ -473,7 +473,7 @@ console.log('\n[7] per-deployment Preview isolation');
   ok(!index.includes('za-shm.vercel.app'), 'committed shell has no hard-coded canonical origin');
   ok(index.includes('PLACEHOLDER_SITE_ORIGIN'), 'committed shell carries a build-time origin placeholder');
 
-  const { contentSecurityPolicy, configuredSupabaseOrigin } = await import('../src/lib/csp.mjs');
+  const { contentSecurityPolicy, configuredSupabaseOrigin } = await import('../src/lib/csp.cjs');
   const staging = 'https://sfenutmgfawuhmvwkmhv.supabase.co';
   const preview = contentSecurityPolicy({ VITE_SUPABASE_URL: staging });
   ok(preview && preview.includes(`connect-src 'self' ${staging}`), 'Preview CSP allows only its configured staging Supabase');

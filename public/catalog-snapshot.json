@@ -1,57 +1,8 @@
 {
-  "generatedAt": "2026-11-24T04:26:43.208Z",
-  "count": 2,
+  "generatedAt": "2026-11-10T00:29:30.020Z",
+  "count": 0,
   "excludedIds": [
     "1794232720755261"
   ],
-  "products": [
-    {
-      "id": 9900000000001,
-      "name": "STAGE3 Test Tee",
-      "category": "Test",
-      "price": 100,
-      "salePrice": null,
-      "description": "Isolated staging fixture",
-      "stock": 8,
-      "variantStock": {},
-      "sku": "ST3-001",
-      "label": "TEST",
-      "colors": [],
-      "sizes": [],
-      "images": [],
-      "image": null,
-      "sizeGuide": {},
-      "sizeRanges": {},
-      "rating": 0,
-      "reviews": 0
-    },
-    {
-      "id": 9900000000002,
-      "name": "STAGE3 Variant Hoodie",
-      "category": "Test",
-      "price": 250,
-      "salePrice": null,
-      "description": "Isolated staging fixture",
-      "stock": 5,
-      "variantStock": {
-        "L-Black": 1,
-        "M-Black": 4
-      },
-      "sku": "ST3-002",
-      "label": "TEST",
-      "colors": [
-        "Black"
-      ],
-      "sizes": [
-        "M",
-        "L"
-      ],
-      "images": [],
-      "image": null,
-      "sizeGuide": {},
-      "sizeRanges": {},
-      "rating": 0,
-      "reviews": 0
-    }
-  ]
+  "products": []
 }
