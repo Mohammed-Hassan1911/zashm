@@ -213,7 +213,9 @@ Do not re-add the old Vercel Origin without an owner decision.
 An owner-approved Cloudflare Images image-proxy release was deployed on
 2026-11-25, finally as Worker version
 `698ec41c-3698-4db8-9793-911eeab4d906`, deployment
-`11086225-df23-4546-8e9d-bee810de3e3d` (100%). It adds same-origin
+`11086225-df23-4546-8e9d-bee810de3e3d` (100%). It was later committed and
+pushed as `1257cc1ffcf89210e6d3713c2fdef0fbcf66dc61` on
+`origin/cloudflare-migration`, matching the deployed Worker. It adds same-origin
 `/img/v1/w160|w480|w1200/<base64url key>` URLs; the Worker accepts only GET/HEAD,
 restricts keys to `products/`, rejects traversal/query/invalid base64, and builds
 the Supabase origin solely from its configured env value. No arbitrary proxy

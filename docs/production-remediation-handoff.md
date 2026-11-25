@@ -1052,13 +1052,15 @@ secret or Telegram token in the 36-file artifact.
 
 ### 13.19 Cloudflare Images egress proxy (2026-11-25, owner-approved)
 
-- Deployed an uncommitted working-tree change directly to Worker `zashm`, finally
-  as version `698ec41c-3698-4db8-9793-911eeab4d906`, deployment
+- Deployed a working-tree change directly to Worker `zashm`, finally as version
+  `698ec41c-3698-4db8-9793-911eeab4d906`, deployment
   `11086225-df23-4546-8e9d-bee810de3e3d`, 100%, created
-  `2026-11-25T03:15:59.784239Z`. No push, Vercel alias/deployment, DNS, custom
-  domain, Supabase setting/metadata, secret or product/order/coupon/data write
-  was made. The final deployment command included the tag
-  `image-proxy-qvalue-20261125`; the earlier image-proxy version
+  `2026-11-25T03:15:59.784239Z`. After deployment, the owner approved committing
+  and pushing it as `1257cc1ffcf89210e6d3713c2fdef0fbcf66dc61` on
+  `origin/cloudflare-migration`; the deployed Worker matches that commit. No
+  Vercel alias/deployment, DNS, custom domain, Supabase setting/metadata, secret
+  or product/order/coupon/data write was made. The final deployment command
+  included the tag `image-proxy-qvalue-20261125`; the earlier image-proxy version
   `ad093362-6c7b-41b8-9e40-b6102b25fb00` / deployment
   `96a1be4f-ff2c-4f04-b763-557ebe70185a` is retained as an intermediate rollback
   target.
@@ -1094,5 +1096,5 @@ secret or Telegram token in the 36-file artifact.
   `8968cc7e-dd47-4f6d-bf38-98aed61aef9b`, or the retained hardened version
   `2d53453a-689b-441a-9e9e-5289c8988cd6` /
   `fc618b23-3244-4d8f-8e70-46ce4b2234ff`. No database, Vercel, DNS or secret
-  rollback is required. The code remains uncommitted; do not claim a git revert
-  is available until the owner approves a commit.
+  rollback is required. Git-local rollback is
+  `git revert --no-edit 1257cc1ffcf89210e6d3713c2fdef0fbcf66dc61`.

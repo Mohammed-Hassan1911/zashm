@@ -866,8 +866,10 @@ change was made**.
 
 ## Cloudflare Images image-proxy release (2026-11-25, owner-approved)
 
-Owner approval covered implementing and deploying the image proxy. The change is
-still **uncommitted in the working tree**; no push, Vercel alias/deployment, DNS,
+Owner approval covered implementing, deploying, committing and pushing the image
+proxy. The deployed Worker matches commit
+`1257cc1ffcf89210e6d3713c2fdef0fbcf66dc61` on `origin/cloudflare-migration`;
+the commit/push happened after deployment. No Vercel alias/deployment, DNS,
 custom domain, Supabase setting/metadata, secret or product/order/coupon/data
 write was made. The original photos remain in Supabase Storage.
 
@@ -923,7 +925,9 @@ write was made. The original photos remain in Supabase Storage.
   `8968cc7e-dd47-4f6d-bf38-98aed61aef9b`, or the retained hardened version
   `2d53453a-689b-441a-9e9e-5289c8988cd6` /
   `fc618b23-3244-4d8f-8e70-46ce4b2234ff`. No database rollback is needed.
-  Supabase object `cache-control` metadata was deliberately not changed.
+  Git-local rollback is
+  `git revert --no-edit 1257cc1ffcf89210e6d3713c2fdef0fbcf66dc61`. Supabase
+  object `cache-control` metadata was deliberately not changed.
 
 ## Rollback
 
