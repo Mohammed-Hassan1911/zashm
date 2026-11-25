@@ -968,21 +968,21 @@ try {
         && /\.product-page-label \.label-badge::before,\s*\.product-card-labels-above \.label-badge::before \{/.test(css),
         'the card and product page labels share one pill shape and lit stud');
       assert.ok(/\.product-page-label \.label-badge,\s*\.product-card-labels-above \.label-badge \{[^}]*padding:\s*6px 13px/.test(css)
-        && /\.product-card-labels-above \.label-badge \{[^}]*font-size:\s*9px/.test(css)
-        && /\.product-card-labels-above \.label-badge \{[^}]*padding:\s*5px 11px/.test(css)
+        && /\.product-card-labels-above \.label-badge \{[^}]*font-size:\s*9\.5px/.test(css)
+        && /\.product-card-labels-above \.label-badge \{[^}]*padding:\s*6px 12px/.test(css)
         && /\.product-card-labels-above \.label-badge::before \{[^}]*width:\s*4px/.test(css),
         'the card badge keeps the shared pill but is a shade smaller than the product-page badge');
       assert.ok(/\.product-card-labels-above \{[^}]*position: static[^}]*margin:\s*0/.test(css),
         'the card label stays outside the photo, flush with its top edge');
       const phoneLabel = (css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [])
-        .find((block) => /\.product-card-labels-above \.label-badge \{\s*font-size:\s*8px/.test(block)) || '';
-      assert.ok(/\.product-card-labels-above \.label-badge \{\s*font-size:\s*8px;[\s\S]*?letter-spacing:\s*0\.2px;[\s\S]*?padding:\s*2px 4px;/.test(phoneLabel) &&
+        .find((block) => /\.product-card-labels-above \.label-badge \{\s*font-size:\s*9px/.test(block)) || '';
+      assert.ok(/\.product-card-labels-above \.label-badge \{\s*font-size:\s*9px;[\s\S]*?letter-spacing:\s*0\.3px;[\s\S]*?padding:\s*3px 6px;/.test(phoneLabel) &&
         /\.product-card-labels-above \.label-badge::before \{\s*width:\s*3px/.test(phoneLabel),
       'phones shrink the card badge with the two-up card so it stays a left-edge tag, not a centred title');
       const narrowLabel = (css.match(/@media \(max-width: 360px\) \{[\s\S]*?\n\}/g) || [])
         .find((block) => /\.product-card-labels-above \.label-badge/.test(block)) || '';
-      assert.ok(/\.product-card-labels-above \{\s*align-items:\s*flex-end;\s*min-height:\s*19px;/.test(phoneLabel)
-        && /\.product-card-labels-above \{\s*min-height:\s*17px;/.test(narrowLabel),
+      assert.ok(/\.product-card-labels-above \{\s*align-items:\s*flex-end;\s*min-height:\s*21px;/.test(phoneLabel)
+        && /\.product-card-labels-above \{\s*min-height:\s*19px;/.test(narrowLabel),
       'the phone frame hugs the badge exactly, so no empty border strip sits above it');
       assert.ok(/\.product-card-labels \{[^}]*justify-content:\s*flex-start/.test(css),
         'the badge row never centres the label on small cards');

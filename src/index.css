@@ -651,7 +651,7 @@ select option { background: var(--bg3); }
    boxing an empty strip above it. */
 .product-card-labels-above {
   position: static;
-  min-height: 26px;
+  min-height: 28px;
   margin: 0;
   overflow: hidden;
 }
@@ -803,9 +803,9 @@ select option { background: var(--bg3); }
 /* The card keeps the same pill and stud as the product page, just a shade
    smaller so the photo still leads. */
 .product-card-labels-above .label-badge {
-  font-size: 9px;
-  letter-spacing: 1px;
-  padding: 5px 11px;
+  font-size: 9.5px;
+  letter-spacing: 1.1px;
+  padding: 6px 12px;
 }
 .product-card-labels-above .label-badge::before {
   width: 4px;
@@ -819,12 +819,12 @@ select option { background: var(--bg3); }
 @media (max-width: 768px) {
   .product-card-labels-above {
     align-items: flex-end;
-    min-height: 19px;
+    min-height: 21px;
   }
   .product-card-labels-above .label-badge {
-    font-size: 8px;
-    letter-spacing: 0.2px;
-    padding: 2px 4px;
+    font-size: 9px;
+    letter-spacing: 0.3px;
+    padding: 3px 6px;
   }
   .product-card-labels-above .label-badge::before {
     width: 3px;
@@ -833,12 +833,12 @@ select option { background: var(--bg3); }
 }
 @media (max-width: 360px) {
   .product-card-labels-above {
-    min-height: 17px;
+    min-height: 19px;
   }
   .product-card-labels-above .label-badge {
-    font-size: 7.5px;
+    font-size: 8px;
     letter-spacing: 0;
-    padding: 1.5px 3px;
+    padding: 2px 4px;
   }
 }
 
