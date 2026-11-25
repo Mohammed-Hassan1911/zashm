@@ -155,6 +155,52 @@ palette (§13.16); its Production build was rebaked with
 `ZASHM_STOREFRONT_NOINDEX=1` so the temporary noindex directive stays in both the
 HTML and the response headers.
 
+Addendum (2026-11-25) — records the redirect change and the locally implemented
+`ALLOWED_ORIGINS` hardening; the dated §0 baseline above remains as verified on
+2026-11-20 and was not re-attested here.
+
+On 2026-11-25 the owner approved deleting only the unused `zashm-stage3` Worker
+and then a two-attempt Vercel Production cutover to Cloudflare (final deployment
+`dpl_9DfBJfoD3hWqFpukeCGEL9R6BsnQ`). `za-shm.vercel.app` now 307-redirects to
+`https://zashm.za-shm.workers.dev`, preserving path and query; the tightened
+script reported 21 passed / 0 failed (the earlier 35 included 16 no-op SSO
+skips). Previews remain behind Vercel SSO, the two
+other production aliases remain on the preserved rollback deployment
+`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`, and `OPTIONS`/`POST` from the old Vercel
+Origin are still fail-closed. No CORS allow-list, cookie flag, RLS policy,
+DNS record, secret or SSO setting was relaxed. Session/CSRF cookies are
+host-only and cart/wishlist are origin-scoped, so existing admin sessions and
+Vercel bags do not carry over; signed tracking links do. See
+`docs/production-remediation-handoff.md` §13.17 for the full proof and rollback.
+
+`ALLOWED_ORIGINS` hardening (implemented locally on 2026-11-25, not yet
+deployed): the earlier residual risk in this addendum has been closed in the
+working tree. `src/lib/production-env.mjs` now requires an explicit HTTPS
+allow-list when `ZASHM_ENVIRONMENT=production`; missing, empty, placeholder,
+wildcard, path/query/hash, credentialed, non-default-port, trailing-dot,
+retired Vercel, loopback (including 127/8 and mapped IPv6), Staging and
+unapproved `workers.dev` entries fail closed. The canonical Cloudflare
+`workers.dev` origin is accepted only with the explicit opt-in flag, and
+`PUBLIC_BASE_URL` must be inside the list. `api/_lib.js` applies the same
+Production-only validation as a second layer: an unsafe or absent binding
+grants no CORS Origin and rejects unsafe methods; Development, Testing and
+Staging keep their historical fallback. The current Cloudflare Origin
+`https://zashm.za-shm.workers.dev` still passes; the retired Vercel and
+localhost Origins are denied, including the bypass spellings found in review.
+
+Local verification only — these results prove the local tree, not the deployed
+Worker: focused suite `node scripts/test-allowed-origins.mjs` → 119 passed /
+0 failed; `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 38 suites / 4238 assertions,
+all 0 failed, with the real temporary PostgreSQL 17 suite actually running
+(495 passed / 0 failed); `npm run build` passed;
+`node scripts/test-vercel-cloudflare-redirect.mjs --expect-redirect` → 21 passed
+/ 0 failed; `git diff --check` clean. `wrangler.production.toml`, Vercel
+aliases, DNS, secrets, Supabase and SSO were not changed, and no commit, push,
+deployment or rollback was made. Until this change is separately approved and
+deployed, Production still runs the previously deployed bundle and the earlier
+residual risk remains live there. Do not re-add the old Vercel Origin without an
+owner decision.
+
 Until real products are added, the catalogue is intentionally empty and the
 store is **not** ready for sale.
 

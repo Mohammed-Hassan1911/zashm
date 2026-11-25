@@ -1,19 +1,25 @@
 # Cloudflare Workers migration
 
 Status: **temporary production launch active on Cloudflare Workers**. Vercel
-remains the untouched rollback target (`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`,
-alias `za-shm.vercel.app`). No Supabase catalog/customer data, grants, RLS,
-DNS or net Vercel settings were changed. A fake coupon probe may increment the
-operational `zshm_rate_limits` counter.
-The base migration is committed as `4c0e2ef`/`25bb149` on `cloudflare-migration`
-and pushed to `origin`. The later parity/review fixes are committed on this same
-migration branch in a separate commit; the branch is **not merged**.
+is retained only as the public 307 bridge and the rollback target: the public
+alias `za-shm.vercel.app` now points to the approved redirect deployment
+`dpl_9DfBJfoD3hWqFpukeCGEL9R6BsnQ`, while the original deployment
+`dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and the two SSO-gated production aliases
+are preserved as the rollback state (see §Vercel → Cloudflare 307 redirect and
+§Rollback). The base migration changed no Vercel settings; the separately
+approved cutover is recorded below. No Supabase catalog/customer data, grants,
+RLS or DNS settings were changed. A fake coupon probe may increment the
+operational `zshm_rate_limits` counter. The base migration is committed as
+`4c0e2ef`/`25bb149` on `cloudflare-migration` and pushed to `origin`. The later
+parity/review fixes are committed on this same migration branch in a separate
+commit; the branch is **not merged**.
 
 Production Worker: `https://zashm.za-shm.workers.dev`
 Staging Worker: `https://zashm-staging.za-shm.workers.dev`
-Retained, untouched legacy Worker: `https://zashm-stage3.za-shm.workers.dev`
-All three URLs follow the account subdomain change documented in Phase 5; the
-former `*.mohammedhassanmail1.workers.dev` URLs are retired.
+Legacy Worker `https://zashm-stage3.za-shm.workers.dev`: deleted 2026-11-25 with
+owner approval (see §Stage 3 cleanup). The original three URLs followed the
+account subdomain change documented in Phase 5; the former
+`*.mohammedhassanmail1.workers.dev` URLs are retired.
 Owner Cloudflare account: `9fe493bc12463ea71e52fd2f040c5171`
 
 ## What changed
@@ -741,9 +747,92 @@ available.
   Production 14, Staging 34 and legacy `zashm-stage3` 11; the Vercel rollback
   deployment and its alias are untouched.
 
+## Stage 3 cleanup (2026-11-25)
+
+The owner approved deleting only the legacy Worker `zashm-stage3`. Before the
+deletion its 10 retained deployments were captured to
+`docs/evidence/zashm-stage3-deployments-before-delete.json` (author emails
+redacted); the latest was deployment
+`36e4313e-6a69-4f17-9f13-bf07f48a2d1d` / version
+`417af14c-55c3-4a63-85c1-2b1b3d574dd6` at `2026-11-24T03:10:17.619745Z`, with
+`Phase 3 rollback drill` at `83d7e36f-e6a8-4e6f-b36d-703912f3d0e7`.
+
+`npx wrangler delete zashm-stage3 --force` succeeded. Post-delete checks:
+`wrangler deployments list` reports “This Worker does not exist on your
+account” and `https://zashm-stage3.za-shm.workers.dev/` returns 404. Production
+`zashm` and Staging `zashm-staging` still return 200 with the baked
+`noindex, nofollow, noarchive` header. No config, Vercel deployment, DNS,
+Supabase setting or customer/order data was changed. The original `zashm-stage3`
+Worker cannot be restored from this environment; recreating it would be a new
+deployment from scratch and was not requested.
+
+The Vercel → Cloudflare 307 cutover was approved and executed **separately** and
+is recorded in the next section. Nothing in the stage3 cleanup changed Vercel.
+
+## Vercel → Cloudflare 307 redirect (2026-11-25, owner-approved)
+
+- Inventory: one Vercel team (`zashm`), **0 custom domains**, three production
+  aliases on the original rollback deployment
+  `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`: `za-shm.vercel.app` (public),
+  `zashm-zashm.vercel.app` and `zashm-git-main-zashm.vercel.app` (both already
+  behind Vercel SSO). Both preview aliases remain SSO-protected.
+- Attempt 1 (`dpl_C3Y6nE9rZR1pefaxUq1mQRCzmXWX`) added only `/:path*` rules.
+  `--expect-redirect` reported **31 passed / 1 failed**: root `/` stayed 200
+  because Vercel's `/:path*` did not match the empty path. The launch was
+  stopped immediately, all three aliases were restored to `dpl_C38…`, and the
+  failed deployment was kept idle (not deleted).
+- Attempt 2 (single additional approved deploy) added an explicit
+  `{ "source": "/" }` rule for `za-shm.vercel.app` before the catch-all.
+  Deployment `dpl_9DfBJfoD3hWqFpukeCGEL9R6BsnQ`
+  (`https://zashm-d8e3ip8v1-zashm.vercel.app`) is READY and now owns the public
+  alias `za-shm.vercel.app`. The two SSO-gated production aliases remain on the
+  original deployment; no customer traffic used them.
+- `node scripts/test-vercel-cloudflare-redirect.mjs --expect-redirect` →
+  **21 passed / 0 failed** after the review tightened the script: the 307 and
+  exact `Location` (path **and** query) are asserted for the **public alias
+  only** over `/`, `/?probe=123`, `/shop?sort=newest`,
+  `/product/1?utm=preflight`, `/cart?x=1`, `/checkout`, `/admin` and
+  `/track?track=…&tk=…`. The two SSO-gated aliases are checked separately for
+  their unchanged SSO challenge, not counted as redirect passes. Raw headers
+  confirmed `Location: https://zashm.za-shm.workers.dev/?probe=123` and the
+  full tracking query. `OPTIONS`/`POST` from the old Vercel Origin are
+  fail-closed (no CORS grant, 403 before any handler); the Cloudflare Origin
+  gets the exact CORS grant. Previews still answer 302 to `vercel.com/sso-api`.
+  No order was created and no customer/order row was read or written. An
+  explicit mode flag is now required; `--preflight` is the pre-cutover baseline
+  and correctly fails 2 assertions now that the redirect is live.
+- Cookie/localStorage impact is unchanged from the handoff record: session and
+  CSRF cookies are host-only, and cart/wishlist live in origin-scoped browser
+  storage, so admins re-login on Cloudflare and an existing Vercel bag must be
+  rebuilt. Tracking tokens travel in the URL, so they survive the redirect.
+- **Operational constraints (not changed in this review):** the explicit `/`
+  rule is scoped to `za-shm.vercel.app` as approved. The two SSO aliases must
+  **not** be re-pointed to `dpl_9Df…`, because Vercel's `/:path*` does not match
+  the empty path and their root would then serve the SPA instead of a 307.
+  Their catch-all rules in `vercel.json` are currently inert while they remain
+  on `dpl_C38…`. Host patterns are dot-escaped but unanchored; anchoring them
+  would require another Production deploy, which was not approved. Vercel's
+  bodyless 307 responses do not carry the Cloudflare CSP/robots headers; the
+  destination response does, and was verified.
+- Rollback remains `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC`; the executable alias
+  commands are in the **Rollback** section below. No Cloudflare, Supabase, DNS,
+  secret, SSO or deployment-deletion change was made.
+
 ## Rollback
 
 - Keep Vercel deployment `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and its alias.
+- Immediate alias restoration (read-only verification after each command;
+  this was executed once after the failed attempt 1 and must **not** be run
+  again unless the owner explicitly approves a rollback):
+
+  ```bash
+  vercel alias set dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC za-shm.vercel.app
+  vercel alias set dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC zashm-zashm.vercel.app
+  vercel alias set dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC zashm-git-main-zashm.vercel.app
+  ```
+
+  Then `curl -I https://za-shm.vercel.app/` must return **200** from the old
+  storefront with no `Location` to Cloudflare. No database rollback is needed.
 - Do not point the custom domain at Cloudflare until after full verification.
 - If Cloudflare is cut over and must be reverted, change DNS back to the Vercel
   alias; no database rollback is needed because no SQL was changed.

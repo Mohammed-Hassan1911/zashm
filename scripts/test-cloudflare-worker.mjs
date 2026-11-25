@@ -990,6 +990,7 @@ ok(productionConfigProblems({ ...tempBase, PUBLIC_BASE_URL: TEMP_WORKERS_DEV_ORI
 'the temporary workers.dev origin stays blocked without the explicit opt-in flag');
 ok(!productionConfigProblems({
   ...tempBase,
+  ALLOWED_ORIGINS: TEMP_WORKERS_DEV_ORIGIN,
   PUBLIC_BASE_URL: TEMP_WORKERS_DEV_ORIGIN,
   [TEMP_WORKERS_DEV_FLAG]: '1',
 }).length, 'the exact opted-in workers.dev origin passes the guard for local testing');

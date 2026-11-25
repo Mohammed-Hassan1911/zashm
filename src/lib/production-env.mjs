@@ -53,6 +53,111 @@ function httpsOrigin(value) {
   }
 }
 
+function isLoopbackHost(host) {
+  const value = host.toLowerCase();
+  if (value === 'localhost' || value.endsWith('.localhost') ||
+      value === '0' || value === '0.0.0.0' ||
+      /^127(?:\.\d{1,3}){3}$/.test(value)) return true;
+  const ipv6 = value.startsWith('[') && value.endsWith(']') ? value.slice(1, -1) : value;
+  return ipv6 === '::1' || ipv6 === '0:0:0:0:0:0:0:1' ||
+    /^::ffff:(?:127(?:\.\d{1,3}){3}|7f00:[0-9a-f]{1,4})$/i.test(ipv6);
+}
+
+/**
+ * Validate one ALLOWED_ORIGINS entry. Production may only name explicit HTTPS
+ * origins; retired Vercel, loopback, Staging and unapproved workers.dev hosts
+ * are refused even when the rest of the guard is bypassed by a bad deploy.
+ */
+function allowedOriginProblem(rawValue, env) {
+  const value = rawValue.trim();
+  if (/\*/.test(value)) {
+    return 'ALLOWED_ORIGINS must name explicit origins, not wildcards';
+  }
+
+  let host = '';
+  let parsed = null;
+  try {
+    parsed = new URL(value);
+    host = parsed.hostname.toLowerCase();
+  } catch {
+    return 'ALLOWED_ORIGINS must contain explicit https origins';
+  }
+
+  // A trailing dot is a different DNS name to browsers but resolves to the
+  // same host. Fail closed instead of normalising an ambiguous allow-list.
+  if (host.endsWith('.')) {
+    return 'ALLOWED_ORIGINS must not use a trailing-dot hostname';
+  }
+
+  // Vercel is the retired public origin and localhost is a development-only
+  // fallback. Neither may be authorised by a Production binding.
+  if (host === 'za-shm.vercel.app' || host.endsWith('.vercel.app')) {
+    return 'ALLOWED_ORIGINS contains the retired Vercel origin';
+  }
+  if (isLoopbackHost(host)) {
+    return 'ALLOWED_ORIGINS contains a localhost origin';
+  }
+  if (host.includes(STAGING_SUPABASE_REF) || host.includes(STAGING_WORKER_HOST)) {
+    return 'ALLOWED_ORIGINS contains a Staging origin';
+  }
+  if (parsed.port) {
+    return 'ALLOWED_ORIGINS must use the default HTTPS port';
+  }
+  if (host.endsWith('.workers.dev')) {
+    if (httpsOrigin(value) !== TEMP_WORKERS_DEV_ORIGIN) {
+      return 'ALLOWED_ORIGINS contains an unapproved workers.dev origin';
+    }
+    if (String(env[TEMP_WORKERS_DEV_FLAG] || '') !== '1') {
+      return 'ALLOWED_ORIGINS uses the temporary workers.dev origin without the opt-in flag';
+    }
+  }
+  if (!httpsOrigin(value)) {
+    return 'ALLOWED_ORIGINS must contain explicit https origins without credentials, path, query or hash';
+  }
+  return null;
+}
+
+/** Return the parsed, production-safe allow-list and any reasons to fail closed. */
+function inspectAllowedOrigins(env) {
+  const raw = env.ALLOWED_ORIGINS;
+  // Missing/placeholder values are already reported by REQUIRED_PRODUCTION_BINDINGS.
+  if (!nonEmptyString(raw) || PLACEHOLDER_VALUE.test(raw.trim())) {
+    return { origins: [], problems: [] };
+  }
+
+  const problems = [];
+  const addProblem = (message) => {
+    if (!problems.includes(message)) problems.push(message);
+  };
+  const entries = raw.split(',').map((s) => s.trim());
+  if (entries.some((entry) => !entry)) {
+    addProblem('ALLOWED_ORIGINS contains an empty entry');
+  }
+
+  const origins = [];
+  for (const entry of entries) {
+    if (!entry) continue;
+    const problem = allowedOriginProblem(entry, env);
+    if (problem) addProblem(problem);
+    else origins.push(httpsOrigin(entry));
+  }
+
+  // If the canonical site origin is not in the allow-list, the storefront's own
+  // /api calls would be denied. That is a configuration error, not a reason to
+  // silently widen the list.
+  const publicOrigin = httpsOrigin(env.PUBLIC_BASE_URL);
+  if (!problems.length && publicOrigin && !origins.includes(publicOrigin)) {
+    addProblem('ALLOWED_ORIGINS must include PUBLIC_BASE_URL');
+  }
+  return { origins: problems.length ? [] : origins, problems };
+}
+
+/** The exact Production origin list; empty whenever the configuration is unsafe. */
+export function allowedOriginsFromEnv(env = {}) {
+  if (!isProductionEnv(env)) return [];
+  return inspectAllowedOrigins(env).origins;
+}
+
 export function isProductionEnv(env = {}) {
   return env && env[PRODUCTION_ENV_FLAG] === PRODUCTION_ENV_VALUE;
 }
@@ -104,10 +209,7 @@ export function productionConfigProblems(env = {}) {
     problems.push('PUBLIC_BASE_URL must not be the old vercel.app origin');
   }
 
-  const allowed = nonEmptyString(env.ALLOWED_ORIGINS) ? env.ALLOWED_ORIGINS : '';
-  if (allowed.includes(STAGING_SUPABASE_REF) || allowed.includes(STAGING_WORKER_HOST)) {
-    problems.push('ALLOWED_ORIGINS contains a Staging origin');
-  }
+  problems.push(...inspectAllowedOrigins(env).problems);
 
   const telegramToken = env.TELEGRAM_BOT_TOKEN;
   const telegramChat = env.TELEGRAM_CHAT_ID;

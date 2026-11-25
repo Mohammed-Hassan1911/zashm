@@ -1,0 +1,163 @@
+[
+  {
+    "id": "6c77f3a2-d303-4cbf-b938-fa3ee7031da4",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "secret"
+    },
+    "versions": [
+      {
+        "version_id": "e23d2842-9913-49c4-a361-4982dfabf60c",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:02:42.535472Z"
+  },
+  {
+    "id": "7e75cc6c-8fb2-4813-baa4-eac839f07870",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "secret"
+    },
+    "versions": [
+      {
+        "version_id": "527a3e12-7d50-466f-8962-63ffff29030a",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:02:47.406415Z"
+  },
+  {
+    "id": "7cdb44fc-a66d-4c19-a2b3-112982b484a8",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "secret"
+    },
+    "versions": [
+      {
+        "version_id": "fc79d265-a8c6-43dc-b7ae-35bda2e9dc13",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:02:52.634012Z"
+  },
+  {
+    "id": "8ae4614e-6485-4450-bea2-8b10c37fba1b",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "secret"
+    },
+    "versions": [
+      {
+        "version_id": "ab90afba-f828-4c2c-9055-88a92746cd82",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:02:57.647295Z"
+  },
+  {
+    "id": "00d6739f-6579-4c60-a816-7030727c5f47",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "secret"
+    },
+    "versions": [
+      {
+        "version_id": "6905afb6-b3e4-4018-8956-3c574e6e71a5",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:03:02.531208Z"
+  },
+  {
+    "id": "15779dee-0795-4e63-b6d7-c0363d22a0b2",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "secret"
+    },
+    "versions": [
+      {
+        "version_id": "8546570f-b25b-40d1-b4f7-75e6b3f88ca4",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:03:07.2699Z"
+  },
+  {
+    "id": "5b8db9a3-698e-4c74-b25c-3119d8590d66",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "deployment"
+    },
+    "versions": [
+      {
+        "version_id": "a803781d-9700-4265-961b-138943f79c79",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:03:41.256294Z"
+  },
+  {
+    "id": "d53650b9-80ba-4839-ba31-d68c61561ee9",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "deployment"
+    },
+    "versions": [
+      {
+        "version_id": "53ee966e-92c4-4870-b794-e1cc8ebaf065",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:06:21.05507Z"
+  },
+  {
+    "id": "83d7e36f-e6a8-4e6f-b36d-703912f3d0e7",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/message": "Phase 3 rollback drill",
+      "workers/triggered_by": "deployment"
+    },
+    "versions": [
+      {
+        "version_id": "a803781d-9700-4265-961b-138943f79c79",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:09:51.613111Z"
+  },
+  {
+    "id": "36e4313e-6a69-4f17-9f13-bf07f48a2d1d",
+    "source": "wrangler",
+    "strategy": "percentage",
+    "author_email": "[redacted]",
+    "annotations": {
+      "workers/triggered_by": "deployment"
+    },
+    "versions": [
+      {
+        "version_id": "417af14c-55c3-4a63-85c1-2b1b3d574dd6",
+        "percentage": 100
+      }
+    ],
+    "created_on": "2026-11-24T03:10:17.619745Z"
+  }
+]

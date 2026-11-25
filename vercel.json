@@ -1,6 +1,32 @@
 {
   "buildCommand": "node scripts/resilience-sync.mjs --best-effort --stamp && npm run build",
   "outputDirectory": "build",
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "za-shm\\.vercel\\.app" }],
+      "destination": "https://zashm.za-shm.workers.dev/",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "za-shm\\.vercel\\.app" }],
+      "destination": "https://zashm.za-shm.workers.dev/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "zashm-zashm\\.vercel\\.app" }],
+      "destination": "https://zashm.za-shm.workers.dev/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "zashm-git-main-zashm\\.vercel\\.app" }],
+      "destination": "https://zashm.za-shm.workers.dev/:path*",
+      "permanent": false
+    }
+  ],
   "functions": {
     "api/sitemap.mjs": {
       "includeFiles": "build/prerendered-products.json"

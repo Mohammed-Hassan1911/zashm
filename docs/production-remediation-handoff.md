@@ -978,3 +978,40 @@ secret or Telegram token in the 36-file artifact.
   deployment `fc0f7712-6354-423b-ac08-30d4aa950332` (§13.15). No Supabase,
   Vercel, DNS or secret setting was changed, no commercial test order was
   placed, and no commit or push was made for this change.
+
+### 13.17 Legacy Worker cleanup and Vercel → Cloudflare 307 (2026-11-25)
+
+- Only the unused legacy Worker `zashm-stage3` was deleted with owner approval.
+  Production `zashm` and Staging `zashm-staging` remain live with the baked
+  `noindex, nofollow, noarchive` header. Pre-delete deployment history was
+  captured; `npx wrangler delete zashm-stage3 --force` succeeded and the old URL
+  now returns 404. Full evidence is in `docs/cloudflare-migration.md`.
+- Owner-approved Vercel Production redirect: the public alias
+  `za-shm.vercel.app` now answers **307** to
+  `https://zashm.za-shm.workers.dev/:path*`. Vercel's `/:path*` did not match the
+  empty path, so attempt 1 (`dpl_C3Y6nE9rZR1pefaxUq1mQRCzmXWX`) failed one
+  assertion (`/` stayed 200), was rolled back immediately, and its deployment
+  was kept idle. Attempt 2 added an explicit `{ "source": "/" }` rule and was
+  the only other Production deploy: `dpl_9DfBJfoD3hWqFpukeCGEL9R6BsnQ`
+  (`zashm-d8e3ip8v1-zashm.vercel.app`), READY, target production.
+- `node scripts/test-vercel-cloudflare-redirect.mjs --expect-redirect` →
+  **21 passed / 0 failed** after review tightened the script (the earlier run
+  reported 35, of which 16 were no-op SSO skips counted as passes). The 307 and
+  exact `Location` with preserved path/query are proven for the public alias on
+  `/`, `/?probe=123`, `/shop`, `/product`, `/cart`, `/checkout`, `/admin` and
+  `/track?track=…&tk=…`; the tracking query reached Cloudflare intact. The two
+  SSO-gated aliases are asserted separately to still challenge with Vercel SSO
+  and are not counted as redirect passes. Both preview aliases still answer
+  302 to `vercel.com/sso-api`. `OPTIONS` and `POST` from the old Vercel Origin
+  stay fail-closed (no CORS grant / 403 before any handler), so no CORS or CSRF
+  weakening was introduced and no order was created. No Supabase, Cloudflare,
+  DNS, secret or SSO setting was changed.
+- **Client impact:** session/CSRF cookies are host-only and cart/wishlist are
+  origin-scoped, so admins must log in again on Cloudflare and an old Vercel bag
+  must be rebuilt. Tracking tokens live in the URL and survive the redirect;
+  cash-on-delivery has no payment session to lose.
+- **Rollback:** restore the three aliases to
+  `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` with the literal `vercel alias set`
+  commands in the **Rollback** section of `docs/cloudflare-migration.md`; no
+  database rollback is needed. That original deployment was never deleted.
+  This is documentation only — no rollback was performed in this review.

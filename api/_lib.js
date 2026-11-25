@@ -23,6 +23,18 @@ function env(name) {
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : '';
 }
 
+// These Production constants mirror src/lib/production-env.mjs. They are used
+// only to fail closed inside the API layer; non-Production runtimes keep the
+// historical fallback below so Development, Testing and Staging are unchanged.
+const PRODUCTION_ENV_FLAG = 'ZASHM_ENVIRONMENT';
+const PRODUCTION_ENV_VALUE = 'production';
+const TEMP_WORKERS_DEV_ORIGIN = 'https://zashm.za-shm.workers.dev';
+const TEMP_WORKERS_DEV_FLAG = 'ZASHM_TEMP_WORKERS_DEV';
+const STAGING_WORKER_HOST = 'zashm-staging.za-shm.workers.dev';
+const STAGING_SUPABASE_REF = 'sfenutmgfawuhmvwkmhv';
+const LEGACY_FALLBACK_ORIGINS =
+  'https://za-shm.vercel.app,http://localhost:3000,http://127.0.0.1:3000';
+
 function getSupabaseUrl() {
   return env('SUPABASE_URL') || env('REACT_APP_SUPABASE_URL');
 }
@@ -84,17 +96,77 @@ function safeLogError(label, err, detail) {
   console.error(parts.join(' | '));
 }
 
-function getAllowedOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return null;
-  const allowed = (
-    env('ALLOWED_ORIGINS') ||
-    'https://za-shm.vercel.app,http://localhost:3000,http://127.0.0.1:3000'
-  )
+function isProductionRuntime() {
+  return env(PRODUCTION_ENV_FLAG) === PRODUCTION_ENV_VALUE;
+}
+
+function normalizedHttpsOrigin(value) {
+  if (typeof value !== 'string' || !value.trim() || /\*/.test(value)) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:' || url.username || url.password ||
+        url.pathname !== '/' || url.search || url.hash || url.port) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHost(host) {
+  const value = host.toLowerCase();
+  if (value === 'localhost' || value.endsWith('.localhost') ||
+      value === '0' || value === '0.0.0.0' ||
+      /^127(?:\.\d{1,3}){3}$/.test(value)) return true;
+  const ipv6 = value.startsWith('[') && value.endsWith(']') ? value.slice(1, -1) : value;
+  return ipv6 === '::1' || ipv6 === '0:0:0:0:0:0:0:1' ||
+    /^::ffff:(?:127(?:\.\d{1,3}){3}|7f00:[0-9a-f]{1,4})$/i.test(ipv6);
+}
+
+/**
+ * Production-only second line of defence. Even if the Worker guard is skipped,
+ * a missing, malformed or known-retired allow-list yields no grant at all.
+ */
+function productionAllowedOrigins() {
+  const raw = env('ALLOWED_ORIGINS');
+  if (!raw) return [];
+  const entries = raw.split(',').map((s) => s.trim());
+  if (!entries.length || entries.some((entry) => !entry)) return [];
+
+  const origins = [];
+  // Read this flag exactly as the Production guard does: a padded value must
+  // not make the API layer more permissive than the Worker gate.
+  const tempAllowed = process.env[TEMP_WORKERS_DEV_FLAG] === '1';
+  for (const entry of entries) {
+    const origin = normalizedHttpsOrigin(entry);
+    if (!origin) return [];
+    const host = new URL(origin).hostname.toLowerCase();
+    if (host.endsWith('.')) return [];
+    if (host === 'za-shm.vercel.app' || host.endsWith('.vercel.app')) return [];
+    if (isLoopbackHost(host)) return [];
+    if (host.includes(STAGING_SUPABASE_REF) || host.includes(STAGING_WORKER_HOST)) return [];
+    if (host.endsWith('.workers.dev')) {
+      if (origin !== TEMP_WORKERS_DEV_ORIGIN || !tempAllowed) return [];
+    }
+    origins.push(origin);
+  }
+
+  const publicOrigin = normalizedHttpsOrigin(env('PUBLIC_BASE_URL'));
+  if (!publicOrigin || !origins.includes(publicOrigin)) return [];
+  return origins;
+}
+
+function configuredAllowedOrigins() {
+  if (isProductionRuntime()) return productionAllowedOrigins();
+  return (env('ALLOWED_ORIGINS') || LEGACY_FALLBACK_ORIGINS)
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return allowed.includes(origin) ? origin : null;
+}
+
+function getAllowedOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return null;
+  return configuredAllowedOrigins().includes(origin) ? origin : null;
 }
 
 function applyCors(req, res) {
