@@ -645,20 +645,20 @@ select option { background: var(--bg3); }
   pointer-events: none;
 }
 
-/* The shop card label is welded inside the photo's top-left corner. It is taken
-   out of flow, so no row is reserved and every card's photo starts at the same
-   top edge; the badge simply lies over the image instead of pushing it down. */
+/* The shop card label sits outside the photo, flush against its top edge. The
+   row is reserved so labelled and unlabelled cards stay aligned, but its height
+   now equals the badge itself, so the card frame hugs the label instead of
+   boxing an empty strip above it. */
 .product-card-labels-above {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 2;
-  min-height: 0;
+  position: static;
+  min-height: 26px;
   margin: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
-/* Product-page label keeps its own row above the photo, unlike the card badge. */
+/* Product label: a small row above the photo, left aligned, so the badge never
+   covers the image. The reserved height keeps every card's photo aligned in a
+   grid row, whether or not that product has a label. */
 .product-card-label-row {
   display: flex;
   align-items: center;
@@ -812,9 +812,15 @@ select option { background: var(--bg3); }
   height: 4px;
 }
 /* Phones show the cards two-up, so the desktop badge would fill most of the
-   narrow card and read like a centred title. Scale it with the card so it stays
-   a small tag welded to the photo's top-left corner. */
+   narrow label row and read like a centred title. Scale it with the card so it
+   stays a small tag welded to the left edge of the photo. The reserved row keeps
+   every photo aligned in its grid row, but the badge sits at the bottom of that
+   row, so it touches the photo instead of floating above it. */
 @media (max-width: 768px) {
+  .product-card-labels-above {
+    align-items: flex-end;
+    min-height: 19px;
+  }
   .product-card-labels-above .label-badge {
     font-size: 8px;
     letter-spacing: 0.2px;
@@ -826,6 +832,9 @@ select option { background: var(--bg3); }
   }
 }
 @media (max-width: 360px) {
+  .product-card-labels-above {
+    min-height: 17px;
+  }
   .product-card-labels-above .label-badge {
     font-size: 7.5px;
     letter-spacing: 0;
