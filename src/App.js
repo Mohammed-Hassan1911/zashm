@@ -83,6 +83,11 @@ function AppInner() {
   // The bag drawer owns the screen while it is open; WhatsApp sits above every
   // page layer, so remove it for the lifetime of the dialog.
   const cartOpen = useStore((state) => state.cartOpen);
+  const productsLoadStatus = useStore((state) => state.productsLoadStatus);
+  // The first footer mount on /product must wait for the catalogue to settle.
+  // Before that, the clamped skeleton reserves one viewport; the real product
+  // is taller, so mounting the footer earlier would pull it down again.
+  const productCatalogPending = productsLoadStatus === 'idle' || productsLoadStatus === 'loading';
 
   const [activeModal, setActiveModal] = useState(null);
   // The footer is only added once the first page has actually committed. While a
@@ -169,16 +174,41 @@ function AppInner() {
   }, [currentPage]);
 
   useEffect(() => {
+    let idleHandle;
+    let cancelled = false;
     async function loadOnlineData() {
-      await refreshProducts();
+      // A direct /checkout navigation does not need the catalogue for its first
+      // paint. Let the route chunk and form land first, then load stock data in
+      // idle time; pricing and totals remain server-authoritative at checkout.
+      const route = resolveRoute();
+      if (route.page === 'checkout' &&
+          typeof window !== 'undefined' &&
+          typeof window.requestIdleCallback === 'function') {
+        idleHandle = window.requestIdleCallback(() => {
+          if (cancelled) return;
+          void refreshProducts().catch((err) => {
+            console.error('Catalogue refresh failed:', err);
+          });
+        });
+      } else {
+        await refreshProducts();
+      }
       // الكوبونات لا تُجلب للواجهة إطلاقاً: تُتحقق عبر /api/coupons/validate
       // وتُدار في لوحة التحكم عبر /api/admin/coupons بعد تسجيل الدخول.
       // الطلبات تتطلب جلسة أدمن — لا نجلبها أبداً لزوار المتجر.
-      if (session) {
+      if (!cancelled && session) {
         await refreshOrders();
       }
     }
-    loadOnlineData();
+    loadOnlineData().catch((err) => console.error('Online data refresh failed:', err));
+    return () => {
+      cancelled = true;
+      if (idleHandle !== undefined &&
+          typeof window !== 'undefined' &&
+          typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleHandle);
+      }
+    };
   }, [session, refreshProducts, refreshOrders]);
 
   useEffect(() => {
@@ -240,7 +270,10 @@ function AppInner() {
               transition={{ duration: 0.18, ease: 'easeOut' }}
             >
               <Suspense fallback={<PageLoading page={currentPage} />}>
-                <PageReadySignal onReady={markPageReady} />
+                <PageReadySignal
+                  onReady={markPageReady}
+                  ready={currentPage !== 'product' || !productCatalogPending}
+                />
                 {currentPage === 'home' && <HomePage />}
                 {currentPage === 'shop' && <ShopPage />}
                 {currentPage === 'product' && <ProductPage />}
@@ -270,10 +303,10 @@ function AppInner() {
 
 // Lives inside the page Suspense boundary, so its effect runs only after the
 // real page has committed — never while the loading fallback is on screen.
-function PageReadySignal({ onReady }) {
+function PageReadySignal({ onReady, ready = true }) {
   useEffect(() => {
-    onReady();
-  }, [onReady]);
+    if (ready) onReady();
+  }, [onReady, ready]);
   return null;
 }
 

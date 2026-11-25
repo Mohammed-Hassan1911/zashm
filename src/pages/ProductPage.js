@@ -286,7 +286,7 @@ export default function ProductPage() {
   if (!p) return productPending ? (
     <ProductPageSkeleton />
   ) : (
-    <div style={{ paddingTop: 120, textAlign: 'center', padding: '120px 24px' }}>
+    <div className="product-not-found-shell" style={{ textAlign: 'center', padding: '120px 24px' }}>
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 400, margin: 0 }}>{'Product not found.'}</h1>
       <button className="gold-btn" style={{ marginTop: 24 }} onClick={() => setPage('shop')}>Back to Shop</button>
     </div>

@@ -15,7 +15,7 @@ const LABEL_CLASS = {
 const FALLBACK_IMAGE =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ccc" width="100" height="100"/%3E%3C/svg%3E';
 
-export default function ProductCard({ product, index = 0 }) {
+export default function ProductCard({ product, index = 0, priority = false }) {
   const {
     setPage,
     setSelectedProduct,
@@ -29,6 +29,12 @@ export default function ProductCard({ product, index = 0 }) {
   // download every second photo before anyone points at it.
   const [secondaryRequested, setSecondaryRequested] = useState(false);
   const [secondaryLoaded, setSecondaryLoaded] = useState(false);
+
+  // Only the caller knows which grid is above the fold. Home, wishlist and
+  // related-product grids stay lazy so their images cannot compete with the
+  // shop page's LCP candidate; /shop passes the responsive first row explicitly.
+  const isPriorityImage = Boolean(priority);
+  const skipEntrance = isPriorityImage || index === 0;
 
   // A touch screen has no hover, so the second frame would be a download the
   // shopper never sees. Gate it on a real pointer, and follow the device if a
@@ -103,8 +109,8 @@ export default function ProductCard({ product, index = 0 }) {
   return (
     <motion.div
       className="product-card"
-      // Keep the LCP card visible immediately; later cards retain the entrance fade.
-      initial={index === 0 ? false : { opacity: 0 }}
+      // Priority cards and the first card in any grid skip the entrance fade.
+      initial={skipEntrance ? false : { opacity: 0 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.3,
@@ -142,8 +148,8 @@ export default function ProductCard({ product, index = 0 }) {
         <img
           src={primary.src}
           alt={product?.name || 'Product'}
-          loading={index === 0 ? 'eager' : 'lazy'}
-          fetchpriority={index === 0 ? 'high' : 'auto'}
+          loading={isPriorityImage ? 'eager' : 'lazy'}
+          fetchpriority={isPriorityImage ? 'high' : 'auto'}
           decoding="async"
           onError={primary.onError}
           className="product-card-img"

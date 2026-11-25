@@ -48,6 +48,40 @@ export default function ShopPage() {
   // the first ArrowDown ends the interaction.
   const sortPointerRef = useRef(false);
 
+  // .product-collection-grid is 4-up desktop, 3-up on small laptops and 2-up on
+  // phones. Lighthouse may pick any card in that first row as LCP, so exactly
+  // that row is eager/high; every other collection grid stays lazy.
+  const [leadRowCount, setLeadRowCount] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return 2;
+    if (window.matchMedia('(max-width: 768px)').matches) return 2;
+    if (window.matchMedia('(max-width: 1100px)').matches) return 3;
+    return 4;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const narrow = window.matchMedia('(max-width: 768px)');
+    const medium = window.matchMedia('(max-width: 1100px)');
+    const sync = () => setLeadRowCount(narrow.matches ? 2 : medium.matches ? 3 : 4);
+    sync();
+    if (narrow.addEventListener) {
+      narrow.addEventListener('change', sync);
+      medium.addEventListener('change', sync);
+    } else {
+      narrow.addListener(sync);
+      medium.addListener(sync);
+    }
+    return () => {
+      if (narrow.removeEventListener) {
+        narrow.removeEventListener('change', sync);
+        medium.removeEventListener('change', sync);
+      } else {
+        narrow.removeListener(sync);
+        medium.removeListener(sync);
+      }
+    };
+  }, []);
+
   // The native picker does not always fire blur when it closes. Clear the
   // focused sort on the first tap elsewhere (and on Escape) so its focus
   // styling leaves with the picker instead of hanging around on the toolbar.
@@ -238,18 +272,16 @@ export default function ShopPage() {
         <span className="shop-hero-glow" aria-hidden="true" />
         <motion.p
           className="shop-hero-eyebrow"
-          initial={{ opacity: 0, y: 10 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
         >
           Our Collection
         </motion.p>
 
         <motion.h1
           className="shop-hero-title"
-          initial={{ opacity: 0, y: 14 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.06 }}
         >
           {activeCategory}
         </motion.h1>
@@ -257,16 +289,14 @@ export default function ShopPage() {
         <motion.span
           className="shop-hero-rule"
           aria-hidden="true"
-          initial={{ scaleX: 0, opacity: 0 }}
+          initial={false}
           animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ duration: 0.7, delay: 0.18 }}
         />
 
         <motion.p
           className="shop-hero-count"
-          initial={{ opacity: 0 }}
+          initial={false}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.24 }}
         >
           <span className="shop-hero-count-dot" aria-hidden="true" />
           {filtered.length}{' '}
@@ -718,6 +748,7 @@ export default function ShopPage() {
                   key={product.id}
                   product={product}
                   index={index}
+                  priority={index < leadRowCount}
                 />
               ))}
             </div>

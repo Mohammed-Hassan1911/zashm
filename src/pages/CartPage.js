@@ -498,8 +498,8 @@ export function CheckoutPage() {
 
   React.useEffect(() => { setPageMeta({ title: 'Checkout', description: 'Complete your order', robots: 'noindex, nofollow' }); }, []);
   React.useEffect(() => { refreshAppliedDiscount(); }, []);
-  // Same warm-up as the bag: checkout is the likeliest place to paste a code.
-  React.useEffect(() => { warmCouponEndpoint(); }, []);
+  // The coupon field still warms on focus. Doing it on mount competed with the
+  // route chunk and first paint on a cold direct /checkout navigation.
   
   // 🔝 السكرول المبدئي عند فتح الصفحة لأول مرة.
   // فوري (auto) بدل الانسيابي حتى لا تبدو الشاشة وكأنها تتحرك أثناء تعبئة الفورم.

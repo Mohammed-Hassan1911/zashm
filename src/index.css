@@ -2131,6 +2131,22 @@ select option { background: var(--bg3); }
 
 .page-skeleton-product {
   padding-top: 90px;
+  box-sizing: border-box;
+  /* On one-column layouts the stacked image and info lines can exceed a phone
+     viewport. Clamp the pending view to the same height as the settled
+     not-found shell so the footer cannot jump when the catalog resolves. */
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+/* A settled but missing product replaces a one-viewport skeleton with this
+   short view. Reserving the same height keeps the footer below the fold instead
+   of letting it jump up when /product/:id is not in the catalogue. */
+.product-not-found-shell {
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100svh;
 }
 
 .page-skeleton-product-container {
@@ -2163,6 +2179,10 @@ select option { background: var(--bg3); }
 .page-skeleton-product-image {
   width: 100%;
   aspect-ratio: 3 / 4;
+  /* Keep the pending product view inside one viewport so the settled
+     "not found" shell has the same height and cannot pull the footer up. */
+  max-height: 60vh;
+  max-height: 60svh;
 }
 
 .page-skeleton-product-info {

@@ -249,8 +249,9 @@ console.log('\n[7] source scan: no storefront coupon reads');
   ok(/function warmCouponEndpoint/.test(cartPage) &&
      /method: 'OPTIONS'/.test(cartPage) &&
      /onFocus=\{warmCouponEndpoint\}/.test(cartPage) &&
-     /React\.useEffect\(\(\) => \{ warmCouponEndpoint\(\); \}, \[\]\)/.test(cartPage),
-    'the bag/checkout page and the coupon field warm the endpoint before apply');
+     /React\.useEffect\(\(\) => \{ if \(safeCart\.length\) warmCouponEndpoint\(\); \}, \[\]\)/.test(cartPage) &&
+     !/React\.useEffect\(\(\) => \{ warmCouponEndpoint\(\); \}, \[\]\)/.test(cartPage),
+    'the coupon field and bag warm the endpoint, but checkout no longer warms on mount');
   ok((cartPage.match(/\{couponApplying \? 'Checking…' : 'Apply'\}/g) || []).length === 2 &&
      /minWidth: 96/.test(cartPage) &&
      !/cursor:\s*couponApplying \? 'progress'/.test(cartPage),

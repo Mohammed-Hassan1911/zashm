@@ -623,11 +623,14 @@ console.log('\n[10] public SEO and checkout accessibility');
   ok(/initial=\{\{ opacity: 0 \}\}\s+animate=\{\{ opacity: 1 \}\}\s+transition=\{\{ duration: 0\.18, ease: 'easeOut' \}\}/.test(app),
     'the new page fades in immediately with no vertical jump');
   const productCard = read('src/components/shop/ProductCard.js');
-  ok(/initial=\{index === 0 \? false : \{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
-    'the LCP product card appears immediately while later cards use a brief fade');
-  ok(/loading=\{index === 0 \? 'eager' : 'lazy'\}/.test(productCard) &&
-     /fetchpriority=\{index === 0 \? 'high' : 'auto'\}/.test(productCard),
-    'only the first collection image loads eagerly with high priority (lowercase attribute avoids the React 18 warning)');
+  ok(/export default function ProductCard\(\{ product, index = 0, priority = false \}\)/.test(productCard) &&
+     /const isPriorityImage = Boolean\(priority\);/.test(productCard) &&
+     /initial=\{skipEntrance \? false : \{ opacity: 0 \}\}[\s\S]*?duration: 0\.3,[\s\S]*?delay: Math\.min\(Math\.max\(index, 0\), 5\) \* 0\.015/.test(productCard),
+    'priority cards and grid leaders appear immediately while later cards use a brief fade');
+  ok(/loading=\{isPriorityImage \? 'eager' : 'lazy'\}/.test(productCard) &&
+     /fetchpriority=\{isPriorityImage \? 'high' : 'auto'\}/.test(productCard) &&
+     !/index < 2/.test(productCard),
+    'only caller-prioritised collection images load eagerly with high priority (lowercase attribute avoids the React 18 warning)');
   ok(!/fonts\.(googleapis|gstatic)\.com/.test(read('index.html')) &&
      !/BRAND_FONTS_HREF/.test(read('src/index.js')) &&
      /rel="preload" as="font" type="font\/woff2" href="\/fonts\/cormorant-garamond-latin-var\.woff2" crossorigin/.test(read('index.html')),
