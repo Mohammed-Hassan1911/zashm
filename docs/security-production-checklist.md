@@ -173,33 +173,42 @@ host-only and cart/wishlist are origin-scoped, so existing admin sessions and
 Vercel bags do not carry over; signed tracking links do. See
 `docs/production-remediation-handoff.md` §13.17 for the full proof and rollback.
 
-`ALLOWED_ORIGINS` hardening (implemented locally on 2026-11-25, not yet
-deployed): the earlier residual risk in this addendum has been closed in the
-working tree. `src/lib/production-env.mjs` now requires an explicit HTTPS
-allow-list when `ZASHM_ENVIRONMENT=production`; missing, empty, placeholder,
-wildcard, path/query/hash, credentialed, non-default-port, trailing-dot,
-retired Vercel, loopback (including 127/8 and mapped IPv6), Staging and
-unapproved `workers.dev` entries fail closed. The canonical Cloudflare
-`workers.dev` origin is accepted only with the explicit opt-in flag, and
-`PUBLIC_BASE_URL` must be inside the list. `api/_lib.js` applies the same
-Production-only validation as a second layer: an unsafe or absent binding
-grants no CORS Origin and rejects unsafe methods; Development, Testing and
-Staging keep their historical fallback. The current Cloudflare Origin
-`https://zashm.za-shm.workers.dev` still passes; the retired Vercel and
-localhost Origins are denied, including the bypass spellings found in review.
+`ALLOWED_ORIGINS` hardening was deployed on 2026-11-25 as Worker version
+`2d53453a-689b-441a-9e9e-5289c8988cd6`, deployment
+`fc618b23-3244-4d8f-8e70-46ce4b2234ff`. `src/lib/production-env.mjs` now
+requires an explicit HTTPS allow-list when `ZASHM_ENVIRONMENT=production`;
+missing, empty, placeholder, wildcard, path/query/hash, credentialed,
+non-default-port, trailing-dot, retired Vercel, loopback (including 127/8 and
+mapped IPv6), Staging and unapproved `workers.dev` entries fail closed. The
+canonical Cloudflare `workers.dev` origin is accepted only with the explicit
+opt-in flag, and `PUBLIC_BASE_URL` must be inside the list. `api/_lib.js`
+applies the same Production-only validation as a second layer: an unsafe or
+absent binding grants no CORS Origin and rejects unsafe methods; Development,
+Testing and Staging keep their historical fallback. Live probes after the
+later performance release confirmed the canonical Origin receives
+`access-control-allow-origin: https://zashm.za-shm.workers.dev`,
+`access-control-allow-credentials: true` and `Vary: Origin`, while the retired
+Vercel alias and `https://evil.example` receive no CORS grant.
 
-Local verification only — these results prove the local tree, not the deployed
-Worker: focused suite `node scripts/test-allowed-origins.mjs` → 119 passed /
-0 failed; `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 38 suites / 4238 assertions,
-all 0 failed, with the real temporary PostgreSQL 17 suite actually running
-(495 passed / 0 failed); `npm run build` passed;
-`node scripts/test-vercel-cloudflare-redirect.mjs --expect-redirect` → 21 passed
-/ 0 failed; `git diff --check` clean. `wrangler.production.toml`, Vercel
-aliases, DNS, secrets, Supabase and SSO were not changed, and no commit, push,
-deployment or rollback was made. Until this change is separately approved and
-deployed, Production still runs the previously deployed bundle and the earlier
-residual risk remains live there. Do not re-add the old Vercel Origin without an
-owner decision.
+A separately owner-approved storefront performance release was deployed on
+2026-11-25 from local commit `5f62e15` as Worker version
+`1ead16fb-85c8-440c-8672-babbca38101a`, deployment
+`8968cc7e-dd47-4f6d-bf38-98aed61aef9b` (100%, tag `perf-5f62e15`). It changes
+only storefront rendering: responsive first-row image priority on `/shop`, a
+one-viewport pending/missing product shell, deferred checkout catalogue load
+and a catalogue-settlement gate before the first `/product` footer mount. No
+API, SQL, data, payment, Vercel, DNS, Supabase setting or secret changed.
+Verification: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 39 suites / 4263 passed /
+0 failed with the real PostgreSQL suite running (495 passed / 0 failed);
+`npm run build` passed (`index-DgN9MCIU.js`, `index-C5S0Kll9.css`);
+`npm run verify:production:config` → `READY: 0 problem(s)`; final review found
+no Blocker/High/Medium defect. Post-deploy smoke covered `/`, `/shop`, a real
+product, `/cart`, `/checkout`, `/track`, `/admin`, sitemap, robots and a real
+404 — all 200 with CSP and `noindex, nofollow, noarchive`, and the 404 stayed
+404. Browser console errors were 0 on all four storefront pages. Rollback
+targets remain version `2d53453a-…` / deployment `fc618b23-…` and the older
+`f06cfd8e-ac68-4550-9269-9ba0c42f3b4a` / `79e44e77-a0b7-4c7d-8958-1fd0da8309ab`.
+Do not re-add the old Vercel Origin without an owner decision.
 
 Until real products are added, the catalogue is intentionally empty and the
 store is **not** ready for sale.

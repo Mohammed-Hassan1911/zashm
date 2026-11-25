@@ -818,6 +818,52 @@ is recorded in the next section. Nothing in the stage3 cleanup changed Vercel.
   commands are in the **Rollback** section below. No Cloudflare, Supabase, DNS,
   secret, SSO or deployment-deletion change was made.
 
+## Storefront performance release (2026-11-25, owner-approved)
+
+Owner approval covered deployment and post-deploy verification only. The
+working tree commit `5f62e15c36dae70db3ba5800a548c398cf6f6a1b`
+(`perf: stabilise shop LCP and product CLS on cold loads`) was built locally
+from the real Production origin/anon key into `build-production/` and deployed
+directly to Worker `zashm`; **no push, Vercel, DNS, Supabase, secret or data
+change was made**.
+
+- Artifact: `index-DgN9MCIU.js` + `index-C5S0Kll9.css`; dry-run read 46 files
+  (1164.36 KiB / 213.02 KiB gzip) with only `ASSETS` and the seven reviewed
+  non-secret vars. A 39-file scan found one JWT with `role=anon` and no
+  Staging/Vercel/placeholder reference, service-role value, session secret,
+  Telegram or Upstash token.
+- Deployment: version `1ead16fb-85c8-440c-8672-babbca38101a`, deployment
+  `8968cc7e-dd47-4f6d-bf38-98aed61aef9b`, created
+  `2026-11-25T02:01:34.771263Z`, tag `perf-5f62e15`, 100% traffic. Eight secret
+  names are unchanged. The previous hardened version
+  `2d53453a-689b-441a-9e9e-5289c8988cd6` / deployment
+  `fc618b23-3244-4d8f-8e70-46ce4b2234ff` remains retained as the immediate
+  rollback target.
+- Pre-deploy gates: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 39 suites / 4263
+  passed / 0 failed (SQL 495 / 0, actually run); `npm run build` passed;
+  `npm run verify:production:config` → `READY: 0 problem(s)`; `git diff --check`
+  clean; final read-only review found no Blocker/High/Medium defect.
+- Live GET-only smoke: `/`, `/shop`, `/product/1795385879888720`, `/cart`,
+  `/checkout`, `/track`, `/admin`, `/sitemap.xml` and `/robots.txt` all 200
+  with CSP and `noindex, nofollow, noarchive`; `/no-such-page-a0` stayed 404.
+  Canonicals use `https://zashm.za-shm.workers.dev`, the new bundle hash is
+  present and the old `index-B4VjJ2E2.js` is gone.
+- Live CORS: the canonical Origin gets `access-control-allow-origin`,
+  `access-control-allow-credentials: true` and `Vary: Origin`; the retired
+  Vercel Origin and `https://evil.example` get no CORS grant. Browser console
+  errors were 0 on `/shop`, a real product, `/cart` and `/checkout`; `/shop`
+  serves the first row as `eager/high` and later cards as `lazy/low`.
+- Post-deploy Lighthouse 13.6 (`simulate`) was variable across runs. Mobile
+  `/shop`: score 0.62–0.86, LCP 6684–3627 ms, CLS 0. Real product: score
+  0.82–0.83, CLS 0, LCP 4105–4533 ms. `/cart`: score 0.85–0.92, CLS 0.
+  `/checkout`: score 0.74, CLS 0. Desktop `/shop`: score 0.56–0.61, CLS
+  ~0.0015. No field RUM was collected; the owner accepted lab-only evidence
+  and the remaining LCP/TTFB variance.
+- Rollback: redeploy version `2d53453a-…` / deployment `fc618b23-…` (keeps the
+  `ALLOWED_ORIGINS` hardening), or the older `f06cfd8e-…` /
+  `79e44e77-…` if a full pre-hardening rollback is required. Git-local
+  rollback is `git revert --no-edit 5f62e15`. No database rollback is needed.
+
 ## Rollback
 
 - Keep Vercel deployment `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and its alias.

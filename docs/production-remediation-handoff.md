@@ -1015,3 +1015,37 @@ secret or Telegram token in the 36-file artifact.
   commands in the **Rollback** section of `docs/cloudflare-migration.md`; no
   database rollback is needed. That original deployment was never deleted.
   This is documentation only — no rollback was performed in this review.
+
+### 13.18 Storefront performance release (2026-11-25, owner-approved)
+
+- Deployed local commit `5f62e15c36dae70db3ba5800a548c398cf6f6a1b` to the
+  production Worker without push, Vercel, DNS, Supabase, secret or data changes.
+  Version `1ead16fb-85c8-440c-8672-babbca38101a`, deployment
+  `8968cc7e-dd47-4f6d-bf38-98aed61aef9b`, tag `perf-5f62e15`, 100%. The build
+  used the real Production origin and public anon key, produced
+  `index-DgN9MCIU.js` and `index-C5S0Kll9.css`, and was prerendered for two real
+  product pages.
+- Gates: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 39 suites / 4263 passed / 0
+  failed (SQL 495 / 0, not skipped); `npm run build` passed;
+  `npm run verify:production:config` → `READY: 0 problem(s)`; `git diff --check`
+  clean; read-only final review found no Blocker/High/Medium finding. The 39-file
+  artifact scan found only one `anon` JWT, no service-role/session-secret/
+  Telegram/Upstash value and no Staging, Vercel or placeholder reference.
+- Post-deploy proof: nine smoke routes passed (200 with CSP and
+  `noindex, nofollow, noarchive`; unknown route 404); canonical and sitemap stay
+  on `https://zashm.za-shm.workers.dev`; live CORS grants only the canonical
+  Origin; eight Worker secret names unchanged; browser console errors 0 on
+  `/shop`, a real product, `/cart` and `/checkout`; `/shop` image priority is
+  `eager/high` for the responsive first row and `lazy/low` for the rest. No
+  order, payment, product, coupon, stock or customer row was created or changed.
+- Lighthouse after deployment was variable: mobile `/shop` score 0.62–0.86 with
+  CLS 0, real product 0.82–0.83 with CLS 0, `/cart` 0.85–0.92 with CLS 0,
+  `/checkout` 0.74 with CLS 0, desktop `/shop` 0.56–0.61 with CLS ~0.0015.
+  TTFB and LCP depend on the edge and Supabase image download; field RUM was not
+  collected and the owner accepted lab-only verification.
+- Rollback: redeploy retained version `2d53453a-689b-441a-9e9e-5289c8988cd6` /
+  deployment `fc618b23-3244-4d8f-8e70-46ce4b2234ff`, or the older
+  `f06cfd8e-ac68-4550-9269-9ba0c42f3b4a` /
+  `79e44e77-a0b7-4c7d-8958-1fd0da8309ab`. Git-local rollback is
+  `git revert --no-edit 5f62e15`. No database, Vercel alias, DNS or secret
+  rollback is required.
