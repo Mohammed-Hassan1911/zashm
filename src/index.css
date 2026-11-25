@@ -1561,35 +1561,6 @@ select option { background: var(--bg3); }
   animation-delay: calc(var(--letter-index) * 0.6s);
 }
 
-/* Two tiny stars per glyph, brightening on the same beat as the light that
-   reaches it. One wrapper per letter owns a shared opacity loop, so the ten
-   stars cost five layers instead of ten, and no new keyframe is added. */
-.hero-brand-letter-stars {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  /* Matches the twinkle's resting frame, so a letter waiting for its turn is
-     already dim instead of flashing bright when its delay starts. */
-  opacity: 0.12;
-  animation: hero-dust-twinkle 5s ease-in-out infinite;
-  animation-delay: calc(var(--letter-index) * 0.6s);
-  will-change: opacity;
-}
-
-.hero-brand-letter-star {
-  position: absolute;
-  width: 4px;
-  aspect-ratio: 1;
-  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
-  background: #fff4c2;
-  box-shadow: 0 0 5px rgba(245, 215, 127, 0.7);
-}
-
-.hero-brand-letter-star--a { top: -24%; left: -20%; }
-
-.hero-brand-letter-star--b { top: 8%; right: -24%; width: 3px; }
-
 /* A long rise to the peak, then a long fall. At 5s per cycle the glow reaches
    full strength at 0.9s and fades by 2.1s; with letters 0.6s apart, two or three
    neighbours overlap, which is what makes the light read as one moving beam. */
@@ -1600,8 +1571,8 @@ select option { background: var(--bg3); }
 }
 
 /* Five small stars around the wordmark, and six dust motes in the hero air.
-   The stars are static shapes with a shared twinkle; no new keyframe, no per-
-   letter sparkle, and every frame is `opacity`/`transform` only, so the
+   The stars are static shapes with a shared twinkle; no new keyframe, no
+   per-letter stars, and every frame is `opacity`/`transform` only, so the
    compositor runs it without repainting the text, the gradients or the photo
    behind it. */
 .hero-brand-sparkle {
@@ -3993,7 +3964,6 @@ main, [role="main"] {
   .footer-wordmark-letter::after,
   .hero-brand-sparkle,
   .footer-wordmark-sparkle,
-  .hero-brand-letter-stars,
   .footer-wordmark-letter-stars,
   .admin-login-mote,
   .admin-login-backdrop {
@@ -5147,7 +5117,6 @@ main, [role="main"] {
     transform: none;
   }
 
-  .hero-brand-letter-stars,
   .footer-wordmark-letter-stars {
     animation: none;
     opacity: 0.55;

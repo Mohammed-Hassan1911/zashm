@@ -98,10 +98,6 @@ export default function HomePage() {
                     style={{ '--letter-index': index }}
                   >
                     {letter}
-                    <span className="hero-brand-letter-stars" aria-hidden="true">
-                      <span className="hero-brand-letter-star hero-brand-letter-star--a" />
-                      <span className="hero-brand-letter-star hero-brand-letter-star--b" />
-                    </span>
                   </span>
                 ))}
               </span>
