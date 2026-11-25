@@ -23,6 +23,8 @@ export const WHATSAPP_NUMBER = '201013380313';
 
 const SUPABASE_PUBLIC_MARKER = '/storage/v1/object/public/';
 
+export { imageCandidates, imageSrcSet, proxyImageUrl } from './image-proxy.mjs';
+
 /**
  * Map a Supabase Storage public URL to its committed same-origin copy.
  *

@@ -308,6 +308,7 @@ export function CartPage() {
                     <div className="bag-line-media">
                       <SafeImage
                         src={item?.product?.images?.[0]}
+                        data-image-width="thumb"
                         fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="110" height="138"%3E%3Crect fill="%23ccc" width="110" height="138"/%3E%3C/svg%3E'}
                         alt={item?.product?.name ?? 'Product'}
                         loading="lazy"
@@ -1318,6 +1319,7 @@ export function CheckoutPage() {
                 <li key={item?.key}>
                   <SafeImage
                     src={item?.product?.images?.[0]}
+                    data-image-width="thumb"
                     fallback={'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="50"%3E%3Crect fill="%23222" width="40" height="50"/%3E%3C/svg%3E'}
                     alt=""
                     style={{ width: 40, height: 50, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}

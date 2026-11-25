@@ -364,6 +364,7 @@ export default function ProductImageLightbox({
           <SafeImage
             key={current}
             src={photos[current]}
+            data-image-width="detail"
             alt={`${name || 'Product'} — view ${current + 1}`}
             fallback={fallback}
             draggable={false}

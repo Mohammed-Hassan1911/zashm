@@ -32,6 +32,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { proxyImageUrl } from '../src/lib/image-proxy.mjs';
 import { availableStock, effectivePrice } from '../src/lib/pricing.js';
 import { productRoutePath } from '../src/lib/product-url.mjs';
 
@@ -238,7 +239,11 @@ export function renderProductHtml(template, product, { baseUrl = DEFAULT_BASE } 
   // the attribute React sets on the same element after mount. It goes directly
   // after the charset declaration so the encoding still wins the first bytes.
   if (image) {
-    const preload = `<link rel="preload" as="image" href="${escapeHtml(image)}" fetchpriority="high"/>`;
+    // The preload must match React's first paint: an optimized edge URL keeps
+    // the LCP image small and warm in Cloudflare's cache. Social/OG tags above
+    // keep the original Supabase URL so crawlers still see the true asset.
+    const preloadSrc = proxyImageUrl(image, 'detail') || image;
+    const preload = `<link rel="preload" as="image" href="${escapeHtml(preloadSrc)}" fetchpriority="high"/>`;
     html = html.includes('<meta charset="utf-8"/>')
       ? html.replace('<meta charset="utf-8"/>', () => `<meta charset="utf-8"/>\n  ${preload}`)
       : html.replace(/<head>/i, () => `<head>\n  ${preload}`);

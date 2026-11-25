@@ -864,6 +864,67 @@ change was made**.
   `79e44e77-…` if a full pre-hardening rollback is required. Git-local
   rollback is `git revert --no-edit 5f62e15`. No database rollback is needed.
 
+## Cloudflare Images image-proxy release (2026-11-25, owner-approved)
+
+Owner approval covered implementing and deploying the image proxy. The change is
+still **uncommitted in the working tree**; no push, Vercel alias/deployment, DNS,
+custom domain, Supabase setting/metadata, secret or product/order/coupon/data
+write was made. The original photos remain in Supabase Storage.
+
+- Design: same-origin `/img/v1/w160|w480|w1200/<base64url key>` requests; the
+  Worker builds the origin URL only from `VITE_SUPABASE_URL` and a key restricted
+  to `products/`, applies `cf.image`, negotiates one concrete format (AVIF, WebP
+  or JPEG), caches it in the Cloudflare Cache API under a format-specific key,
+  and returns `Cache-Control: public, max-age=31536000, immutable`. The browser
+  falls back to the original Supabase URL and then the `/media` mirror path
+  (currently empty until the snapshot sync is enabled); OG/Twitter/JSON-LD still
+  advertise the original Supabase asset.
+- Artifact: production rebuild used the same real origin/public anon key as the
+  deployed bundle, produced `index-B1fOZKAP.js` + `index-C5S0Kll9.css`, and the
+  final dry run read 46 files (1170.66 KiB / 214.68 KiB gzip). A 39-file scan found one
+  `anon` JWT, zero Staging/placeholder references and zero forbidden secrets;
+  the two `vercel-scripts.com` matches are CSP entries only.
+- Gates: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 40 suites / 4373 passed / 0 failed
+  (SQL 495 / 0, actually run); `npm run build` passed;
+  `npm run verify:production:config` → `READY: 0 problem(s)`; `git diff --check`
+  clean. A read-only review found four issues (format negotiation cached under
+  a URL-only key, `Range` poisoning, original fallback cached as immutable and
+  HEAD cache-hit body); all were fixed with regression tests before the first
+  deploy. A final review found two Low issues (`Accept` q-values ignored and docs
+  overstating the empty `/media` mirror); both were fixed before the final
+  redeploy.
+- Deployment: Worker `zashm` final version
+  `698ec41c-3698-4db8-9793-911eeab4d906`, deployment
+  `11086225-df23-4546-8e9d-bee810de3e3d`, created
+  `2026-11-25T03:15:59.784239Z`, 100% traffic (deploy command included
+  `--tag image-proxy-qvalue-20261125`). The earlier image-proxy version
+  `ad093362-6c7b-41b8-9e40-b6102b25fb00` / deployment
+  `96a1be4f-ff2c-4f04-b763-557ebe70185a` is retained as an intermediate rollback
+  target. The eight secret names are unchanged.
+- Live GET-only smoke: the nine page/sitemap/robots routes stayed 200 with CSP
+  and `noindex, nofollow, noarchive`; the unknown route stayed 404. A real
+  `w1200` image returned AVIF `60153` bytes (sample Supabase original: `120634`
+  bytes), `x-zashm-image: transformed` then `hit` on repeat, distinct AVIF/WebP/
+  JPEG variants, and a query-buster still hit the same cache entry. `w480` and
+  `w160` returned `24579` and `3176` AVIF bytes. After the final redeploy,
+  `Accept: image/avif;q=0,image/webp` returned WebP and
+  `image/avif;q=0,image/webp;q=0,*/*;q=1` returned JPEG. Invalid key → 404,
+  POST → 405.
+- Browser smoke: `/shop` cards request `/img/v1/`, expose 480w/1200w `srcSet`,
+  and made zero direct Supabase Storage image requests; product hero and zoom
+  use `w1200`, thumbnails/bag/cart/checkout use `w160`, and console errors were
+  0 on shop, product, cart, checkout and track. Lighthouse emitted
+  accessibility/best-practices/SEO 1/1/1 with no failures; the harness did not
+  emit a performance category, so no new LCP/field-CWV claim is made.
+- Rollback: redeploy the intermediate image-proxy version
+  `ad093362-6c7b-41b8-9e40-b6102b25fb00` / deployment
+  `96a1be4f-ff2c-4f04-b763-557ebe70185a`, the perf version
+  `1ead16fb-85c8-440c-8672-babbca38101a` /
+  `8968cc7e-dd47-4f6d-bf38-98aed61aef9b`, or the retained hardened version
+  `2d53453a-689b-441a-9e9e-5289c8988cd6` /
+  `fc618b23-3244-4d8f-8e70-46ce4b2234ff`. No database rollback is needed.
+  Supabase object `cache-control` metadata was deliberately not changed.
+
 ## Rollback
 
 - Keep Vercel deployment `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and its alias.

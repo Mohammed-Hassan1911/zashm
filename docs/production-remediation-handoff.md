@@ -1049,3 +1049,50 @@ secret or Telegram token in the 36-file artifact.
   `79e44e77-a0b7-4c7d-8958-1fd0da8309ab`. Git-local rollback is
   `git revert --no-edit 5f62e15`. No database, Vercel alias, DNS or secret
   rollback is required.
+
+### 13.19 Cloudflare Images egress proxy (2026-11-25, owner-approved)
+
+- Deployed an uncommitted working-tree change directly to Worker `zashm`, finally
+  as version `698ec41c-3698-4db8-9793-911eeab4d906`, deployment
+  `11086225-df23-4546-8e9d-bee810de3e3d`, 100%, created
+  `2026-11-25T03:15:59.784239Z`. No push, Vercel alias/deployment, DNS, custom
+  domain, Supabase setting/metadata, secret or product/order/coupon/data write
+  was made. The final deployment command included the tag
+  `image-proxy-qvalue-20261125`; the earlier image-proxy version
+  `ad093362-6c7b-41b8-9e40-b6102b25fb00` / deployment
+  `96a1be4f-ff2c-4f04-b763-557ebe70185a` is retained as an intermediate rollback
+  target.
+- Storefront images now use `/img/v1/w160|w480|w1200/<base64url key>` (cards
+  expose 480w/1200w `srcSet`; hero/zoom use 1200; thumbnails use 160). The Worker
+  applies `cf.image` with a negotiated concrete format, caches it at the edge
+  with immutable browser caching, and falls back to the original Supabase URL
+  and the `/media` mirror path (currently empty until synced). OG/Twitter/JSON-LD
+  keep the original Supabase asset.
+- Gates: `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 40 suites / 4373 passed / 0 failed
+  (SQL 495 / 0, not skipped); `npm run build` passed; production rebuild used the
+  real origin/public anon key; `npm run verify:production:config` →
+  `READY: 0 problem(s)`; `git diff --check` clean; Cloudflare dry-run succeeded
+  with unchanged bindings (1170.66 KiB / 214.68 KiB gzip). Two review passes
+  found six issues and each was fixed with a regression test: format-specific
+  cache keys, no forwarded `Range`, no immutable caching of the untransformed
+  fallback, no HEAD cache-hit body, `Accept` q-value parsing, and docs that
+  overstated the currently empty `/media` mirror.
+- Live proof: nine route smokes passed; a real product image served 60153 AVIF
+  bytes at `w1200` from 120634 original bytes, 24579 at `w480` and 3176 at
+  `w160`, with `x-zashm-image: transformed` then `hit`; AVIF/WebP/JPEG were
+  distinct; a query buster still hit cache; invalid key → 404 and POST → 405.
+  After the final redeploy, `image/avif;q=0,image/webp` served WebP and
+  `image/avif;q=0,image/webp;q=0,*/*;q=1` served JPEG. Browser checks showed zero
+  direct Supabase Storage image requests and zero
+  console errors on shop, product, cart, checkout and track. Lighthouse emitted
+  accessibility/best-practices/SEO 1/1/1 with no failures; no performance score
+  or field CWV was collected, so the earlier accepted LCP/TTFB caveat remains.
+- Rollback: redeploy the intermediate image-proxy version
+  `ad093362-6c7b-41b8-9e40-b6102b25fb00` / deployment
+  `96a1be4f-ff2c-4f04-b763-557ebe70185a`, the perf version
+  `1ead16fb-85c8-440c-8672-babbca38101a` /
+  `8968cc7e-dd47-4f6d-bf38-98aed61aef9b`, or the retained hardened version
+  `2d53453a-689b-441a-9e9e-5289c8988cd6` /
+  `fc618b23-3244-4d8f-8e70-46ce4b2234ff`. No database, Vercel, DNS or secret
+  rollback is required. The code remains uncommitted; do not claim a git revert
+  is available until the owner approves a commit.

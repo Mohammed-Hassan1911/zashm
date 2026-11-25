@@ -210,6 +210,38 @@ targets remain version `2d53453a-…` / deployment `fc618b23-…` and the older
 `f06cfd8e-ac68-4550-9269-9ba0c42f3b4a` / `79e44e77-a0b7-4c7d-8958-1fd0da8309ab`.
 Do not re-add the old Vercel Origin without an owner decision.
 
+An owner-approved Cloudflare Images image-proxy release was deployed on
+2026-11-25, finally as Worker version
+`698ec41c-3698-4db8-9793-911eeab4d906`, deployment
+`11086225-df23-4546-8e9d-bee810de3e3d` (100%). It adds same-origin
+`/img/v1/w160|w480|w1200/<base64url key>` URLs; the Worker accepts only GET/HEAD,
+restricts keys to `products/`, rejects traversal/query/invalid base64, and builds
+the Supabase origin solely from its configured env value. No arbitrary proxy
+target, auth bypass, Vercel/DNS/Supabase setting, secret or production data write
+was introduced, and Supabase object metadata was not changed. The browser keeps
+CSP-compatible fallbacks to the original Supabase URL and the `/media` mirror
+path (currently empty until synced); temporary `noindex` applies to image
+responses too.
+
+Pre-deploy gates were `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 40 suites / 4373
+passed / 0 failed (SQL 495 / 0, actually run), `npm run build`,
+`npm run verify:production:config` → `READY: 0 problem(s)` and `git diff --check`
+clean. Two review passes found and fixed six concrete issues with regression
+tests: format-specific cache keys, no forwarded `Range` (partial 206 bytes can
+never poison the immutable cache), no immutable caching of the untransformed
+fallback, no body on HEAD cache hits, `Accept` q-value parsing (q=0 is respected),
+and docs that overstated the currently empty `/media` mirror. Live probes
+returned 404 for an invalid key and 405 for POST; the transformed image returned
+immutable `Cache-Control`, `Vary: Accept` and a repeat `x-zashm-image: hit`.
+`image/avif;q=0,image/webp` served WebP and `image/avif;q=0,image/webp;q=0,*/*;q=1`
+served JPEG after the final redeploy. Browser console errors remained 0 on shop,
+product, cart, checkout and track, with zero direct Supabase Storage image
+requests from the storefront. Rollback is the retained intermediate image-proxy
+version `ad093362-6c7b-41b8-9e40-b6102b25fb00` / deployment
+`96a1be4f-ff2c-4f04-b763-557ebe70185a`, then the perf version
+`1ead16fb-85c8-440c-8672-babbca38101a` /
+`8968cc7e-dd47-4f6d-bf38-98aed61aef9b`.
+
 Until real products are added, the catalogue is intentionally empty and the
 store is **not** ready for sale.
 

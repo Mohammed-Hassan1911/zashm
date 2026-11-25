@@ -13,6 +13,7 @@
 import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { proxyImageUrl } from '../src/lib/image-proxy.mjs';
 import {
   absoluteImageUrl,
   baseUrlFromEnv,
@@ -129,7 +130,8 @@ console.log('\n[3] the LCP image is discovered before the bundle runs');
   const html = renderProductHtml(TEMPLATE, PRODUCT);
   const preload = /<meta charset="utf-8"\/>\n\s*<link rel="preload" as="image" href="([^"]+)" fetchpriority="high"\/>/.exec(html);
   ok(preload, 'a preload link is injected right after the charset');
-  eq(preload && preload[1], PRODUCT.images[0], 'it points at the first product image');
+  eq(preload && preload[1], proxyImageUrl(PRODUCT.images[0], 'detail'),
+    'it preloads the optimized edge version of the first product image');
   ok(html.indexOf('rel="preload"') < html.indexOf('rel="stylesheet"'), 'the preload comes before the stylesheet');
 }
 

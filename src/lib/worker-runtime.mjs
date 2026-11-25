@@ -13,6 +13,7 @@ import adminUsersHandler from '../../api/admin/users.js';
 import adminReviewsHandler from '../../api/admin/reviews.js';
 import adminUploadHandler from '../../api/admin/upload.js';
 import productExists from './product-exists.cjs';
+import { isImageResponse, negotiatedImageFormat, parseImagePath } from './image-proxy.mjs';
 import { isProductionEnv, productionConfigProblems, productionGuardResponse } from './production-env.mjs';
 
 const {
@@ -361,7 +362,134 @@ export function applySecurityHeaders(response, path, url, env = {}) {
   });
 }
 
-export async function handleRequest(request, env) {
+const IMAGE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+function imageError(message, status) {
+  return new Response(message, {
+    status,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+/**
+ * Serve one Supabase object through Cloudflare's edge cache.
+ *
+ * `cf.image` is a Worker fetch option, not an Images Paid feature: the first
+ * request for a width creates a unique transformation, later requests are
+ * served from cache without touching Supabase. Only the exact configured
+ * Supabase project is used and the object key comes from a validated path, so
+ * this cannot be used as an open proxy.
+ */
+export async function handleImageRequest(request, env = {}, helpers = {}) {
+  const parsed = parseImagePath(new URL(request.url).pathname);
+  if (!parsed) return imageError('Not Found', 404);
+
+  const method = String(request.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store' },
+    });
+  }
+
+  const origin = configuredSupabaseOrigin(env);
+  if (!origin) return imageError('Not Found', 404);
+
+  let sourceUrl;
+  try {
+    sourceUrl = new URL(`/storage/v1/object/public/${parsed.key}`, origin);
+  } catch {
+    return imageError('Not Found', 404);
+  }
+
+  const fetchImpl = helpers.fetchImpl || globalThis.fetch;
+  if (typeof fetchImpl !== 'function') return imageError('Image unavailable', 502);
+
+  const accept = request.headers && typeof request.headers.get === 'function'
+    ? request.headers.get('accept') || ''
+    : '';
+  // `format: auto` would make the bytes depend on Accept while the cache key
+  // stays URL-only. Negotiate one of three concrete variants instead, and give
+  // each its own internal cache key. Browser query strings are still ignored so
+  // cache busters cannot create unbounded edge objects or Supabase egress.
+  const format = negotiatedImageFormat(accept);
+  const cacheVariant = format || 'jpeg';
+  const cacheUrl = new URL(new URL(request.url).pathname, new URL(request.url).origin);
+  cacheUrl.searchParams.set('__zashm_format', cacheVariant);
+  const cacheRequest = new Request(cacheUrl.href, {
+    headers: { Accept: format ? `image/${format}` : 'image/jpeg' },
+  });
+  const cache = helpers.cache || (typeof caches !== 'undefined' && caches && caches.default) || null;
+  if (cache) {
+    try {
+      const hit = await cache.match(cacheRequest);
+      if (hit && hit.ok) {
+        const headers = new Headers(hit.headers);
+        headers.set('X-Zashm-Image', 'hit');
+        // HEAD must never return a body, even on a cache hit.
+        return new Response(method === 'HEAD' ? null : hit.body, { status: hit.status, headers });
+      }
+    } catch { /* a cache failure must fall through to the origin */ }
+  }
+
+  // Range is deliberately not forwarded: a 206 partial image must never be
+  // rewrapped as 200 and cached under the full-image key.
+  const requestHeaders = { Accept: format ? `image/${format}` : 'image/jpeg' };
+  const imageOptions = {
+    method: 'GET',
+    headers: requestHeaders,
+    cf: {
+      image: {
+        width: parsed.width,
+        quality: 82,
+        ...(format ? { format } : {}),
+      },
+    },
+  };
+
+  let upstream = null;
+  let usedTransform = true;
+  try {
+    upstream = await fetchImpl(sourceUrl.href, imageOptions);
+    // A 9422 (Free-plan transformation limit) or an unsupported format must not
+    // break photos; one retry with the untouched object is the safety net.
+    if (!isImageResponse(upstream)) {
+      usedTransform = false;
+      upstream = await fetchImpl(sourceUrl.href, {
+        method: 'GET',
+        headers: requestHeaders,
+      });
+    }
+  } catch {
+    return imageError('Image unavailable', 502);
+  }
+  if (!isImageResponse(upstream)) return imageError('Image unavailable', 502);
+
+  const headers = new Headers();
+  headers.set('Content-Type', String(upstream.headers.get('content-type') || 'image/jpeg'));
+  // The transform changes the byte length; never forward the origin's length.
+  // A failed transform falls back to the large original, but must not pin that
+  // original in the edge cache for a year: the next visitor should retry resize.
+  headers.set('Cache-Control', usedTransform ? IMAGE_CACHE_CONTROL : 'public, max-age=60');
+  headers.set('Vary', 'Accept');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Zashm-Image', usedTransform ? 'transformed' : 'original');
+
+  const response = new Response(upstream.body, { status: 200, headers });
+  if (cache && usedTransform) {
+    try {
+      await cache.put(cacheRequest, response.clone());
+    } catch { /* caching is an optimisation, never a hard failure */ }
+  }
+
+  if (method === 'HEAD') return new Response(null, { status: 200, headers });
+  return response;
+}
+
+export async function handleRequest(request, env, helpers = {}) {
   const url = new URL(request.url);
   const path = normalizePath(url.pathname);
 
@@ -391,6 +519,13 @@ export async function handleRequest(request, env) {
     }), path, url, env);
     shim.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
     return shim;
+  }
+
+  // Image proxy first: it owns a narrow path and must never fall through to the
+  // static 404 handler when a shopper asks for a resized product photo.
+  if (parseImagePath(url.pathname)) {
+    const imageResponse = await handleImageRequest(request, env, helpers);
+    return applySecurityHeaders(imageResponse, path, url, env);
   }
 
   let route = API_ROUTES.get(path);

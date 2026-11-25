@@ -62,8 +62,15 @@ export default function ProductCard({ product, index = 0, priority = false }) {
 
   // Both frames stay mounted: swapping `src` on hover is what made the old
   // transition flash. Only the second frame's download waits for the pointer.
-  const primary = useImageFallback(images[0] || FALLBACK_IMAGE, FALLBACK_IMAGE);
-  const secondary = useImageFallback(images[1] || FALLBACK_IMAGE, FALLBACK_IMAGE);
+  // Cards ask the edge for a 480px image (1200px on wide/hi-dpi grids) instead
+  // of downloading the full Supabase original for every product in the grid.
+  const cardImageOptions = {
+    width: 'card',
+    srcSet: true,
+    sizes: '(max-width: 700px) 50vw, (max-width: 1100px) 33vw, 25vw',
+  };
+  const primary = useImageFallback(images[0] || FALLBACK_IMAGE, FALLBACK_IMAGE, cardImageOptions);
+  const secondary = useImageFallback(images[1] || FALLBACK_IMAGE, FALLBACK_IMAGE, cardImageOptions);
 
   const hasSecondImage = canHover && images.length > 1 && !isSoldOut;
   // Reveal the deferred frame only once its real image has landed, so the
@@ -147,6 +154,8 @@ export default function ProductCard({ product, index = 0, priority = false }) {
       >
         <img
           src={primary.src}
+          srcSet={primary.srcSet || undefined}
+          sizes={primary.sizes || undefined}
           alt={product?.name || 'Product'}
           loading={isPriorityImage ? 'eager' : 'lazy'}
           fetchpriority={isPriorityImage ? 'high' : 'auto'}
@@ -160,6 +169,8 @@ export default function ProductCard({ product, index = 0, priority = false }) {
         {hasSecondImage && (
           <img
             src={secondaryRequested ? secondary.src : FALLBACK_IMAGE}
+            srcSet={secondaryRequested ? (secondary.srcSet || undefined) : undefined}
+            sizes={secondaryRequested ? (secondary.sizes || undefined) : undefined}
             alt=""
             aria-hidden="true"
             loading="lazy"

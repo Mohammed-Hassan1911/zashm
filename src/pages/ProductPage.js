@@ -404,6 +404,7 @@ export default function ProductPage() {
                     <div key={i} className="product-gallery-frame">
                       <SafeImage
                         src={img}
+                        data-image-width="detail"
                         alt={i === imgIdx ? p.name : ''}
                         draggable={false}
                         fallback={FALLBACK_IMG}
@@ -463,7 +464,7 @@ export default function ProductPage() {
                   className={`product-thumb${imgIdx === i ? ' is-active' : ''}`}
                   style={{ flex: '0 0 auto', padding: 0, cursor: 'pointer' }}
                   whileHover={{ scale: 1.04 }}>
-                  <SafeImage src={img} alt="" fallback={FALLBACK_IMG} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <SafeImage src={img} data-image-width="thumb" alt="" fallback={FALLBACK_IMG} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </motion.button>
               ))}
             </div>

@@ -198,7 +198,7 @@ export default function CartDrawer() {
                       className="cart-drawer-item"
                     >
                       <div className="cart-drawer-thumb">
-                        <SafeImage src={item.product?.images && item.product.images[0]} fallback={FALLBACK_IMG} alt={item.product?.name || 'Product'}
+                        <SafeImage src={item.product?.images && item.product.images[0]} data-image-width="thumb" fallback={FALLBACK_IMG} alt={item.product?.name || 'Product'}
                           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       </div>
 

@@ -977,7 +977,7 @@ try {
         && !/zashm-label-in/.test(css)
         && !/zashm-label-glow/.test(css),
         'the label box is static: no entrance, no glow loop');
-      assert.ok(/className="product-card-image"[\s\S]{0,1600}className="product-card-labels"/.test(card),
+      assert.ok(/className="product-card-image"[\s\S]{0,2200}className="product-card-labels"/.test(card),
         'every card cover carries the label box on the image');
       assert.ok(/className="product-card-labels product-page-label"[\s\S]{0,400}?className="product-card-image\b/.test(product),
         'the product page label sits in its own row above the photo, never over it');
@@ -1790,9 +1790,9 @@ try {
       assert.ok(/src=\{secondaryRequested \? secondary\.src : FALLBACK_IMAGE\}/.test(card),
         'the Supabase URL is withheld until then');
       assert.ok(!/src=\{secondary\.src\}/.test(card), 'no unconditional secondary source remains');
-      assert.ok(/const secondary = useImageFallback\(images\[1\] \|\| FALLBACK_IMAGE, FALLBACK_IMAGE\)/.test(card) &&
+      assert.ok(/const secondary = useImageFallback\(images\[1\] \|\| FALLBACK_IMAGE, FALLBACK_IMAGE, cardImageOptions\)/.test(card) &&
         /onError=\{secondary\.onError\}/.test(card),
-        'the original mirror -> placeholder fallback chain is preserved');
+        'the optimized -> original -> mirror -> placeholder fallback chain is preserved');
       assert.ok(/\{hasSecondImage && \(\s*<img/.test(card), 'the second frame stays mounted when eligible');
       assert.ok(/const showSecond = hovered && hasSecondImage && secondaryLoaded/.test(card) &&
         /onLoad=\{\(\) => setSecondaryLoaded\(true\)\}/.test(card) &&
