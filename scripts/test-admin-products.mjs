@@ -301,6 +301,28 @@ console.log('\n[4b] product payload: duplicate options and server-recomputed sto
   eq(clamped, null, 'a negative variant quantity is still rejected');
 }
 
+console.log('\n[4c] product gallery budget');
+{
+  const urls = Array.from({ length: 12 }, (_, i) => `https://example.test/${i}.jpg`);
+  const gallery = lib.validateProductPayload({
+    name: 'Gallery Tee', category: 'Tees', price: 100, stock: 1, images: urls,
+  });
+
+  eq(lib.MAX_PRODUCT_IMAGES, 10, 'the API budget is 10 images');
+  eq(gallery.images.length, 10, 'up to 10 gallery images survive validation');
+  eq(gallery.images[9], urls[9], 'the tenth image is preserved');
+  eq(gallery.images.includes(urls[10]), false, 'an eleventh image is clamped');
+
+  const uploader = readFileSync(
+    new URL('../src/components/admin/ImageUploader.js', import.meta.url),
+    'utf8'
+  );
+  ok(/const MAX_PRODUCT_IMAGES = 10;/.test(uploader),
+    'the dashboard declares the same 10-image budget');
+  ok(/maxImages = MAX_PRODUCT_IMAGES/.test(uploader),
+    'the product uploader uses the gallery budget instead of a hardcoded six');
+}
+
 console.log('\n[5] admin page navigation and add-product wiring');
 {
   const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');

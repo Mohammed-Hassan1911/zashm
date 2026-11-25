@@ -974,6 +974,13 @@ try {
         'the card badge keeps the shared pill but is a shade smaller than the product-page badge');
       assert.ok(/\.product-card-labels-above \{[^}]*position: static[^}]*margin:\s*0/.test(css),
         'the card label stays outside the photo, flush with its top edge');
+      const phoneLabel = (css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [])
+        .find((block) => /\.product-card-labels-above \.label-badge \{\s*font-size:\s*8px/.test(block)) || '';
+      assert.ok(/\.product-card-labels-above \.label-badge \{\s*font-size:\s*8px;[\s\S]*?letter-spacing:\s*0\.2px;[\s\S]*?padding:\s*2px 4px;/.test(phoneLabel) &&
+        /\.product-card-labels-above \.label-badge::before \{\s*width:\s*3px/.test(phoneLabel),
+      'phones shrink the card badge with the two-up card so it stays a left-edge tag, not a centred title');
+      assert.ok(/\.product-card-labels \{[^}]*justify-content:\s*flex-start/.test(css),
+        'the badge row never centres the label on small cards');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*text-align:\s*center/.test(css),
         'the label text is centred inside its box');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*transition:\s*box-shadow/.test(css)

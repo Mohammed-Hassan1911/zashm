@@ -809,11 +809,25 @@ select option { background: var(--bg3); }
   width: 4px;
   height: 4px;
 }
+/* Phones show the cards two-up, so the desktop badge would fill most of the
+   narrow label row and read like a centred title. Scale it with the card so it
+   stays a small tag welded to the left edge of the photo. */
 @media (max-width: 768px) {
   .product-card-labels-above .label-badge {
-    font-size: 9px;
-    letter-spacing: 0.4px;
-    padding: 3px 7px;
+    font-size: 8px;
+    letter-spacing: 0.2px;
+    padding: 2px 4px;
+  }
+  .product-card-labels-above .label-badge::before {
+    width: 3px;
+    height: 3px;
+  }
+}
+@media (max-width: 360px) {
+  .product-card-labels-above .label-badge {
+    font-size: 7.5px;
+    letter-spacing: 0;
+    padding: 1.5px 3px;
   }
 }
 

@@ -20,6 +20,8 @@ const MAX_PARALLEL_UPLOADS = 1;
 const UPLOAD_TIMEOUT = 90000;
 const UPLOAD_RETRIES = 1;
 const RETRY_DELAY_MS = 1500;
+// Owner-approved gallery budget: mirrors MAX_PRODUCT_IMAGES in api/_lib.js.
+const MAX_PRODUCT_IMAGES = 10;
 
 // A failed fetch has status 0 in ApiError; 408/5xx are worth one more attempt.
 function isRetryableUploadError(err) {
@@ -125,7 +127,7 @@ function getUploadError(err) {
 export default function ImageUploader({
   images = [],
   onChange,
-  maxImages = 6
+  maxImages = MAX_PRODUCT_IMAGES
 }) {
   const [dragging, setDragging] = useState(false);
   const [urlInput, setUrlInput] = useState('');

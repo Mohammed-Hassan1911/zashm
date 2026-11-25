@@ -1216,6 +1216,10 @@ function validateOrderEditPayload(body) {
   };
 }
 
+// Product gallery budget. Mirrors the admin ImageUploader default; direct API
+// and CSV writes are clamped to the same number of images.
+const MAX_PRODUCT_IMAGES = 10;
+
 // ─── PER-SIZE BODY WINDOWS (size finder) ────────────────────────────────────
 // The owner can publish, per product and per size, the height/weight window a
 // size is meant for. Shape: { "M": { minWeight, maxWeight, minHeight, maxHeight } }.
@@ -1313,7 +1317,7 @@ function validateProductPayload(p) {
   const colors = strArr(p.colors, 40, 30);
 
   const images = Array.isArray(p.images)
-    ? p.images.slice(0, 6).map((u) => str(u).slice(0, 2000)).filter((u) => u && isHttpsUrl(u))
+    ? p.images.slice(0, MAX_PRODUCT_IMAGES).map((u) => str(u).slice(0, 2000)).filter((u) => u && isHttpsUrl(u))
     : [];
 
   let variantStock = {};
@@ -2703,6 +2707,7 @@ module.exports = {
   validateOrderEditPayload,
   cairoDateString,
   isHttpsUrl,
+  MAX_PRODUCT_IMAGES,
   validateProductPayload,
   validateCouponPayload,
   couponDiscountValue,
