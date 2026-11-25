@@ -627,9 +627,9 @@ select option { background: var(--bg3); }
 }
 
 .product-card-labels {
+  /* Shared badge row. The shop card overrides it to sit above the photo; the
+     product page keeps its own row above the gallery image. */
   position: absolute;
-  /* Welded into the photo's top-left corner: no inset, no padding, so the
-     label starts exactly where the image starts. */
   top: 0;
   left: 0;
   z-index: 2;
@@ -640,10 +640,18 @@ select option { background: var(--bg3); }
   gap: 4px;
   padding: 0;
   box-sizing: border-box;
-  /* The photo has no other overlay now, so the label may use its full width. */
   max-width: 100%;
   min-width: 0;
   pointer-events: none;
+}
+
+/* The shop card label sits outside the photo, flush against its top edge. The
+   row is always reserved so labelled and unlabelled cards stay aligned. */
+.product-card-labels-above {
+  position: static;
+  min-height: 26px;
+  margin: 0;
+  overflow: hidden;
 }
 
 /* Product label: a small row above the photo, left aligned, so the badge never
@@ -670,10 +678,9 @@ select option { background: var(--bg3); }
   text-overflow: ellipsis;
 }
 
-/* The product label: a small jewellery-like box welded into the top-left
-   corner of the photo. Smoked glass, one hairline of light, and a quiet
-   breathing glow. Font, padding and tracking scale with the image width via
-   container units, so it stays compact on phones and refined on desktop. */
+/* Base jewellery-like badge: smoked glass, one hairline of light and a quiet
+   glow. Both visible labels override this to a rounded pill; only the squared
+   corner and hairline are inherited here. */
 .product-card-labels .label-badge {
   font-size: 9px;
   font-size: clamp(9px, 2.3cqw, 11px);
@@ -684,10 +691,8 @@ select option { background: var(--bg3); }
   padding: clamp(2.5px, 0.9cqw, 5px) clamp(5px, 2.2cqw, 10px);
   white-space: nowrap;
   text-align: center;
-  /* Square on the left so the box is visibly welded to the image edge; the
-     right corners stay soft. The top-left radius matches the card frame, so
-     the corner curve is followed instead of shaved. A thin gold seam marks
-     the welded edge. */
+  /* Square on the left and soft on the right in the base style; the two visible
+     labels override this to a closed pill. A thin gold seam marks the edge. */
   border-radius: 10px 999px 999px 0;
   border: 1px solid rgba(255, 244, 214, 0.14);
   border-left: 2px solid rgba(232, 200, 112, 0.55);
@@ -727,14 +732,15 @@ select option { background: var(--bg3); }
   padding: 0;
   pointer-events: none;
 }
-/* It is no longer welded to the image edge, so the box closes on all sides and
-   carries a small lit stud before the wording. */
-.product-page-label .label-badge {
+/* The card row and the product page row share the same closed pill and stud. */
+.product-page-label .label-badge,
+.product-card-labels-above .label-badge {
   border-radius: 999px;
   border-left: 1px solid rgba(255, 244, 214, 0.14);
   padding: 6px 13px;
 }
-.product-page-label .label-badge::before {
+.product-page-label .label-badge::before,
+.product-card-labels-above .label-badge::before {
   content: '';
   flex: 0 0 auto;
   width: 5px;
@@ -747,7 +753,8 @@ select option { background: var(--bg3); }
 /* The product page photo is much larger than a card, so the box scales up a
    little there while staying a small accent. */
 @media (min-width: 769px) {
-  .product-page-label .label-badge {
+  .product-page-label .label-badge,
+  .product-card-labels-above .label-badge {
     font-size: 10px;
     letter-spacing: 1.6px;
     padding: 7px 15px;
@@ -773,7 +780,8 @@ select option { background: var(--bg3); }
     letter-spacing: clamp(0.2px, 0.08cqw, 0.5px);
     padding: clamp(2px, 0.7cqw, 3.5px) clamp(4px, 1.8cqw, 7px);
   }
-  .product-page-label .label-badge {
+  .product-page-label .label-badge,
+  .product-card-labels-above .label-badge {
     font-size: 10px;
     letter-spacing: 0.5px;
     padding: 3px 8px;
@@ -788,6 +796,33 @@ select option { background: var(--bg3); }
     padding: 2px 2px;
     letter-spacing: 0;
   }
+}
+
+/* The card keeps the same pill and stud as the product page, just a shade
+   smaller so the photo still leads. */
+.product-card-labels-above .label-badge {
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 5px 11px;
+}
+.product-card-labels-above .label-badge::before {
+  width: 4px;
+  height: 4px;
+}
+@media (max-width: 768px) {
+  .product-card-labels-above .label-badge {
+    font-size: 9px;
+    letter-spacing: 0.4px;
+    padding: 3px 7px;
+  }
+}
+
+/* The card keeps the same pill as the product page; hover only lights the
+   whole border instead of opening a gold seam on the left. */
+.product-card:hover .product-card-labels-above .label-badge,
+.product-card:focus-within .product-card-labels-above .label-badge {
+  border-color: rgba(255, 244, 214, 0.24);
+  border-left-color: rgba(255, 244, 214, 0.24);
 }
 
 .product-card-sold-out {
@@ -2406,7 +2441,6 @@ select option { background: var(--bg3); }
   .product-card-info { padding: 11px 12px 13px !important; }
   .product-card-rating { margin-top: 5px !important; gap: 4px !important; }
   .product-card-price { margin-top: 6px !important; gap: 5px !important; }
-  .product-card-labels { top: 0; }
   .product-card-sold-out { font-size: 6.5px; padding: 1.5px 3px; }
 }
 

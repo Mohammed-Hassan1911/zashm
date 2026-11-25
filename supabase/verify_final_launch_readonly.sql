@@ -1,0 +1,321 @@
+-- ══════════════════════════════════════════════════════════════════════════════
+-- ZASHM · READ-ONLY PRODUCTION SECURITY VERIFICATION
+--
+-- Run this file in the Supabase SQL Editor (or psql) and compare the output
+-- with the expected values in docs/production-remediation-handoff.md §5.
+-- It changes NOTHING: every statement is a SELECT. It contains no secrets and
+-- no customer data (users/orders/coupons are only counted or inspected through
+-- catalog metadata).
+--
+-- Safe to run more than once, before or after a deployment.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ── 1) Table ownership / RLS state ───────────────────────────────────────────
+SELECT c.relname,
+       pg_get_userbyid(c.relowner) AS owner,
+       c.relkind,
+       c.relrowsecurity AS rls_enabled,
+       c.relforcerowsecurity AS rls_forced
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'public'
+   AND c.relname IN ('products', 'products_public', 'users', 'orders', 'coupons')
+ ORDER BY c.relname;
+
+-- ── 2) products_public definition and columns ────────────────────────────────
+SELECT pg_get_viewdef('public.products_public'::regclass, true) AS view_definition;
+
+SELECT column_name, data_type
+  FROM information_schema.columns
+ WHERE table_schema = 'public'
+   AND table_name = 'products_public'
+ ORDER BY ordinal_position;
+
+-- ── 3) products / products_public grants ─────────────────────────────────────
+SELECT table_name, grantee, privilege_type
+  FROM information_schema.role_table_grants
+  WHERE table_schema = 'public'
+   AND table_name IN ('products', 'products_public')
+   AND grantee IN ('PUBLIC', 'anon', 'authenticated', 'service_role')
+ ORDER BY table_name, grantee, privilege_type;
+
+SELECT grantee, column_name, privilege_type
+  FROM information_schema.column_privileges
+  WHERE table_schema = 'public'
+   AND table_name = 'products'
+   AND grantee IN ('PUBLIC', 'anon', 'authenticated')
+ ORDER BY grantee, column_name, privilege_type;
+
+SELECT has_table_privilege('public', 'public.products', 'SELECT') AS public_can_read_products,
+       has_table_privilege('anon', 'public.products', 'SELECT') AS anon_can_read_products,
+       has_table_privilege('authenticated', 'public.products', 'SELECT') AS auth_can_read_products,
+       has_any_column_privilege('anon', 'public.products', 'SELECT') AS anon_has_column_read,
+       has_any_column_privilege('authenticated', 'public.products', 'SELECT') AS auth_has_column_read,
+       has_table_privilege('anon', 'public.products_public', 'SELECT') AS anon_can_read_view,
+       has_table_privilege('service_role', 'public.products', 'SELECT') AS service_can_read_products;
+
+-- ── 4) RLS state + policy counts for every sensitive table ───────────────────
+SELECT n.nspname AS schema,
+       c.relname AS table_name,
+       c.relrowsecurity AS rls_enabled,
+       c.relforcerowsecurity AS rls_forced,
+       count(p.policyname) AS policy_count
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  LEFT JOIN pg_policies p
+         ON p.schemaname = n.nspname AND p.tablename = c.relname
+ WHERE n.nspname = 'public'
+   AND c.relname IN ('products', 'products_public', 'orders', 'users', 'coupons')
+ GROUP BY n.nspname, c.relname, c.relrowsecurity, c.relforcerowsecurity
+ ORDER BY c.relname;
+
+SELECT tablename, policyname, permissive, cmd, roles, qual, with_check
+  FROM pg_policies
+ WHERE schemaname = 'public'
+   AND tablename IN ('users', 'orders', 'coupons')
+ ORDER BY tablename, policyname;
+
+-- ── 5) users / orders / coupons grants (expected: anon/auth false) ───────────
+SELECT
+  t.table_name,
+  r.rolname AS role_name,
+  has_table_privilege(r.rolname, format('public.%I', t.table_name), 'SELECT')     AS can_select,
+  has_table_privilege(r.rolname, format('public.%I', t.table_name), 'INSERT')     AS can_insert,
+  has_table_privilege(r.rolname, format('public.%I', t.table_name), 'UPDATE')     AS can_update,
+  has_table_privilege(r.rolname, format('public.%I', t.table_name), 'DELETE')     AS can_delete,
+  has_table_privilege(r.rolname, format('public.%I', t.table_name), 'TRUNCATE')   AS can_truncate,
+  has_table_privilege(r.rolname, format('public.%I', t.table_name), 'REFERENCES') AS can_references,
+  has_table_privilege(r.rolname, format('public.%I', t.table_name), 'TRIGGER')    AS can_trigger
+FROM (VALUES ('users'), ('orders'), ('coupons')) AS t(table_name)
+CROSS JOIN (VALUES ('anon'), ('authenticated'), ('service_role')) AS r(rolname)
+ORDER BY t.table_name, r.rolname;
+
+SELECT table_name, grantee, column_name, privilege_type
+  FROM information_schema.column_privileges
+ WHERE table_schema = 'public'
+   AND table_name IN ('users', 'orders', 'coupons')
+   AND grantee IN ('PUBLIC', 'anon', 'authenticated')
+ ORDER BY table_name, grantee, column_name, privilege_type;
+
+-- ── 6) Data shape (counts only — no customer PII) ────────────────────────────
+SELECT count(*) FILTER (WHERE active IS TRUE) AS active_products,
+       count(*) FILTER (WHERE active IS FALSE) AS inactive_products,
+       count(*) FILTER (WHERE active IS NULL) AS null_active_products,
+       count(*) AS total_products
+  FROM public.products;
+
+SELECT count(*) FILTER (WHERE "reservedStock" IS NOT NULL AND "reservedStock" <> 0) AS nonzero_reserved_stock,
+       count(*) AS total_products
+  FROM public.products;
+
+SELECT count(*) FILTER (WHERE role = 'admin') AS admins,
+       count(*) FILTER (WHERE role <> 'admin') AS non_admins,
+       count(*) AS total_users
+  FROM public.users;
+
+SELECT count(*) AS total_orders,
+       count(*) FILTER (WHERE lower(COALESCE(status, '')) = 'cancelled') AS cancelled_orders
+  FROM public.orders;
+
+SELECT count(*) AS total_coupons,
+       count(*) FILTER (WHERE active IS TRUE) AS active_coupons
+  FROM public.coupons;
+
+-- ── 7) Deploy flags ──────────────────────────────────────────────────────────
+SELECT name, set_at, note
+  FROM public.zshm_deploy_flags
+ ORDER BY name;
+
+-- ── 8) Session revocation column ─────────────────────────────────────────────
+SELECT column_name, data_type, column_default, is_nullable
+  FROM information_schema.columns
+ WHERE table_schema = 'public'
+   AND table_name = 'users'
+   AND column_name = 'session_version';
+
+-- ── 9) Storage bucket + product-scoped policies ──────────────────────────────
+SELECT id, public, file_size_limit, allowed_mime_types
+  FROM storage.buckets
+ WHERE id = 'products';
+
+SELECT policyname, cmd, roles, qual, with_check
+  FROM pg_policies
+ WHERE schemaname = 'storage'
+   AND tablename = 'objects'
+   AND (coalesce(qual, '') LIKE '%products%' OR coalesce(with_check, '') LIKE '%products%')
+ ORDER BY policyname;
+
+SELECT policyname, permissive, roles, qual
+  FROM pg_policies
+ WHERE schemaname = 'storage'
+   AND tablename = 'objects'
+   AND policyname = 'zshm_products_no_public_listing';
+
+SELECT (
+         SELECT relrowsecurity FROM pg_class
+          WHERE oid = to_regclass('public.zshm_rate_limits')
+       ) AS rate_limits_rls_enabled,
+       CASE WHEN to_regclass('public.zshm_rate_limits') IS NULL THEN NULL
+            ELSE has_table_privilege('anon', to_regclass('public.zshm_rate_limits'), 'SELECT')
+       END AS anon_can_read_counters,
+       CASE WHEN to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NULL THEN NULL
+            ELSE has_function_privilege('anon',
+              to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)'), 'EXECUTE')
+       END AS anon_can_execute_limiter,
+       CASE WHEN to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NULL THEN NULL
+            ELSE has_function_privilege('service_role',
+              to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)'), 'EXECUTE')
+       END AS service_can_execute_limiter;
+
+SELECT pg_get_functiondef(
+         to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)')
+       ) AS rate_limit_function_definition
+ WHERE to_regprocedure('public.zshm_rate_limit(text,integer,integer,text)') IS NOT NULL;
+
+-- ── 10) Functions (exact deployed names) ─────────────────────────────────────
+SELECT p.proname,
+       pg_get_function_identity_arguments(p.oid) AS args,
+       p.prosecdef AS security_definer,
+       p.proconfig AS settings
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+ WHERE n.nspname = 'public'
+   AND p.proname IN (
+     'atomic_place_order',
+     'atomic_adjust_stock',
+     'atomic_set_order_status',
+     'atomic_delete_order',
+     'zshm_adjust_coupon_usage',
+     'zshm_order_signature',
+     'zshm_order_items',
+     'zshm_order_lines',
+     'zshm_order_skipped_lines',
+     'zshm_protect_last_admin',
+     'zshm_guard_coupon_delete',
+     'zshm_rate_limit'
+   )
+ ORDER BY p.proname;
+
+SELECT p.oid::regprocedure AS function_signature,
+       pg_get_functiondef(p.oid) AS function_definition
+  FROM pg_proc p
+ WHERE p.oid IN (
+   to_regprocedure('public.atomic_place_order(jsonb,text)'),
+   to_regprocedure('public.atomic_adjust_stock(jsonb,integer)')
+ )
+ ORDER BY p.proname;
+
+-- ── 11) Triggers that enforce invariants ─────────────────────────────────────
+SELECT tgname, tgrelid::regclass AS table_name, tgenabled
+  FROM pg_trigger
+ WHERE NOT tgisinternal
+   AND tgname IN ('zshm_protect_last_admin', 'zshm_guard_coupon_delete')
+ ORDER BY tgname;
+
+-- ── 12) Index usage ──────────────────────────────────────────────────────────
+SELECT schemaname, relname AS table_name, indexrelname AS index_name,
+       idx_scan, idx_tup_read, idx_tup_fetch
+  FROM pg_stat_user_indexes
+ WHERE schemaname = 'public'
+   AND relname IN ('products', 'orders')
+ ORDER BY relname, indexrelname;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- ZASHM · EXTRA READ-ONLY FINAL-LAUNCH CHECKS (2026-11-25)
+--
+-- Paste this whole file in the Supabase SQL Editor and Run. Every statement is
+-- a SELECT. It changes nothing and contains no secrets or customer PII.
+-- These queries close the gaps in the base verification file above:
+-- flags/backup RLS, all trigger functions/triggers, and post-deletion drift.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ── A) RLS for deploy flags and storage-policy backup ────────────────────────
+SELECT c.relname,
+       c.relrowsecurity AS rls_enabled,
+       c.relforcerowsecurity AS rls_forced,
+       count(p.policyname) AS policy_count
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  LEFT JOIN pg_policies p
+         ON p.schemaname = n.nspname AND p.tablename = c.relname
+ WHERE n.nspname = 'public'
+   AND c.relname IN ('zshm_deploy_flags', 'zshm_storage_policy_backup')
+ GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
+ ORDER BY c.relname;
+
+-- ── B) All 20 required functions: search_path, definer and grants ───────────
+SELECT p.proname,
+       pg_get_function_identity_arguments(p.oid) AS args,
+       p.prosecdef AS security_definer,
+       p.proconfig AS settings,
+       p.proacl AS grants
+  FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+ WHERE n.nspname = 'public'
+   AND p.proname IN (
+     'atomic_place_order', 'atomic_adjust_stock', 'atomic_delete_order',
+     'atomic_set_order_status', 'atomic_edit_order',
+     'zshm_order_signature', 'zshm_sellable_stock', 'zshm_order_items',
+     'zshm_order_lines', 'zshm_order_skipped_lines',
+     'zshm_valid_variant_stock', 'zshm_adjust_coupon_usage',
+     'zshm_guard_coupon_delete', 'zshm_protect_last_admin', 'zshm_rate_limit',
+     'zshm_storage_policy_scope_is_products', 'zshm_restore_storage_policies',
+     'zshm_refresh_product_rating', 'zshm_product_review_sync_rating',
+     'handle_new_user_secure'
+   )
+ ORDER BY p.proname;
+
+-- ── C) Three integrity triggers + one reviewed auth provisioning trigger ───
+WITH trg AS (
+  SELECT t.tgname,
+         t.tgenabled,
+         fn.nspname || '.' || p.proname AS function_name,
+         pg_get_triggerdef(t.oid) AS definition
+    FROM pg_trigger t
+    JOIN pg_class c     ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_proc p      ON p.oid = t.tgfoid
+    JOIN pg_namespace fn ON fn.oid = p.pronamespace
+   WHERE n.nspname = 'auth'
+     AND c.relname = 'users'
+     AND NOT t.tgisinternal
+)
+SELECT CASE WHEN count(*) FILTER (
+                  WHERE tgenabled = 'O'
+                    AND tgname IN ('on_auth_user_created_secure', 'on_auth_user_created')
+              ) = 1
+             AND count(*) FILTER (WHERE tgenabled <> 'O') = 0
+            THEN 'PASS' ELSE 'FAIL' END AS verdict,
+       jsonb_agg(jsonb_build_object(
+         'trigger', tgname,
+         'function', function_name,
+         'enabled', tgenabled,
+         'definition', definition
+       )) AS auth_triggers
+FROM trg;
+
+-- Keep the three non-auth integrity triggers visible as well.
+SELECT tgname,
+       tgrelid::regclass AS table_name,
+       tgenabled
+  FROM pg_trigger
+ WHERE NOT tgisinternal
+   AND tgname IN (
+     'zshm_protect_last_admin', 'zshm_guard_coupon_delete',
+     'zshm_product_review_sync'
+   )
+ ORDER BY tgname;
+
+-- ── D) Post-deletion coupon/stock drift (read-only) ─────────────────────────
+SELECT c.code,
+       COALESCE(c."usageCount", 0) AS usage_count,
+       (SELECT count(*)
+          FROM public.orders o
+         WHERE upper(btrim(COALESCE(o."discountCode", ''))) = upper(c.code)
+           AND lower(COALESCE(o.status, '')) <> 'cancelled') AS active_orders_using_coupon
+  FROM public.coupons c
+ ORDER BY c.code;
+
+SELECT id, name, stock, "variantStock"
+  FROM public.products
+ ORDER BY id;

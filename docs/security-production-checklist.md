@@ -925,3 +925,22 @@ test suite; they do not change the migration order above.
   failed (SQL suite actually ran on a temporary PostgreSQL 17 cluster);
   `npm run build` → success; `npm audit --omit=dev` → 0 vulnerabilities;
   built bundle contains only the anon JWT (no service-role key/secret).
+
+## Final launch caveats (2026-11-25)
+
+See `docs/final-launch-checks-2026-11-25.md`. The deployed image proxy remains
+live, but formal Production-ready sign-off is still withheld pending owner
+real-device viewport/performance checks and a custom-domain decision; the SQL
+gate is complete. A local browser matrix against live Worker content passed at
+320/375/768/1440 CSS px (§2.3), but it is not a real-device or field-CWV test.
+Read-only REST probes here confirmed anon isolation, Phase 3 flags, zero non-zero
+`reservedStock`, and counts `products=2`, `users=1` admin, `orders=3`,
+`coupons=1`; the owner must confirm those counts are expected. Owner results also
+closed the `zshm_valid_variant_stock` PUBLIC grant via
+`supabase/revoke_public_execute_valid_variant_stock.sql`, and §1.5 found unsafe
+legacy auth provisioning (`users.role DEFAULT 'manager'` and a function that
+omits required columns); the owner approved and ran
+`supabase/fix_auth_user_provisioning.sql` with `verdict = PASS`, role default
+`support`, pinned `search_path`, clean grants and the single auth trigger intact.
+The owner confirmed the current counts are expected, so the SQL gate is complete. No secret value, production
+data, DNS, Vercel alias or Supabase setting was changed.

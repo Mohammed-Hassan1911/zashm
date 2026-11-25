@@ -929,6 +929,33 @@ write was made. The original photos remain in Supabase Storage.
   `git revert --no-edit 1257cc1ffcf89210e6d3713c2fdef0fbcf66dc61`. Supabase
   object `cache-control` metadata was deliberately not changed.
 
+## Owner final checks (2026-11-25)
+
+The live Worker and Vercel 307 bridge were not changed by these checks. The
+remaining launch caveats and the exact owner-side steps are recorded in
+`docs/final-launch-checks-2026-11-25.md`:
+
+- SQL verification was run by the owner in the Supabase SQL Editor using
+  `supabase/verify_production_security.sql` plus Extra A–D in
+  `docs/final-launch-checks-2026-11-25.md` §1.4; all verdicts were `PASS` and the
+  owner confirmed the counts are expected. Only read-only REST probes were
+  possible from this environment.
+- Owner real-device checks remain. A temporary local read-only proxy to the live
+  Worker did produce a 320/375/768/1440 CSS-px layout matrix (all routes had
+  `scrollWidth == innerWidth`, 0 console errors, 0 direct Supabase images, and
+  correct WhatsApp/nav behaviour); see
+  `docs/final-launch-checks-2026-11-25.md` §2.3. That is not iOS Safari/Android
+  Chrome or field CWV. Lab trace showed 0 long tasks, 2 cached AVIF proxy image
+  hits and 0 direct Supabase image requests on live `/shop`.
+- A final shop-card label refinement was made locally only: the outside badge
+  is flush above the photo, keeps the product-page pill but a shade smaller; the
+  product page label is unchanged. It is uncommitted and **not** on the Worker
+  (see `docs/final-launch-checks-2026-11-25.md` §2.4). No commit, push or deploy
+  was made here.
+- With no card available, the canonical origin remains
+  `https://zashm.za-shm.workers.dev` with `noindex`. No custom domain, DNS,
+  Vercel alias or `noindex` change was made.
+
 ## Rollback
 
 - Keep Vercel deployment `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and its alias.

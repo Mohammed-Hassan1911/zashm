@@ -964,21 +964,24 @@ try {
     });
 
     await step('product cards keep a clean photo and readable badges', () => {
-      assert.ok(/@media \(max-width: 768px\) \{\s*\.product-card-labels \.label-badge \{\s*font-size:\s*clamp\(8px, 2\.1cqw, 9px\)/.test(css)
-        && /\.product-card-image\s*\{[^}]*container-type:\s*inline-size/.test(css),
-        'card labels shrink on phones and small screens while staying readable');
-      assert.ok(/\.product-card-labels\s*\{[^}]*top:\s*0;[^}]*left:\s*0;[^}]*padding:\s*0;/.test(css),
-        'the card label is welded into the top-left corner of the image');
-      assert.ok(!/\.product-page-label\s*\{[^}]*left:\s*50%/.test(css),
-        'the product page label stays on the top-left image edge too');
+      assert.ok(/\.product-page-label \.label-badge,\s*\.product-card-labels-above \.label-badge \{[^}]*border-radius:\s*999px/.test(css)
+        && /\.product-page-label \.label-badge::before,\s*\.product-card-labels-above \.label-badge::before \{/.test(css),
+        'the card and product page labels share one pill shape and lit stud');
+      assert.ok(/\.product-page-label \.label-badge,\s*\.product-card-labels-above \.label-badge \{[^}]*padding:\s*6px 13px/.test(css)
+        && /\.product-card-labels-above \.label-badge \{[^}]*font-size:\s*9px/.test(css)
+        && /\.product-card-labels-above \.label-badge \{[^}]*padding:\s*5px 11px/.test(css)
+        && /\.product-card-labels-above \.label-badge::before \{[^}]*width:\s*4px/.test(css),
+        'the card badge keeps the shared pill but is a shade smaller than the product-page badge');
+      assert.ok(/\.product-card-labels-above \{[^}]*position: static[^}]*margin:\s*0/.test(css),
+        'the card label stays outside the photo, flush with its top edge');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*text-align:\s*center/.test(css),
         'the label text is centred inside its box');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*transition:\s*box-shadow/.test(css)
         && !/zashm-label-in/.test(css)
         && !/zashm-label-glow/.test(css),
         'the label box is static: no entrance, no glow loop');
-      assert.ok(/className="product-card-image"[\s\S]{0,2200}className="product-card-labels"/.test(card),
-        'every card cover carries the label box on the image');
+      assert.ok(/className="product-card-labels product-card-labels-above"[\s\S]{0,1200}?className="product-card-image"/.test(card),
+        'every card label sits in its own row above the photo');
       assert.ok(/className="product-card-labels product-page-label"[\s\S]{0,400}?className="product-card-image\b/.test(product),
         'the product page label sits in its own row above the photo, never over it');
       assert.ok(/\.product-page-label\s*\{[\s\S]{0,140}?position: static/.test(css),

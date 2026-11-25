@@ -1098,3 +1098,38 @@ secret or Telegram token in the 36-file artifact.
   `fc618b23-3244-4d8f-8e70-46ce4b2234ff`. No database, Vercel, DNS or secret
   rollback is required. Git-local rollback is
   `git revert --no-edit 1257cc1ffcf89210e6d3713c2fdef0fbcf66dc61`.
+
+### 13.20 Final launch caveats still open (2026-11-25)
+
+- The owner asked that `Conditional Go` not be changed until three caveats are
+  closed: production SQL verification, custom-domain decision, and real-device
+  viewport/performance checks. See
+  `docs/final-launch-checks-2026-11-25.md` for the exact owner steps and the
+  read-only evidence already collected. SQL is now complete; the local
+  browser matrix in §2.3 passed at 320/375/768/1440px against live Worker
+  content, but real devices and the domain decision remain.
+- SQL: no Management token/DB connection string exists here, so only REST
+  probes were run. They confirmed anon isolation, the Phase 3 flags, zero
+  non-zero `reservedStock` and read-only counts (`products=2`, `users=1` admin,
+  `orders=3`, `coupons=1`). The owner will run
+  `supabase/verify_production_security.sql` **plus Extra A–D** in
+  `docs/final-launch-checks-2026-11-25.md` §1.4. Trigger functions are not
+  exposed as RPCs, and the supplied file does not cover all four functions,
+  triggers or the post-deletion drift check. Owner results closed the grant
+  finding via `supabase/revoke_public_execute_valid_variant_stock.sql`, but
+  §1.5 found that `handle_new_user()` cannot provision a user and `users.role`
+  defaults to `manager`; the owner approved and ran
+  `supabase/fix_auth_user_provisioning.sql` with `verdict = PASS`, role default
+  now `support`, pinned `search_path`, unchanged single auth trigger, and clean
+  grants. The owner confirmed the current counts are expected, so the SQL gate
+  is complete.
+- Devices: in this environment, against the live Worker, the connected browser
+  cannot emulate 320/375/768/1440px (CSP sandbox gives iframes an opaque origin;
+  `window.resizeTo` is ineffective). This does not invalidate the earlier
+  local-proxy matrix in `docs/cloudflare-migration.md`. Lab trace on live
+  `/shop` showed 0 long tasks, and its 2 image requests were both cached AVIF
+  proxy hits with 0 direct Supabase image requests. The owner will test on
+  personal devices and report screenshots/CWV where available.
+- Domain: no card is available, so the owner accepted the temporary/permanent
+  canonical origin `https://zashm.za-shm.workers.dev` with `noindex`. No DNS,
+  custom-domain, Vercel alias or `noindex` change was made.

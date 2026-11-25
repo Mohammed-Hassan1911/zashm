@@ -138,6 +138,23 @@ export default function ProductCard({ product, index = 0, priority = false }) {
       role="button"
       tabIndex={0}
     >
+      {/* The outside label keeps the product-page pill shape, a little smaller,
+          in its own reserved row above the photo. */}
+      <div
+        className="product-card-labels product-card-labels-above"
+        aria-label={(product?.label || isSoldOut) ? 'Product label and status' : undefined}
+        aria-hidden={!product?.label && !isSoldOut ? 'true' : undefined}
+      >
+        {product?.label && (
+          <span className={`label-badge ${LABEL_CLASS[product.label] || ''}`}>
+            {product.label}
+          </span>
+        )}
+        {isSoldOut && (
+          <span className="product-card-sold-out">Sold Out</span>
+        )}
+      </div>
+
       {/* PRODUCT IMAGE */}
       <div
         className="product-card-image"
@@ -182,23 +199,6 @@ export default function ProductCard({ product, index = 0, priority = false }) {
             data-visible={showSecond ? 'true' : 'false'}
             data-sold-out="false"
           />
-        )}
-
-        {/* Labels sit on the photo, welded into its top-left corner, so they
-            never reserve vertical space above the image. The photo carries no
-            other control: the whole card opens the product, and the wishlist
-            lives on the product page. */}
-        {(product?.label || isSoldOut) && (
-          <div className="product-card-labels" aria-label="Product label and status">
-            {product?.label && (
-              <span className={`label-badge ${LABEL_CLASS[product.label] || ''}`}>
-                {product.label}
-              </span>
-            )}
-            {isSoldOut && (
-              <span className="product-card-sold-out">Sold Out</span>
-            )}
-          </div>
         )}
       </div>
 
