@@ -972,18 +972,15 @@ try {
         && /\.product-card-labels-above \.label-badge \{[^}]*padding:\s*5px 11px/.test(css)
         && /\.product-card-labels-above \.label-badge::before \{[^}]*width:\s*4px/.test(css),
         'the card badge keeps the shared pill but is a shade smaller than the product-page badge');
-      assert.ok(/\.product-card-labels-above \{[^}]*position: static[^}]*margin:\s*0/.test(css),
-        'the card label stays outside the photo, flush with its top edge');
+      assert.ok(/\.product-card-labels-above \{[^}]*position:\s*absolute[^}]*top:\s*0[^}]*left:\s*0[^}]*z-index:\s*2[^}]*min-height:\s*0/.test(css),
+        'the card badge is welded inside the photo at the top-left corner, with no reserved row');
       const phoneLabel = (css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [])
         .find((block) => /\.product-card-labels-above \.label-badge \{\s*font-size:\s*8px/.test(block)) || '';
       assert.ok(/\.product-card-labels-above \.label-badge \{\s*font-size:\s*8px;[\s\S]*?letter-spacing:\s*0\.2px;[\s\S]*?padding:\s*2px 4px;/.test(phoneLabel) &&
         /\.product-card-labels-above \.label-badge::before \{\s*width:\s*3px/.test(phoneLabel),
       'phones shrink the card badge with the two-up card so it stays a left-edge tag, not a centred title');
-      const narrowLabel = (css.match(/@media \(max-width: 360px\) \{[\s\S]*?\n\}/g) || [])
-        .find((block) => /\.product-card-labels-above \.label-badge/.test(block)) || '';
-      assert.ok(/\.product-card-labels-above \{\s*align-items:\s*flex-end;\s*min-height:\s*19px;/.test(phoneLabel)
-        && /\.product-card-labels-above \{\s*min-height:\s*17px;/.test(narrowLabel),
-      'the phone frame hugs the badge exactly, so no empty border strip sits above it');
+      assert.ok(!/\.product-card-labels-above \{[^}]*min-height:\s*(19|17)px/.test(css),
+        'no phone-only row height remains; the photo and badge share the same top edge');
       assert.ok(/\.product-card-labels \{[^}]*justify-content:\s*flex-start/.test(css),
         'the badge row never centres the label on small cards');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*text-align:\s*center/.test(css),
@@ -993,7 +990,7 @@ try {
         && !/zashm-label-glow/.test(css),
         'the label box is static: no entrance, no glow loop');
       assert.ok(/className="product-card-labels product-card-labels-above"[\s\S]{0,1200}?className="product-card-image"/.test(card),
-        'every card label sits in its own row above the photo');
+        'every card label is positioned over its photo, not in a flow row');
       assert.ok(/className="product-card-labels product-page-label"[\s\S]{0,400}?className="product-card-image\b/.test(product),
         'the product page label sits in its own row above the photo, never over it');
       assert.ok(/\.product-page-label\s*\{[\s\S]{0,140}?position: static/.test(css),

@@ -114,8 +114,8 @@ console.log('[3] the card photo is full-bleed: no mat, no sampler, no extra requ
   check('both photo layers fill the 3:4 box', () => {
     assert.ok(/\.product-card-img \{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*cover;[^}]*object-position:\s*center;/s.test(css));
   });
-  check('the badge row reserves its own space above the full-bleed photo', () => {
-    assert.ok(/\.product-card-labels-above \{[^}]*position:\s*static/.test(css));
+  check('the badge lies over the top-left corner of the full-bleed photo', () => {
+    assert.ok(/\.product-card-labels-above \{[^}]*position:\s*absolute[^}]*top:\s*0[^}]*left:\s*0/.test(css));
     assert.ok(/className="product-card-labels product-card-labels-above"[\s\S]{0,1200}?className="product-card-image"/.test(card));
   });
   check('no colour sampler can add a second image request', () => {
