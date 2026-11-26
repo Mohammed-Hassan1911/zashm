@@ -974,6 +974,8 @@ try {
         'the card badge keeps the shared pill but is a shade smaller than the product-page badge');
       assert.ok(/\.product-card-labels-above \{[^}]*position: static[^}]*margin:\s*0/.test(css),
         'the card label stays outside the photo, flush with its top edge');
+      assert.ok(/\.product-card-labels-above:empty\s*\{\s*display:\s*none;\s*\}/.test(css),
+        'a product without a label has no empty strip above its photo');
       const phoneLabel = (css.match(/@media \(max-width: 768px\) \{[\s\S]*?\n\}/g) || [])
         .find((block) => /\.product-card-labels-above \.label-badge \{\s*font-size:\s*9px/.test(block)) || '';
       assert.ok(/\.product-card-labels-above \.label-badge \{\s*font-size:\s*9px;[\s\S]*?letter-spacing:\s*0\.3px;[\s\S]*?padding:\s*3px 6px;/.test(phoneLabel) &&
@@ -983,7 +985,7 @@ try {
         .find((block) => /\.product-card-labels-above \.label-badge/.test(block)) || '';
       assert.ok(/\.product-card-labels-above \{\s*align-items:\s*flex-end;\s*min-height:\s*21px;/.test(phoneLabel)
         && /\.product-card-labels-above \{\s*min-height:\s*19px;/.test(narrowLabel),
-      'the phone frame hugs the badge exactly, so no empty border strip sits above it');
+      'the labelled phone card hugs the badge exactly, while empty rows are removed above');
       assert.ok(/\.product-card-labels \{[^}]*justify-content:\s*flex-start/.test(css),
         'the badge row never centres the label on small cards');
       assert.ok(/\.product-card-labels \.label-badge\s*\{[^}]*text-align:\s*center/.test(css),
@@ -1033,9 +1035,13 @@ try {
         'the drawer body contains its own overscroll');
       assert.ok(!/repeating-linear-gradient/.test(css.slice(css.indexOf('Ambient backdrop'), css.indexOf('Film grain'))),
         'the background carries no vertical fluted lines');
-      assert.ok(/\.product-card-image\.product-gallery-main::before\s*\{\s*display:\s*none;/.test(css)
-        && !/\.product-gallery-main::after\s*\{[^}]*inset 0 0 0 1px/.test(css),
-        'the product photo keeps one outer border, not a border inside a border');
+      assert.ok(!/\.product-card-image(?:[^{}]*)?::before\s*\{/.test(css)
+        && !/\.product-gallery-main::after\s*\{/.test(css)
+        && !/\.product-gallery-main\s*\{[^}]*padding:/.test(css),
+        'no inset border, mat or vignette sits between the photo and the outer frame');
+      assert.ok(/\.product-card \{[^}]*border:\s*1px/.test(css)
+        && /\.product-gallery-main \{[^}]*border:\s*1px/.test(css),
+        'the outer card and gallery borders survive the inner-border removal');
 
       // The promo chip is a small champagne pill, never a full-width green box.
       assert.ok(/\.bag-coupon-applied\s*\{[^}]*border-radius:\s*999px/.test(css)

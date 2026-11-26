@@ -577,19 +577,6 @@ select option { background: var(--bg3); }
   container-type: inline-size;
 }
 
-/* A hairline of light inside the top of every photo, so the frame catches the
-   gallery light and the card reads as a framed print rather than a flat
-   rectangle. Pointer-transparent and above the image, below the labels. */
-.product-card-image::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border: 1px solid rgba(255, 248, 230, 0.06);
-  border-top-color: rgba(255, 248, 230, 0.13);
-  pointer-events: none;
-}
-
 /* Two stacked frames crossfade instead of swapping `src`. The second frame is
    mounted but its Supabase source waits for the first hover, so a card grid
    does not download every alternate photo up front. The layers are absolutely
@@ -645,20 +632,20 @@ select option { background: var(--bg3); }
   pointer-events: none;
 }
 
-/* The shop card label sits outside the photo, flush against its top edge. The
-   row is reserved so labelled and unlabelled cards stay aligned, but its height
-   now equals the badge itself, so the card frame hugs the label instead of
-   boxing an empty strip above it. */
+/* The shop card label sits outside the photo, flush against its top edge. A
+   labelled card reserves exactly the badge height; an unlabelled card collapses
+   the row completely so no empty strip sits above its photo. */
 .product-card-labels-above {
   position: static;
   min-height: 28px;
   margin: 0;
   overflow: hidden;
 }
+.product-card-labels-above:empty { display: none; }
 
-/* Product label: a small row above the photo, left aligned, so the badge never
-   covers the image. The reserved height keeps every card's photo aligned in a
-   grid row, whether or not that product has a label. */
+/* Product label: the live row is .product-card-labels-above (see the :empty
+   rule above), left aligned above the photo so the badge never covers it. Only
+   cards that show a label reserve height; unlabelled cards collapse it. */
 .product-card-label-row {
   display: flex;
   align-items: center;
@@ -813,9 +800,9 @@ select option { background: var(--bg3); }
 }
 /* Phones show the cards two-up, so the desktop badge would fill most of the
    narrow label row and read like a centred title. Scale it with the card so it
-   stays a small tag welded to the left edge of the photo. The reserved row keeps
-   every photo aligned in its grid row, but the badge sits at the bottom of that
-   row, so it touches the photo instead of floating above it. */
+   stays a small tag welded to the left edge of the photo. The badge sits at the
+   bottom of its row, so it touches the photo; an unlabelled card has no row at
+   all and starts flush with the image. */
 @media (max-width: 768px) {
   .product-card-labels-above {
     align-items: flex-end;
@@ -4665,14 +4652,12 @@ main, [role="main"] {
   box-shadow: 0 0 10px rgba(201, 168, 76, 0.35);
 }
 
-/* ─── Product gallery: one lit plate and its strip ──────────────────────────
-   The main shot is framed like the rest of the storefront: a smoked-glass
-   plate with a champagne hairline, a warm light from the top and a soft drop
-   shadow. The thumbnails are small plates from the same family; the one in
-   view carries the gold ring, so the strip reads as a row of prints rather
-   than a set of bordered boxes. */
+/* ─── Product gallery: one framed photo and its strip ───────────────────────
+   The main shot fills the frame edge to edge: one champagne hairline, a warm
+   light from the top and a soft drop shadow. No inner mat, vignette or second
+   border sits between the photo and that outer frame. The thumbnails are small
+   plates from the same family; the one in view carries the gold ring. */
 .product-gallery-main {
-  padding: 10px;
   border-radius: 12px;
   border: 1px solid rgba(255, 248, 230, 0.1);
   background:
@@ -4683,13 +4668,8 @@ main, [role="main"] {
     0 22px 50px rgba(0, 0, 0, 0.48);
 }
 
-/* The product photo keeps one frame only. The shop-card hairline and the
-   inner mat hairline are both switched off here, so the shot sits inside the
-   single outer border instead of a border inside a border. */
-.product-card-image.product-gallery-main::before { display: none; }
-
 /* The strip slides by one frame width per selection. Only `transform` moves,
-   so the champagne mat and the arrows stay perfectly still. */
+   so the frame and the arrows stay perfectly still. */
 .product-gallery-track {
   position: absolute;
   inset: 0;
@@ -4697,7 +4677,7 @@ main, [role="main"] {
   will-change: transform;
 }
 
-/* The swipe plate sits under the controls and above the mat. Only `transform`
+/* The swipe plate sits under the controls and above the frame. Only `transform`
    moves during a touch drag, so the photo never repaints under the finger. */
 .product-gallery-frames {
   position: absolute;
@@ -4708,7 +4688,7 @@ main, [role="main"] {
   will-change: transform;
 }
 
-/* One frame per photo: the strip is exactly as wide as the lit plate, so one
+/* One frame per photo: the strip is exactly as wide as the framed photo, so one
    measured step lands on the next print at every breakpoint. */
 .product-gallery-frame {
   position: relative;
@@ -4716,19 +4696,6 @@ main, [role="main"] {
   width: 100%;
   height: 100%;
   min-width: 0;
-}
-
-/* The print sits on a dark mat: a soft vignette at its edges, so a bright
-   studio shot still reads as a mounted print rather than a white rectangle
-   dropped on the page. No second hairline. */
-.product-gallery-main::after {
-  content: '';
-  position: absolute;
-  inset: 10px;
-  z-index: 1;
-  border-radius: 6px;
-  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.16);
-  pointer-events: none;
 }
 
 .product-thumbs {
@@ -4793,8 +4760,7 @@ main, [role="main"] {
 }
 
 @media (max-width: 480px) {
-  .product-gallery-main { padding: 8px; border-radius: 10px; }
-  .product-gallery-main::after { inset: 8px; border-radius: 5px; }
+  .product-gallery-main { border-radius: 10px; }
   .product-thumb { border-radius: 8px; }
 }
 
