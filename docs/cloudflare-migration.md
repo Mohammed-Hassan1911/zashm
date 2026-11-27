@@ -956,6 +956,73 @@ remaining launch caveats and the exact owner-side steps are recorded in
   `https://zashm.za-shm.workers.dev` with `noindex`. No custom domain, DNS,
   Vercel alias or `noindex` change was made.
 
+## Owner-approved storefront hardening deploy (2026-11-27, dce2c49)
+
+- Scope: code only. The owner approved deploying commit
+  `dce2c4931aa5c8617c9408baae651a83879610a8` from `main` to Worker `zashm`.
+  Removing `noindex`, indexing/domain/DNS/Route/Zone changes, secrets/env,
+  SQL, Supabase settings and production data writes remain unapproved and were
+  not made.
+- Pre-flight: local HEAD and `origin/main` both matched `dce2c49`; CI run
+  `46008740011` was `completed/success` for that SHA; `CI_ONLY_DO_NOT_DEPLOY`
+  was absent; `ZASHM_BUILD_DIR=build-production npm run artifact:assert-deployable`
+  returned `READY TO DEPLOY`; `wrangler.production.toml` still used
+  `directory = "./build-production"`, `workers_dev = true`,
+  `preview_urls = false`, the temporary workers.dev vars, and had no
+  Route/Zone/custom domain. The dry run read 48 files (1176.07 KiB /
+  215.92 KiB gzip) and the secret names were unchanged.
+- Deployment:
+  `npx wrangler deploy --config wrangler.production.toml --tag release-dce2c49 --message "dce2c49: storefront states, a11y, cart labels and release gates"`.
+  Worker version `e3a69c62-1607-4a50-b536-fc47ae48484e`, created
+  `2026-11-27T13:42:37.841Z`, is serving 100% traffic with tag
+  `release-dce2c49`. The previous 100% version
+  `14d48837-2908-4f2f-a2d1-1ce0c1fd228f` (tag `review-fix-467999b`) remains
+  the rollback target.
+- Live hashes: `/assets/index-BwzHvfEM.js` and `/assets/index-DERsNCzr.css`,
+  both with `Cache-Control: public, max-age=31536000, immutable`. The CI-only
+  bundle (`index-6KRv3S_C.js` plus marker) was rejected and never deployed.
+  A scan of the live JS found zero service-role/session-secret/Telegram/Upstash
+  markers and one JWT with `role=anon`.
+- Post-deploy proof: 17 HTTP checks passed (home, shop, both products, cart,
+  checkout, wishlist, track, admin, sitemap, robots, strict 404, admin API 401,
+  invalid login 401, both assets, image proxy). Every HTML route plus
+  sitemap/robots returned `X-Robots-Tag: noindex, nofollow, noarchive`; the
+  prerendered HTML carries the same robots meta; CSP was present; sitemap URLs
+  use only the workers.dev origin. Anon REST probes returned 200 for
+  `products_public`, 401 for base `products/users/orders/coupons`, and zero
+  object names from storage list. An invalid coupon returned `{valid:false}`
+  with no row data; a bad Origin returned 403. Browser HTML routes had zero
+  console errors and no real 4xx/5xx; the best-effort coupon OPTIONS warm-up
+  appeared once as `net::ERR_ABORTED` while a direct OPTIONS probe returned
+  204; two CSP console messages appeared only while Chromium rendered
+  `/sitemap.xml` as XML.
+- Journeys: a valid variant add-to-bag kept size/colour and correct EGP totals
+  through drawer, cart and checkout. A persisted empty-variation line rendered
+  the shared `Standard` label and its availability guard blocked checkout
+  without silently deleting the line. Tracking showed the secure-link-required
+  and explicit not-found states with no console errors.
+  `node scripts/test-storefront-a11y-seo-fixes.mjs` → 67 passed, 0 failed,
+  including the Standard-label assertions. WhatsApp is home-only,
+  `position: fixed`, `z-index: 30000`, uses safe-area offsets, has a 54px phone
+  tap box, unmounts while the bag dialog is open, and no scroll-to-top element
+  exists.
+- Monitor: automation `aut_21d492678001vml80l2GDprA3T`
+  (`ZASHM 2-min monitor v16 (dce2c49, 6 checks)`) returned explicit `PASS` at
+  `2026-11-27T14:08:22.965Z` after 6 clean checks covering shop-flow,
+  admin-flow, edges and assets, with pinned hashes, noindex/CSP, immutable
+  assets, image proxy and strict 401s.
+- Caveats: after hydration the SPA rewrites the public-page robots meta to
+  `index, follow`; the HTTP `X-Robots-Tag` and prerendered meta remain
+  `noindex, nofollow, noarchive`, so the effective indexing block is intact.
+  Changing the hydrated DOM meta needs a new approved code change/deploy. The
+  320/375/768/1440 matrix was not re-run here because the connected browser
+  cannot emulate viewports; the earlier local-proxy matrix remains the
+  evidence. No Supabase Management token/DB connection string exists here, so
+  SQL state was checked only by anon REST probes.
+- Rollback:
+  `npx wrangler rollback 14d48837-2908-4f2f-a2d1-1ce0c1fd228f --config wrangler.production.toml`.
+  No SQL, Vercel, DNS or secret rollback is required.
+
 ## Rollback
 
 - Keep Vercel deployment `dpl_C38pB3xWTz7RQaBq8YFGF3Kt5dBC` and its alias.

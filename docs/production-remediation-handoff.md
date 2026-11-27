@@ -1133,3 +1133,42 @@ secret or Telegram token in the 36-file artifact.
 - Domain: no card is available, so the owner accepted the temporary/permanent
   canonical origin `https://zashm.za-shm.workers.dev` with `noindex`. No DNS,
   custom-domain, Vercel alias or `noindex` change was made.
+
+### 13.21 Owner-approved code deploy of dce2c49 (2026-11-27)
+
+- Approved scope: code only — commit
+  `dce2c4931aa5c8617c9408baae651a83879610a8` from `main` to Worker `zashm`.
+  No `noindex` removal, indexing, domain/DNS/Route/Zone, secret/env, SQL,
+  Supabase setting or production data change was approved or made. The
+  temporary canonical origin remains `https://zashm.za-shm.workers.dev`.
+- Gates: local HEAD and `origin/main` both `dce2c49`; CI run `46008740011`
+  `completed/success` for that SHA; `CI_ONLY_DO_NOT_DEPLOY` absent;
+  `ZASHM_BUILD_DIR=build-production npm run artifact:assert-deployable` →
+  `READY TO DEPLOY`; `ZSHM_REQUIRE_SQL_TESTS=1 npm test` → 40 suites /
+  4349 passed / 0 failed (SQL 495 / 0, actually run); `npm run build` passed;
+  Wrangler config/secret names unchanged and dry-run clean.
+- Deployment: tag `release-dce2c49`, message
+  `dce2c49: storefront states, a11y, cart labels and release gates`. Worker
+  version `e3a69c62-1607-4a50-b536-fc47ae48484e` serves 100% traffic;
+  live hashes are `index-BwzHvfEM.js` / `index-DERsNCzr.css` with immutable
+  caching. The previous 100% version
+  `14d48837-2908-4f2f-a2d1-1ce0c1fd228f` is retained for rollback.
+- Verification: 17 HTTP smokes passed; every HTML route plus sitemap/robots
+  kept `X-Robots-Tag: noindex, nofollow, noarchive` and prerendered robots
+  meta; CSP, strict 404, admin/auth 401s, bad-Origin 403, anon isolation and
+  zero object-name exposure were confirmed. Browser HTML pages had zero
+  console errors and no real 404s. `node scripts/test-storefront-a11y-seo-fixes.mjs`
+  → 67 passed / 0 failed, including the `Standard` cart label. Tracking and
+  WhatsApp invariants were checked live. Full details are in
+  `docs/cloudflare-migration.md`.
+- Monitor `aut_21d492678001vml80l2GDprA3T` returned explicit `PASS` at
+  `2026-11-27T14:08:22.965Z` after 6 clean checks covering all four groups.
+- Caveats: hydrated public pages rewrite the robots meta to `index, follow`,
+  but the HTTP header and prerendered meta remain `noindex`; changing the DOM
+  meta requires a new approved deploy. The 320/375/768/1440 matrix was not
+  re-run in this environment (viewport emulation unavailable); the earlier
+  local-proxy matrix remains valid. SQL could only be probed through anon REST
+  because no Management token/DB connection string exists here.
+- Status: **READY** for this code-only release, with the temporary workers.dev
+  URL and full HTTP-level noindex unchanged. Rollback command:
+  `npx wrangler rollback 14d48837-2908-4f2f-a2d1-1ce0c1fd228f --config wrangler.production.toml`.

@@ -137,13 +137,18 @@ console.log('\n[3] the LCP image is discovered before the bundle runs');
 
 console.log('\n[4] Product structured data mirrors the storefront rules');
 {
-  const data = jsonLdOf(renderProductHtml(TEMPLATE, PRODUCT));
+  const productHtml = renderProductHtml(TEMPLATE, PRODUCT);
+  const data = jsonLdOf(productHtml);
+  const canonical = /<link rel="canonical" href="([^"]+)"\s*\/?>/.exec(productHtml)?.[1];
+  const ogUrl = /<meta property="og:url" content="([^"]+)"\s*\/?>/.exec(productHtml)?.[1];
+  eq(canonical, 'https://za-shm.vercel.app/product/1794232720755261', 'canonical uses the base origin + product path');
+  eq(ogUrl, canonical, 'prerendered og:url matches canonical');
   eq(data && data['@type'], 'Product', 'type');
   eq(data && data.name, 'Jacket', 'name');
   eq(data && data.offers.price, 2000, 'sale price is used when 0 < salePrice < price');
   eq(data && data.offers.priceCurrency, 'EGP', 'currency');
   eq(data && data.offers.availability, 'https://schema.org/InStock', 'variant stock makes it InStock');
-  eq(data && data.offers.url, 'https://za-shm.vercel.app/product/1794232720755261', 'offer url');
+  eq(data && data.offers.url, canonical, 'prerendered offer url matches canonical and og:url');
   eq(data && data.brand.name, 'ZASHM', 'brand');
   eq(data && data.sku, 'ZSH-JKT-1', 'sku');
 

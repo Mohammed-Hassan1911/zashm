@@ -139,6 +139,9 @@ ok(shell.includes(`https://${PRODUCTION_SUPABASE_REF}.supabase.co`), 'CSP precon
 ok(!shell.includes(STAGING_SUPABASE_REF), 'shell has no Staging Supabase ref');
 ok(!shell.includes('za-shm.vercel.app'), 'shell has no Vercel Production canonical');
 ok(shell.includes(TEMP_WORKERS_DEV_ORIGIN), 'canonical uses the approved temporary workers.dev origin');
+const robots = bundleFile('robots.txt');
+ok(robots.includes(TEMP_WORKERS_DEV_ORIGIN), 'Production robots.txt advertises the workers.dev sitemap');
+ok(!robots.includes('za-shm.vercel.app'), 'Production robots.txt has no retired Vercel sitemap URL');
 ok(headers.includes(`https://${PRODUCTION_SUPABASE_REF}.supabase.co`), 'static CSP allows only the Production Supabase origin');
 ok(!headers.includes('__ZASHM_SUPABASE_ORIGIN__'), 'Supabase placeholder was filled for this build');
 ok(shell.includes('content="noindex, nofollow, noarchive"'), 'storefront shell carries the temporary noindex directive');

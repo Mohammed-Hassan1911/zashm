@@ -916,8 +916,17 @@ console.log('\n[13] admin image upload payload budget');
 console.log('\n[14] private-page robots meta and accessibility landmarks');
 {
   const seo = read('src/lib/seo.js');
-  ok(/if \(robots\) \{\s*setNamed\('robots', robots\);\s*\} else \{/.test(seo),
-    'setPageMeta rewrites robots to index, follow only when a page omits robots');
+  ok(/robotsFromShell\(\)/.test(seo) && /\bnoindex\b/.test(seo),
+    'setPageMeta captures the shell robots policy before any page mutates it');
+  ok(!/setAttribute\('content', 'index, follow'\)/.test(seo),
+    'setPageMeta never rewrites robots to index, follow');
+  ok(/const robotsDirective = robotsForPage\(robots\);/.test(seo) &&
+     /if \(robotsDirective\) setNamed\('robots', robotsDirective\);/.test(seo),
+    'all runtime robots writes go through the shell-aware helper');
+  ok(!seo.includes('window.location.href'),
+    'Product JSON-LD never uses the tracked full href as offers.url');
+  ok(/url: offerUrl/.test(seo) && /canonicalUrl\(window\.location\.pathname/.test(seo),
+    'offers.url is built from the canonical origin + pathname rule');
 
   const cart = read('src/pages/CartPage.js');
   for (const title of ['Shopping Bag', 'Checkout', 'Wishlist']) {

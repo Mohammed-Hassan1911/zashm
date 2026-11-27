@@ -850,6 +850,17 @@ const shellOriginAssets = {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
       });
     }
+    if (assetPath === '/product/456/index.html') {
+      return new Response(
+        '<html><head>' +
+          '<link rel="canonical" href="https://zashm.za-shm.workers.dev/product/456"/>' +
+          '<meta property="og:url" content="https://zashm.za-shm.workers.dev/product/456"/>' +
+          '<script type="application/ld+json" id="zashm-product-jsonld">' +
+          '{"offers":{"url":"https://zashm.za-shm.workers.dev/product/456"}}</script>' +
+          '</head></html>',
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
     if (assetPath === '/shop/index.html') {
       return new Response(
         '<html><head><link rel="canonical" href="https://za-shm.vercel.app/shop"/>' +
@@ -865,6 +876,10 @@ try {
   // A CORS-only storage origin must not become a rewrite target.
   process.env.ALLOWED_ORIGINS =
     'https://zashm.example, https://ptegprcbtfylqhbnbkih.supabase.co';
+  // A future paid-domain cutover must keep the baked workers.dev origin in the
+  // dedicated sitemap list so the Worker can rewrite it to the new canonical.
+  process.env.SITEMAP_ALLOWED_ORIGINS =
+    'https://zashm.example, https://zashm.za-shm.workers.dev';
 
   const rewrittenProduct = await handleRequest(
     new Request('https://zashm.example/product/123'),
@@ -901,6 +916,20 @@ try {
     '/shop serves its own generated shell instead of the root canonical');
   ok(!rewrittenShopBody.includes('za-shm.vercel.app'),
     '/shop metadata no longer advertises the build-time Vercel origin');
+
+  const rewrittenTempShell = await handleRequest(
+    new Request('https://zashm.example/product/456'),
+    { ASSETS: shellOriginAssets }
+  );
+  const rewrittenTempBody = await rewrittenTempShell.text();
+  ok(rewrittenTempBody.includes('href="https://zashm.example/product/456"'),
+    'a baked workers.dev canonical is rewritten when its origin stays in SITEMAP_ALLOWED_ORIGINS');
+  ok(rewrittenTempBody.includes('content="https://zashm.example/product/456"'),
+    'the baked workers.dev og:url follows the same cutover rewrite');
+  ok(rewrittenTempBody.includes('"url":"https://zashm.example/product/456"'),
+    'Product JSON-LD follows the same cutover rewrite');
+  ok(!rewrittenTempBody.includes('zashm.za-shm.workers.dev'),
+    'no baked temporary origin survives the approved cutover');
 } finally {
   for (const name of shellOriginEnvNames) {
     if (oldShellOriginEnv[name] === undefined) delete process.env[name];

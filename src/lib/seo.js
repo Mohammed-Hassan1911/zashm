@@ -37,6 +37,25 @@ function setProp(property, content) {
   if (el) el.setAttribute('content', content);
 }
 
+// The prerendered shell owns the site-wide indexing policy. Capture its robots
+// directive once, before any page can rewrite the tag, so a SPA navigation can
+// never turn a noindex deployment back into an indexable one. Private pages may
+// still add a stricter directive when the shell is indexable.
+let shellRobotsDirective;
+function robotsFromShell() {
+  if (shellRobotsDirective !== undefined) return shellRobotsDirective;
+  if (typeof document === 'undefined') return '';
+  const el = document.head.querySelector('meta[name="robots"]');
+  shellRobotsDirective = el ? String(el.getAttribute('content') || '') : '';
+  return shellRobotsDirective;
+}
+
+function robotsForPage(requested) {
+  const shell = robotsFromShell();
+  if (/\bnoindex\b/i.test(shell)) return shell;
+  return requested || shell || '';
+}
+
 // The storefront always advertises the brand image: a product that has no photo
 // still inherits the site card instead of keeping a stale product URL from the
 // previous page. Resolve against the canonical URL first, then the live origin.
@@ -52,7 +71,8 @@ function defaultOgImage(canonical) {
 
 // title: page title (brand suffix is appended automatically).
 // description: meta description. image: absolute URL. url: canonical URL.
-// robots: e.g. 'noindex, nofollow' to keep a page out of search results.
+// robots: per-page directive, e.g. 'noindex, nofollow'. A noindex directive
+// baked into the shell always wins so public routes cannot re-enable indexing.
 // preserveTitle: refresh the other tags without replacing a product title that
 // is already correct (the shell prerenders it before React hydrates).
 export function setPageMeta({ title, description, image, url, robots, preserveTitle = false } = {}) {
@@ -79,12 +99,8 @@ export function setPageMeta({ title, description, image, url, robots, preserveTi
   setNamed('twitter:description', desc);
   setNamed('twitter:image', socialImage);
 
-  if (robots) {
-    setNamed('robots', robots);
-  } else {
-    const r = document.head.querySelector('meta[name="robots"]');
-    if (r) r.setAttribute('content', 'index, follow');
-  }
+  const robotsDirective = robotsForPage(robots);
+  if (robotsDirective) setNamed('robots', robotsDirective);
 
   if (canonical) {
     const link = upsert('link[rel="canonical"]', () => {
@@ -162,7 +178,12 @@ export function setProductJsonLd(product) {
   // in stock when at least one declared size × color variant has stock; the
   // legacy `stock` column is the aggregate and is not updated per variant.
   const inStock = availableStock(product) > 0;
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  // Match the canonical link exactly: path + origin, never the full href with
+  // UTM/tracking query strings or a hash. The prerendered shell uses the same
+  // shape, so crawling the hydrated DOM cannot create a second product URL.
+  const offerUrl = typeof window !== 'undefined'
+    ? canonicalUrl(window.location.pathname, window.location.origin)
+    : '';
   const data = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -177,7 +198,7 @@ export function setProductJsonLd(product) {
       price: Number.isFinite(price) ? price : 0,
       priceCurrency: 'EGP',
       availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-      url: typeof window !== 'undefined' ? window.location.href : origin,
+      url: offerUrl,
     },
   };
   el.textContent = JSON.stringify(data);
