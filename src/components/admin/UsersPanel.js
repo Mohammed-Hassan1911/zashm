@@ -11,7 +11,7 @@ const ROLE_CONFIG = {
 };
 
 export default function UsersPanel() {
-  const { users, addUser, updateUser, deleteUser, session } = useAuth();
+  const { users, usersLoadStatus, usersError, loadUsers, addUser, updateUser, deleteUser, session } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'support' });
   const [errors, setErrors] = useState({});
@@ -121,18 +121,35 @@ export default function UsersPanel() {
   };
 
   const storedUsers = users ? users.filter(u => u.id) : []; 
+  const usersPending = usersLoadStatus === 'idle' || usersLoadStatus === 'loading';
+  const memberCount = usersPending
+    ? 'Loading team members...'
+    : usersLoadStatus === 'error' && storedUsers.length === 0
+      ? 'Team members unavailable'
+      : `${storedUsers.length} team members`;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <p style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 4 }}>{storedUsers.length} team members</p>
+          <p style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 4 }}>{memberCount}</p>
         </div>
         <button type="button" className="gold-btn" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px' }}
           onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', email: '', password: '', role: 'support' }); setErrors({}); setShowPassword(false); }}>
           <Plus size={14} /> Add User
         </button>
       </div>
+
+      {usersLoadStatus === 'error' && (
+        <div role="alert" aria-live="assertive" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, border: '1px solid var(--red)', borderRadius: 6, padding: '12px 16px', background: 'rgba(192,57,43,0.08)' }}>
+          <p style={{ color: 'var(--red)', fontSize: 12, lineHeight: 1.6, margin: 0, flex: '1 1 220px' }}>
+            Could not load team members. {usersError || 'Please try again.'}
+          </p>
+          <button type="button" className="outline-btn" onClick={loadUsers} disabled={usersPending} style={{ padding: '7px 14px', fontSize: 11 }}>
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Role Legend */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 12, marginBottom: 24 }}>
@@ -167,7 +184,28 @@ export default function UsersPanel() {
             </tr>
           </thead>
           <tbody>
-            {storedUsers.map(user => {
+            {usersPending && (
+              <tr>
+                <td colSpan={4} style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text3)', fontSize: 12 }}>
+                  <span role="status">Loading team members...</span>
+                </td>
+              </tr>
+            )}
+            {usersLoadStatus === 'error' && storedUsers.length === 0 && (
+              <tr>
+                <td colSpan={4} style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text3)', fontSize: 12 }}>
+                  Team members could not be loaded. Use Retry above.
+                </td>
+              </tr>
+            )}
+            {usersLoadStatus === 'success' && storedUsers.length === 0 && (
+              <tr>
+                <td colSpan={4} style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text3)', fontSize: 12 }}>
+                  No team members yet.
+                </td>
+              </tr>
+            )}
+            {!usersPending && storedUsers.map(user => {
               const cfg = ROLE_CONFIG[user.role] || ROLE_CONFIG.support;
               const isMe = user.id === session?.userId;
               return (

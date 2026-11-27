@@ -5,6 +5,7 @@ import { useStore } from '../../store';
 import { toast } from '../ui/BackToTop';
 import { focusFirstElement, redirectOutsideFocus, trapTabKey } from '../../lib/focus-trap';
 import { effectivePrice } from '../../lib/pricing';
+import { itemVariationLabel } from '../../lib/cart-variant';
 import SafeImage from '../ui/SafeImage';
 
 const FALLBACK_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="100"%3E%3Crect fill="%23222" width="80" height="100"/%3E%3C/svg%3E';
@@ -206,7 +207,7 @@ export default function CartDrawer() {
                       <div className="cart-drawer-info">
                         <div className="cart-drawer-info-top">
                           <p className="cart-drawer-name">{item.product?.name || 'Product'}</p>
-                          <p className="cart-drawer-meta">Size: {item.size} · Color: {item.color}</p>
+                          <p className="cart-drawer-meta">{itemVariationLabel(item)}</p>
                           <p className="cart-drawer-price">
                             EGP {(effectivePrice(item.product) * (item.qty ?? 0)).toLocaleString()}
                           </p>

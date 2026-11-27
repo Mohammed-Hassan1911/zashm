@@ -37,16 +37,34 @@ function setProp(property, content) {
   if (el) el.setAttribute('content', content);
 }
 
+// The storefront always advertises the brand image: a product that has no photo
+// still inherits the site card instead of keeping a stale product URL from the
+// previous page. Resolve against the canonical URL first, then the live origin.
+function defaultOgImage(canonical) {
+  const base = canonical || (typeof window !== 'undefined' ? window.location.origin : '');
+  if (!base) return '/og-image.jpg';
+  try {
+    return new URL('/og-image.jpg', base).href;
+  } catch {
+    return `${String(base).replace(/\/+$/, '')}/og-image.jpg`;
+  }
+}
+
 // title: page title (brand suffix is appended automatically).
 // description: meta description. image: absolute URL. url: canonical URL.
 // robots: e.g. 'noindex, nofollow' to keep a page out of search results.
-export function setPageMeta({ title, description, image, url, robots } = {}) {
+// preserveTitle: refresh the other tags without replacing a product title that
+// is already correct (the shell prerenders it before React hydrates).
+export function setPageMeta({ title, description, image, url, robots, preserveTitle = false } = {}) {
   if (typeof document === 'undefined') return;
-  const fullTitle = title ? `${title} — ${BRAND}` : `${BRAND} — Luxury Fashion`;
+  const fullTitle = preserveTitle && document.title
+    ? document.title
+    : title ? `${title} — ${BRAND}` : `${BRAND} — Luxury Fashion`;
   const desc = description || DEFAULT_DESC;
   const canonical = url || (typeof window !== 'undefined'
     ? canonicalUrl(window.location.pathname, window.location.origin)
     : '');
+  const socialImage = image || defaultOgImage(canonical);
 
   document.title = fullTitle;
   setNamed('description', desc);
@@ -55,11 +73,11 @@ export function setPageMeta({ title, description, image, url, robots } = {}) {
   setProp('og:type', 'website');
   setProp('og:site_name', BRAND);
   setProp('og:url', canonical);
-  if (image) setProp('og:image', image);
+  setProp('og:image', socialImage);
   setNamed('twitter:card', 'summary_large_image');
   setNamed('twitter:title', fullTitle);
   setNamed('twitter:description', desc);
-  if (image) setNamed('twitter:image', image);
+  setNamed('twitter:image', socialImage);
 
   if (robots) {
     setNamed('robots', robots);

@@ -1,0 +1,70 @@
+[
+  {
+    "id": 1795385879888720,
+    "name": "Textured Zip Jacket",
+    "price": 2000,
+    "salePrice": 1500,
+    "category": "Jackets",
+    "stock": 25,
+    "image": "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/1cfa31a67efdc0f34e8af4c0.jpg",
+    "images": [
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/1cfa31a67efdc0f34e8af4c0.jpg",
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/7945dcde3a7ca22243c51e3a.jpg",
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/66f0138526529d5ded879361.jpg",
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/db31b9448a305b1b0c59934d.jpg",
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/650becf83ad8ecbcd30ac762.jpg"
+    ],
+    "description": "",
+    "label": "Limited Edition",
+    "rating": 0,
+    "reviews": 0,
+    "sku": "",
+    "sizes": [
+      "M",
+      "L",
+      "XL"
+    ],
+    "colors": [
+      "Burgundy",
+      "Black",
+      "White"
+    ],
+    "variantStock": {
+      "L-Burgundy": 16,
+      "M-Burgundy": 6,
+      "XL-Burgundy": 3
+    }
+  },
+  {
+    "id": 1795405822136272,
+    "name": "Old Money Pants",
+    "price": 900,
+    "salePrice": 760,
+    "category": "Pants",
+    "stock": 36,
+    "image": "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/6774a692845c2c4bd89fc7b2.jpg",
+    "images": [
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/6774a692845c2c4bd89fc7b2.jpg",
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/6e037c5ae867f3df779e017a.jpg",
+      "https://ptegprcbtfylqhbnbkih.supabase.co/storage/v1/object/public/products/8d4854be83189f4d2531e2a6.jpg"
+    ],
+    "description": "",
+    "label": "New Arrival",
+    "rating": 0,
+    "reviews": 0,
+    "sku": "",
+    "sizes": [
+      "M",
+      "L",
+      "XL"
+    ],
+    "colors": [
+      "Beige"
+    ],
+    "variantStock": {
+      "L-Beige": 10,
+      "M-Beige": 17,
+      "XL-Beige": 9
+    }
+  }
+]

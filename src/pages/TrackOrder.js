@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api';
+import { isOutageError } from '../lib/resilience';
 import { readTrackCredential, saveTrackCredential } from '../lib/trackCredential.mjs';
 import { Search, Package, MapPin, Calendar, ArrowRight } from 'lucide-react';
 import SafeImage from '../components/ui/SafeImage';
@@ -17,6 +18,15 @@ const STATUS_COLORS = {
 };
 
 const STATUS_FLOW = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered'];
+
+// A failed lookup is not proof that the order is missing. Network/timeouts,
+// rate limits, 5xx and outage payloads must say so and offer a retry instead.
+function isTrackingOutage(err) {
+  const status = Number(err?.status);
+  if (isOutageError(status) || status === 429) return true;
+  const code = String(err?.payload?.error || '').toLowerCase();
+  return /unavailable|timeout|timed ?out|network|server|database|temporar|overload|rate limit/.test(code);
+}
 
 // SEC-16: the signed token is a credential. Capture it into component state and
 // remove it from the address bar so it cannot leak through history, screenshots
@@ -40,6 +50,9 @@ export default function TrackOrder() {
   const [currentOrder, setCurrentOrder] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [missingToken, setMissingToken] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const [outage, setOutage] = useState(false);
+  const [lookupAttempt, setLookupAttempt] = useState(0);
   const [loadingTrack, setLoadingTrack] = useState(false);
   // 🎯 لقط الأوردر أوتوماتيكياً: رابط التتبع الآمن (?track=...&tk=...) هو المصدر
   // الوحيد. نص بحث المنتجات في الـ store ليس رقم طلب ويجب ألا يملأ هذا الحقل.
@@ -67,6 +80,8 @@ export default function TrackOrder() {
       setCurrentOrder(null);
       setNotFound(false);
       setMissingToken(false);
+      setLookupError('');
+      setOutage(false);
       return;
     }
     const id = activeOrderId.trim();
@@ -79,6 +94,8 @@ export default function TrackOrder() {
       setCurrentOrder(null);
       setNotFound(false);
       setMissingToken(true);
+      setLookupError('');
+      setOutage(false);
       setLoadingTrack(false);
       return;
     }
@@ -86,6 +103,8 @@ export default function TrackOrder() {
     setLoadingTrack(true);
     setNotFound(false);
     setMissingToken(false);
+    setLookupError('');
+    setOutage(false);
     setCurrentOrder(null);
 
     (async () => {
@@ -93,25 +112,42 @@ export default function TrackOrder() {
         const qs = `/orders?track=${encodeURIComponent(id)}&tk=${encodeURIComponent(tk)}`;
         const payload = await api.get(qs);
         if (cancelled) return;
-        if (payload && payload.found && payload.order) {
+        if (payload && payload.found === false) {
+          // Only an explicit negative answer from the server means "not found".
+          setNotFound(true);
+        } else if (payload && payload.found && payload.order) {
           setCurrentOrder({ ...payload.order, access: payload.access || 'full' });
         } else {
-          setNotFound(true);
+          const message = typeof payload?.error === 'string' && payload.error
+            ? payload.error
+            : 'Tracking is temporarily unavailable. Please try again.';
+          setLookupError(message);
+          setOutage(true);
         }
       } catch (err) {
         if (cancelled) return;
-        setNotFound(true);
+        setLookupError(err?.message || 'Tracking is temporarily unavailable. Please try again.');
+        setOutage(isTrackingOutage(err));
       } finally {
         if (!cancelled) setLoadingTrack(false);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [activeOrderId, signedToken]);
+  }, [activeOrderId, signedToken, lookupAttempt]);
 
   const shippingAmount = currentOrder
     ? Math.max(0, (currentOrder.total || 0) - (currentOrder.subtotal || 0) + (currentOrder.discount || 0))
     : 0;
+
+  // Re-runs the exact same tokenised lookup; the effect already holds the id
+  // and credential in state, so no new URL or storage write is needed.
+  const retryLookup = () => {
+    setLookupError('');
+    setOutage(false);
+    setNotFound(false);
+    setLookupAttempt((attempt) => attempt + 1);
+  };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault(); // 🎯 منع تحديث الصفحة أو الاتصال الخارجي نهائياً
@@ -164,6 +200,8 @@ export default function TrackOrder() {
       {!currentOrder && activeOrderId && (
         <motion.div
           className="track-card track-notice"
+          role={lookupError ? (outage ? 'alert' : 'status') : undefined}
+          aria-live={lookupError ? (outage ? 'assertive' : 'polite') : undefined}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
@@ -175,6 +213,16 @@ export default function TrackOrder() {
               <p className="track-notice-copy">
                 For your privacy, orders can only be tracked through the secure link sent with your order confirmation.
               </p>
+            </>
+          ) : lookupError ? (
+            <>
+              <p className="track-notice-title">
+                {outage ? 'Tracking is temporarily unavailable.' : 'We couldn’t check this order.'}
+              </p>
+              <p className="track-notice-copy">{lookupError}</p>
+              <button type="button" className="track-submit" onClick={retryLookup} disabled={loadingTrack}>
+                Retry
+              </button>
             </>
           ) : notFound ? (
             <>

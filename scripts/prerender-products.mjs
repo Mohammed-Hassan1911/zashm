@@ -20,11 +20,13 @@
 // for this file to disagree with the client render.
 //
 // Data comes from the public `products_public` view with the anon key — the same
-// read the storefront already performs. Nothing secret is read, written, or
-// embedded. Any failure (missing env, network, bad payload, missing build) is a
-// no-op for product pages and their sitemap manifest: the deploy keeps the
-// working SPA shell, and the sitemap uses its short fail-closed fallback instead
-// of caching an empty product list. `scripts/resilience-exclude.json`
+// read the storefront already performs — or from a reviewed public snapshot at
+// `ZASHM_CATALOGUE_SNAPSHOT` for reproducible offline/release builds. Nothing
+// secret is read, written, or embedded. Any failure (missing env, network, bad
+// payload, missing build) is a no-op for product pages and their sitemap
+// manifest: the deploy keeps the working SPA shell, and the sitemap uses its
+// short fail-closed fallback instead of caching an empty product list.
+// `scripts/resilience-exclude.json`
 // is deliberately NOT applied — it only keeps products out of the offline backup,
 // while a live product still deserves real metadata.
 
@@ -51,6 +53,7 @@ const SHOP_TITLE = 'Shop — ZASHM';
 const SHOP_DESCRIPTION = 'Browse the full ZASHM collection — premium clothing with delivery across Egypt.';
 const META_DESCRIPTION_MAX = 300;
 const FETCH_TIMEOUT_MS = 15000;
+const SNAPSHOT_ENV = 'ZASHM_CATALOGUE_SNAPSHOT';
 
 const dryRun = process.argv.slice(2).includes('--dry-run');
 
@@ -299,6 +302,24 @@ export function renderProductHtml(template, product, { baseUrl = DEFAULT_BASE } 
 }
 
 async function fetchProducts({ env = process.env, fetchImpl = fetch } = {}) {
+  // A reviewed public snapshot makes offline/release builds reproducible: the
+  // same prerendered shells and sitemap ids are produced without a live read.
+  // It is checked before the skip flag so an explicit snapshot always wins.
+  const snapshot = env[SNAPSHOT_ENV];
+  if (snapshot) {
+    const target = resolve(ROOT, String(snapshot));
+    if (!target.startsWith(`${ROOT}${sep}`)) {
+      return { skipped: 'catalogue snapshot must stay inside the repository' };
+    }
+    if (!existsSync(target)) {
+      return { skipped: `catalogue snapshot not found: ${snapshot}` };
+    }
+    const rows = JSON.parse(readFileSync(target, 'utf8'));
+    if (!Array.isArray(rows)) throw new Error('catalogue snapshot is not an array');
+    if (rows.length === 0) return { skipped: 'catalogue snapshot is empty' };
+    return { products: rows, source: 'snapshot' };
+  }
+
   // Preparation builds must not make even a read request to the other
   // environment. This keeps `build-production` completely offline: the SPA
   // shell and shop page are still generated, but no catalogue is fetched.

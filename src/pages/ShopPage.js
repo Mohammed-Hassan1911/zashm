@@ -31,6 +31,7 @@ export default function ShopPage() {
     productsLoadStatus,
     refreshProducts,
     searchQuery,
+    setSearchQuery,
     filterCategory,
     setFilterCategory
   } = useStore();
@@ -208,6 +209,7 @@ export default function ShopPage() {
 
   // RESET FILTERS
   const resetFilters = () => {
+    setSearchQuery('');
     setFilterCategory('ALL');
     setLabelFilter('All');
     setPriceRange({
@@ -698,7 +700,17 @@ export default function ShopPage() {
         )}
 
         <div style={{ paddingBottom: 80 }}>
-          {filtered.length === 0 && productsLoadStatus === 'error' && products.length === 0 ? null : filtered.length === 0 ? (
+          {productsLoadStatus === 'idle' || productsLoadStatus === 'loading' ? (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{ textAlign: 'center', padding: '100px 20px', color: 'var(--text3)' }}
+            >
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--text2)' }}>
+                Loading products...
+              </p>
+            </div>
+          ) : filtered.length === 0 && productsLoadStatus === 'success' ? (
             <div
               style={{
                 textAlign: 'center',
@@ -741,7 +753,7 @@ export default function ShopPage() {
                 Reset Filters
               </button>
             </div>
-          ) : (
+          ) : filtered.length === 0 ? null : (
             <div className="product-collection-grid">
               {filtered.map((product, index) => (
                 <ProductCard

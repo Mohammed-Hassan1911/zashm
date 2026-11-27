@@ -1176,8 +1176,10 @@ try {
         'the floating-action gate reads the real drawer state');
       assert.ok(!/isEditingField|isSmallScreen|<BackToTop/.test(app),
         'no keyboard-hiding state and no scroll-to-top button remain');
-      assert.ok(!/focusin|focusout/.test(app),
-        'the removed floating action left no focus listeners behind');
+      assert.ok(!/document\.addEventListener\(['"]focus(?:in|out)['"]/.test(app),
+        'the removed floating action left no document-level focus listeners behind');
+      assert.ok(/onBlur=\{\(event\) => redirectOutsideFocus\(/.test(app),
+        'dialog focus containment is scoped, not a global listener');
     });
 
     await step('mobile footer clears the floating actions above the bottom nav', () => {

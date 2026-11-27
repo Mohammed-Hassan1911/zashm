@@ -10,7 +10,7 @@
  *
  *   node scripts/test-prerender.mjs
  */
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { proxyImageUrl } from '../src/lib/image-proxy.mjs';
@@ -351,6 +351,98 @@ console.log('\n[12] a failed catalogue read never publishes an empty manifest');
   eq(offline.available, false, 'offline preparation reports an unavailable catalogue');
   eq(fetched, false, 'no Supabase request is made during preparation');
   ok(offline.reason.includes('ZASHM_SKIP_CATALOGUE_FETCH'), 'the skip reason is explicit in the build log');
+}
+
+console.log('\n[13] a reviewed snapshot makes offline prerendering reproducible');
+{
+  const dir = mkdtempSync(join(ROOT, '.tmp-zashm-prerender-snapshot-'));
+  const snapshot = join(dir, 'catalogue.json');
+  const rows = [
+    { id: 1795385879888720, name: 'Snapshot Jacket', price: 100, images: [] },
+    { id: 1795405822136272, name: 'Snapshot Pants', price: 200, images: [] },
+  ];
+  writeFileSync(snapshot, JSON.stringify(rows), 'utf8');
+  try {
+    let fetched = false;
+    const env = {
+      // An explicit snapshot must win over the skip flag and never fetch.
+      ZASHM_SKIP_CATALOGUE_FETCH: '1',
+      ZASHM_CATALOGUE_SNAPSHOT: snapshot,
+    };
+    const loaded = await loadCatalogue({
+      env,
+      fetchImpl: async () => { fetched = true; throw new Error('snapshot must not fetch'); },
+    });
+    eq(loaded.available, true, 'a reviewed snapshot is a valid catalogue source');
+    eq(loaded.products.length, 2, 'the snapshot rows are used as-is');
+    eq(fetched, false, 'no live request is made when a snapshot is supplied');
+
+    const out = join(dir, 'out');
+    const result = await prerenderCatalogue(TEMPLATE, {
+      buildDir: out,
+      env,
+      fetchImpl: async () => { throw new Error('snapshot must not fetch'); },
+    });
+    eq(result.available, true, 'prerender from snapshot reports a successful catalogue');
+    eq(result.ids.length, 2, 'both snapshot products receive a shell');
+    eq(result.manifest.ids, result.ids, 'the sitemap manifest matches the snapshot shells');
+    ok(existsSync(join(out, 'prerendered-products.json')), 'the snapshot publishes a manifest');
+
+    writeFileSync(snapshot, '[]', 'utf8');
+    const empty = await loadCatalogue({
+      env,
+      fetchImpl: async () => { throw new Error('snapshot must not fetch'); },
+    });
+    eq(empty.available, false, 'an empty snapshot is refused');
+    ok(empty.reason.includes('empty'), 'the empty-snapshot reason is explicit');
+
+    writeFileSync(snapshot, '{ not json', 'utf8');
+    const malformed = await loadCatalogue({
+      env,
+      fetchImpl: async () => { throw new Error('snapshot must not fetch'); },
+    });
+    eq(malformed.available, false, 'a malformed snapshot is refused');
+
+    const outside = await loadCatalogue({
+      env: { ZASHM_CATALOGUE_SNAPSHOT: join(tmpdir(), 'outside-zashm.json') },
+      fetchImpl: async () => { throw new Error('snapshot must not fetch'); },
+    });
+    eq(outside.available, false, 'a path outside the repository is refused');
+    ok(outside.reason.includes('inside the repository'), 'the path guard reason is explicit');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+console.log('\n[14] the checked-in snapshot is a valid prerender source');
+{
+  const file = join(ROOT, 'config/catalogue-snapshot.json');
+  ok(existsSync(file), 'the reviewed snapshot is committed with the build scripts');
+  if (existsSync(file)) {
+    let rows = null;
+    try {
+      rows = JSON.parse(readFileSync(file, 'utf8'));
+    } catch (err) {
+      fail += 1;
+      console.log(`  FAIL the committed snapshot parses as JSON :: ${err.message}`);
+    }
+    ok(Array.isArray(rows) && rows.length > 0, 'the committed snapshot is a non-empty array');
+    if (Array.isArray(rows)) {
+      const allowed = new Set([
+        'id', 'name', 'price', 'salePrice', 'category', 'stock', 'image', 'images',
+        'description', 'label', 'rating', 'reviews', 'sku', 'sizes', 'colors', 'variantStock',
+      ]);
+      ok(rows.every((row) => row && row.id != null && typeof row.name === 'string'),
+        'every reviewed row has an id and a name');
+      ok(rows.every((row) => Object.keys(row).every((key) => allowed.has(key))),
+        'the snapshot only publishes allow-listed products_public fields');
+      ok(rows.every((row) => !Object.prototype.hasOwnProperty.call(row, 'reservedStock')),
+        'reservedStock never enters the reviewed snapshot');
+      ok(rows.every((row) => Array.isArray(row.sizes) && Array.isArray(row.colors)
+        && row.variantStock && typeof row.variantStock === 'object'),
+        'reviewed rows keep their declared variation surface');
+    }
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

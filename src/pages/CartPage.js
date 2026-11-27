@@ -12,6 +12,7 @@ import { clearCheckoutIdempotencyKey, getCheckoutIdempotencyKey } from '../lib/o
 import { buildCheckoutErrorNotice, focusCheckoutField } from '../lib/checkoutErrors.mjs';
 import { effectivePrice } from '../lib/pricing';
 import { clearOrderConfirmation, readOrderConfirmation, saveOrderConfirmation } from '../lib/orderConfirmation.mjs';
+import { itemVariationLabel } from '../lib/cart-variant';
 
 // يطابق المحافظة المكتوبة (عربي/إنجليزي، بأي حالة أحرف) مع القائمة الرسمية،
 // ويعيد '' لو مفيش تطابق — يمنع إرسال مدينة حرة يرفضها السيرفر.
@@ -321,9 +322,7 @@ export function CartPage() {
                           <p className="bag-line-cat">{item?.product?.category ?? 'General'}</p>
                           <p className="bag-line-name">{item?.product?.name ?? 'Unknown Product'}</p>
                           <p className="bag-line-variant">
-                            <span>{'Size'} {item?.size ?? 'N/A'}</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{item?.color ?? 'N/A'}</span>
+                            <span>{itemVariationLabel(item)}</span>
                           </p>
                         </div>
                         <button
@@ -1328,7 +1327,7 @@ export function CheckoutPage() {
                   <div className="checkout-item-copy">
                     <p className="checkout-item-name">{item?.product?.name ?? 'Unknown Product'}</p>
                     <p className="checkout-item-meta">
-                      <span>{item?.size ?? 'N/A'} / {item?.color ?? 'N/A'}</span>
+                      <span>{itemVariationLabel(item)}</span>
                       <span className="checkout-item-qty">× {item?.qty ?? 0}</span>
                     </p>
                   </div>
@@ -1466,9 +1465,10 @@ export function CheckoutPage() {
 
 // ─── WISHLIST PAGE ────────────────────────────────────────────────────────────
 export function WishlistPage() {
-  const { products, wishlist, setPage } = useStore();
+  const { products = [], wishlist = [], productsLoadStatus, productsError, refreshProducts, setPage } = useStore();
   // 🎯 إخفاء المنتجات غير النشطة عن العملاء في قائمة المفضلة
   const wished = products.filter(p => p.active !== false && wishlist.includes(p.id));
+  const wishlistPending = productsLoadStatus === 'idle' || productsLoadStatus === 'loading';
 
   React.useEffect(() => { setPageMeta({ title: 'Wishlist', description: 'Your saved luxury pieces', robots: 'noindex, nofollow' }); }, []);
 
@@ -1478,19 +1478,45 @@ export function WishlistPage() {
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <p style={{ fontSize: 10, letterSpacing: 4, color: 'var(--gold)', textTransform: 'uppercase', marginBottom: 8 }}>{'Saved'}</p>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 7vw, 48px)', fontWeight: 400 }}>{'Wishlist'}</h1>
-          <p style={{ color: 'var(--text3)', marginTop: 8 }}>{wished.length} {wished.length === 1 ? 'item' : 'items'} saved</p>
+          <p style={{ color: 'var(--text3)', marginTop: 8 }}>
+            {wishlistPending
+              ? 'Loading saved pieces...'
+              : productsLoadStatus === 'error'
+                ? 'Saved pieces unavailable'
+                : `${wished.length} ${wished.length === 1 ? 'item' : 'items'} saved`}
+          </p>
         </div>
-        {wished.length === 0 ? (
-          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '60px 0' }}>
-            <Heart size={80} color="var(--border)" style={{ margin: '0 auto 24px', display: 'block' }} />
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8, color: 'var(--text2)' }}>{'Nothing saved yet'}</p>
-            <p style={{ color: 'var(--text3)', marginBottom: 32 }}>{'Save your favourite pieces for later'}</p>
-            <button className="gold-btn" onClick={() => setPage('shop')}>{'Explore Collection'}</button>
-          </motion.div>
-        ) : (
-          <div className="product-collection-grid">
-            {wished.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+        {wishlistPending ? (
+          <div role="status" aria-live="polite" style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text3)' }}>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--text2)' }}>Loading your saved pieces...</p>
           </div>
+        ) : (
+          <>
+            {productsLoadStatus === 'error' && (
+              <div role="alert" aria-live="assertive" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, border: '1px solid var(--red)', borderRadius: 6, padding: '12px 16px', background: 'rgba(192,57,43,0.08)' }}>
+                <p style={{ color: 'var(--red)', fontSize: 12, lineHeight: 1.6, margin: 0, flex: '1 1 220px' }}>
+                  Could not load your saved pieces. {productsError || 'Please try again.'}
+                </p>
+                <button type="button" className="outline-btn" onClick={refreshProducts} style={{ padding: '7px 14px', fontSize: 11 }}>
+                  Retry
+                </button>
+              </div>
+            )}
+            {wished.length === 0 ? (
+              productsLoadStatus === 'success' ? (
+                <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ textAlign: 'center', padding: '60px 0' }}>
+                  <Heart size={80} color="var(--border)" style={{ margin: '0 auto 24px', display: 'block' }} />
+                  <p style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8, color: 'var(--text2)' }}>{'Nothing saved yet'}</p>
+                  <p style={{ color: 'var(--text3)', marginBottom: 32 }}>{'Save your favourite pieces for later'}</p>
+                  <button className="gold-btn" onClick={() => setPage('shop')}>{'Explore Collection'}</button>
+                </motion.div>
+              ) : null
+            ) : (
+              <div className="product-collection-grid">
+                {wished.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

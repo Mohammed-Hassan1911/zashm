@@ -392,7 +392,7 @@ console.log('\n[4] secure order tracking');
 
   const trackPageSrc = read('src/pages/TrackOrder.js');
   ok(/setSignedToken\(tk\)/.test(trackPageSrc) &&
-     /\[activeOrderId, signedToken\]/.test(trackPageSrc) &&
+     /\[activeOrderId, signedToken, lookupAttempt\]/.test(trackPageSrc) &&
      !/new URLSearchParams\(window\.location\.search\)\.get\('tk'\)/.test(trackPageSrc),
     'signed token is captured into state and never re-read from the live URL');
   ok(/searchParams\.delete\('tk'\)/.test(trackPageSrc) &&

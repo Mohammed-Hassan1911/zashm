@@ -23,7 +23,8 @@ import ErrorBoundary from './components/ui/ErrorBoundary';
 import { ShopPageSkeleton, ProductPageSkeleton } from './components/ui/PageSkeletons';
 import { OrderNotification, Toaster, toast } from './components/ui/BackToTop';
 import WhatsAppButton from './components/ui/WhatsAppButton';
-import { setPageMeta, setSiteJsonLd } from './lib/seo';
+import { setPageMeta, setSiteJsonLd, clearProductJsonLd } from './lib/seo';
+import { getFocusableElements, focusFirstElement, trapTabKey, redirectOutsideFocus } from './lib/focus-trap';
 import { trackPageView } from './lib/ga';
 import { resolveRoute } from './lib/routes';
 import { lazyWithRetry } from './lib/chunkRecovery';
@@ -149,9 +150,7 @@ function AppInner() {
   // Keep the document title / meta description in sync with the active page.
   useEffect(() => {
     const META = {
-      home: { title: 'Home' },
       shop: { title: 'Shop', description: 'Browse the full ZASHM collection — premium clothing with delivery across Egypt.' },
-      product: { title: 'Product' },
       cart: { title: 'Your Bag', robots: 'noindex, nofollow' },
       checkout: { title: 'Checkout', robots: 'noindex, nofollow' },
       wishlist: { title: 'Wishlist', robots: 'noindex, nofollow' },
@@ -160,13 +159,28 @@ function AppInner() {
       notfound: { title: 'Page Not Found', robots: 'noindex, nofollow' },
     };
     const meta = META[currentPage] || {};
-    setPageMeta(meta);
+    // ProductPage owns the product title. On a cold /product/:id load the
+    // prerendered shell already carries it, so only refresh the other tags.
+    setPageMeta(currentPage === 'product' ? { ...meta, preserveTitle: true } : meta);
+    // ProductPage owns its own product JSON-LD; a route that is not a product
+    // must never keep a previous product's structured data in <head>.
+    if (currentPage !== 'product') clearProductJsonLd();
 
     // The initial page_view is sent by gtag 'config'; track later navigations.
     if (trackedFirstView.current) {
+      // Home and product do not have generic META titles. Use the loaded
+      // product name when available, and never send an undefined page_title.
+      let pageTitle = meta.title ? `${meta.title} — ZASHM` : document.title;
+      if (currentPage === 'product') {
+        const productId = window.location.pathname.split('/').filter(Boolean)[1];
+        const product = useStore.getState().products.find(
+          (item) => String(item?.id) === String(productId)
+        );
+        if (product?.name) pageTitle = `${product.name} — ZASHM`;
+      }
       trackPageView(
         `${window.location.pathname}${window.location.search}`,
-        meta.title ? `${meta.title} — ZASHM` : undefined
+        pageTitle || undefined
       );
     } else {
       trackedFirstView.current = true;
@@ -365,16 +379,39 @@ function AppStartupScreen({ compact = false }) {
 /* ================= MODAL COMPONENT ================= */
 function InfoModal({ type, onClose }) {
   const closeRef = useRef(null);
+  const dialogRef = useRef(null);
+  // The caller passes a fresh arrow on every render; keep the latest callback
+  // without re-running the effect and stealing focus from the dialog.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!type) return undefined;
+    const opener = document.activeElement;
+    const dialog = dialogRef.current;
+    const focusables = getFocusableElements(dialog);
+    const closeButton = focusables.includes(closeRef.current) ? closeRef.current : focusables[0];
+    if (closeButton) closeButton.focus();
+    else focusFirstElement(dialog);
+
+    // The footer link underneath must not scroll while the policy is open.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      trapTabKey(event, dialog);
     };
     document.addEventListener('keydown', handleKeyDown);
-    closeRef.current?.focus();
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [type, onClose]);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (opener && typeof opener.focus === 'function') opener.focus();
+    };
+  }, [type]);
 
   if (!type) return null;
 
@@ -425,10 +462,17 @@ function InfoModal({ type, onClose }) {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      {/* A scoped blur handler keeps focus in the dialog without reintroducing
+          the document-level focus listeners the floating-action decision removed. */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="info-modal-title"
+        onBlur={(event) => redirectOutsideFocus(
+          { target: event.relatedTarget || event.target },
+          dialogRef.current,
+        )}
         onClick={(event) => event.stopPropagation()}
         style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, width: 460, maxWidth: '100%', padding: 24, position: 'relative' }}
       >
@@ -475,10 +519,11 @@ function Footer({ setModal }) {
         <div className="footer-grid">
 
           <div className="footer-brand">
-            <div
+            <button
+              type="button"
               className="footer-wordmark"
+              aria-label="ZASHM"
               onClick={handleFooterLogoClick}
-              role="presentation"
             >
               {'ZASHM'.split('').map((letter, index) => (
                 <span
@@ -500,7 +545,7 @@ function Footer({ setModal }) {
               <span className="footer-wordmark-sparkle footer-wordmark-sparkle--three" aria-hidden="true" />
               <span className="footer-wordmark-sparkle footer-wordmark-sparkle--four" aria-hidden="true" />
               <span className="footer-wordmark-sparkle footer-wordmark-sparkle--five" aria-hidden="true" />
-            </div>
+            </button>
             <p className="footer-blurb">
               <Gem size={14} aria-hidden="true" />
               <span>{'Luxury fashion crafted with elegance and precision for the modern gentleman.'}</span>

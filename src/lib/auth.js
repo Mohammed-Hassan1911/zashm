@@ -7,17 +7,30 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [users, setUsers] = useState([]);
+  const [usersLoadStatus, setUsersLoadStatus] = useState('idle');
+  const [usersError, setUsersError] = useState(null);
   const [loading, setLoading] = useState(true);
   const sessionRef = useRef(null);
   sessionRef.current = session;
 
   const loadUsers = useCallback(async () => {
+    setUsersLoadStatus('loading');
+    setUsersError(null);
     try {
       const payload = await api.get('/admin/users');
       setUsers(Array.isArray(payload.users) ? payload.users : []);
+      setUsersLoadStatus('success');
     } catch (err) {
       // No permission or session problem — users list simply stays empty.
-      if (err && (err.status === 401 || err.status === 403)) setUsers([]);
+      if (err && (err.status === 401 || err.status === 403)) {
+        setUsers([]);
+        setUsersLoadStatus('success');
+        return;
+      }
+      // Network / 5xx failures keep the last good list so the panel can show
+      // an error with a retry instead of pretending the team is empty.
+      setUsersError(err?.message || 'Could not load team members.');
+      setUsersLoadStatus('error');
     }
   }, []);
 
@@ -204,7 +217,7 @@ export function AuthProvider({ children }) {
   }, [hasPermission, loadUsers]);
 
   return (
-    <AuthContext.Provider value={{ session, login, logout, hasPermission, canAccess, loading, users, addUser, updateUser, deleteUser }}>
+    <AuthContext.Provider value={{ session, login, logout, hasPermission, canAccess, loading, users, usersLoadStatus, usersError, loadUsers, addUser, updateUser, deleteUser }}>
       {children}
     </AuthContext.Provider>
   );

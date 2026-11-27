@@ -10,6 +10,7 @@ import ProductImageLightbox from '../components/ui/ProductImageLightbox';
 import { ProductPageSkeleton } from '../components/ui/PageSkeletons';
 import { toast } from '../components/ui/BackToTop';
 import { setPageMeta, setProductJsonLd, clearProductJsonLd, clearCanonical } from '../lib/seo';
+import { getFocusableElements, focusFirstElement, trapTabKey, redirectOutsideFocus } from '../lib/focus-trap';
 import { discountPercent, effectivePrice, hasInvalidVariantConfig, hasVariantStock, regularPrice, sellableStockFor } from '../lib/pricing';
 import { GARMENT, garmentKind } from '../lib/fit';
 import { resolveRoute } from '../lib/routes';
@@ -104,26 +105,38 @@ export default function ProductPage() {
   const lastProductIdRef = useRef(null);
   const stockCloseRef = useRef(null);
   const sizeGuideCloseRef = useRef(null);
+  const stockDialogRef = useRef(null);
+  const sizeGuideDialogRef = useRef(null);
 
-  // كل مودالات الصفحة: Escape يقفل، والتركيز يبدأ على زر الإغلاق.
+  // كل مودالات الصفحة: Escape يقفل، والتركيز يبدأ على زر الإغلاق ويبقى داخل
+  // المودال إن حاول عنصر خارجي سحبه، ثم يعود لزر الفتح عند الإغلاق.
   useEffect(() => {
     if (!stockModal.open && !sizeGuideOpen) return undefined;
+    const opener = document.activeElement;
+    const dialog = stockModal.open ? stockDialogRef.current : sizeGuideDialogRef.current;
+    const closeButton = stockModal.open ? stockCloseRef.current : sizeGuideCloseRef.current;
+    const focusables = getFocusableElements(dialog);
+    const firstControl = focusables.includes(closeButton) ? closeButton : focusables[0];
+    if (firstControl) firstControl.focus();
+    else focusFirstElement(dialog);
+
     const handleKeyDown = (event) => {
-      if (event.key !== 'Escape') return;
-      if (stockModal.open) setStockModal({ open: false, message: '' });
-      if (sizeGuideOpen) setSizeGuideOpen(false);
+      if (event.key === 'Escape') {
+        if (stockModal.open) setStockModal({ open: false, message: '' });
+        if (sizeGuideOpen) setSizeGuideOpen(false);
+        return;
+      }
+      trapTabKey(event, dialog);
     };
+    const handleFocusIn = (event) => { redirectOutsideFocus(event, dialog); };
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('focusin', handleFocusIn);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('focusin', handleFocusIn);
+      if (opener && typeof opener.focus === 'function') opener.focus();
+    };
   }, [stockModal.open, sizeGuideOpen]);
-
-  useEffect(() => {
-    if (stockModal.open) stockCloseRef.current?.focus();
-  }, [stockModal.open]);
-
-  useEffect(() => {
-    if (sizeGuideOpen) sizeGuideCloseRef.current?.focus();
-  }, [sizeGuideOpen]);
 
   // Lock the page behind modals so the size chart can be read without the
   // catalogue scrolling underneath it on a phone.
@@ -315,20 +328,28 @@ export default function ProductPage() {
   const currentVariantStock = sellableStockFor(p, selSize, selColor);
   const variantConfigInvalid = hasInvalidVariantConfig(p);
   const isOutOfStock = variantConfigInvalid || currentVariantStock <= 0;
+  // A plain-stock product declares no sizes, no colours and no variantStock.
+  // Global stock is sellable on its own, so it must never ask for a variation.
+  const needsVariant = (p.sizes || []).length > 0 || (p.colors || []).length > 0 || hasVariantStock(p);
 
   const showToast = (msg, type) => {
     toast(msg, type);
   };
 
   const handleAddToCart = () => {
-    if (!selSize) { showToast('Please select a size.', 'warning'); return; }
-    if (!selColor) { showToast('Please select a color.', 'warning'); return; }
+    if (needsVariant && !selSize) { showToast('Please select a size.', 'warning'); return; }
+    if (needsVariant && !selColor) { showToast('Please select a color.', 'warning'); return; }
     if (qty > currentVariantStock) {
-      setStockModal({ open: true, message: `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.` });
+      setStockModal({
+        open: true,
+        message: needsVariant
+          ? `Sorry, only ${currentVariantStock} pieces are available for Size: ${selSize} / Color: ${selColor}.`
+          : `Sorry, only ${currentVariantStock} pieces are available.`,
+      });
       return;
     }
-    
-    const result = addToCart(p, selSize, selColor, qty);
+
+    const result = addToCart(p, needsVariant ? selSize : '', needsVariant ? selColor : '', qty);
     
     if (result && result.success) {
       showToast(`${p.name ?? 'Product'} added to your bag!`, 'success');
@@ -599,10 +620,14 @@ export default function ProductPage() {
               {variantConfigInvalid
                 ? 'This product is not available to order right now.'
                 : isOutOfStock
-                ? 'This size and colour is sold out.'
+                ? needsVariant
+                  ? 'This size and colour is sold out.'
+                  : 'This product is sold out.'
                 : currentVariantStock > 5
                   ? 'In stock — ready to ship'
-                  : `Only ${currentVariantStock} left in this size and colour`}
+                  : needsVariant
+                    ? `Only ${currentVariantStock} left in this size and colour`
+                    : `Only ${currentVariantStock} left`}
             </p>
 
             {/* Qty + Add */}
@@ -785,7 +810,8 @@ export default function ProductPage() {
             zIndex: 9999, padding: 20
           }} onClick={() => setStockModal({ open: false, message: '' })}>
             
-            <motion.div 
+            <motion.div
+              ref={stockDialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby="stock-availability-title"
@@ -859,6 +885,7 @@ export default function ProductPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.16, ease: 'easeOut' }}
               className="size-guide-modal"
+              ref={sizeGuideDialogRef}
               onClick={e => e.stopPropagation()}
             >
               <button className="size-guide-close" onClick={() => setSizeGuideOpen(false)}

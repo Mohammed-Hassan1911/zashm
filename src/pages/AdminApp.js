@@ -219,6 +219,12 @@ export default function AdminApp() {
   const [collapsed, setCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuTriggerRef = useRef(null);
+  const mobileMenuDialog = useAdminDialog({
+    open: mobileMenuOpen,
+    onClose: () => setMobileMenuOpen(false),
+    openerRef: mobileMenuTriggerRef,
+  });
   const [orderToOpen, setOrderToOpen] = useState(null);
   const [productFormOpen, setProductFormOpen] = useState(false);
   // Reviews waiting for moderation. The number comes straight from the database
@@ -346,7 +352,7 @@ export default function AdminApp() {
               initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setMobileMenuOpen(false)}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:2999, backdropFilter:'blur(4px)' }}
             />
-            <motion.div
+            <motion.div {...mobileMenuDialog.dialogProps} aria-label="Navigation menu"
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
               transition={{ type:'spring', damping:25, stiffness:200 }}
               style={{ position:'fixed', left:0, top:0, bottom:0, width:260, background:'linear-gradient(180deg, #14110d 0%, #0e0c09 58%, #0a0908 100%)', zIndex:3000, borderRight:'1px solid rgba(201,168,76,0.16)', boxShadow:'14px 0 40px rgba(0,0,0,0.55)' }}
@@ -361,7 +367,7 @@ export default function AdminApp() {
         <div className="admin-topbar" style={{ position:'sticky', top:0, zIndex:100, background:'rgba(18,15,11,0.88)', backdropFilter:'blur(18px) saturate(140%)', WebkitBackdropFilter:'blur(18px) saturate(140%)', borderBottom:'1px solid rgba(201,168,76,0.16)', boxShadow:'0 10px 28px rgba(0,0,0,0.35)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <button
-              type="button" className="show-mobile-flex" onClick={() => setMobileMenuOpen(true)}
+              type="button" className="show-mobile-flex" ref={mobileMenuTriggerRef} onClick={() => setMobileMenuOpen(true)}
               aria-label="Open navigation menu" title="Open navigation menu"
               style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:36, height:36, borderRadius:8, alignItems:'center', justifyContent:'center', cursor:'pointer' }}
             >
@@ -785,7 +791,8 @@ function editItemsKey(items) {
 
 function OrderEditModal({ order, products, onClose }) {
   const editOrder = useStore((s) => s.editOrder);
-  const { dialogRef, dialogProps, titleProps } = useAdminDialog({ onClose, disabled: false });
+  const [saving, setSaving] = useState(false);
+  const { dialogRef, dialogProps, titleProps } = useAdminDialog({ onClose, disabled: saving });
   const itemsLocked = !EDITABLE_ITEM_STATUSES.includes(order.status);
   const initialKey = useMemo(() => editItemsKey(order.items), [order.id]);
   const initialCode = useMemo(() => String(order.discountCode || '').trim().toUpperCase(), [order.id]);
@@ -806,7 +813,6 @@ function OrderEditModal({ order, products, onClose }) {
     })),
   }));
   const [newItem, setNewItem] = useState({ productId: '', size: '', color: '', qty: 1 });
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState([]);
 
@@ -1096,7 +1102,18 @@ function OrderEditModal({ order, products, onClose }) {
 
 // ─── ORDERS PANEL ─────────────────────────────────────────────────────────────
 function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
-  const { orders, updateOrderStatus, products } = useStore();
+  const {
+    orders, updateOrderStatus, products,
+    refreshOrders, ordersLoading, ordersError, ordersLiveStatus,
+  } = useStore();
+  const [ordersAttempted, setOrdersAttempted] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    // The compact root poll is not a full snapshot: hydrate the table once so
+    // an empty store never masquerades as "no orders" or stays "loading".
+    Promise.resolve(refreshOrders()).catch(() => {}).finally(() => { if (!cancelled) setOrdersAttempted(true); });
+    return () => { cancelled = true; };
+  }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selected, setSelected] = useState(null);
@@ -1118,7 +1135,8 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   // because the 10s poll (see AdminApp root) can move the row underneath us.
   const [statusConfirm, setStatusConfirm] = useState(null); // { order, status, expectedStatus }
   const [statusSaving, setStatusSaving] = useState(false);
-  const statusDialog = useAdminDialog({ open: Boolean(statusConfirm), onClose: () => { if (!statusSaving) setStatusConfirm(null); }, disabled: statusSaving });
+  const statusKeepRef = useRef(null);
+  const statusDialog = useAdminDialog({ open: Boolean(statusConfirm), onClose: () => { if (!statusSaving) setStatusConfirm(null); }, disabled: statusSaving, initialFocusRef: statusKeepRef });
   const statusDialogRef = statusDialog.dialogRef;
 
   // Explicit keyboard contract at the final-status call site; the shared hook
@@ -1267,6 +1285,11 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
 
   const paginated = paginate(filtered, page, PER_PAGE);
 
+  // An empty row is only truthful once a full snapshot has settled successfully.
+  const ordersFailed = Boolean(ordersError) || ordersLiveStatus === 'unauthorized';
+  const showOrderError = !ordersLoading && ordersFailed;
+  const ordersReady = ordersAttempted && !ordersLoading && !ordersFailed;
+
   const exportCSV = () => {
     const rows = [['ID','Customer','Phone','Alternate Phone','Email','Items','Subtotal','Discount','Total','Status','Date','Address'],
       ...filtered.map(o => [o.id, o.customer, o.phone, o.phoneAlt||'', o.email||'', o.items.length, o.subtotal, o.discount||0, o.total, o.status, o.date, o.address])];
@@ -1295,6 +1318,21 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
         </button>
       </div>
 
+      {showOrderError && (
+        <div role="alert" style={{ marginBottom:16, border:'1px solid rgba(231,76,60,0.35)', background:'rgba(231,76,60,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
+            <AlertCircle size={14} /> Could not load orders — {ordersError || 'This session cannot read orders.'}
+          </p>
+          <button type="button" onClick={refreshOrders} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!ordersReady && !showOrderError && orders.length === 0 && (
+        <p role="status" style={{ padding:16, textAlign:'center', color:'var(--text3)', fontSize:12 }}>Loading orders…</p>
+      )}
+
       <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
         <div className="zshm-admin-table-scroll" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
           <table style={{ width:'100%', minWidth:720, borderCollapse:'collapse' }}>
@@ -1306,7 +1344,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
               </tr>
             </thead>
             <tbody>
-              {paginated.items.length === 0 && (
+              {paginated.items.length === 0 && ordersReady && (
                 <tr>
                   <td colSpan={7} style={{ padding: '8px' }}>
                     <DashEmpty
@@ -1530,11 +1568,11 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                   : ' This is the final fulfilment status.'}
               </p>
               <div style={{ display:'flex', gap:10 }}>
-                <button type="button" autoFocus onClick={confirmStatusChange} disabled={statusSaving}
+                <button type="button" onClick={confirmStatusChange} disabled={statusSaving}
                   style={{ flex:1, padding:'10px 14px', borderRadius:6, border:'none', background: STATUS_COLORS[statusConfirm.status], color:'#ffffff', fontSize:12, fontWeight:700, cursor: statusSaving ? 'not-allowed' : 'pointer', opacity: statusSaving ? 0.7 : 1 }}>
                   {statusSaving ? 'Saving…' : `Yes, mark ${statusConfirm.status}`}
                 </button>
-                <button type="button" onClick={() => setStatusConfirm(null)} disabled={statusSaving}
+                <button type="button" ref={statusKeepRef} onClick={() => setStatusConfirm(null)} disabled={statusSaving}
                   style={{ flex:1, padding:'10px 14px', borderRadius:6, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:12, cursor: statusSaving ? 'not-allowed' : 'pointer' }}>
                   Keep as is
                 </button>
@@ -3108,8 +3146,22 @@ function DiscountsPanel({ canEdit }) {
 
 // ─── ANALYTICS PANEL ──────────────────────────────────────────────────────────
 function AnalyticsPanel() {
-  const { orders, products } = useStore();
+  const {
+    orders, products,
+    refreshOrders, ordersLoading, ordersError, ordersLiveStatus,
+    refreshProducts, productsLoadStatus, productsError,
+  } = useStore();
   const [range, setRange] = useState('7d');
+  const [analyticsAttempted, setAnalyticsAttempted] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    // KPIs need both a full orders snapshot and the catalogue; the compact
+    // root poll supplies neither, so request them explicitly once.
+    Promise.all([refreshProducts(), refreshOrders()])
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setAnalyticsAttempted(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   const report = useMemo(
     () => computeAnalyticsReport(orders, products, range),
@@ -3126,6 +3178,14 @@ function AnalyticsPanel() {
     [report.categoryRevenue],
   );
   const hasSeriesData = report.series.some((p) => p.value > 0 || p.orders > 0);
+
+  // Zero-valued KPIs and empty charts are only meaningful once both loads
+  // settled successfully; otherwise they misreport a failure as no sales.
+  const ordersFailed = Boolean(ordersError) || ordersLiveStatus === 'unauthorized';
+  const productsFailed = productsLoadStatus === 'error';
+  const analyticsLoading = !analyticsAttempted || ordersLoading
+    || productsLoadStatus === 'loading' || productsLoadStatus === 'idle';
+  const showAnalyticsError = !analyticsLoading && (ordersFailed || productsFailed);
 
   const kpis = [
     { labelEn: 'Total Sales', value: fmtEGP(report.totalValue), sub: 'Non-cancelled · COD', color: KPI_TONES.gold, icon: TrendingUp, delta: report.totalDeltaPct },
@@ -3157,6 +3217,29 @@ function AnalyticsPanel() {
         </div>
       </div>
 
+      {analyticsLoading ? (
+        <div role="status" style={{ padding:24, textAlign:'center', color:'var(--text3)', fontSize:12, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>Loading orders and products…</div>
+      ) : showAnalyticsError ? (
+        <div style={{ display:'grid', gap:10 }}>
+          {ordersFailed && (
+            <div role="alert" style={{ border:'1px solid rgba(231,76,60,0.35)', background:'rgba(231,76,60,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+              <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
+                <AlertCircle size={14} /> Could not load orders — {ordersError || 'This session cannot read orders.'}
+              </p>
+              <button type="button" onClick={refreshOrders} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>Retry</button>
+            </div>
+          )}
+          {productsFailed && (
+            <div role="alert" style={{ border:'1px solid rgba(231,76,60,0.35)', background:'rgba(231,76,60,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+              <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
+                <AlertCircle size={14} /> Could not load products — {productsError || 'Please try again.'}
+              </p>
+              <button type="button" onClick={refreshProducts} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>Retry</button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         {kpis.map(({ labelEn, value, sub, color, icon: Icon, delta }, i) => (
           <motion.div key={labelEn} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
@@ -3250,6 +3333,8 @@ function AnalyticsPanel() {
           ))}
         </div>
       </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -13,7 +13,7 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function useAdminDialog({ open = true, onClose, disabled = false, initialFocusRef } = {}) {
+export function useAdminDialog({ open = true, onClose, disabled = false, initialFocusRef, openerRef } = {}) {
   const dialogRef = useRef(null);
   const titleId = useId();
   const closeRef = useRef(onClose);
@@ -24,7 +24,9 @@ export function useAdminDialog({ open = true, onClose, disabled = false, initial
   useEffect(() => {
     if (!open || typeof document === 'undefined') return undefined;
     const root = dialogRef.current;
-    const opener = document.activeElement;
+    // A trigger ref can be supplied when the opener is not the active element
+    // at mount time (e.g. a mouse-only tap on the admin mobile menu button).
+    const opener = (openerRef && openerRef.current) || document.activeElement;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
@@ -69,7 +71,7 @@ export function useAdminDialog({ open = true, onClose, disabled = false, initial
       document.body.style.overflow = previousOverflow;
       if (opener && typeof opener.focus === 'function' && document.contains(opener)) opener.focus();
     };
-  }, [open, initialFocusRef]);
+  }, [open, initialFocusRef, openerRef]);
 
   return {
     dialogRef,
