@@ -37,5 +37,8 @@ jobs:
           echo "${PG_BIN}" >> "$GITHUB_PATH"
 
       - run: npm ci
+      # The isolation suite reads the separate Production artifact; generate it
+      # in CI instead of relying on an untracked local directory.
+      - run: npm run build:production:ci
       - run: npm test
       - run: npm run build

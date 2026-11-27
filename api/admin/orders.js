@@ -8,6 +8,7 @@ const {
   readBody,
   clientIp,
   rateLimitShared,
+  rateLimitSharedStrict,
   tooMany,
   requirePerm,
   supabaseAdmin,
@@ -42,6 +43,37 @@ function orderRev(order) {
   const raw = order && order.timestamps && order.timestamps.rev;
   const n = Number(raw);
   return Number.isInteger(n) && n >= 0 ? n : 0;
+}
+
+// Explicit allow-list: the admin list must return every field the dashboard /
+// edit form / CSV export uses, but must never be a blanket `select('*')` that
+// silently exposes a future PII or internal column.
+const ORDER_LIST_COLUMNS = [
+  'id', 'status', 'date', 'customer', 'phone', 'phoneAlt', 'email', 'address',
+  'city', 'notes', 'items', 'timestamps', 'subtotal', 'discount', 'total',
+  'discountCode', 'tracking_url',
+].join(', ');
+
+// `notes` is customer free text and often contains phone numbers/addresses.
+// `tracking_url` is a signed bearer credential: opening it returns the entire
+// unmasked order, so leaving it on a support response defeats the field mask.
+// `city` is coarse operational location and is intentionally kept.
+const SUPPORT_PII_FIELDS = ['customer', 'phone', 'phoneAlt', 'email', 'address', 'notes', 'tracking_url'];
+
+function maskSupportPii(order) {
+  const masked = { ...order };
+  for (const field of SUPPORT_PII_FIELDS) masked[field] = '';
+  return masked;
+}
+
+// Compact 10s poll: one row per status + the newest few orders. No items,
+// addresses, usage counters or other bulk PII ever cross the wire here.
+const SUMMARY_NEWEST_LIMIT = 5;
+
+function emptyStatusCounts() {
+  const counts = {};
+  for (const status of ORDER_STATUSES) counts[status] = 0;
+  return counts;
 }
 
 /**
@@ -124,6 +156,48 @@ function buildEditedOrderItems(products, items) {
 // transaction, and the caller's expected status is re-checked under that lock.
 // JS never coordinates the steps — that is what made SEC-04/SEC-05 possible.
 
+// ─── GET /api/admin/orders?summary=1 — compact live status ──────────────────
+
+async function orderSummary(req, res, session) {
+  const support = String(session && session.role) === 'support';
+  try {
+    const sb = supabaseAdmin();
+    const [statusResult, newestResult] = await Promise.all([
+      sb.from('orders').select('status'),
+      sb.from('orders')
+        .select('id, status, total, date, customer')
+        .order('date', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(SUMMARY_NEWEST_LIMIT),
+    ]);
+    if (statusResult.error || newestResult.error) {
+      safeLogError('Order summary failed', statusResult.error || newestResult.error);
+      return json(res, 500, { error: 'Could not load order summary' });
+    }
+
+    const byStatus = emptyStatusCounts();
+    const rows = Array.isArray(statusResult.data) ? statusResult.data : [];
+    for (const row of rows) {
+      const status = ORDER_STATUSES.includes(row && row.status) ? row.status : 'Pending';
+      byStatus[status] += 1;
+    }
+
+    const newest = (Array.isArray(newestResult.data) ? newestResult.data : []).map((row) => ({
+      id: String((row && row.id) || ''),
+      status: ORDER_STATUSES.includes(row && row.status) ? row.status : 'Pending',
+      total: Number(row && row.total) || 0,
+      date: String((row && row.date) || ''),
+      // Support can watch order flow but must never read customer identities.
+      customer: support ? '' : String((row && row.customer) || ''),
+    })).filter((row) => row.id);
+
+    return json(res, 200, { summary: { total: rows.length, byStatus, newest } });
+  } catch (err) {
+    safeLogError('Order summary error', err);
+    return json(res, 500, { error: 'Could not load order summary' });
+  }
+}
+
 // ─── GET /api/admin/orders — full list for admin dashboard ───────────────────
 
 async function listOrders(req, res) {
@@ -134,8 +208,14 @@ async function listOrders(req, res) {
   const check = await rateLimitShared(`adminorderread:${ip}`, 120, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
-  // Optional paging for the orders table. The 10s poll and dashboard analytics
-  // still call this without params so they keep receiving the full snapshot.
+  // The 10s poll uses the compact shape; dashboard/analytics/manual refresh
+  // keep the full snapshot. Same permission and same rate-limit budget.
+  if (String((req.query && req.query.summary) || '') === '1') {
+    return orderSummary(req, res, session);
+  }
+
+  // Optional paging for the orders table. The dashboard and analytics still
+  // call this without params so they keep receiving the full snapshot.
   const paging = parseListPagination(req.query, 15);
 
   try {
@@ -161,7 +241,7 @@ async function listOrders(req, res) {
     // page boundaries stable so a row is never repeated or skipped.
     let query = sb
       .from('orders')
-      .select('*')
+      .select(ORDER_LIST_COLUMNS)
       .order('date', { ascending: false })
       .order('id', { ascending: false });
     if (paging) {
@@ -173,10 +253,11 @@ async function listOrders(req, res) {
       safeLogError('Orders list failed', error);
       return json(res, 500, { error: 'Could not load orders' });
     }
+    const support = String(session && session.role) === 'support';
     const orders = (data || []).map((row) => {
       const order = parseOrderRow(row);
       order.tracking_url = trackingUrlFor(row.id);
-      return order;
+      return support ? maskSupportPii(order) : order;
     });
     const body = { orders };
     if (paging) {
@@ -198,7 +279,9 @@ async function updateOrder(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = await rateLimitShared(`adminorder:${ip}`, 60, 60 * 1000);
+  // Status changes/deletes are protected mutations: no silent per-instance
+  // downgrade when both shared providers are down.
+  const check = await rateLimitSharedStrict(`adminorder:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -585,7 +668,9 @@ async function deleteOrder(req, res) {
   if (!session) return;
 
   const ip = clientIp(req);
-  const check = await rateLimitShared(`adminorder:${ip}`, 60, 60 * 1000);
+  // Status changes/deletes are protected mutations: no silent per-instance
+  // downgrade when both shared providers are down.
+  const check = await rateLimitSharedStrict(`adminorder:${ip}`, 60, 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body = {};

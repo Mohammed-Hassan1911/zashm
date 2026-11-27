@@ -60,11 +60,16 @@ const storeMock = `
     adminProductsError: null,
     ordersLoading: false,
     ordersError: null,
+    ordersLiveStatus: 'ok',
+    orderSummary: { total: 0, byStatus: {}, newest: [] },
+    discountsLoadStatus: 'success',
+    discountsError: null,
     unreadOrderCount: 0,
     newOrderNotification: null,
     markNotificationsRead: () => {},
     getNotifications: () => [],
     refreshOrders: refresh,
+    refreshOrderSummary: refresh,
     refreshDiscounts: refresh,
     refreshProducts: refresh,
     refreshAdminProducts: refresh,
@@ -205,6 +210,19 @@ function pageHeading() {
   return document.querySelector('main h1')?.textContent.trim();
 }
 
+// The admin dialog hook labels via aria-labelledby; older markup used a direct
+// aria-label. Accept either accessible-name pattern so the test follows the
+// accessible name, not one specific attribute.
+function newProductDialog() {
+  return [...document.querySelectorAll('[role="dialog"]')].find((dialog) => {
+    if (dialog.getAttribute('aria-label') === 'New Product') return true;
+    const titleId = dialog.getAttribute('aria-labelledby');
+    if (!titleId) return false;
+    const title = document.getElementById(titleId);
+    return Boolean(title && title.textContent.trim() === 'New Product');
+  });
+}
+
 try {
   server = await createServer({
     configFile: false,
@@ -264,7 +282,7 @@ try {
   console.log('\n[4] dashboard opens the new-product form without creating a product');
   await click(buttonByText('Add product'));
   assert.equal(pageHeading(), 'products');
-  assert.ok(document.querySelector('[role="dialog"][aria-label="New Product"]'));
+  assert.ok(newProductDialog());
   assert.equal(globalThis.__zashmAdminTest.addProductCalls, 0);
   console.log('  PASS add-product opens the form and does not create a product');
 
@@ -272,7 +290,7 @@ try {
   await click(buttonByText('Cancel'));
   assert.equal(document.querySelector('[role="dialog"]'), null);
   await click(buttonByText('Add Product'));
-  assert.ok(document.querySelector('[role="dialog"][aria-label="New Product"]'));
+  assert.ok(newProductDialog());
   assert.equal(globalThis.__zashmAdminTest.addProductCalls, 0);
   console.log('  PASS form closes and reopens without a create request');
   console.log('\nadmin-navigation: 5 passed, 0 failed');

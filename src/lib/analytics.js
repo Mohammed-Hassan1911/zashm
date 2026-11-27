@@ -211,7 +211,21 @@ function computeSeries(list, rangeKey, now) {
         buckets.set(key, b);
       });
     const months = [...buckets.values()].sort((a, b) => (a.key < b.key ? -1 : 1));
-    return months.map((b) => ({ ...b, label: monthShortLabel(b.key) }));
+    // A bare "Jan" is ambiguous once the data crosses a year boundary: two
+    // Januaries would render as identical bars. Include a short year only when
+    // the series actually spans more than twelve distinct months.
+    const monthIndex = (key) => {
+      const [y, m] = key.split('-').map(Number);
+      return y * 12 + (m - 1);
+    };
+    const withYear = months.length > 1 &&
+      monthIndex(months[months.length - 1].key) - monthIndex(months[0].key) >= 12;
+    return months.map((b) => ({
+      ...b,
+      label: withYear
+        ? `${monthShortLabel(b.key)} ${String(Number(b.key.slice(0, 4))).slice(-2)}`
+        : monthShortLabel(b.key),
+    }));
   }
 
   const today = todayCairoStr(now);

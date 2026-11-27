@@ -8,6 +8,7 @@ const {
   readBody,
   clientIp,
   rateLimitShared,
+  rateLimitSharedStrict,
   resetRateLimitShared,
   tooMany,
   supabaseAdmin,
@@ -128,9 +129,9 @@ module.exports = async function handler(req, res) {
   const ipKey = `login:${ip}`;
   const accountKey = `login:acct:${email}`;
   const [emailCheck, ipCheck, accountCheck] = await Promise.all([
-    rateLimitShared(emailKey, 5, LOGIN_WINDOW_MS),
-    rateLimitShared(ipKey, 20, LOGIN_WINDOW_MS),
-    rateLimitShared(accountKey, 12, LOGIN_WINDOW_MS),
+    rateLimitSharedStrict(emailKey, 5, LOGIN_WINDOW_MS),
+    rateLimitSharedStrict(ipKey, 20, LOGIN_WINDOW_MS),
+    rateLimitSharedStrict(accountKey, 12, LOGIN_WINDOW_MS),
   ]);
   if (!emailCheck.allowed) return tooMany(res, emailCheck.resetIn);
   if (!ipCheck.allowed) return tooMany(res, ipCheck.resetIn);

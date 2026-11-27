@@ -166,6 +166,20 @@ function makeDb() {
 
     async rpc(name, args) {
       state.rpcCalls.push({ name, args });
+      // Checkout uses the strict shared limiter. Keep this counter healthy so
+      // the fixtures exercise pricing/RPC behaviour, not the outage path that
+      // is intentionally fail-closed in production.
+      if (name === 'zshm_rate_limit') {
+        return {
+          data: {
+            allowed: true,
+            count: 1,
+            remaining: Math.max(0, Number(args && args.p_max_attempts) - 1),
+            resetIn: Number(args && args.p_window_seconds) || 60,
+          },
+          error: null,
+        };
+      }
       if (state.rpcThrow) throw new Error('database connection lost');
       if (name !== 'atomic_place_order') {
         return { data: { ok: false, reason: 'unexpected_rpc' }, error: null };

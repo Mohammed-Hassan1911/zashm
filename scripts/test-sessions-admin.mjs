@@ -124,8 +124,28 @@ function makeQuery(table) {
   return q;
 }
 
+const rateCounters = new Map();
 const sb = {
   from(table) { return makeQuery(table); },
+  // Security-critical routes use the strict shared limiter. Model a healthy,
+  // stateful database counter so auth behaviour is exercised instead of the
+  // deliberate provider-outage fail-closed path (covered by test-admin-fixes).
+  async rpc(name, args) {
+    if (name !== 'zshm_rate_limit') return { data: null, error: null };
+    const key = String(args && args.p_key);
+    const max = Number(args && args.p_max_attempts) || 60;
+    const resetIn = Number(args && args.p_window_seconds) || 60;
+    if (args && args.p_action === 'reset') {
+      rateCounters.delete(key);
+      return { data: { allowed: true, count: 0, remaining: max, resetIn }, error: null };
+    }
+    const count = (rateCounters.get(key) || 0) + 1;
+    rateCounters.set(key, count);
+    return {
+      data: { allowed: count <= max, count, remaining: Math.max(0, max - count), resetIn },
+      error: null,
+    };
+  },
 };
 
 // ─── Boot the real handlers ──────────────────────────────────────────────────
@@ -647,7 +667,7 @@ console.log('\n[13] per-account login budget');
 
   const src = readFileSync(new URL('../api/auth.js', import.meta.url), 'utf8');
   ok(/login:acct:\$\{email\}/.test(src), 'the account key is the normalised email, not the IP');
-  ok(/rateLimitShared\(accountKey, 12, LOGIN_WINDOW_MS\)/.test(src), 'the account budget is 12 per window');
+  ok(/rateLimitShared(?:Strict)?\(accountKey, 12, LOGIN_WINDOW_MS\)/.test(src), 'the account budget is 12 per window');
   ok(/resetRateLimitShared\(accountKey\)/.test(src), 'a successful login resets the account budget');
 }
 

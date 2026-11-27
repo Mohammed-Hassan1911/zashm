@@ -235,6 +235,27 @@ function computeUnread(orders) {
 // Order ids seen so far, so a background poll can raise a toast only for orders
 // that genuinely just arrived (null = first load → no toast, just baseline).
 let knownOrderIds = null;
+let summarySeeded = false;
+// The compact summary only carries the newest five rows. It must never seed the
+// "already seen" baseline before a full snapshot has loaded, otherwise the
+// older backlog would look brand new when the full list arrives.
+let orderSnapshotLoaded = false;
+
+function initNotifBaseline() {
+  try {
+    if (localStorage.getItem(NOTIF_READ_KEY) === null) {
+      localStorage.setItem(NOTIF_READ_KEY, String(Date.now()));
+    }
+  } catch (e) { /* storage may be blocked */ }
+}
+
+const ORDER_SUMMARY_STATUSES = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+
+function emptyOrderSummary() {
+  const byStatus = {};
+  for (const status of ORDER_SUMMARY_STATUSES) byStatus[status] = 0;
+  return { total: 0, byStatus, newest: [] };
+}
 
 // ─── SAFE DB INITIALIZATION ──────────────────────────────────────────────────
 function initDB() {
@@ -295,9 +316,14 @@ export const useStore = create((set, get) => ({
   adminProductsLoadStatus: 'idle',
   adminProductsError: null,
   discounts: [],
+  discountsLoadStatus: 'idle',
+  discountsError: null,
   orders: getSanitizedOrders(),
   ordersLoading: false,
   ordersError: null,
+  // Compact /api/admin/orders?summary=1 result; never used as a full snapshot.
+  orderSummary: emptyOrderSummary(),
+  ordersLiveStatus: 'idle',
 
   refreshProducts: async () => {
     set({ productsLoading: true, productsLoadStatus: 'loading', productsError: null });
@@ -381,16 +407,25 @@ export const useStore = create((set, get) => ({
   // Admin-only: requires a signed session with discounts.read. Visitors never
   // call this, so no coupon rows are pulled into the storefront.
   refreshDiscounts: async () => {
+    set({ discountsLoadStatus: 'loading', discountsError: null });
     try {
       const payload = await api.get('/admin/coupons');
       const data = Array.isArray(payload.discounts) ? payload.discounts : [];
-      set({ discounts: data });
+      set({ discounts: data, discountsLoadStatus: 'success', discountsError: null });
+      return data;
     } catch (err) {
-      if (err && (err.status === 401 || err.status === 403)) {
-        set({ discounts: [] });
-        return;
-      }
-      console.error('Failed to fetch discounts:', err && err.message);
+      const unauthorized = err && (err.status === 401 || err.status === 403);
+      const message = unauthorized
+        ? 'Not authorized to load discounts'
+        : (err && err.message) || 'Could not load discounts';
+      set({
+        // A failed fetch is an error state, never a genuine empty list.
+        ...(unauthorized ? { discounts: [] } : {}),
+        discountsLoadStatus: 'error',
+        discountsError: message,
+      });
+      if (!unauthorized) console.error('Failed to fetch discounts:', err && err.message);
+      return null;
     }
   },
 
@@ -719,19 +754,16 @@ export const useStore = create((set, get) => ({
       const payload = await api.get('/admin/orders');
       const data = Array.isArray(payload.orders) ? payload.orders : [];
       const sanitized = data.map(o => sanitizeOrder(o, get().products));
-      const firstLoad = knownOrderIds === null;
+      const firstLoad = !orderSnapshotLoaded;
       const fresh = firstLoad
         ? []
         : sanitized.filter(o => !knownOrderIds.has(String(o.id)));
       knownOrderIds = new Set(sanitized.map(o => String(o.id)));
+      orderSnapshotLoaded = true;
       if (firstLoad) {
-        // On the very first poll, mark the current backlog as already seen so the
-        // bell doesn't report every historical order as unread.
-        try {
-          if (localStorage.getItem(NOTIF_READ_KEY) === null) {
-            localStorage.setItem(NOTIF_READ_KEY, String(Date.now()));
-          }
-        } catch (e) { /* ignore */ }
+        // On the very first full snapshot, mark the current backlog as already
+        // seen so the bell doesn't report every historical order as unread.
+        initNotifBaseline();
       }
       const newest = fresh.length
         ? fresh.reduce((a, b) => (orderCreatedMs(b) > orderCreatedMs(a) ? b : a))
@@ -739,18 +771,97 @@ export const useStore = create((set, get) => ({
       set({
         orders: sanitized,
         ordersLoading: false,
+        ordersLiveStatus: 'ok',
         unreadOrderCount: computeUnread(sanitized),
         ...(newest ? { newOrderNotification: { order: newest, timestamp: Date.now() } } : {}),
       });
     } catch (err) {
       if (err && (err.status === 401 || err.status === 403)) {
-        set({ ordersLoading: false });
+        set({ ordersLoading: false, ordersLiveStatus: 'unauthorized' });
         return;
       }
       console.error("Unexpected error in refreshOrders:", err && err.message);
       // Background polls fail quietly; manual refreshes surface the error.
       if (!isSilent) set({ ordersError: (err && err.message) || 'Could not load orders' });
-      set({ ordersLoading: false });
+      set({ ordersLoading: false, ordersLiveStatus: 'degraded' });
+    }
+  },
+
+  // Compact 10s poll: totals + newest ids only. The full snapshot stays in
+  // refreshOrders() for the dashboard, analytics and manual refresh.
+  refreshOrderSummary: async (silent = false) => {
+    const isSilent = silent === true;
+    try {
+      const payload = await api.get('/admin/orders?summary=1');
+      const raw = payload && payload.summary;
+      if (!raw || !Array.isArray(raw.newest)) throw new Error('Invalid order summary');
+
+      const byStatus = emptyOrderSummary().byStatus;
+      for (const status of ORDER_SUMMARY_STATUSES) {
+        const n = Number(raw.byStatus && raw.byStatus[status]);
+        byStatus[status] = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+      }
+      const newest = raw.newest.slice(0, 5).map((row) => ({
+        id: String((row && row.id) || ''),
+        status: ORDER_SUMMARY_STATUSES.includes(row && row.status) ? row.status : 'Pending',
+        total: Number((row && row.total) || 0) || 0,
+        date: String((row && row.date) || ''),
+        customer: String((row && row.customer) || ''),
+      })).filter((row) => row.id);
+      const orderSummary = { total: Number(raw.total) || 0, byStatus, newest };
+
+      const fullOrders = get().orders || [];
+      // A summary may arrive before the first full snapshot. It can seed the
+      // baseline for later compact polls, but it must never raise a toast. The
+      // full refresh uses `orderSnapshotLoaded` (not knownOrderIds) for its own
+      // first-load decision, so a partial five-row summary cannot make the
+      // older backlog look new when the full list finally arrives.
+      const firstSummary = !summarySeeded;
+      if (firstSummary) {
+        summarySeeded = true;
+        if (fullOrders.length === 0) initNotifBaseline();
+      }
+      const prior = firstSummary
+        ? new Set(fullOrders.map((o) => String(o.id)))
+        : knownOrderIds;
+      const fresh = firstSummary ? [] : newest.filter((o) => !prior.has(o.id));
+      knownOrderIds = new Set([...prior, ...newest.map((o) => o.id)]);
+
+      const patch = {
+        orderSummary,
+        ordersLiveStatus: 'ok',
+        unreadOrderCount: computeUnread(fullOrders) + fresh.length,
+      };
+      if (fresh.length) {
+        const latest = fresh.reduce((a, b) => (String(b.date) > String(a.date) ? b : a));
+        patch.newOrderNotification = {
+          order: sanitizeOrder({
+            id: latest.id,
+            status: latest.status,
+            total: latest.total,
+            date: latest.date,
+            customer: latest.customer,
+            items: [],
+            timestamps: { created: new Date().toISOString() },
+          }, get().products),
+          timestamp: Date.now(),
+        };
+      }
+      set(patch);
+      return orderSummary;
+    } catch (err) {
+      const status = err && err.status;
+      if (status === 401 || status === 403) {
+        set({ ordersLiveStatus: 'unauthorized' });
+        return null;
+      }
+      // A silent poll must never hide throttling from the operator.
+      const message = (err && err.message) || 'Could not load order summary';
+      const patch = { ordersLiveStatus: 'degraded' };
+      if (!isSilent || status === 429) patch.ordersError = message;
+      set(patch);
+      if (!isSilent || status === 429) console.error('Failed to load order summary:', message);
+      return null;
     }
   },
 
@@ -1056,12 +1167,15 @@ export const useStore = create((set, get) => ({
     const requested = list.length;
     try {
       const payload = await api.post('/admin/products', { items: list });
-      await get().refreshProducts();
       const count = payload && typeof payload.count === 'number' ? payload.count : requested;
       return { success: true, count, requested, truncated: count < requested };
     } catch (err) {
       console.error('importProducts failed:', err.message);
       return { success: false, error: err.message || 'Import failed' };
+    } finally {
+      // Same as addProduct: imported rows must appear in the admin grid
+      // immediately, without a remount or a manual refresh.
+      await Promise.all([get().refreshProducts(), get().refreshAdminProducts()]);
     }
   },
 

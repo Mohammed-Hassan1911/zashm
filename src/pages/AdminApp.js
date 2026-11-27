@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Package, ShoppingCart, Tag, BarChart2,
   LogOut, Plus, Search, Edit, Trash2, Eye, Download, TrendingUp,
   AlertCircle, CheckCircle, Clock, Truck, XCircle, Bell, Users,
   Upload, Filter, RefreshCw, ChevronLeft, ChevronRight,
-  ArrowUpRight, ArrowDownRight, Package2, Menu, X, MessageSquare
+  ArrowUpRight, ArrowDownRight, Package2, Menu, X, MessageSquare,
+  Flame, Phone, Smartphone, ClipboardList, Link2, CalendarDays, Hash,
+  Palette, Volume2, VolumeX,
 } from 'lucide-react';
 import { useStore } from '../store';
 import { useAuth } from '../lib/auth';
@@ -18,27 +20,44 @@ import {
   computeSalesOverview,
   RANGE_OPTIONS,
   fmtEGP,
-  compactEGP,
   classifyInventory,
   computeAnalyticsReport,
 } from '../lib/analytics';
 import AdminLogin from '../components/admin/AdminLogin';
 import DateField from '../components/admin/DateField';
 import ImageUploader, { storagePathFromUrl } from '../components/admin/ImageUploader';
-import CSVImport from '../components/admin/CSVImport';
 import UsersPanel from '../components/admin/UsersPanel';
 import PhotoLightbox from '../components/ui/PhotoLightbox';
 import { api, deleteStorageFile } from '../lib/api';
 import { formatDateLabel, inclusiveDays } from '../lib/calendar';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, Legend } from 'recharts';
-import Papa from 'papaparse';
+import { useAdminDialog } from '../components/admin/useAdminDialog';
+import { cairoTodayKey, daysUntilCairoDate } from '../components/admin/cairoDate';
+import { copyText } from '../components/admin/clipboard';
+import { toCSV } from '../components/admin/csvExport';
+import {
+  getOrderSoundEnabled, setOrderSoundEnabled, playOrderChime, closeOrderChime,
+} from '../components/admin/orderSound';
 import { toast } from '../components/ui/BackToTop';
 import StarRating from '../components/shop/StarRating';
+
+// Charts and CSV parsing are only needed on two admin screens: keep them out of
+// the initial bundle and out of Orders/Products/Discounts navigation.
+const AdminCharts = lazy(() => import('../components/admin/AdminCharts'));
+const CSVImport = lazy(() => import('../components/admin/CSVImport'));
 
 const STATUS_COLORS = { Pending:'#f39c12', Confirmed:'#3498db', Processing:'#9b59b6', Shipped:'#c9a84c', Delivered:'#27ae60', Cancelled:'#e74c3c' };
 const STATUS_FLOW = ['Pending','Confirmed','Processing','Shipped','Delivered'];
 // Statuses that settle stock/coupon usage and must never apply on a stray click.
 const FINAL_ORDER_STATUSES = ['Delivered', 'Cancelled'];
+// Data KPIs use the brand palette; the coloured STATUS_COLORS above remain for
+// order-status semantics only (and match the customer tracking timeline).
+const KPI_TONES = { gold: 'var(--gold)', text: 'var(--text)', soft: 'var(--text2)', muted: 'var(--text3)' };
+const KPI_TONE_BACKGROUNDS = {
+  [KPI_TONES.gold]: 'rgba(201,168,76,0.1)',
+  [KPI_TONES.text]: 'var(--bg4)',
+  [KPI_TONES.soft]: 'var(--bg4)',
+  [KPI_TONES.muted]: 'var(--bg4)',
+};
 
 function cleanupPathSummary(paths) {
   const unique = [...new Set(paths.filter(Boolean))];
@@ -99,7 +118,7 @@ function KpiDelta({ pct }) {
   if (pct === null || pct === undefined) return null;
   const up = pct >= 0;
   return (
-    <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:10, background: up ? 'rgba(39,174,96,0.12)' : 'rgba(231,76,60,0.12)', color: up ? '#27ae60' : '#e74c3c' }}>
+    <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:10, background: up ? 'rgba(201,168,76,0.12)' : 'rgba(145,138,125,0.12)', color: up ? 'var(--gold)' : 'var(--text3)' }}>
       {up ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
       {Math.abs(pct)}%
     </span>
@@ -115,9 +134,88 @@ const SIDEBAR = [
   { id:'users', label:'Users', icon:Users, perm:'users.read' },
 ];
 
+// Defined at module scope so the 10-second summary refresh does not recreate
+// (and remount) either sidebar on every store update — a remount loses focus in
+// the mobile drawer and replays the entrance animation for no reason.
+function SidebarContent({
+  isMobile = false, collapsed, session, pages, activePage, pendingCount, pendingReviews,
+  onNavigate, onToggleCollapse, onCloseMobile, onViewStore, onLogout,
+}) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden' }}>
+      <div style={{ padding:'20px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, cursor: isMobile ? 'default' : 'pointer' }} onClick={() => !isMobile && onToggleCollapse()}>
+          <div style={{ width:36, height:36, background:'linear-gradient(135deg, var(--gold-dark), var(--gold))', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:700, color:'var(--bg)' }}>Z</span>
+          </div>
+          {(!collapsed || isMobile) && <div>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:17, fontWeight:600, letterSpacing:3 }} className="lit-wordmark">ZASHM</span>
+            <p style={{ fontSize:9, color:'var(--text3)', letterSpacing:1, textTransform:'uppercase' }}>Admin Console</p>
+          </div>}
+        </div>
+        {isMobile && (
+          <button type="button" onClick={onCloseMobile} aria-label="Close navigation menu" title="Close navigation menu"
+            style={{ background:'none', border:'none', color:'var(--text2)', cursor:'pointer' }}>
+            <X size={20} />
+          </button>
+        )}
+      </div>
+
+      {(!collapsed || isMobile) && (
+        <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)', background:'rgba(201,168,76,0.04)' }}>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            <div style={{ width:28, height:28, borderRadius:'50%', background:'linear-gradient(135deg, var(--gold-dark), var(--gold))', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'var(--bg)', flexShrink:0 }}>
+              {session.name?.[0] || 'A'}
+            </div>
+            <div style={{ minWidth:0 }}>
+              <p style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{session.name}</p>
+              <p style={{ fontSize:10, color:'var(--gold)', textTransform:'capitalize' }}>{session.role}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto' }} aria-label="Admin sections">
+        {pages.map(({ id, label, icon:Icon, badge }) => {
+          const active = activePage === id;
+          const badgeCount = badge === 'pending' ? pendingCount : badge === 'reviews' ? pendingReviews : 0;
+          const showText = !collapsed || isMobile;
+          return (
+            <motion.button key={id} type="button" onClick={() => { onNavigate(id); if (isMobile) onCloseMobile(); }}
+              aria-label={label} title={label} aria-current={active ? 'page' : undefined}
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!showText) ? '10px 14px' : '10px 12px', borderRadius:6, marginBottom:2, background: active ? 'rgba(201,168,76,0.12)' : 'transparent', color: active ? 'var(--gold)' : 'var(--text2)', border: `1px solid ${active ? 'rgba(201,168,76,0.2)' : 'transparent'}`, cursor:'pointer', transition:'all 0.15s', justifyContent: (!showText) ? 'center' : 'flex-start', position:'relative' }}
+              whileHover={{ color:'var(--gold)', background:'rgba(201,168,76,0.07)' }}>
+              <Icon size={17} style={{ flexShrink:0 }} />
+              {showText && <span style={{ fontSize:13, fontWeight:500, whiteSpace:'nowrap' }}>{label}</span>}
+              {showText && badgeCount > 0 && <span style={{ marginLeft:'auto', background:'var(--gold)', color:'var(--bg)', borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:700 }}>{badgeCount}</span>}
+              {!showText && badgeCount > 0 && <span style={{ position:'absolute', top:6, right:6, width:8, height:8, background:'var(--gold)', borderRadius:'50%' }} />}
+            </motion.button>
+          );
+        })}
+      </nav>
+
+      <div style={{ padding:'10px 8px', borderTop:'1px solid var(--border)' }}>
+        <button type="button" onClick={() => { onViewStore(); if (isMobile) onCloseMobile(); }} aria-label="View store" title="View store" style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!collapsed || isMobile) ? '10px 12px' : '10px 14px', borderRadius:6, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', justifyContent: (!collapsed || isMobile) ? 'flex-start' : 'center' }}>
+          <Package2 aria-hidden="true" size={17} />
+          {(!collapsed || isMobile) && <span style={{ fontSize:13 }}>View Store</span>}
+        </button>
+        <button type="button" onClick={onLogout} aria-label="Sign out" title="Sign out" style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!collapsed || isMobile) ? '10px 12px' : '10px 14px', borderRadius:6, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', justifyContent: (!collapsed || isMobile) ? 'flex-start' : 'center' }}>
+          <LogOut aria-hidden="true" size={17} />
+          {(!collapsed || isMobile) && <span style={{ fontSize:13 }}>Sign Out</span>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminApp() {
   const { session, logout, canAccess, loading: authLoading } = useAuth();
-  const { adminPage, setAdminPage, setPage, orders, unreadOrderCount, markNotificationsRead, getNotifications, newOrderNotification, refreshOrders, refreshDiscounts } = useStore();
+  const {
+    adminPage, setAdminPage, setPage, orders, unreadOrderCount, markNotificationsRead, getNotifications,
+    newOrderNotification, refreshOrders, refreshDiscounts,
+    adminProducts, adminProductsLoadStatus, adminProductsError, refreshAdminProducts,
+    discountsLoadStatus, discountsError, orderSummary, ordersLiveStatus, refreshOrderSummary,
+  } = useStore();
   const [collapsed, setCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -155,35 +253,28 @@ export default function AdminApp() {
     }
   }, [session, adminPage, canAccess, navigateAdminPage]);
 
+  // Audio is opt-out: one AudioContext is reused for all notifications and a
+  // muted admin never creates one at all.
+  const [soundEnabled, setSoundEnabled] = useState(() => getOrderSoundEnabled());
   useEffect(() => {
-    if (!newOrderNotification) return;
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      [880, 1100, 1320].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.1);
-        gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + i * 0.1 + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.3);
-        osc.start(ctx.currentTime + i * 0.1);
-        osc.stop(ctx.currentTime + i * 0.1 + 0.3);
-      });
-    } catch(e) {}
-  }, [newOrderNotification]);
+    if (!newOrderNotification || !soundEnabled) return;
+    playOrderChime();
+  }, [newOrderNotification, soundEnabled]);
+  useEffect(() => () => closeOrderChime(), []);
 
-  // Keep orders + coupons fresh without a manual refresh while the console is open.
+  // Keep the lightweight summary + coupons fresh without a manual refresh. Full
+  // orders are still loaded for dashboard/analytics and by the Refresh button.
   useEffect(() => {
     if (!session) {
       useStore.setState({ discounts: [] });
-      return;
+      return undefined;
     }
     refreshDiscounts();
-    const ordersId = setInterval(() => { refreshOrders(true); }, 10000);
+    refreshOrderSummary(false);
+    const summaryId = setInterval(() => { refreshOrderSummary(true); }, 10000);
     const discountsId = setInterval(() => { refreshDiscounts(); }, 60000);
-    return () => { clearInterval(ordersId); clearInterval(discountsId); };
-  }, [session, refreshOrders, refreshDiscounts]);
+    return () => { clearInterval(summaryId); clearInterval(discountsId); };
+  }, [session, refreshDiscounts, refreshOrderSummary]);
 
   // Pending reviews badge: refreshed on entry, after moderation (adminPage
   // change) and every minute, so the count is current without a manual reload.
@@ -217,72 +308,24 @@ export default function AdminApp() {
   );
 
   const accessiblePages = SIDEBAR.filter(s => canAccess(s.id));
-  const pendingCount = orders.filter(o => o.status === 'Pending').length;
+  // The full list is authoritative when present; the compact poll still keeps
+  // the badge useful for roles that only receive the live summary.
+  const pendingCount = orders.length
+    ? orders.filter(o => o.status === 'Pending').length
+    : (Number(orderSummary?.byStatus?.Pending) || 0);
   const notifications = getNotifications().slice(0, 8);
 
-  const SidebarContent = ({ isMobile = false }) => (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden' }}>
-      <div style={{ padding:'20px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, cursor: isMobile ? 'default' : 'pointer' }} onClick={() => !isMobile && setCollapsed(!collapsed)}>
-          <div style={{ width:36, height:36, background:'linear-gradient(135deg, var(--gold-dark), var(--gold))', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-            <span style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:700, color:'var(--bg)' }}>Z</span>
-          </div>
-          {(!collapsed || isMobile) && <div>
-            <span style={{ fontFamily:'var(--font-display)', fontSize:17, fontWeight:600, letterSpacing:3 }} className="lit-wordmark">ZASHM</span>
-            <p style={{ fontSize:9, color:'var(--text3)', letterSpacing:1, textTransform:'uppercase' }}>Admin Console</p>
-          </div>}
-        </div>
-        {isMobile && (
-          <button onClick={() => setMobileMenuOpen(false)} style={{ background:'none', border:'none', color:'var(--text2)', cursor:'pointer' }}>
-            <X size={20} />
-          </button>
-        )}
-      </div>
-
-      {(!collapsed || isMobile) && (
-        <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)', background:'rgba(201,168,76,0.04)' }}>
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <div style={{ width:28, height:28, borderRadius:'50%', background:'linear-gradient(135deg, var(--gold-dark), var(--gold))', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'var(--bg)', flexShrink:0 }}>
-              {session.name?.[0] || 'A'}
-            </div>
-            <div style={{ minWidth:0 }}>
-              <p style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{session.name}</p>
-              <p style={{ fontSize:10, color:'var(--gold)', textTransform:'capitalize' }}>{session.role}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto' }}>
-        {accessiblePages.map(({ id, label, icon:Icon, badge }) => {
-          const active = adminPage === id;
-          const badgeCount = badge === 'pending' ? pendingCount : badge === 'reviews' ? pendingReviews : 0;
-          const showText = !collapsed || isMobile;
-          return (
-            <motion.button key={id} onClick={() => { navigateAdminPage(id); if(isMobile) setMobileMenuOpen(false); }}
-              style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!showText) ? '10px 14px' : '10px 12px', borderRadius:6, marginBottom:2, background: active ? 'rgba(201,168,76,0.12)' : 'transparent', color: active ? 'var(--gold)' : 'var(--text2)', border: `1px solid ${active ? 'rgba(201,168,76,0.2)' : 'transparent'}`, cursor:'pointer', transition:'all 0.15s', justifyContent: (!showText) ? 'center' : 'flex-start', position:'relative' }}
-              whileHover={{ color:'var(--gold)', background:'rgba(201,168,76,0.07)' }}>
-              <Icon size={17} style={{ flexShrink:0 }} />
-              {showText && <span style={{ fontSize:13, fontWeight:500, whiteSpace:'nowrap' }}>{label}</span>}
-              {showText && badgeCount > 0 && <span style={{ marginLeft:'auto', background:'var(--gold)', color:'var(--bg)', borderRadius:10, padding:'1px 7px', fontSize:10, fontWeight:700 }}>{badgeCount}</span>}
-              {!showText && badgeCount > 0 && <span style={{ position:'absolute', top:6, right:6, width:8, height:8, background:'var(--gold)', borderRadius:'50%' }} />}
-            </motion.button>
-          );
-        })}
-      </nav>
-
-      <div style={{ padding:'10px 8px', borderTop:'1px solid var(--border)' }}>
-        <button onClick={() => { setPage('home'); if(isMobile) setMobileMenuOpen(false); }} style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!collapsed || isMobile) ? '10px 12px' : '10px 14px', borderRadius:6, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', justifyContent: (!collapsed || isMobile) ? 'flex-start' : 'center' }}>
-          <Package2 size={17} />
-          {(!collapsed || isMobile) && <span style={{ fontSize:13 }}>View Store</span>}
-        </button>
-        <button onClick={logout} style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding: (!collapsed || isMobile) ? '10px 12px' : '10px 14px', borderRadius:6, color:'var(--text3)', background:'none', border:'none', cursor:'pointer', justifyContent: (!collapsed || isMobile) ? 'flex-start' : 'center' }}>
-          <LogOut size={17} />
-          {(!collapsed || isMobile) && <span style={{ fontSize:13 }}>Sign Out</span>}
-        </button>
-      </div>
-    </div>
-  );
+  const sidebarProps = {
+    collapsed, session,
+    pages: accessiblePages,
+    activePage: adminPage,
+    pendingCount, pendingReviews,
+    onNavigate: navigateAdminPage,
+    onToggleCollapse: () => setCollapsed((value) => !value),
+    onCloseMobile: () => setMobileMenuOpen(false),
+    onViewStore: () => setPage('home'),
+    onLogout: logout,
+  };
 
   return (
     <div className="admin-container" style={{ display:'flex', minHeight:0, flexDirection: 'row' }}>
@@ -291,7 +334,7 @@ export default function AdminApp() {
         className="hidden-mobile"
         style={{ background:'linear-gradient(180deg, #14110d 0%, #0e0c09 58%, #0a0908 100%)', borderRight:'1px solid rgba(201,168,76,0.14)', display:'flex', flexDirection:'column', position:'sticky', top:0, height:'100vh', overflow:'hidden', flexShrink:0 }}
       >
-        <SidebarContent isMobile={false} />
+        <SidebarContent isMobile={false} {...sidebarProps} />
       </motion.aside>
 
       <AnimatePresence>
@@ -306,7 +349,7 @@ export default function AdminApp() {
               transition={{ type:'spring', damping:25, stiffness:200 }}
               style={{ position:'fixed', left:0, top:0, bottom:0, width:260, background:'linear-gradient(180deg, #14110d 0%, #0e0c09 58%, #0a0908 100%)', zIndex:3000, borderRight:'1px solid rgba(201,168,76,0.16)', boxShadow:'14px 0 40px rgba(0,0,0,0.55)' }}
             >
-              <SidebarContent isMobile={true} />
+              <SidebarContent isMobile={true} {...sidebarProps} />
             </motion.div>
           </>
         )}
@@ -316,7 +359,8 @@ export default function AdminApp() {
         <div className="admin-topbar" style={{ position:'sticky', top:0, zIndex:100, background:'rgba(18,15,11,0.88)', backdropFilter:'blur(18px) saturate(140%)', WebkitBackdropFilter:'blur(18px) saturate(140%)', borderBottom:'1px solid rgba(201,168,76,0.16)', boxShadow:'0 10px 28px rgba(0,0,0,0.35)', padding:'14px 16px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             <button
-              className="show-mobile-flex" onClick={() => setMobileMenuOpen(true)}
+              type="button" className="show-mobile-flex" onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation menu" title="Open navigation menu"
               style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:36, height:36, borderRadius:8, alignItems:'center', justifyContent:'center', cursor:'pointer' }}
             >
               <Menu size={18} />
@@ -325,14 +369,26 @@ export default function AdminApp() {
           </div>
 
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+            <button type="button" onClick={() => { setSoundEnabled((value) => { setOrderSoundEnabled(!value); return !value; }); }}
+              aria-label="New order sound" title={soundEnabled ? 'Mute new order sound' : 'Unmute new order sound'}
+              aria-pressed={soundEnabled}
+              style={{ width:34, height:34, borderRadius:8, background:'var(--bg3)', border:'1px solid var(--border)', color: soundEnabled ? 'var(--gold)' : 'var(--text3)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+            {ordersLiveStatus === 'degraded' && (
+              <span className="zshm-degraded-indicator" role="status" aria-label="Live summary delayed" title="The live order summary is temporarily unavailable. Refresh the page to retry." style={{ display:'inline-flex', alignItems:'center', gap:5, color:'var(--text2)', fontSize:11, padding:'4px 8px', border:'1px solid var(--border)', borderRadius:6, whiteSpace:'nowrap' }}>
+                <AlertCircle aria-hidden="true" size={12} /> <span>Live summary delayed</span>
+              </span>
+            )}
             <AnimatePresence>
               {newOrderNotification && (
-                <motion.div initial={{ opacity:0, scale:0.8, x:20 }} animate={{ opacity:1, scale:1, x:0 }} exit={{ opacity:0, scale:0.8, x:20 }}
-                  style={{ background:'rgba(201,168,76,0.1)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'6px 12px', display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}
+                <motion.button type="button" initial={{ opacity:0, scale:0.8, x:20 }} animate={{ opacity:1, scale:1, x:0 }} exit={{ opacity:0, scale:0.8, x:20 }}
+                  aria-label={`View new order ${newOrderNotification.order?.id || ''}`}
+                  style={{ background:'rgba(201,168,76,0.1)', border:'1px solid var(--border-gold)', borderRadius:6, padding:'6px 12px', display:'flex', alignItems:'center', gap:8, cursor:'pointer', color:'var(--gold)' }}
                   onClick={() => { navigateAdminPage('orders'); }}>
                   <motion.div animate={{ scale:[1,1.3,1] }} transition={{ repeat:2, duration:0.3 }} style={{ width:8, height:8, borderRadius:'50%', background:'var(--gold)' }} />
                   <span style={{ color:'var(--gold)', fontSize:12, fontWeight:600 }} className="hidden-mobile">New order: {newOrderNotification.order?.id}</span>
-                </motion.div>
+                </motion.button>
               )}
             </AnimatePresence>
 
@@ -350,7 +406,9 @@ export default function AdminApp() {
             )}
 
             <div style={{ position:'relative' }}>
-              <motion.button onClick={() => { setNotifOpen(!notifOpen); markNotificationsRead(); }}
+              <motion.button type="button" onClick={() => { setNotifOpen(!notifOpen); markNotificationsRead(); }}
+                aria-label={`Notifications${unreadOrderCount ? `, ${unreadOrderCount} unread` : ''}`} title="Notifications"
+                aria-expanded={notifOpen}
                 style={{ width:38, height:38, borderRadius:8, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', position:'relative' }}
                 whileHover={{ color:'var(--gold)' }}>
                 <Bell size={16} />
@@ -375,7 +433,7 @@ export default function AdminApp() {
                         {notifications.length === 0 ? (
                           <p style={{ padding:20, textAlign:'center', color:'var(--text3)', fontSize:13 }}>No notifications</p>
                         ) : notifications.map(n => (
-                          <div key={n.id} style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', cursor:'pointer' }}
+                          <button type="button" key={n.id} style={{ display:'block', width:'100%', textAlign:'left', padding:'12px 16px', border:'none', borderBottom:'1px solid var(--border)', cursor:'pointer', background:'transparent', color:'inherit' }}
                             onClick={() => { navigateAdminPage('orders'); setNotifOpen(false); }}
                             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -385,7 +443,7 @@ export default function AdminApp() {
                             </div>
                             <p style={{ fontSize:12, color:'var(--text2)' }}>{n.customer} — EGP {n.total?.toLocaleString()}</p>
                             <p style={{ fontSize:11, color:'var(--text3)' }}>{n.orderId}</p>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </motion.div>
@@ -444,13 +502,14 @@ function DashSkeleton() {
 
 function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
   const {
-    orders, products, productsLoading, productsLoadStatus, productsError, refreshProducts,
-    adminProducts, refreshAdminProducts,
+    orders, products,
+    adminProducts, adminProductsLoading, adminProductsLoadStatus, adminProductsError, refreshAdminProducts,
     refreshOrders, ordersLoading, ordersError,
   } = useStore();
 
-  // Inventory must include inactive products, so admins read the full rows.
-  // Roles without products.read keep the storefront list as a fallback.
+  // Inventory must include inactive products, so admins read the full admin
+  // snapshot with its own status/errors. Roles without products.read use the
+  // public storefront list and its separate status fields.
   const canReadProducts = typeof canAccess === 'function' ? canAccess('products') : false;
 
   const [range, setRange] = useState('7d');
@@ -466,6 +525,9 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
 
   const overview = useMemo(() => computeSalesOverview(orders, range), [orders, range]);
   const inventoryProducts = canReadProducts ? adminProducts : products;
+  const inventoryLoading = canReadProducts ? adminProductsLoading : false;
+  const inventoryStatus = canReadProducts ? adminProductsLoadStatus : 'success';
+  const inventoryError = canReadProducts ? adminProductsError : null;
   const inventory = useMemo(() => classifyInventory(inventoryProducts), [inventoryProducts]);
 
   const recentOrders = useMemo(() => {
@@ -481,14 +543,14 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === range);
 
   const kpis = [
-    { key: 'totalValue', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${Math.max(0, overview.orderCount - overview.cancelledCount)} non-cancelled orders`, color: 'var(--gold)', icon: TrendingUp, delta: overview.totalDeltaPct },
-    { key: 'delivered', labelEn: 'Delivered Sales', value: fmtEGP(overview.deliveredSales), sub: `${overview.deliveredCount} delivered`, color: '#27ae60', icon: CheckCircle },
-    { key: 'pending', labelEn: 'Orders In Progress Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: '#f39c12', icon: Clock },
-    { key: 'shipped', labelEn: 'Shipped Order Value', value: fmtEGP(overview.shippedValue), sub: `${overview.shippedCount} shipped`, color: '#3498db', icon: Truck },
-    { key: 'orders', labelEn: 'Total Orders', value: String(overview.orderCount), sub: 'all statuses', color: 'var(--text)', icon: ShoppingCart, delta: overview.orderDeltaPct },
-    { key: 'deliveredCount', labelEn: 'Delivered Orders', value: String(overview.deliveredCount), sub: `of ${overview.orderCount} total`, color: '#27ae60', icon: Package2 },
-    { key: 'aov', labelEn: 'Average Order Value', value: fmtEGP(overview.aov), sub: 'per eligible order', color: '#9b59b6', icon: BarChart2 },
-    { key: 'cancelled', labelEn: 'Cancelled Orders', value: fmtEGP(overview.cancelledValue), sub: `${overview.cancelledCount} cancelled (excluded everywhere)`, color: '#e74c3c', icon: XCircle },
+    { key: 'totalValue', labelEn: 'Total Order Value', value: fmtEGP(overview.totalValue), sub: `${Math.max(0, overview.orderCount - overview.cancelledCount)} non-cancelled orders`, color: KPI_TONES.gold, icon: TrendingUp, delta: overview.totalDeltaPct },
+    { key: 'delivered', labelEn: 'Delivered Sales', value: fmtEGP(overview.deliveredSales), sub: `${overview.deliveredCount} delivered`, color: KPI_TONES.soft, icon: CheckCircle },
+    { key: 'pending', labelEn: 'Orders In Progress Value', value: fmtEGP(overview.pendingValue), sub: `${overview.pendingCount} in confirmation/processing`, color: KPI_TONES.gold, icon: Clock },
+    { key: 'shipped', labelEn: 'Shipped Order Value', value: fmtEGP(overview.shippedValue), sub: `${overview.shippedCount} shipped`, color: KPI_TONES.muted, icon: Truck },
+    { key: 'orders', labelEn: 'Total Orders', value: String(overview.orderCount), sub: 'all statuses', color: KPI_TONES.text, icon: ShoppingCart, delta: overview.orderDeltaPct },
+    { key: 'deliveredCount', labelEn: 'Delivered Orders', value: String(overview.deliveredCount), sub: `of ${overview.orderCount} total`, color: KPI_TONES.soft, icon: Package2 },
+    { key: 'aov', labelEn: 'Average Order Value', value: fmtEGP(overview.aov), sub: 'per eligible order', color: KPI_TONES.soft, icon: BarChart2 },
+    { key: 'cancelled', labelEn: 'Cancelled Orders', value: String(overview.cancelledCount), sub: `${fmtEGP(overview.cancelledValue)} (excluded everywhere)`, color: KPI_TONES.muted, icon: XCircle },
   ];
 
   const hasSeriesData = !isEmpty && overview.series.some((p) => p.value > 0 || p.orders > 0);
@@ -502,7 +564,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
             Overview · {rangeLabel ? `${rangeLabel.labelEn}` : ''} — up to {overview.orderCount} orders
           </p>
         </div>
-        <motion.button onClick={refreshOrders} whileTap={{ scale:0.95 }} disabled={ordersLoading}
+        <motion.button type="button" onClick={refreshOrders} whileTap={{ scale:0.95 }} disabled={ordersLoading}
           style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:6, color:'var(--text2)', cursor:'pointer', fontSize:12, opacity: ordersLoading ? 0.7 : 1 }}>
           <motion.span animate={{ rotate: ordersLoading ? 360 : 0 }} transition={{ duration: 0.6, repeat: ordersLoading ? Infinity : 0, ease: 'linear' }} style={{ display:'flex' }}>
             <RefreshCw size={13} />
@@ -516,7 +578,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
           <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
             <AlertCircle size={14} /> Could not load orders — {ordersError}
           </p>
-          <button onClick={refreshOrders} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
+          <button type="button" onClick={refreshOrders} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
             Retry
           </button>
         </div>
@@ -530,8 +592,8 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
               <motion.div key={labelEn} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ delay:i*0.04 }}
                 style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:'14px 14px 12px', display:'flex', flexDirection:'column' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                  <div style={{ width:30, height:30, borderRadius:8, background:`${color === 'var(--text)' ? '#2a2a2a' : color}1a`, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <Icon size={15} color={color === 'var(--text)' ? 'var(--text2)' : color} />
+                  <div style={{ width:30, height:30, borderRadius:8, background: KPI_TONE_BACKGROUNDS[color] || 'var(--bg4)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <Icon size={15} color={color === KPI_TONES.text ? KPI_TONES.soft : color} />
                   </div>
                   {delta !== undefined && <KpiDelta pct={delta} />}
                 </div>
@@ -556,9 +618,9 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
             titleEn="Sales Performance"
             style={{ marginBottom: 16 }}
             actions={
-              <div style={{ display:'flex', gap:2, background:'var(--bg)', padding:2, borderRadius:6, border:'1px solid var(--border)', overflowX:'auto' }}>
+              <div className="zshm-admin-filter-scroll" style={{ display:'flex', gap:2, background:'var(--bg)', padding:2, borderRadius:6, border:'1px solid var(--border)', overflowX:'auto' }}>
                 {RANGE_OPTIONS.map((r) => (
-                  <button key={r.key} onClick={() => setRange(r.key)}
+                  <button key={r.key} type="button" onClick={() => setRange(r.key)} aria-label={`Show ${r.labelEn}`}
                     style={{ padding:'4px 10px', borderRadius:4, fontSize:10, fontWeight:600, cursor:'pointer', border:'none', background: range === r.key ? 'var(--gold)' : 'transparent', color: range === r.key ? 'var(--bg)' : 'var(--text3)', whiteSpace:'nowrap' }}>
                     {r.labelEn}
                   </button>
@@ -568,24 +630,9 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
           >
             <div style={{ width:'100%', height:270 }}>
               {hasSeriesData ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={overview.series} margin={{ left: -14, right: 4, top: 8 }}>
-                    <defs>
-                      <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#c9a84c" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#c9a84c" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="left" orientation="left" tickFormatter={compactEGP} tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{ fill:'var(--text3)', fontSize:10 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<SalesTooltip />} />
-                    <Legend wrapperStyle={{ fontSize:11, color:'var(--text2)', marginTop:8 }} iconType="circle" iconSize={7} />
-                    <Area yAxisId="left" type="monotone" dataKey="value" name="Sales (EGP)" stroke="#c9a84c" strokeWidth={2} fill="url(#salesGrad)" dot={false} activeDot={{ r: 3 }} />
-                    <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#3b82c4" radius={[3,3,0,0]} barSize={Math.max(6, Math.min(30, Math.round(320 / (overview.series.length || 1))))} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <React.Suspense fallback={<div role="status" style={{ color:'var(--text3)', fontSize:12, textAlign:'center', paddingTop:80 }}>Loading chart…</div>}>
+                  <AdminCharts series={overview.series} />
+                </React.Suspense>
               ) : (
                 <DashEmpty icon={BarChart2} title="No orders in this period"
                   hint="Choose another date range above or wait for the first order."
@@ -631,7 +678,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                       <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                         <strong dir="ltr" style={{ fontSize:12, color:'var(--text)' }}>{fmtEGP(o.total)}</strong>
                         <StatusBadge status={o.status} small />
-                        <button onClick={() => onOpenOrder(o.id)} title="Open order" aria-label="Open order"
+                        <button type="button" onClick={() => onOpenOrder(o.id)} title="Open order" aria-label={`Open order ${o.id}`}
                           style={{ width:28, height:28, borderRadius:6, background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
                           <Eye size={12} />
                         </button>
@@ -644,20 +691,20 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
 
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <Card title="Store Health">
-                {productsLoading || productsLoadStatus === 'idle' ? (
+                {inventoryLoading || inventoryStatus === 'idle' ? (
                   <p role="status" style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>Loading product and stock data…</p>
-                ) : productsLoadStatus === 'error' ? (
+                ) : inventoryStatus === 'error' ? (
                   <div role="alert" style={{ display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-                    <p style={{ color:'#e74c3c', fontSize:12 }}>{`Could not load products${productsError ? ` — ${productsError}` : ''}`}</p>
-                    <button onClick={refreshProducts} style={{ padding:'5px 10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>Retry</button>
+                    <p style={{ color:'var(--red-light)', fontSize:12 }}>{`Could not load products${inventoryError ? ` — ${inventoryError}` : ''}`}</p>
+                    <button type="button" onClick={canReadProducts ? refreshAdminProducts : undefined} style={{ padding:'5px 10px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>Retry</button>
                   </div>
-                ) : products.length === 0 ? (
+                ) : inventoryProducts.length === 0 ? (
                   <p style={{ color:'var(--text3)', fontSize:12, padding:'4px 0' }}>No products to show stock health for.</p>
                 ) : inventory.outOfStock.length === 0 &&
                   inventory.lowStock.length === 0 &&
                   inventory.variantOutOfStock.length === 0 &&
                   inventory.variantLowStock.length === 0 ? (
-                  <div style={{ display:'flex', alignItems:'center', gap:8, color:'#27ae60', fontSize:12, padding:'4px 0' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, color:'var(--gold)', fontSize:12, padding:'4px 0' }}>
                     <CheckCircle size={15} /> All products and variations are well stocked
                   </div>
                 ) : (
@@ -666,14 +713,14 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                       <div key={product.id} style={{ padding:'8px 0', borderBottom:'1px solid var(--border)' }}>
                         <div style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:11, marginBottom:variants.length ? 6 : 0 }}>
                           <span style={{ color:'var(--text2)', minWidth:0, overflowWrap:'anywhere' }}>{product.name}</span>
-                          <strong style={{ flexShrink:0, color:stock <= 0 ? 'var(--red)' : stock <= 5 ? '#f39c12' : '#27ae60' }}>
+                          <strong style={{ flexShrink:0, color:stock <= 0 ? 'var(--red-light)' : stock <= 5 ? 'var(--gold)' : 'var(--text2)' }}>
                             Total: {stock}
                           </strong>
                         </div>
                         {variants.length > 0 && (
                           <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
                             {variants.map((variant) => {
-                              const color = variant.stock <= 0 ? 'var(--red)' : variant.stock <= 5 ? '#f39c12' : '#27ae60';
+                              const color = variant.stock <= 0 ? 'var(--red-light)' : variant.stock <= 5 ? 'var(--gold)' : 'var(--text2)';
                               const status = variant.stock <= 0 ? 'Out of stock' : variant.stock <= 5 ? 'Low' : 'In stock';
                               return (
                                 <span key={variant.key} style={{ color, border:`1px solid ${color}55`, background:`${color}12`, borderRadius:4, padding:'3px 6px', fontSize:10, whiteSpace:'nowrap' }}>
@@ -691,7 +738,7 @@ function Dashboard({ setAdminPage, canAccess, onOpenOrder, onAddProduct }) {
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop:'1px solid var(--border)' }}>
                   <p style={{ fontSize:10, color:'var(--text3)', fontWeight:600, marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Orders in progress</p>
                   {attentionOrders.length === 0 ? (
-                    <p style={{ fontSize:12, color:'#27ae60', display:'flex', alignItems:'center', gap:6 }}><CheckCircle size={14} /> No pending orders</p>
+                    <p style={{ fontSize:12, color:'var(--gold)', display:'flex', alignItems:'center', gap:6 }}><CheckCircle size={14} /> No pending orders</p>
                   ) : attentionOrders.map((o) => (
                     <div key={o.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', fontSize:11 }}>
                       <span style={{ color:'var(--text2)', fontFamily:'monospace' }}>{o.id}</span>
@@ -736,6 +783,7 @@ function editItemsKey(items) {
 
 function OrderEditModal({ order, products, onClose }) {
   const editOrder = useStore((s) => s.editOrder);
+  const { dialogRef, dialogProps, titleProps } = useAdminDialog({ onClose, disabled: false });
   const itemsLocked = !EDITABLE_ITEM_STATUSES.includes(order.status);
   const initialKey = useMemo(() => editItemsKey(order.items), [order.id]);
   const initialCode = useMemo(() => String(order.discountCode || '').trim().toUpperCase(), [order.id]);
@@ -861,8 +909,14 @@ function OrderEditModal({ order, products, onClose }) {
     if (nextCode !== initialCode) changes.couponCode = nextCode;
 
     setSaving(true);
-    const result = await editOrder(order.id, changes);
-    setSaving(false);
+    let result;
+    try {
+      result = await editOrder(order.id, changes);
+    } catch (err) {
+      result = { success: false, error: err.message || 'Could not update the order.' };
+    } finally {
+      setSaving(false);
+    }
 
     if (!result || result.success === false) {
       setErrors(Array.isArray(result && result.errors) ? result.errors : []);
@@ -880,15 +934,16 @@ function OrderEditModal({ order, products, onClose }) {
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={saving ? undefined : onClose}
         style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 2100, backdropFilter: 'blur(4px)' }} />
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 24 }}
+      <motion.div {...dialogProps} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 24 }}
+        aria-labelledby={titleProps.id}
         style={{ position: 'fixed', top: '4vh', left: '50%', transform: 'translateX(-50%)', width: '94%', maxWidth: 620, maxHeight: '92vh', overflowY: 'auto', background: 'var(--bg2)', border: '1px solid var(--border-gold)', borderRadius: 12, padding: 20, zIndex: 2101, boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 16 }}>
           <div>
             <p style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>Edit order</p>
-            <h3 style={{ fontFamily: 'monospace', fontSize: 18, color: 'var(--gold)' }}>{order.id}</h3>
+            <h3 {...titleProps} style={{ fontFamily: 'monospace', fontSize: 18, color: 'var(--gold)' }}>{order.id}</h3>
             <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>Status: {order.status}</p>
           </div>
-          <button onClick={onClose} disabled={saving}
+          <button type="button" onClick={onClose} disabled={saving} aria-label="Close edit order"
             style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', cursor: saving ? 'not-allowed' : 'pointer' }}>✕</button>
         </div>
 
@@ -964,13 +1019,13 @@ function OrderEditModal({ order, products, onClose }) {
                   </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <button onClick={() => updateQty(index, -1)} disabled={itemsLocked || saving}
+                  <button type="button" aria-label="Decrease quantity" onClick={() => updateQty(index, -1)} disabled={itemsLocked || saving}
                     style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text1)', cursor: itemsLocked ? 'not-allowed' : 'pointer', opacity: itemsLocked ? 0.4 : 1 }}>−</button>
                   <span style={{ minWidth: 22, textAlign: 'center', fontSize: 12 }}>{item.qty}</span>
-                  <button onClick={() => updateQty(index, 1)} disabled={itemsLocked || saving}
+                  <button type="button" aria-label="Increase quantity" onClick={() => updateQty(index, 1)} disabled={itemsLocked || saving}
                     style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text1)', cursor: itemsLocked ? 'not-allowed' : 'pointer', opacity: itemsLocked ? 0.4 : 1 }}>+</button>
                 </div>
-                <button onClick={() => removeItem(index)} disabled={itemsLocked || saving}
+                <button type="button" onClick={() => removeItem(index)} disabled={itemsLocked || saving}
                   style={{ padding: '6px 8px', borderRadius: 4, background: 'rgba(231,76,60,0.12)', border: '1px solid rgba(231,76,60,0.35)', color: '#e74c3c', fontSize: 10, cursor: itemsLocked ? 'not-allowed' : 'pointer', opacity: itemsLocked ? 0.4 : 1 }}>
                   Remove
                 </button>
@@ -1012,7 +1067,7 @@ function OrderEditModal({ order, products, onClose }) {
                     onChange={e => setNewItem(n => ({ ...n, qty: e.target.value }))} style={inputStyle} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <button onClick={addItem} disabled={newItemInvalid || saving}
+                  <button type="button" onClick={addItem} disabled={newItemInvalid || saving}
                     style={{ width: '100%', padding: '8px 10px', borderRadius: 4, background: newItemInvalid ? 'var(--bg4)' : 'var(--gold)', color: newItemInvalid ? 'var(--text3)' : 'var(--bg)', border: 'none', fontWeight: 700, fontSize: 11, cursor: newItemInvalid ? 'not-allowed' : 'pointer' }}>
                     Add item
                   </button>
@@ -1023,11 +1078,11 @@ function OrderEditModal({ order, products, onClose }) {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-          <button onClick={onClose} disabled={saving}
+          <button type="button" onClick={onClose} disabled={saving}
             style={{ padding: '9px 16px', borderRadius: 6, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 12, cursor: saving ? 'not-allowed' : 'pointer' }}>
             Cancel
           </button>
-          <button onClick={handleSave} disabled={saving}
+          <button type="button" onClick={handleSave} disabled={saving}
             style={{ padding: '9px 18px', borderRadius: 6, background: saving ? 'var(--bg4)' : 'var(--gold)', border: 'none', color: saving ? 'var(--text3)' : 'var(--bg)', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}>
             {saving ? 'Saving…' : 'Save changes'}
           </button>
@@ -1051,12 +1106,46 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [copied, setCopied] = useState(false); // حالة لإشعار النسخ
+  const [copying, setCopying] = useState(false);
+  const copyTimerRef = useRef(null);
+  const historyDialog = useAdminDialog({ open: showHistoryModal, onClose: () => setShowHistoryModal(false) });
+  const detailsDialog = useAdminDialog({ open: Boolean(selected), onClose: () => setSelected(null) });
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); }, []);
   // `expectedStatus` is the status the admin saw when they opened the dialog.
   // It is captured here — NOT re-read from the store at confirmation time —
   // because the 10s poll (see AdminApp root) can move the row underneath us.
   const [statusConfirm, setStatusConfirm] = useState(null); // { order, status, expectedStatus }
   const [statusSaving, setStatusSaving] = useState(false);
-  const statusDialogRef = useRef(null);
+  const statusDialog = useAdminDialog({ open: Boolean(statusConfirm), onClose: () => { if (!statusSaving) setStatusConfirm(null); }, disabled: statusSaving });
+  const statusDialogRef = statusDialog.dialogRef;
+
+  // Explicit keyboard contract at the final-status call site; the shared hook
+  // also traps focus, restores it and locks background scroll for this dialog.
+  useEffect(() => {
+    if (!statusConfirm) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        if (!statusSaving) setStatusConfirm(null);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const root = statusDialogRef.current;
+      if (!root) return;
+      const focusable = root.querySelectorAll('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [statusConfirm, statusSaving]);
 
   const applyStatusChange = async (id, status, expectedStatus) => {
     const res = await updateOrderStatus(id, status, expectedStatus);
@@ -1076,7 +1165,10 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
       setStatusConfirm({ order, status, expectedStatus: order.status });
       return;
     }
-    applyStatusChange(order.id, status, order.status);
+    applyStatusChange(order.id, status, order.status)
+      .catch((err) => {
+        toast.error(`Order not updated. ${(err && err.message) || 'Please try again.'}`);
+      });
   };
 
   // The background poll can change the row while the dialog is open. If the
@@ -1110,32 +1202,6 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   };
 
   useEffect(() => {
-    if (!statusConfirm) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        if (!statusSaving) setStatusConfirm(null);
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const root = statusDialogRef.current;
-      if (!root) return;
-      const focusable = root.querySelectorAll('button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [statusConfirm, statusSaving]);
-
-  useEffect(() => {
     if (!preOpenOrderId) return;
     const target = (orders || []).find(o => o.id === preOpenOrderId);
     if (target) setSelected(target);
@@ -1167,12 +1233,22 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
     setShowHistoryModal(true);
   };
 
-  // دالة نسخ الرابط
-  const handleCopyLink = (url) => {
-    if (!url) return;
-    navigator.clipboard.writeText(url);
+  // دالة نسخ الرابط — never claim success before the write resolves.
+  const handleCopyLink = async (url) => {
+    if (!url || copying) return;
+    setCopying(true);
+    let ok = false;
+    try {
+      ok = await copyText(url);
+    } catch (err) {
+      ok = false;
+    } finally {
+      setCopying(false);
+    }
+    if (!ok) { toast.error('Could not copy the link. Copy it manually from the field.'); return; }
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const filtered = useMemo(() => {
@@ -1192,7 +1268,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   const exportCSV = () => {
     const rows = [['ID','Customer','Phone','Alternate Phone','Email','Items','Subtotal','Discount','Total','Status','Date','Address'],
       ...filtered.map(o => [o.id, o.customer, o.phone, o.phoneAlt||'', o.email||'', o.items.length, o.subtotal, o.discount||0, o.total, o.status, o.date, o.address])];
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const csv = toCSV(rows);
     const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = `zashm-orders-${new Date().toISOString().split('T')[0]}.csv`; a.click();
   };
 
@@ -1203,23 +1279,23 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
           <Search size={13} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'var(--text3)' }} />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search..." style={{ width:'100%', paddingLeft:34 }} />
         </div>
-        <div style={{ display:'flex', gap:4, overflowX:'auto', paddingBottom:4, width:'100%', WebkitOverflowScrolling:'touch' }}>
+        <div className="zshm-admin-filter-scroll" style={{ display:'flex', gap:4, overflowX:'auto', paddingBottom:4, width:'100%', WebkitOverflowScrolling:'touch' }}>
           {['All','Pending','Confirmed','Processing','Shipped','Delivered','Cancelled'].map(s => (
-            <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
+            <button key={s} type="button" onClick={() => { setStatusFilter(s); setPage(1); }} aria-label={`Filter orders by ${s}`}
               style={{ padding:'6px 12px', borderRadius:4, fontSize:11, fontWeight:500, background: statusFilter === s ? (s === 'All' ? 'var(--gold)' : STATUS_COLORS[s]) : 'var(--bg3)', color: statusFilter === s ? (s === 'All' ? 'var(--bg)' : 'white') : 'var(--text2)', border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>
               {s} {s !== 'All' && `(${orders.filter(o => o.status === s).length})`}
             </button>
           ))}
         </div>
-        <button onClick={exportCSV}
+        <button type="button" onClick={exportCSV}
           style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', borderRadius:6, cursor:'pointer', fontSize:12, marginLeft:'auto' }}>
           <Download size={13} /> Export CSV
         </button>
       </div>
 
       <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
-        <div style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <div className="zshm-admin-table-scroll" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+          <table style={{ width:'100%', minWidth:720, borderCollapse:'collapse' }}>
             <thead>
               <tr style={{ borderBottom:'1px solid var(--border)', background:'var(--bg3)' }}>
                 {['Order ID','Customer','Items','Total','Status','Date','Actions'].map(h => (
@@ -1253,7 +1329,8 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
 
                         {/* 🎯 الـ Badge الذهبي للعميل المتكرر */}
                         {orderCount > 1 && (
-                          <span
+                          <button
+                            type="button"
                             onClick={() => handleShowCustomerHistory(order.phone)}
                             style={{
                               padding: '1px 6px',
@@ -1269,19 +1346,20 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                               gap: 2,
                               userSelect: 'none'
                             }}
-                            title="Click to view order history and contact the customer"
+                            aria-label={`View ${orderCount} orders for this repeat customer`}
+                            title="View order history and contact the customer"
                           >
-                            🔥 VIP ({orderCount})
-                          </span>
+                            <Flame aria-hidden="true" size={11} /> VIP ({orderCount})
+                          </button>
                         )}
                       </div>
-                      <p style={{ fontSize:10, color:'var(--text3)', marginTop: 4 }}>📞 {order.phone}</p>
-                      {order.phoneAlt && <p style={{ fontSize:10, color:'var(--gold)', marginTop:2 }}>📱 {order.phoneAlt} (alt)</p>}
+                      <p style={{ fontSize:10, color:'var(--text3)', marginTop: 4, display:'flex', alignItems:'center', gap:4 }}><Phone aria-hidden="true" size={11} /> {order.phone}</p>
+                      {order.phoneAlt && <p style={{ fontSize:10, color:'var(--gold)', marginTop:2, display:'flex', alignItems:'center', gap:4 }}><Smartphone aria-hidden="true" size={11} /> {order.phoneAlt} (alt)</p>}
                     </td>
 
                     <td style={{ padding:'11px 14px', verticalAlign: 'top', minWidth: '220px' }}>
                       <div style={{ fontSize:11, color:'var(--gold)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        📦 {order.items?.length || 0} item{order.items?.length > 1 ? 's' : ''}:
+                        <Package aria-hidden="true" size={12} /> {order.items?.length || 0} item{order.items?.length > 1 ? 's' : ''}:
                       </div>
                       {order.items && order.items.length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1311,7 +1389,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     </td>
                     <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
                       {canEdit ? (
-                        <select value={order.status} onChange={e => { const next = e.target.value; e.target.value = order.status; requestStatusChange(order, next); }}
+                        <select aria-label={`Status for order ${order.id}`} value={order.status} onChange={e => { const next = e.target.value; e.target.value = order.status; requestStatusChange(order, next); }}
                           style={{ padding:'4px 8px', fontSize:11, background:'var(--bg3)', border:`1px solid ${STATUS_COLORS[order.status]}`, color:STATUS_COLORS[order.status], borderRadius:4, cursor:'pointer' }}>
                           {STATUS_FLOW.concat(['Cancelled']).map(s => <option key={s}>{s}</option>)}
                         </select>
@@ -1321,9 +1399,9 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                     </td>
                     <td style={{ padding:'11px 14px', fontSize:11, color:'var(--text3)', verticalAlign: 'top', whiteSpace:'nowrap' }}>{order.date}</td>
                     <td style={{ padding:'11px 14px', verticalAlign: 'top' }}>
-                      <button onClick={() => setSelected(order)}
+                      <button type="button" onClick={() => setSelected(order)} aria-label={`View details for order ${order.id}`} title="View order details"
                         style={{ width:28, height:28, borderRadius:4, background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-                        <Eye size={12} />
+                        <Eye aria-hidden="true" size={12} />
                       </button>
                     </td>
                   </motion.tr>
@@ -1336,9 +1414,9 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
           <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
             <p style={{ color:'var(--text3)', fontSize:12 }}>Showing {(paginated.page-1)*PER_PAGE+1}–{Math.min(paginated.page*PER_PAGE, paginated.total)} of {paginated.total}</p>
             <div style={{ display:'flex', gap:4 }}>
-              <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasPrev}
+              <button type="button" onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasPrev} aria-label="Previous orders page"
                 style={{ width:30, height:30, borderRadius:4, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', opacity: paginated.hasPrev ? 1 : 0.4 }}>
-                <ChevronLeft size={14} />
+                <ChevronLeft aria-hidden="true" size={14} />
               </button>
               {(() => {
                 const tp = paginated.totalPages;
@@ -1350,12 +1428,12 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                 for (let p = start; p <= end; p++) nums.push(p);
                 return nums;
               })().map((p) => (
-                <button key={p} onClick={() => setPage(p)}
+                <button key={p} type="button" onClick={() => setPage(p)} aria-label={`Orders page ${p}`} aria-current={paginated.page === p ? 'page' : undefined}
                   style={{ width:30, height:30, borderRadius:4, background: paginated.page === p ? 'var(--gold)' : 'var(--bg3)', border:'1px solid var(--border)', color: paginated.page === p ? 'var(--bg)' : 'var(--text2)', cursor:'pointer', fontSize:12 }}>{p}</button>
               ))}
-              <button onClick={() => setPage(p => Math.min(paginated.totalPages,p+1))} disabled={!paginated.hasNext}
+              <button type="button" onClick={() => setPage(p => Math.min(paginated.totalPages,p+1))} disabled={!paginated.hasNext} aria-label="Next orders page"
                 style={{ width:30, height:30, borderRadius:4, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', opacity: paginated.hasNext ? 1 : 0.4 }}>
-                <ChevronRight size={14} />
+                <ChevronRight aria-hidden="true" size={14} />
               </button>
             </div>
           </div>
@@ -1368,17 +1446,17 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
           <>
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowHistoryModal(false)}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2500, backdropFilter:'blur(4px)' }} />
-            <motion.div initial={{ opacity:0, scale:0.95, y: -20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y: -20 }}
-              style={{ position:'fixed', top:'10%', left:'50%', transform:'translateX(-50%)', width:'92%', maxWidth:460, background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:20, zIndex:2501, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
+            <motion.div {...historyDialog.dialogProps} aria-labelledby={historyDialog.titleProps.id}
+              initial={{ opacity:0, scale:0.95, y: -20 }} animate={{ opacity:1, scale:1, y:0 }} exit={{ opacity:0, scale:0.95, y: -20 }}
+              style={{ position:'fixed', top:'10%', left:'50%', transform:'translateX(-50%)', width:'92%', maxWidth:460, maxHeight:'80vh', overflowY:'auto', background:'var(--bg2)', border:'1px solid var(--border-gold)', borderRadius:12, padding:20, zIndex:2501, boxShadow:'0 20px 50px rgba(0,0,0,0.6)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', paddingBottom:12, marginBottom:16 }}>
                 <div>
-                  <h3 style={{ color:'var(--gold)', fontSize:16, fontWeight:600, display:'flex', alignItems:'center', gap:7 }}>
-                    <span aria-hidden="true" style={{ fontFamily:'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif', fontSize:17, lineHeight:1 }}>📋</span>
-                    Repeat order history
+                  <h3 {...historyDialog.titleProps} style={{ color:'var(--gold)', fontSize:16, fontWeight:600, display:'flex', alignItems:'center', gap:7 }}>
+                    <ClipboardList aria-hidden="true" size={16} /> Repeat order history
                   </h3>
                   <p style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>Phone: {selectedCustomerPhone}</p>
                 </div>
-                <button onClick={() => setShowHistoryModal(false)} style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:28, height:28, borderRadius:6, cursor:'pointer', fontSize:12 }}>✕</button>
+                <button type="button" onClick={() => setShowHistoryModal(false)} aria-label="Close repeat order history" style={{ background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', width:28, height:28, borderRadius:6, cursor:'pointer', fontSize:12 }}>✕</button>
               </div>
 
               <div style={{ maxHeight: '280px', overflowY: 'auto', marginBottom: 20, paddingRight: 4 }} className="custom-scrollbar">
@@ -1423,7 +1501,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
   >
     <MessageSquare size={15} /> Contact with the discount
   </a>
-  <button onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize: 13 }}>Close</button>
+  <button type="button" onClick={() => setShowHistoryModal(false)} style={{ padding: '10px 16px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text1)', cursor: 'pointer', fontSize: 13 }}>Close</button>
 </div>
             </motion.div>
           </>
@@ -1470,14 +1548,15 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
           <>
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setSelected(null)}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000, backdropFilter:'blur(4px)' }} />
-            <motion.div initial={{ opacity:0, x:80 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:80 }}
+            <motion.div {...detailsDialog.dialogProps} aria-labelledby={detailsDialog.titleProps.id}
+              initial={{ opacity:0, x:80 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:80 }}
               style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:440, background:'var(--bg2)', borderLeft:'1px solid var(--border)', zIndex:2001, overflow:'auto' }}>
               <div style={{ padding:'20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <div>
                   <p style={{ fontSize:10, color:'var(--text3)', letterSpacing:2, textTransform:'uppercase', marginBottom:2 }}>Order Details</p>
-                  <h2 style={{ fontFamily:'var(--font-display)', fontSize:20, color:'var(--gold)' }}>{selected.id}</h2>
+                  <h2 {...detailsDialog.titleProps} style={{ fontFamily:'var(--font-display)', fontSize:20, color:'var(--gold)' }}>{selected.id}</h2>
                 </div>
-                <button onClick={() => setSelected(null)} style={{ width:32, height:32, borderRadius:6, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                <button type="button" onClick={() => setSelected(null)} aria-label="Close order details" style={{ width:32, height:32, borderRadius:6, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
               </div>
 
               <div style={{ padding:16 }}>
@@ -1485,20 +1564,21 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
                 {/* 🎯 قـسـم تـتـبـع الـطـلـب الـجـديـد (Tracking Link) */}
                 <div style={{ background: 'rgba(212, 175, 55, 0.05)', border: '1px solid rgba(212, 175, 55, 0.2)', borderRadius: 6, padding: 14, marginBottom: 16 }}>
                   <p style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    🔗 Customer Tracking Link
+                    <Link2 aria-hidden="true" size={13} /> Customer Tracking Link
                   </p>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input
                       type="text"
                       readOnly
+                      aria-label="Customer tracking link"
                       value={selected.tracking_url || ''}
                       style={{ flex: 1, padding: '8px 10px', fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text2)', fontFamily: 'monospace' }}
                     />
                     <button
-                      onClick={() => handleCopyLink(selected.tracking_url || '')}
-                      style={{ padding: '8px 12px', background: copied ? '#27ae60' : 'var(--gold)', color: copied ? 'white' : 'var(--bg)', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
+                      type="button" onClick={() => handleCopyLink(selected.tracking_url || '')} disabled={copying || !selected.tracking_url}
+                      style={{ padding: '8px 12px', background: copied ? 'var(--gold-dark)' : 'var(--gold)', color: 'var(--bg)', border: 'none', borderRadius: 4, cursor: copying ? 'wait' : 'pointer', opacity: (copying || !selected.tracking_url) ? 0.6 : 1, fontSize: 11, fontWeight: 600, transition: 'all 0.2s', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
                     >
-                      {copied ? 'Copied!' : 'Copy Link'}
+                      {copying ? 'Copying…' : copied ? 'Copied!' : 'Copy Link'}
                     </button>
                   </div>
                 </div>
@@ -1578,7 +1658,7 @@ function OrdersPanel({ canEdit, preOpenOrderId, onOrderOpened }) {
 
                 {canEdit && (
                   <div style={{ marginTop:16 }}>
-                    <button onClick={() => setShowEditModal(true)}
+                    <button type="button" onClick={() => setShowEditModal(true)}
                       style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 14px', marginBottom:16, borderRadius:6, background:'rgba(201,168,76,0.1)', border:'1px solid var(--border-gold)', color:'var(--gold)', cursor:'pointer', fontSize:12, fontWeight:700 }}>
                       <Edit size={13} /> Edit order details
                     </button>
@@ -1677,9 +1757,15 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
   const [showImport, setShowImport] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [confirmBulk, setConfirmBulk] = useState(null);
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState(false);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [page, setPage] = useState(1);
+  const formDialog = useAdminDialog({ open: showForm, onClose: () => handleCancel(), disabled: savingProduct });
+  const importDialog = useAdminDialog({ open: showImport && !showForm, onClose: () => setShowImport(false) });
+  const singleDeleteDialog = useAdminDialog({ open: Boolean(productToDelete), onClose: () => { if (!deletingProduct) setProductToDelete(null); }, disabled: deletingProduct });
+  const bulkDeleteDialog = useAdminDialog({ open: confirmBulk !== null, onClose: () => { if (!deletingProduct) setConfirmBulk(null); }, disabled: deletingProduct });
 
   // تتبّع الصور المرفوعة خلال الجلسة الحالية فقط (مسارات داخل bucket products)
   // حتى يمكن حذف ملفاتها الفعلية من Storage عند الحذف/الإلغاء دون لمس صور محفوظة.
@@ -1744,7 +1830,10 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
   // إلغاء فتح المنتج: يقفل الـ drawer بأمان وينظف أي صور مؤقتة من Storage
   // (أفضل مجهود — أي فشل يظهر تنبيه فقط ولا يكسر الواجهة أبداً).
   const handleCancel = async () => {
-    if (cancelInFlightRef.current) return;
+    // Escape, backdrop click or Cancel must not clear tempUploadsRef while a
+    // save is in flight: that would delete images the product is about to
+    // reference (or skip cleanup of images it will never reference).
+    if (savingProduct || cancelInFlightRef.current) return;
     cancelInFlightRef.current = true;
 
     const pending = Array.from(tempUploadsRef.current);
@@ -1790,7 +1879,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
   // (ناجح بالكامل، أو ناجح مع فشل تنظيف بعض الصور).
   const confirmSingleDelete = async () => {
     const target = productToDelete;
-    if (!target || !target.id) return;
+    if (!target || !target.id || deletingProduct) return;
+    setDeletingProduct(true);
     setProductToDelete(null);
     try {
       const payload = await deleteProduct(target.id);
@@ -1809,13 +1899,16 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     } catch (err) {
       console.error('confirmSingleDelete failed:', err && err.message);
       toast.error('Could not delete product. Please try again.');
+    } finally {
+      setDeletingProduct(false);
     }
   };
 
   // حذف جماعي: نفس القواعد، بنتيجة دقيقة لكل عملية.
   const confirmBulkDelete = async () => {
     const ids = [...selected];
-    if (!ids.length) return;
+    if (!ids.length || deletingProduct) return;
+    setDeletingProduct(true);
     clearSelect();
     setConfirmBulk(null);
     try {
@@ -1835,6 +1928,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
     } catch (err) {
       console.error('confirmBulkDelete failed:', err && err.message);
       toast.error('Could not delete products. Please try again.');
+    } finally {
+      setDeletingProduct(false);
     }
   };
 
@@ -1888,6 +1983,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
   };
 
   const handleSave = async () => {
+    if (savingProduct) return;
     if (!form.name || form.name.trim() === '') {
       toast.error('⚠️ Please enter the product name before saving.');
       return;
@@ -1988,6 +2084,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       active: form.active !== undefined ? form.active : true
     };
 
+    setSavingProduct(true);
     try {
       let saveResult;
       if (editing && editing.id) {
@@ -2044,15 +2141,18 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
       if (form._isAddingNewCat) update('_isAddingNewCat', false);
       setShowForm(false);
     } catch (err) {
-      console.error("❌ [HandleSave Error]:", err);
+      console.error('[HandleSave Error]:', err);
       toast.error('Database connection error. Please try again.');
+    } finally {
+      setSavingProduct(false);
     }
   };
 
   const toggleSelect = (id) => {
+    if (!canEdit) return;
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
-  const selectAll = () => setSelected(new Set(paginated.items.map(p => p.id)));
+  const selectAll = () => { if (canEdit) setSelected(new Set(paginated.items.map(p => p.id))); };
   const clearSelect = () => setSelected(new Set());
 
   return (
@@ -2063,9 +2163,9 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search products..." style={{ width:'100%', paddingLeft:34 }} />
         </div>
         <div style={{ display:'flex', gap:6, width: '100%', justifyContent:'flex-end', flexWrap:'wrap' }}>
-          {selected.size > 0 && (
+          {canEdit && selected.size > 0 && (
             <button
-              onClick={() => setConfirmBulk(selected.size)}
+              type="button" onClick={() => setConfirmBulk(selected.size)}
               style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.3)', color:'var(--red)', borderRadius:6, cursor:'pointer', fontSize:12, transition:'all 0.2s ease-in-out' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.2)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = '#f07171'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.3)'; e.currentTarget.style.color = 'var(--red)'; }}
@@ -2074,11 +2174,11 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
             </button>
           )}
           {canEdit && <>
-            <button onClick={() => setShowImport(true)}
+            <button type="button" onClick={() => setShowImport(true)}
               style={{ display:'flex', gap:6, alignItems:'center', padding:'8px 14px', background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', borderRadius:6, cursor:'pointer', fontSize:12 }}>
-              <Upload size={13} /> Import
+              <Upload aria-hidden="true" size={13} /> Import
             </button>
-            <button className="gold-btn" style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={openNew}>
+            <button type="button" className="gold-btn" style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={openNew}>
               <Plus size={14} /> Add Product
             </button>
           </>}
@@ -2090,7 +2190,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
           <p style={{ fontSize:12, color:'#e74c3c', display:'flex', alignItems:'center', gap:6 }}>
             <AlertCircle size={14} /> Could not load products — {adminProductsError}
           </p>
-          <button onClick={refreshAdminProducts} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
+          <button type="button" onClick={refreshAdminProducts} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>
             Retry
           </button>
         </div>
@@ -2104,8 +2204,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
           <label style={{ display:'flex', gap:6, alignItems:'center', cursor:'pointer', fontSize:12, color:'var(--text3)' }}>
             <input type="checkbox" checked={selected.size === paginated.items.length && paginated.items.length > 0}
-              onChange={e => e.target.checked ? selectAll() : clearSelect()}
-              style={{ accentColor:'var(--gold)' }} />
+              onChange={e => e.target.checked ? selectAll() : clearSelect()} disabled={!canEdit}
+              aria-label="Select all products on this page" style={{ accentColor:'var(--gold)' }} />
             Select all
           </label>
           <span style={{ color:'var(--text3)', fontSize:12 }}>{filtered.length} total</span>
@@ -2134,7 +2234,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
             onClick={() => toggleSelect(p.id)}
             style={{ background:'var(--surface)', border:`2px solid ${selected.has(p.id) ? 'var(--gold)' : 'var(--border)'}`, borderRadius:6, overflow:'hidden', transition:'border-color 0.15s', position:'relative' }}>
             <div style={{ position:'absolute', top:8, left:8, zIndex:3 }} onClick={(e) => e.stopPropagation()}>
-              <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)}
+              <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} disabled={!canEdit}
                 aria-label={`Select ${p.name}`}
                 style={{ accentColor:'var(--gold)', width:16, height:16, cursor:'pointer' }} />
             </div>
@@ -2182,26 +2282,23 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
 
       {paginated.totalPages > 1 && (
         <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:24 }}>
-          <button onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasPrev}
+          <button type="button" onClick={() => setPage(p => Math.max(1,p-1))} disabled={!paginated.hasPrev} aria-label="Previous products page"
             style={{ padding:'6px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:12, opacity: paginated.hasPrev ? 1 : 0.4 }}>← Prev</button>
           <span style={{ padding:'6px 8px', fontSize:12, color:'var(--text2)' }}>{page} / {paginated.totalPages}</span>
-          <button onClick={() => setPage(p => Math.min(paginated.totalPages,p+1))} disabled={!paginated.hasNext}
+          <button type="button" onClick={() => setPage(p => Math.min(paginated.totalPages,p+1))} disabled={!paginated.hasNext} aria-label="Next products page"
             style={{ padding:'6px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:12, opacity: paginated.hasNext ? 1 : 0.4 }}>Next →</button>
         </div>
       )}
 
       {showForm && (
           <>
-            <div onClick={handleCancel}
+            <div onClick={() => { if (!savingProduct) handleCancel(); }}
               style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={editing ? 'Edit Product' : 'New Product'}
+            <div {...formDialog.dialogProps} aria-labelledby={formDialog.titleProps.id}
               style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:520, background:'var(--bg2)', borderLeft:'1px solid var(--border)', zIndex:2001, display:'flex', flexDirection:'column', overflow:'hidden' }}>
               <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
-                <h2 style={{ fontFamily:'var(--font-display)', fontSize:20 }}>{editing ? 'Edit Product' : 'New Product'}</h2>
-                <button onClick={handleCancel} style={{ color:'var(--text3)', background:'none', border:'none', cursor:'pointer', fontSize:20 }}>✕</button>
+                <h2 {...formDialog.titleProps} style={{ fontFamily:'var(--font-display)', fontSize:20 }}>{editing ? 'Edit Product' : 'New Product'}</h2>
+                <button type="button" onClick={handleCancel} disabled={savingProduct} aria-label="Close product editor" style={{ color:'var(--text3)', background:'none', border:'none', cursor:savingProduct ? 'wait' : 'pointer', fontSize:20 }}>✕</button>
               </div>
               <div style={{ flex:1, overflowY:'auto', padding:'16px' }}>
 
@@ -2250,7 +2347,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                           const all = [...new Set([...PRODUCT_CATEGORIES, ...existing])];
                           return all.map(cat => <option key={cat} value={cat}>{cat}</option>);
                         })()}
-                        <option value="___NEW_CAT___" style={{ color: 'var(--gold)', fontWeight: '600' }}>➕ + Add New Category</option>
+                        <option value="___NEW_CAT___" style={{ color: 'var(--gold)', fontWeight: '600' }}>+ Add New Category</option>
                       </select>
                     )}
                   </div>
@@ -2260,7 +2357,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                     <input type="text" value={form.tags || ''} onChange={e => update('tags', e.target.value)} placeholder="Summer26, Cotton" style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}>Product Label (Filter) 🎯</label>
+                    <label style={{ fontSize: 10, color: 'var(--text3)', display:'flex', alignItems:'center', gap:5, marginBottom: 5, letterSpacing: 1, textTransform: 'uppercase' }}><Tag aria-hidden="true" size={11} /> Product Label (Filter)</label>
                     <select
                       value={form.label || ''} onChange={e => update('label', e.target.value)}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface)', color: form.label ? 'var(--gold)' : 'var(--text)', cursor: 'pointer', height: '37px' }}
@@ -2399,7 +2496,7 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                 </div>
 
                 <div style={{ marginTop:16, padding:12, background:'var(--bg3)', borderRadius:6, border:'1px solid var(--border)' }}>
-                  <label style={{ fontSize:11, color:'var(--gold)', display:'block', marginBottom:12, letterSpacing:1, textTransform:'uppercase', fontWeight:600 }}>🎨 Size & Color Stock Matrix *</label>
+                  <label style={{ fontSize:11, color:'var(--gold)', display:'flex', alignItems:'center', gap:5, marginBottom:12, letterSpacing:1, textTransform:'uppercase', fontWeight:600 }}><Palette aria-hidden="true" size={12} /> Size &amp; Color Stock Matrix *</label>
                   <div style={{ display:'grid', gap:8 }}>
                     {(() => {
                       const currentSizes = uniqueDeclaredOptions(parseOptionList(form.sizes));
@@ -2470,8 +2567,8 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
                               {revivedOrphans.map((entry) => <li key={entry.key}>{entry.key}: {entry.qty}</li>)}
                             </ul>
                             {restoreAck === revivedSignature ? (
-                              <p role="status" style={{ fontSize:11, color:'#27ae60', margin:0 }}>
-                                ✓ Restore confirmed — these units become sellable when you save.
+                              <p role="status" style={{ fontSize:11, color:'var(--green)', margin:0 }}>
+                                <CheckCircle aria-hidden="true" size={12} /> Restore confirmed — these units become sellable when you save.
                               </p>
                             ) : (
                               <button
@@ -2575,18 +2672,21 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
               </div>
               <div style={{ padding:'12px 20px', borderTop:'1px solid var(--border)', display:'flex', gap:8, flexShrink:0 }}>
                 <button
+                  type="button"
                   className="gold-btn"
-                  style={{ flex:1, opacity: (form.salePrice && form.price && Number(form.salePrice) >= Number(form.price)) ? 0.4 : 1, cursor: (form.salePrice && form.price && Number(form.salePrice) >= Number(form.price)) ? 'not-allowed' : 'pointer' }}
+                  disabled={savingProduct || Boolean(form.salePrice && form.price && Number(form.salePrice) >= Number(form.price))}
+                  style={{ flex:1, opacity: (savingProduct || (form.salePrice && form.price && Number(form.salePrice) >= Number(form.price))) ? 0.4 : 1, cursor: savingProduct ? 'wait' : 'not-allowed' }}
                   onClick={() => {
+                    if (savingProduct) return;
                     if (form.salePrice && form.price && Number(form.salePrice) >= Number(form.price)) {
                       toast.error('The sale price cannot be higher than the original price.'); return;
                     }
                     handleSave();
                   }}
                 >
-                  {editing ? 'Save' : 'Create'}
+                  {savingProduct ? 'Saving…' : editing ? 'Save' : 'Create'}
                 </button>
-                <button className="outline-btn" onClick={handleCancel}>Cancel</button>
+                <button type="button" className="outline-btn" onClick={handleCancel} disabled={savingProduct}>Cancel</button>
               </div>
             </div>
           </>
@@ -2596,8 +2696,12 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
         {showForm === false && showImport && (
           <>
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowImport(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
-            <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.95 }} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:540, maxWidth:'92vw', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:8, padding:20, zIndex:2001, maxHeight:'85vh', overflowY:'auto' }}>
-              <CSVImport onClose={() => setShowImport(false)} />
+            <motion.div {...importDialog.dialogProps} aria-labelledby={importDialog.titleProps.id}
+              initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.95 }} style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:540, maxWidth:'92vw', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:8, padding:20, zIndex:2001, maxHeight:'85vh', overflowY:'auto' }}>
+              <h2 {...importDialog.titleProps} className="sr-only">Import products from CSV</h2>
+              <React.Suspense fallback={<p role="status" style={{ color:'var(--text3)', fontSize:12 }}>Loading CSV importer…</p>}>
+                <CSVImport onClose={() => setShowImport(false)} />
+              </React.Suspense>
             </motion.div>
           </>
         )}
@@ -2607,24 +2711,24 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
         {productToDelete && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setProductToDelete(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.85)', zIndex: 3000, backdropFilter: 'blur(10px)' }} />
-            <motion.div
+            <motion.div {...singleDeleteDialog.dialogProps} aria-labelledby={singleDeleteDialog.titleProps.id}
               initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
-              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(192, 57, 43, 0.35)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
+              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'var(--bg2)', border: '1px solid rgba(192, 57, 43, 0.35)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
             >
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(192, 57, 43, 0.1)', border: '1px solid rgba(192, 57, 43, 0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <Trash2 size={28} style={{ color: '#f07171' }} />
+                <Trash2 size={28} style={{ color: 'var(--red-light)' }} />
               </div>
-              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>Confirm permanent deletion</h3>
+              <h3 {...singleDeleteDialog.titleProps} style={{ color: 'var(--text)', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>Confirm permanent deletion</h3>
               <p style={{ color: '#aaaaaa', fontSize: 13, marginBottom: 24, lineHeight: '1.6' }}>Are you sure you want to delete <strong style={{ color: '#ffffff' }}>"{productToDelete.name}"</strong>? This will remove it permanently.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button
-                  onClick={confirmSingleDelete}
-                  style={{ flex: 1, padding: '10px 0', background: '#b83232', border: '1px solid #d65353', color: '#ffffff', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                  type="button" onClick={confirmSingleDelete} disabled={deletingProduct}
+                  style={{ flex: 1, padding: '10px 0', background: 'var(--red)', border: '1px solid var(--red-light)', color: 'var(--white)', borderRadius: 6, fontWeight: 600, cursor: deletingProduct ? 'wait' : 'pointer', opacity: deletingProduct ? 0.6 : 1, fontSize: 13 }}
                 >
-                  Delete
+                  {deletingProduct ? 'Deleting…' : 'Delete'}
                 </button>
-                <button onClick={() => setProductToDelete(null)} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid #333333', color: '#ffffff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+                <button type="button" onClick={() => setProductToDelete(null)} disabled={deletingProduct} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 6, cursor: deletingProduct ? 'wait' : 'pointer', fontSize: 13 }}>Cancel</button>
               </div>
             </motion.div>
           </>
@@ -2635,15 +2739,15 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
         {confirmBulk !== null && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setConfirmBulk(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.85)', zIndex: 3000, backdropFilter: 'blur(10px)' }} />
-            <motion.div
+            <motion.div {...bulkDeleteDialog.dialogProps} aria-labelledby={bulkDeleteDialog.titleProps.id}
               initial={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }} animate={{ opacity: 1, scale: 1, y: "-50%", x: "-50%" }} exit={{ opacity: 0, scale: 0.9, y: "-50%", x: "-50%" }}
               transition={{ type: "spring", damping: 20, stiffness: 300 }}
-              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'linear-gradient(180deg, #111111 0%, #000000 100%)', border: '1px solid rgba(192, 57, 43, 0.35)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
+              style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '90%', maxWidth: 420, background: 'var(--bg2)', border: '1px solid rgba(192, 57, 43, 0.35)', borderRadius: 12, padding: '30px 20px', zIndex: 3001, textAlign: 'center' }}
             >
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(192, 57, 43, 0.1)', border: '1px solid rgba(192, 57, 43, 0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <Trash2 size={28} style={{ color: '#f07171' }} />
+                <Trash2 size={28} style={{ color: 'var(--red-light)' }} />
               </div>
-              <h3 style={{ color: '#ffffff', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>{confirmBulk === 1 ? 'Confirm deletion' : 'Confirm bulk deletion'}</h3>
+              <h3 {...bulkDeleteDialog.titleProps} style={{ color: 'var(--text)', fontSize: 18, fontWeight: 500, marginBottom: 12, fontFamily: 'var(--font-display)', letterSpacing: 1 }}>{confirmBulk === 1 ? 'Confirm deletion' : 'Confirm bulk deletion'}</h3>
               <p style={{ color: '#dddddd', fontSize: 13, marginBottom: 24, lineHeight: '1.6' }}>
                 {confirmBulk === 1
                   ? 'Delete this product?'
@@ -2651,12 +2755,12 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
               </p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button
-                  onClick={confirmBulkDelete}
-                  style={{ flex: 1, padding: '10px 0', background: '#b83232', border: '1px solid #d65353', color: '#ffffff', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                  type="button" onClick={confirmBulkDelete} disabled={deletingProduct}
+                  style={{ flex: 1, padding: '10px 0', background: 'var(--red)', border: '1px solid var(--red-light)', color: 'var(--white)', borderRadius: 6, fontWeight: 600, cursor: deletingProduct ? 'wait' : 'pointer', opacity: deletingProduct ? 0.6 : 1, fontSize: 13 }}
                 >
-                  Yes
+                  {deletingProduct ? 'Deleting…' : 'Yes'}
                 </button>
-                <button onClick={() => setConfirmBulk(null)} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid #333333', color: '#ffffff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>No</button>
+                <button type="button" onClick={() => setConfirmBulk(null)} disabled={deletingProduct} style={{ flex: 1, padding: '10px 0', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 6, cursor: deletingProduct ? 'wait' : 'pointer', fontSize: 13 }}>No</button>
               </div>
             </motion.div>
           </>
@@ -2668,17 +2772,26 @@ function ProductsPanel({ canEdit, showForm, setShowForm }) {
 
 // ─── DISCOUNTS PANEL ──────────────────────────────────────────────────────────
 function DiscountsPanel({ canEdit }) {
-  const { discounts, addDiscount, deleteDiscount, updateDiscount } = useStore();
+  const {
+    discounts, discountsLoadStatus, discountsError, refreshDiscounts,
+    addDiscount, deleteDiscount, updateDiscount,
+  } = useStore();
   const [showForm, setShowForm] = useState(false);
   const [discountToDelete, setDiscountToDelete] = useState(null);
   const [updatingDiscountId, setUpdatingDiscountId] = useState(null);
+  const [savingDiscount, setSavingDiscount] = useState(false);
+  const [deletingDiscount, setDeletingDiscount] = useState(false);
   const [form, setForm] = useState({ code:'', type:'percentage', value:'', startDate:'', endDate:'', usageLimit:100, minOrderAmount:'', maxDiscount:'', description:'', active:true });
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const formDialog = useAdminDialog({ open: showForm, onClose: () => { if (!savingDiscount) setShowForm(false); }, disabled: savingDiscount });
+  const deleteDialog = useAdminDialog({ open: Boolean(discountToDelete), onClose: () => { if (!deletingDiscount) setDiscountToDelete(null); }, disabled: deletingDiscount });
 
-  const tzOffset = (new Date()).getTimezoneOffset() * 60000;
-  const today = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
+  // Coupon windows are Egypt calendar dates; a browser in another timezone must
+  // not flip a code's status a day early or late.
+  const today = cairoTodayKey();
 
   const handleAdd = async () => {
+    if (savingDiscount) return;
     const code = (form.code || '').trim().toUpperCase();
     if (!code) { toast.error('Please enter a discount code.'); return; }
     if (!/^[A-Za-z0-9_-]{3,30}$/.test(code)) { toast.error('The discount code must be 3-30 characters and contain only letters, numbers, _ or -.'); return; }
@@ -2691,13 +2804,14 @@ function DiscountsPanel({ canEdit }) {
     if (form.endDate < form.startDate) { toast.error('The end date must be after the start date.'); return; }
     if (form.usageLimit === '' || form.usageLimit === null || form.usageLimit === undefined) { toast.error('Please enter a usage limit.'); return; }
     const usageLimit = Number(form.usageLimit);
-    if (!Number.isFinite(usageLimit) || !Number.isInteger(usageLimit) || usageLimit < 0 || usageLimit > 1000000) { toast.error('Please enter a valid usage limit.'); return; }
+    if (!Number.isFinite(usageLimit) || !Number.isInteger(usageLimit) || usageLimit < 1 || usageLimit > 1000000) { toast.error('Please enter a usage limit of at least 1.'); return; }
 
     const minOrderAmount = form.minOrderAmount === '' ? 0 : Number(form.minOrderAmount);
     if (!Number.isFinite(minOrderAmount) || minOrderAmount < 0 || minOrderAmount > 10000000) { toast.error('Please enter a valid minimum order amount.'); return; }
     const maxDiscount = form.maxDiscount === '' ? null : Number(form.maxDiscount);
     if (maxDiscount !== null && (!Number.isFinite(maxDiscount) || maxDiscount < 0 || maxDiscount > 10000000)) { toast.error('Please enter a valid maximum discount.'); return; }
 
+    setSavingDiscount(true);
     try {
       await addDiscount({
         ...form,
@@ -2719,6 +2833,8 @@ function DiscountsPanel({ canEdit }) {
     } catch (err) {
       const msg = err && err.message ? err.message : 'Could not create the discount code. Check the details and try again.';
       toast.error(msg);
+    } finally {
+      setSavingDiscount(false);
     }
   };
 
@@ -2739,8 +2855,9 @@ function DiscountsPanel({ canEdit }) {
   };
 
   const confirmDelete = async () => {
-    if (!discountToDelete) return;
+    if (!discountToDelete || deletingDiscount) return;
     const target = discountToDelete;
+    setDeletingDiscount(true);
     setDiscountToDelete(null);
     try {
       await deleteDiscount(target.id);
@@ -2752,27 +2869,43 @@ function DiscountsPanel({ canEdit }) {
         ? e.message
         : 'Could not delete discount code. Please try again.';
       toast.error(msg);
+    } finally {
+      setDeletingDiscount(false);
     }
   };
 
+  const loading = discountsLoadStatus === 'loading' || discountsLoadStatus === 'idle';
+  const failed = discountsLoadStatus === 'error';
+
   return (
     <div>
+      {failed && (
+        <div role="alert" style={{ marginBottom:16, border:'1px solid rgba(192,57,43,0.35)', background:'rgba(192,57,43,0.07)', borderRadius:8, padding:'10px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <p style={{ fontSize:12, color:'var(--red-light)', display:'flex', alignItems:'center', gap:6 }}>
+            <AlertCircle size={14} /> Could not load discounts{discountsError ? ` — ${discountsError}` : ''}
+          </p>
+          <button type="button" onClick={refreshDiscounts} style={{ padding:'5px 12px', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:4, color:'var(--text2)', cursor:'pointer', fontSize:11 }}>Retry</button>
+        </div>
+      )}
       {canEdit && (
         <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:16 }}>
-          <button className="gold-btn" style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={() => setShowForm(true)}>
-            <Plus size={14} /> Create Discount
+          <button type="button" className="gold-btn" style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={() => setShowForm(true)}>
+            <Plus aria-hidden="true" size={14} /> Create Discount
           </button>
         </div>
       )}
       <div style={{ display:'grid', gap:12 }}>
-        {discounts.length === 0 && (
+        {loading && (
+          <p role="status" style={{ fontSize:12, color:'var(--text3)', padding:'8px 0' }}>Loading discount codes...</p>
+        )}
+        {!loading && !failed && discounts.length === 0 && (
           <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>
             <DashEmpty
               icon={Tag}
-              title="No discount codes"
+              title="No discount codes yet"
               hint="Create a discount code to attract more orders."
               action={canEdit ? (
-                <button className="gold-btn" style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={() => setShowForm(true)}>
+                <button type="button" className="gold-btn" style={{ marginTop:12, display:'inline-flex', alignItems:'center', gap:8, padding:'8px 16px' }} onClick={() => setShowForm(true)}>
                   <Plus size={14} /> Create discount code
                 </button>
               ) : null}
@@ -2780,26 +2913,35 @@ function DiscountsPanel({ canEdit }) {
           </div>
         )}
         {discounts.map(d => {
-          const isActive = d.active && d.startDate <= today && d.endDate >= today;
-          const currentUsage = d.usageCount || 0;
-          const pct = d.usageLimit ? Math.round((currentUsage / d.usageLimit) * 100) : 0;
+          const startDays = daysUntilCairoDate(d.startDate, today);
+          const endDays = daysUntilCairoDate(d.endDate, today);
+          const inWindow = startDays !== null && endDays !== null && startDays <= 0 && endDays >= 0;
+          const currentUsage = Math.max(0, Number(d.usageCount) || 0);
+          const usageLimit = Math.max(0, Number(d.usageLimit) || 0);
+          // The API treats `usageLimit = 0` as no redemptions, not unlimited.
+          const exhausted = usageLimit === 0 || currentUsage >= usageLimit;
+          const isActive = Boolean(d.active) && inWindow && !exhausted;
+          const isUpcoming = Boolean(d.active) && startDays !== null && startDays > 0;
+          const hasExpired = Boolean(d.active) && endDays !== null && endDays < 0;
+          const isExhausted = Boolean(d.active) && inWindow && exhausted;
+          const pct = usageLimit === 0 ? 100 : Math.min(100, Math.round((currentUsage / usageLimit) * 100));
           // `discountValue` is the legacy alias; both columns are kept in sync by
           // the admin API but old rows may only have one.
           const discountValue = Number(d.value ?? d.discountValue ?? 0);
           const minOrderAmount = Number(d.minOrderAmount) || 0;
           const maxDiscount = Number(d.maxDiscount) || 0;
 
-          const isExpiring = d.active && d.endDate && (new Date(d.endDate) - new Date()) < 7 * 24 * 60 * 60 * 1000 && (new Date(d.endDate) - new Date()) > 0;
+          const isExpiring = isActive && endDays !== null && endDays <= 7;
           return (
             <motion.div key={d.id} initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
               style={{ background:'var(--surface)', border:`1px solid ${isActive ? 'var(--gold)' : 'var(--border)'}`, borderRadius:8, padding:'16px' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
                   <code style={{ fontFamily:'monospace', fontSize:18, fontWeight:700, color: isActive ? 'var(--gold)' : 'var(--text3)', letterSpacing:2 }}>{d.code}</code>
-                  <span style={{ padding:'2px 8px', borderRadius:10, fontSize:10, fontWeight:600, background: isActive ? 'rgba(39,174,96,0.12)' : 'rgba(100,100,100,0.1)', color: isActive ? '#27ae60' : 'var(--text3)' }}>
-                    {isActive ? '● Active' : '○ Inactive'}
+                  <span style={{ padding:'2px 8px', borderRadius:10, fontSize:10, fontWeight:600, background: isActive ? 'rgba(201,168,76,0.12)' : 'rgba(100,100,100,0.1)', color: isActive ? 'var(--gold)' : 'var(--text3)' }}>
+                    {isActive ? 'Active' : isUpcoming ? 'Upcoming' : hasExpired ? 'Expired' : isExhausted ? 'Exhausted' : 'Inactive'}
                   </span>
-                  {isExpiring && <span style={{ padding:'2px 6px', borderRadius:10, fontSize:9, background:'rgba(243,156,18,0.15)', color:'#f39c12' }}>¼ Expiring</span>}
+                  {isExpiring && <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 6px', borderRadius:10, fontSize:9, background:'rgba(201,168,76,0.15)', color:'var(--gold)' }}><Clock aria-hidden="true" size={10} /> Expiring</span>}
                 </div>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                   <span style={{ background:'rgba(201,168,76,0.1)', color:'var(--gold)', padding:'4px 10px', borderRadius:4, fontSize:12, fontWeight:700 }}>
@@ -2808,13 +2950,13 @@ function DiscountsPanel({ canEdit }) {
                   {canEdit && (
                     <>
                       <button
-                        onClick={() => handleToggle(d)}
+                        type="button" onClick={() => handleToggle(d)}
                         disabled={updatingDiscountId === d.id}
                         style={{ padding:'4px 8px', background:'var(--bg4)', border:'1px solid var(--border)', color:'var(--text2)', borderRadius:4, cursor:updatingDiscountId === d.id ? 'wait' : 'pointer', fontSize:11, opacity:updatingDiscountId === d.id ? 0.6 : 1 }}>
                         {updatingDiscountId === d.id ? 'Saving…' : d.active ? 'Deactivate' : 'Activate'}
                       </button>
                       <button
-                        onClick={() => handleDelete(d)}
+                        type="button" onClick={() => handleDelete(d)} aria-label={`Delete discount ${d.code}`}
                         style={{ width:28, height:28, borderRadius:4, background:'rgba(192,57,43,0.1)', border:'1px solid rgba(192,57,43,0.2)', color:'var(--red)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.2s ease-in-out' }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.2)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = '#f07171'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(192,57,43,0.1)'; e.currentTarget.style.borderColor = 'rgba(192,57,43,0.2)'; e.currentTarget.style.color = 'var(--red)'; }}
@@ -2827,14 +2969,16 @@ function DiscountsPanel({ canEdit }) {
               </div>
               {d.description && <p style={{ color:'var(--text3)', fontSize:12, marginTop:8 }}>{d.description}</p>}
               <div style={{ display:'flex', gap:16, marginTop:12, flexWrap:'wrap' }}>
-                <span style={{ color:'var(--text3)', fontSize:11 }}>¼ {d.startDate} ➔ {d.endDate}</span>
-                <span style={{ color:'var(--text3)', fontSize:11 }}>¼ {currentUsage}/{d.usageLimit} used</span>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:'var(--text3)', fontSize:11 }}><CalendarDays aria-hidden="true" size={11} /> {formatDateLabel(d.startDate)} → {formatDateLabel(d.endDate)}</span>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:4, color: exhausted ? 'var(--red-light)' : 'var(--text3)', fontSize:11 }}>
+                  <Hash aria-hidden="true" size={11} /> {usageLimit === 0 ? 'No uses available (limit 0)' : `${currentUsage}/${usageLimit} used`}
+                </span>
                 {minOrderAmount > 0 && <span style={{ color:'var(--text3)', fontSize:11 }}>Min order: EGP {minOrderAmount}</span>}
                 {maxDiscount > 0 && <span style={{ color:'var(--text3)', fontSize:11 }}>Max discount: EGP {maxDiscount}</span>}
               </div>
               <div style={{ marginTop:10, height:4, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
                 <motion.div initial={{ width:0 }} animate={{ width:`${pct}%` }} transition={{ delay:0.2, duration:0.8 }}
-                  style={{ height:'100%', background: pct > 80 ? '#e74c3c' : 'linear-gradient(to right, var(--gold-dark), var(--gold))', borderRadius:3 }} />
+                  style={{ height:'100%', background: exhausted ? 'var(--red-light)' : 'linear-gradient(to right, var(--gold-dark), var(--gold))', borderRadius:3 }} />
               </div>
             </motion.div>
           );
@@ -2844,12 +2988,12 @@ function DiscountsPanel({ canEdit }) {
       <AnimatePresence>
         {showForm && (
           <>
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setShowForm(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
-            <motion.div
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => { if (!savingDiscount) setShowForm(false); }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:2000 }} />
+            <motion.div {...formDialog.dialogProps} aria-labelledby={formDialog.titleProps.id}
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               style={{ position:'fixed', right:0, top:0, bottom:0, width:'100%', maxWidth:500, overflowY:'auto', background:'var(--bg2)', borderLeft:'1px solid var(--border)', padding:20, zIndex:2001, boxSizing:'border-box' }}
             >
-              <h2 style={{ fontFamily:'var(--font-display)', fontSize:20, marginBottom:16 }}>Create Discount Code</h2>
+              <h2 {...formDialog.titleProps} style={{ fontFamily:'var(--font-display)', fontSize:20, marginBottom:16 }}>Create Discount Code</h2>
               <div style={{ display:'grid', gap:12 }}>
                 <div>
                   <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Code *</label>
@@ -2917,7 +3061,8 @@ function DiscountsPanel({ canEdit }) {
                 </div>
                 <div>
                   <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Usage Limit</label>
-                  <input type="number" value={form.usageLimit} onChange={e => update('usageLimit', e.target.value)} style={{ width:'100%' }} />
+                  <input type="number" min="1" value={form.usageLimit} onChange={e => update('usageLimit', e.target.value)} style={{ width:'100%' }} />
+                  {Number(form.usageLimit) === 0 && <p role="alert" style={{ fontSize:10, color:'var(--red-light)', marginTop:4 }}>A limit of 0 makes this code unusable. Enter the number of allowed redemptions.</p>}
                 </div>
                 <div>
                   <label style={{ fontSize:10, color:'var(--text3)', display:'block', marginBottom:5, textTransform:'uppercase' }}>Description</label>
@@ -2925,8 +3070,8 @@ function DiscountsPanel({ canEdit }) {
                 </div>
               </div>
               <div style={{ display:'flex', gap:10, marginTop:20 }}>
-                <button className="gold-btn" style={{ flex:1 }} onClick={handleAdd}>Create</button>
-                <button className="outline-btn" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="button" className="gold-btn" style={{ flex:1 }} onClick={handleAdd} disabled={savingDiscount}>{savingDiscount ? 'Creating...' : 'Create'}</button>
+                <button type="button" className="outline-btn" onClick={() => setShowForm(false)} disabled={savingDiscount}>Cancel</button>
               </div>
             </motion.div>
           </>
@@ -2936,20 +3081,20 @@ function DiscountsPanel({ canEdit }) {
       <AnimatePresence>
         {discountToDelete && (
           <>
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => setDiscountToDelete(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:3000, backdropFilter:'blur(10px)' }} />
-            <motion.div
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} onClick={() => { if (!deletingDiscount) setDiscountToDelete(null); }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:3000, backdropFilter:'blur(10px)' }} />
+            <motion.div {...deleteDialog.dialogProps} aria-labelledby={deleteDialog.titleProps.id}
               initial={{ opacity:0, scale:0.9, y:'-50%', x:'-50%' }} animate={{ opacity:1, scale:1, y:'-50%', x:'-50%' }} exit={{ opacity:0, scale:0.9, y:'-50%', x:'-50%' }}
               transition={{ type:'spring', damping:20, stiffness:300 }}
-              style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)', width:'90%', maxWidth:420, background:'linear-gradient(180deg, #111111 0%, #000000 100%)', border:'1px solid rgba(192, 57, 43, 0.35)', borderRadius:12, padding:'30px 20px', zIndex:3001, textAlign:'center' }}
+              style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)', width:'90%', maxWidth:420, background:'var(--bg2)', border:'1px solid rgba(192, 57, 43, 0.35)', borderRadius:12, padding:'30px 20px', zIndex:3001, textAlign:'center' }}
             >
               <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(192, 57, 43, 0.1)', border:'1px solid rgba(192, 57, 43, 0.28)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
-                <Trash2 size={28} style={{ color:'#f07171' }} />
+                <Trash2 size={28} style={{ color:'var(--red-light)' }} />
               </div>
-              <h3 style={{ color:'#ffffff', fontSize:18, fontWeight:500, marginBottom:12, fontFamily:'var(--font-display)', letterSpacing:1 }}>Confirm discount deletion</h3>
+              <h3 {...deleteDialog.titleProps} style={{ color:'var(--text)', fontSize:18, fontWeight:500, marginBottom:12, fontFamily:'var(--font-display)', letterSpacing:1 }}>Confirm discount deletion</h3>
               <p style={{ color:'#aaaaaa', fontSize:13, marginBottom:24, lineHeight:'1.6' }}>Are you sure you want to delete the discount code <strong style={{ color:'#ffffff' }}>"{discountToDelete.code}"</strong>? This cannot be undone.</p>
               <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
-                <button onClick={confirmDelete} style={{ flex:1, padding:'10px 0', background:'#b83232', border:'1px solid #d65353', color:'#ffffff', borderRadius:6, fontWeight:600, cursor:'pointer', fontSize:13 }}>Delete</button>
-                <button onClick={() => setDiscountToDelete(null)} style={{ flex:1, padding:'10px 0', background:'transparent', border:'1px solid #333333', color:'#ffffff', borderRadius:6, cursor:'pointer', fontSize:13 }}>Cancel</button>
+                <button type="button" onClick={confirmDelete} disabled={deletingDiscount} style={{ flex:1, padding:'10px 0', background:'var(--red)', border:'1px solid var(--red-light)', color:'var(--white)', borderRadius:6, fontWeight:600, cursor:deletingDiscount ? 'wait' : 'pointer', opacity:deletingDiscount ? 0.6 : 1, fontSize:13 }}>{deletingDiscount ? 'Deleting...' : 'Delete'}</button>
+                <button type="button" onClick={() => setDiscountToDelete(null)} disabled={deletingDiscount} style={{ flex:1, padding:'10px 0', background:'transparent', border:'1px solid var(--border)', color:'var(--text)', borderRadius:6, cursor:deletingDiscount ? 'wait' : 'pointer', fontSize:13 }}>Cancel</button>
               </div>
             </motion.div>
           </>
@@ -2981,14 +3126,14 @@ function AnalyticsPanel() {
   const hasSeriesData = report.series.some((p) => p.value > 0 || p.orders > 0);
 
   const kpis = [
-    { labelEn: 'Total Sales', value: fmtEGP(report.totalValue), sub: 'Non-cancelled · COD', color: 'var(--gold)', icon: TrendingUp, delta: report.totalDeltaPct },
-    { labelEn: 'Orders', value: String(report.orderCount), sub: 'All statuses in range', color: 'var(--text)', icon: ShoppingCart, delta: report.orderDeltaPct },
-    { labelEn: 'Average Order Value', value: fmtEGP(report.aov), sub: 'Total Sales ÷ Orders', color: '#9b59b6', icon: BarChart2 },
-    { labelEn: 'Items Sold', value: report.itemsSold.toLocaleString('en-US'), sub: 'Units across orders', color: '#3498db', icon: Package2 },
-    { labelEn: 'Unique Customers', value: report.uniqueCustomers.toLocaleString('en-US'), sub: 'By phone / name', color: '#16a085', icon: Users },
-    { labelEn: 'Returning Customer Rate', value: `${report.returningRate}%`, sub: `${report.returningCustomers} with more than one order`, color: '#27ae60', icon: RefreshCw },
-    { labelEn: 'Fulfilment Rate', value: `${report.fulfilmentRate}%`, sub: `${report.fulfilledCount} delivered of ${report.orderCount}`, color: '#c9a84c', icon: CheckCircle },
-    { labelEn: 'Cancellation Rate', value: `${report.cancellationRate}%`, sub: `${report.cancelledCount} cancelled`, color: '#e74c3c', icon: XCircle },
+    { labelEn: 'Total Sales', value: fmtEGP(report.totalValue), sub: 'Non-cancelled · COD', color: KPI_TONES.gold, icon: TrendingUp, delta: report.totalDeltaPct },
+    { labelEn: 'Orders', value: String(report.orderCount), sub: 'All statuses in range', color: KPI_TONES.text, icon: ShoppingCart, delta: report.orderDeltaPct },
+    { labelEn: 'Average Order Value', value: fmtEGP(report.aov), sub: 'Total Sales ÷ Orders', color: KPI_TONES.soft, icon: BarChart2 },
+    { labelEn: 'Items Sold', value: report.itemsSold.toLocaleString('en-US'), sub: 'Units across orders', color: KPI_TONES.muted, icon: Package2 },
+    { labelEn: 'Unique Customers', value: report.uniqueCustomers.toLocaleString('en-US'), sub: 'By phone / name', color: KPI_TONES.soft, icon: Users },
+    { labelEn: 'Returning Customer Rate', value: `${report.returningRate}%`, sub: `${report.returningCustomers} with more than one order`, color: KPI_TONES.gold, icon: RefreshCw },
+    { labelEn: 'Fulfilment Rate', value: `${report.fulfilmentRate}%`, sub: `${report.fulfilledCount} delivered of ${report.orderCount}`, color: KPI_TONES.gold, icon: CheckCircle },
+    { labelEn: 'Cancellation Rate', value: `${report.cancellationRate}%`, sub: `${report.cancelledCount} cancelled`, color: KPI_TONES.muted, icon: XCircle },
   ];
 
   return (
@@ -3000,9 +3145,9 @@ function AnalyticsPanel() {
             Analytics · {rangeLabel ? `${rangeLabel.labelEn}` : ''}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 2, background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)', overflowX: 'auto' }}>
+        <div className="zshm-admin-filter-scroll" style={{ display: 'flex', gap: 2, background: 'var(--bg)', padding: 2, borderRadius: 6, border: '1px solid var(--border)', overflowX: 'auto' }}>
           {RANGE_OPTIONS.map((r) => (
-            <button key={r.key} onClick={() => setRange(r.key)}
+            <button key={r.key} type="button" onClick={() => setRange(r.key)} aria-label={`Show ${r.labelEn}`}
               style={{ padding: '4px 10px', borderRadius: 4, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: range === r.key ? 'var(--gold)' : 'transparent', color: range === r.key ? 'var(--bg)' : 'var(--text3)', whiteSpace: 'nowrap' }}>
               {r.labelEn}
             </button>
@@ -3015,8 +3160,8 @@ function AnalyticsPanel() {
           <motion.div key={labelEn} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
             style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: `${color === 'var(--text)' ? '#2a2a2a' : color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon size={15} color={color === 'var(--text)' ? 'var(--text2)' : color} />
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: KPI_TONE_BACKGROUNDS[color] || 'var(--bg4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={15} color={color === KPI_TONES.text ? KPI_TONES.soft : color} />
               </div>
               {delta !== undefined && <KpiDelta pct={delta} />}
             </div>
@@ -3030,24 +3175,9 @@ function AnalyticsPanel() {
       <Card title="Sales over time">
         <div style={{ width: '100%', height: 280 }}>
           {hasSeriesData ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={report.series} margin={{ left: -14, right: 4, top: 8 }}>
-                <defs>
-                  <linearGradient id="analyticsSalesGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#c9a84c" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#c9a84c" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: 'var(--text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="left" orientation="left" tickFormatter={compactEGP} tick={{ fill: 'var(--text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="right" orientation="right" allowDecimals={false} tick={{ fill: 'var(--text3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<SalesTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text2)', marginTop: 8 }} iconType="circle" iconSize={7} />
-                <Area yAxisId="left" type="monotone" dataKey="value" name="Sales (EGP)" stroke="#c9a84c" strokeWidth={2} fill="url(#analyticsSalesGrad)" dot={false} activeDot={{ r: 3 }} />
-                <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#3b82c4" radius={[3, 3, 0, 0]} barSize={Math.max(6, Math.min(30, Math.round(320 / (report.series.length || 1))))} />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <React.Suspense fallback={<div role="status" style={{ color:'var(--text3)', fontSize:12, textAlign:'center', paddingTop:80 }}>Loading chart…</div>}>
+              <AdminCharts series={report.series} gradientId="analyticsSalesGrad" />
+            </React.Suspense>
           ) : (
             <DashEmpty icon={BarChart2} title="No orders in this period"
               hint="Choose another date range above or wait for the first order." />

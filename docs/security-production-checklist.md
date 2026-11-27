@@ -320,7 +320,12 @@ idempotent, fails closed if browser grants exist, and is covered by
 Its rollback is documented in the file and must only be used if Phase 3 is
 reverted.
 
-Still not verifiable here: admin MFA (not offered by the custom login — §3).
+Owner decision 2026-11-27: **admin MFA is intentionally not used**. Admin sign-in
+stays password-only, protected by strict shared rate limits, HttpOnly sessions +
+double-submit CSRF, an Origin allow-list, `session_version` revocation on
+logout/role change, least-privilege permissions, support PII masking and audit
+logging. No `ZSHM_REQUIRE_MFA` flag, trusted-device cookie or `admin_mfa.sql`
+migration exists in this tree.
 
 The 2026-11-07 record below is **historical and superseded**; its row counts
 (orders 15, products 1) no longer match production.
@@ -530,7 +535,11 @@ closed:
    - Site URL: the production storefront origin.
    - Redirect allow-list: only that origin (no wildcards).
 3. **Authentication → Policies / MFA**
-   - Enable MFA (TOTP) for the admin account, or require it via your plan.
+   - Owner decision 2026-11-27: do **not** enable MFA — neither custom TOTP nor
+     the Supabase Auth toggle. Admin sign-in relies on the custom login's strict
+     shared rate limits, HttpOnly session + double-submit CSRF, Origin
+     allow-list, `session_version` revocation on logout/role change,
+     least-privilege permissions and support PII masking.
 4. **Passwords**
    - Minimum length 12, leaked-password protection on (if available).
 5. **API keys**
@@ -557,12 +566,16 @@ Preview as appropriate. Values are not stored in the repo.
 | `PUBLIC_BASE_URL` | recommended | Origin used in tracking links. Example: `https://<your-domain>`. |
 | `UPSTASH_REDIS_REST_URL` | optional | Enables the shared/durable rate limiter. |
 | `UPSTASH_REDIS_REST_TOKEN` | optional | Token for the above. |
-| `TRACKING_TOKEN_TTL_HOURS` | optional | Unset/empty = new tracking links expire after 720 hours (30 days). A positive number overrides that lifetime. Previously issued legacy links remain valid; rotating `SESSION_SECRET` invalidates all links. |
+| `TRACKING_TOKEN_TTL_HOURS` | optional | Unset/empty = new tracking links expire after 720 hours (30 days). A positive number overrides that lifetime. Legacy links now inherit the same bounded lifetime from the order date; rotating `SESSION_SECRET` invalidates all links. |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional | Order notifications. |
 
 Upstash is the primary shared limiter when configured. The database RPC migration
 is used when Upstash is absent or unavailable. If neither shared provider is
-available, the bounded limiter is only per warm serverless instance.
+available, read-only routes keep the bounded per-instance limiter, while login,
+login, coupon validation, checkout and admin writes use `rateLimitSharedStrict()`
+and **fail closed with 429** instead of silently downgrading to a single
+instance. Confirm `zshm_rate_limit` is live before deploying these routes; a
+provider outage otherwise blocks those mutations until it recovers.
 
 **Current production state (verified 2026-11-19):** no Upstash variables are set,
 so `zshm_rate_limit` is the active shared limiter. That is durable and correct,
@@ -579,9 +592,10 @@ performance improvement, not an open security hole.
    for **Production** and **Preview**, then redeploy.
 4. Verify no `VITE_`/`REACT_APP_` copy exists (it would ship to the browser).
 5. Apply `supabase/rate_limit_storage.sql` before relying on its database
-   fallback. Check Vercel logs for `Shared rate limit unavailable` and confirm
-   neither shared provider is failing; that warning means limits have degraded
-   to per-instance counters.
+   fallback. Check Vercel logs for `Shared rate limit unavailable`: on a
+   protected mutation that warning now means the request was refused with 429,
+   not degraded to per-instance counters. Read-only routes still fall back
+   locally.
 
 Verification: log in as admin, open an order, copy its tracking link, and check
 that the link host matches `PUBLIC_BASE_URL`. Send a request with a foreign
@@ -683,7 +697,7 @@ appear.
 | ID | Status | Note |
 |----|--------|------|
 | SEC-24 | Fixed locally; production pending | `reservedStock` is intentionally unused — see §2; verify atomic migration Revision 8 on Production. |
-| SEC-28 | Partially applied | Public signups are **closed** (`disable_signup: true`, verified 2026-11-19). Still open: MFA for the admin accounts (the custom scrypt login has no second factor) and the URL allow-list check — see §3. |
+| SEC-28 | Partially applied | Public signups are **closed** (`disable_signup: true`, verified 2026-11-19). Owner decision 2026-11-27: **MFA declined** — no custom TOTP, no `admin_mfa.sql`, no `ZSHM_REQUIRE_MFA`. Admin access is protected by strict shared rate limits, HttpOnly sessions + CSRF, Origin allow-list, session revocation, least privilege and support PII masking. The URL allow-list check is still open — see §3. |
 | SEC-07 | Mitigated | `/api/coupons/validate` still returns the discount value so the cart can show it. It is rate-limited (10/min/IP) and lockout-protected (5 failures/15 min per IP+code), and the server recomputes the discount at checkout. |
 | Public coupon metadata | Accepted | The endpoint reveals whether a code exists and its value. This is required for the cart UX and is bounded by the limits above. |
 | `/api/errors` | Accepted | Unauthenticated by design (the browser reports its own crashes). Served by `api/_errors.js` through an `api/auth` rewrite (Hobby 12-function cap). 30 reports/10 min/IP, 8 KB body cap, every field sanitised and truncated, one log line per report, one Telegram alert per distinct error (6/hour/instance, 30-min dedupe). No storage, no echo, no PII. |

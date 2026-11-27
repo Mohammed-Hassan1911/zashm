@@ -326,9 +326,11 @@ console.log('\n[8] serverless function budget');
   const authSrc = read('api/auth.js');
   ok(/require\('\.\/_errors'\)/.test(authSrc), 'api/auth.js requires the errors handler');
   ok(/__zshm_route === 'errors'/.test(authSrc), 'api/auth.js recognises the marker');
+  // Compare against the main handler's Origin check so the rewritten error
+  // route still proves the mount is handled before normal auth logic.
   ok(
-    authSrc.indexOf("__zshm_route === 'errors'") < authSrc.indexOf('requestOriginAllowed(req)'),
-    'the mount is handled before any auth logic'
+    authSrc.lastIndexOf("__zshm_route === 'errors'") < authSrc.lastIndexOf('requestOriginAllowed(req)'),
+    'the mount is handled before the main auth logic'
   );
 }
 

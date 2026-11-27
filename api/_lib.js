@@ -538,17 +538,33 @@ function formatDatabaseRateLimit(result) {
  *
  * Counters are shared when Upstash is configured or the Supabase RPC migration
  * is applied. Without either provider, the bounded fallback is per-instance.
+ * Mutations pass `{ strict: true }` (see rateLimitSharedStrict) so a total
+ * provider outage fails closed instead of silently downgrading to one instance.
  * See docs/security-production-checklist.md for rollout requirements.
  */
-async function rateLimitShared(key, maxAttempts, windowMs) {
+async function rateLimitShared(key, maxAttempts, windowMs, options) {
+  const strict = !!(options && options.strict === true);
   const windowSec = Math.max(1, Math.ceil(windowMs / 1000));
+  const unavailable = () => {
+    warnRateLimitOnce(strict
+      ? 'Shared rate limit unavailable, failing closed for a protected mutation'
+      : 'Shared rate limit unavailable, using per-instance fallback');
+    if (strict) {
+      return {
+        allowed: false,
+        degraded: true,
+        remaining: 0,
+        resetIn: Math.max(1, Math.ceil(windowMs / 1000)),
+      };
+    }
+    return rateLimit(key, maxAttempts, windowMs);
+  };
   if (!upstashConfig()) {
     try {
       const result = await databaseRateLimit(key, maxAttempts, windowSec, 'consume');
       return formatDatabaseRateLimit(result);
     } catch (e) {
-      warnRateLimitOnce('Shared rate limit unavailable, using per-instance fallback');
-      return rateLimit(key, maxAttempts, windowMs);
+      return unavailable();
     }
   }
 
@@ -583,12 +599,22 @@ async function rateLimitShared(key, maxAttempts, windowMs) {
         await databaseRateLimit(key, maxAttempts, windowSec, 'consume')
       );
     } catch (databaseError) {
-      // Neither shared provider is available. Keep the store available, but
-      // retain a bounded per-instance guard and emit a health warning.
-      warnRateLimitOnce('Shared rate limit unavailable, using per-instance fallback');
-      return rateLimit(key, maxAttempts, windowMs);
+      // Neither shared provider is available. Read-only routes keep the bounded
+      // per-instance guard; protected mutations fail closed instead.
+      return unavailable();
     }
   }
+}
+
+/**
+ * Strict variant for state-changing/limited routes. When BOTH Upstash and the
+ * shared database RPC are unavailable it returns { allowed: false, degraded:
+ * true, resetIn } instead of downgrading to the per-instance memory bucket.
+ * Read-only endpoints keep the lenient rateLimitShared so a provider outage
+ * cannot take the catalogue or dashboard offline.
+ */
+async function rateLimitSharedStrict(key, maxAttempts, windowMs) {
+  return rateLimitShared(key, maxAttempts, windowMs, { strict: true });
 }
 
 /** Read a durable counter without incrementing it (used by the coupon lockout). */
@@ -910,11 +936,12 @@ async function verifyPassword(password, stored) {
 
 // ─── TRACKING TOKENS (stateless, no schema change) ──────────────────────────
 //
-// Legacy links are 32 hex chars: HMAC(`track:<id>`) truncated. They never
-// expire, which is why rotating SESSION_SECRET is the only way to invalidate
-// them. New links use `v1.<expiry-ms>.<hmac>` and expire after 30 days by
-// default; every legacy token keeps verifying so sent WhatsApp links do not
-// break. TRACKING_TOKEN_TTL_HOURS can set a different positive duration.
+// Legacy links are 32 hex chars: HMAC(`track:<id>`) truncated. They carry no
+// embedded expiry, so their lifetime is bounded from the ORDER's date/timestamp
+// (trackingTtlMs, 720h by default) when the caller supplies it. New links use
+// `v1.<expiry-ms>.<hmac>` and are unchanged. TRACKING_TOKEN_TTL_HOURS can set a
+// different positive duration for both shapes; rotating SESSION_SECRET still
+// invalidates every link.
 function legacyTrackToken(orderId) {
   const secret = requireSecret('SESSION_SECRET');
   return hmac(`track:${orderId}`, secret).toString('hex').slice(0, 32);
@@ -945,7 +972,38 @@ function trackToken(orderId, expiresAt) {
   return `v1.${exp}.${expiringTrackToken(orderId, exp)}`;
 }
 
-function verifyTrackToken(orderId, token) {
+/** Issue time used to bound legacy tracking links. Accepts an ISO timestamp,
+ * epoch milliseconds, an order row (`timestamps.created` preferred, `date`
+ * fallback) and malformed legacy values (→ null = fail closed). Future clocks
+ * are clamped to now so they cannot extend a link's lifetime. */
+function trackingOrderIssuedAt(value) {
+  if (value === undefined || value === null) return null;
+  const fromText = (raw) => {
+    if (typeof raw === 'number') {
+      return Number.isFinite(raw) && raw > 0 ? Math.min(raw, Date.now()) : null;
+    }
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    const ms = Date.parse(raw.trim());
+    return Number.isFinite(ms) && ms > 0 ? Math.min(ms, Date.now()) : null;
+  };
+  if (typeof value !== 'object') return fromText(value);
+
+  const rawTimestamps = parseJsonField(value.timestamps, {});
+  const timestamps = rawTimestamps && typeof rawTimestamps === 'object' && !Array.isArray(rawTimestamps)
+    ? rawTimestamps
+    : {};
+  for (const field of ['created', 'pending', 'Pending']) {
+    if (timestamps[field] === undefined || timestamps[field] === null || timestamps[field] === '') continue;
+    const ms = fromText(timestamps[field]);
+    if (ms !== null) return ms;
+  }
+  if (typeof value.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.date.trim())) {
+    return fromText(`${value.date.trim()}T00:00:00Z`);
+  }
+  return null;
+}
+
+function verifyTrackToken(orderId, token, orderDate) {
   if (!orderId || !token || typeof token !== 'string') return false;
   const versioned = token.match(/^v1\.(\d{1,16})\.([a-f0-9]{32})$/i);
   if (versioned) {
@@ -953,8 +1011,16 @@ function verifyTrackToken(orderId, token) {
     if (!Number.isSafeInteger(exp) || exp <= Date.now()) return false;
     return safeEqualHex(expiringTrackToken(orderId, exp), versioned[2].toLowerCase());
   }
-  // Legacy 32-hex links stay valid indefinitely (no expiry information exists).
-  return safeEqualHex(legacyTrackToken(orderId), token);
+  // Legacy: check the signature FIRST so an invalid token never triggers a DB
+  // read (order ids stay unprobeable). With the order's date/timestamp supplied,
+  // bound its age to the same TTL used for v1 links. Without it (internal
+  // callers that have no row) the signature-only check is unchanged.
+  if (!safeEqualHex(legacyTrackToken(orderId), token)) return false;
+  if (orderDate !== undefined && orderDate !== null) {
+    const issuedAt = trackingOrderIssuedAt(orderDate);
+    if (issuedAt === null || issuedAt + trackingTtlMs() <= Date.now()) return false;
+  }
+  return true;
 }
 
 function trackingUrlFor(orderId) {
@@ -2677,6 +2743,7 @@ module.exports = {
   rateLimit,
   resetRateLimit,
   rateLimitShared,
+  rateLimitSharedStrict,
   rateLimitPeekShared,
   resetRateLimitShared,
   tooMany,
@@ -2701,6 +2768,7 @@ module.exports = {
   verifyPassword,
   trackToken,
   verifyTrackToken,
+  trackingOrderIssuedAt,
   trackingUrlFor,
   PUBLIC_BASE_URL,
   validateOrderPayload,

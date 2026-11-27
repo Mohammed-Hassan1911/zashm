@@ -108,6 +108,7 @@ Object.assign(require.cache[libPath], {
     readBody: async () => currentBody,
     clientIp: () => '203.0.113.9',
     rateLimitShared: async () => ({ allowed: true }),
+    rateLimitSharedStrict: async () => ({ allowed: true }),
     tooMany: () => { response = { status: 429, body: {} }; },
     supabaseAdmin: () => fakeSb,
     generateOrderId: () => 'ZSH-TESTPROBE000001-0001',

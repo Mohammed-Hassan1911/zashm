@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Edit, Shield, Eye, EyeOff, Users, Key } from 'lucide-react';
+import { Plus, Trash2, Edit, Shield, Eye, EyeOff, Users, Check, Minus } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
+import { useAdminDialog } from './useAdminDialog';
 
 const ROLE_CONFIG = {
   admin: { color: 'var(--gold)', bg: 'rgba(201,168,76,0.1)', icon: Shield, label: 'Admin', desc: 'Full system access' },
-  manager: { color: '#3498db', bg: 'rgba(52,152,219,0.1)', icon: Edit, label: 'Manager', desc: 'Products & orders' },
-  support: { color: '#27ae60', bg: 'rgba(39,174,96,0.1)', icon: Eye, label: 'Support', desc: 'View orders only' },
+  manager: { color: 'var(--text2)', bg: 'rgba(145,138,125,0.1)', icon: Edit, label: 'Manager', desc: 'Products & orders' },
+  support: { color: 'var(--gold-dark)', bg: 'rgba(201,168,76,0.1)', icon: Eye, label: 'Support', desc: 'View orders only' },
 };
 
 export default function UsersPanel() {
@@ -22,6 +23,9 @@ export default function UsersPanel() {
 
   // State للتحكم في مودال الحذف المخصص
   const [userToDelete, setUserToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const formDialog = useAdminDialog({ open: showForm, onClose: () => { if (!loading) { setShowForm(false); setShowPassword(false); } }, disabled: loading });
+  const deleteDialog = useAdminDialog({ open: Boolean(userToDelete), onClose: () => { if (!deleting) setUserToDelete(null); }, disabled: deleting });
 
   const update = (k, v) => { 
     setForm(f => ({ ...f, [k]: v })); 
@@ -57,6 +61,7 @@ export default function UsersPanel() {
   };
 
   const handleSave = async () => {
+    if (loading) return;
     const e = validate();
     if (Object.keys(e).length > 0) { setErrors(e); return; }
     setLoading(true);
@@ -97,7 +102,8 @@ export default function UsersPanel() {
 
   // دالة الحذف النهائية من داخل المودال الجديد
   const confirmDeleteUser = async () => {
-    if (!userToDelete) return;
+    if (!userToDelete || deleting) return;
+    setDeleting(true);
     try {
       const res = await deleteUser(userToDelete.id);
       if (!res || res.success === false) {
@@ -109,6 +115,7 @@ export default function UsersPanel() {
       console.error(err);
       if (typeof window.toast?.error === 'function') window.toast.error('Could not delete this team member.');
     } finally {
+      setDeleting(false);
       setUserToDelete(null);
     }
   };
@@ -121,14 +128,14 @@ export default function UsersPanel() {
         <div>
           <p style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 4 }}>{storedUsers.length} team members</p>
         </div>
-        <button className="gold-btn" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px' }}
+        <button type="button" className="gold-btn" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px' }}
           onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', email: '', password: '', role: 'support' }); setErrors({}); setShowPassword(false); }}>
           <Plus size={14} /> Add User
         </button>
       </div>
 
       {/* Role Legend */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 12, marginBottom: 24 }}>
         {Object.entries(ROLE_CONFIG).map(([role, cfg]) => {
           const Icon = cfg.icon;
           const count = storedUsers.filter(u => u.role === role).length;
@@ -150,8 +157,8 @@ export default function UsersPanel() {
       </div>
 
       {/* Users Table */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div className="zshm-admin-table-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg3)', borderBottom: '1px solid var(--border)' }}>
               {['User','Role','Last Login','Actions'].map(h => (
@@ -187,7 +194,8 @@ export default function UsersPanel() {
                   </td>
                   <td style={{ padding: '14px 16px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button 
+                      <button
+                        type="button" aria-label={`Edit ${user.name}`}
                         onClick={() => handleEdit(user)}
                         style={{ 
                           padding: '5px 10px', 
@@ -206,6 +214,7 @@ export default function UsersPanel() {
                       </button>
                       {!isMe && (
                         <button 
+                          type="button" aria-label={`Remove ${user.name}`}
                           onClick={() => setUserToDelete(user)} 
                           style={{ padding: '5px 10px', background: 'rgba(192,57,43,0.1)', border: '1px solid rgba(192,57,43,0.2)', borderRadius: 4, color: 'var(--red)', cursor: 'pointer', fontSize: 11 }}>
                           Remove
@@ -246,7 +255,9 @@ export default function UsersPanel() {
                   <td style={{ padding: '8px 12px', color: 'var(--text2)' }}>{feature}</td>
                   {perms.map((has, i) => (
                     <td key={i} style={{ padding: '8px 12px', textAlign: 'center' }}>
-                      <span style={{ fontSize: 14 }}>{has ? '✅' : '⛔'}</span>
+                      {has
+                        ? <Check role="img" aria-label="Allowed" size={15} color="var(--gold)" style={{ verticalAlign: 'middle' }} />
+                        : <Minus role="img" aria-label="Not allowed" size={15} color="var(--text3)" style={{ verticalAlign: 'middle' }} />}
                     </td>
                   ))}
                 </tr>
@@ -269,10 +280,9 @@ export default function UsersPanel() {
             />
 
             <motion.div
-              role="dialog"
-               aria-modal="true"
-               aria-label={editingId ? 'Edit user' : 'Add team member'}
-               initial={{ x: '100%' }}
+              {...formDialog.dialogProps}
+              aria-labelledby={formDialog.titleProps.id}
+              initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
@@ -292,7 +302,7 @@ export default function UsersPanel() {
                 boxSizing: 'border-box'
               }}
             >
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 24 }}>
+              <h2 {...formDialog.titleProps} style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 24 }}>
                 {editingId ? 'Edit User' : 'Add Team Member'}
               </h2>
 
@@ -397,10 +407,10 @@ export default function UsersPanel() {
               </div>
 
               <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-                <button className="gold-btn" style={{ flex: 1 }} onClick={handleSave}>
+                <button type="button" className="gold-btn" style={{ flex: 1 }} onClick={handleSave} disabled={loading}>
                   {loading ? 'Saving...' : editingId ? 'Save Changes' : 'Add User'}
                 </button>
-                <button className="outline-btn" onClick={() => { setShowForm(false); setShowPassword(false); }}>
+                <button type="button" className="outline-btn" onClick={() => { setShowForm(false); setShowPassword(false); }} disabled={loading}>
                   Cancel
                 </button>
               </div>
@@ -418,7 +428,7 @@ export default function UsersPanel() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setUserToDelete(null)}
+              onClick={() => { if (!deleting) setUserToDelete(null); }}
               style={{
                 position: 'fixed',
                 inset: 0,
@@ -439,10 +449,9 @@ export default function UsersPanel() {
               pointerEvents: 'none'
             }}>
               <motion.div
-                role="dialog"
-               aria-modal="true"
-               aria-labelledby="delete-user-title"
-               initial={{ opacity: 0, scale: 0.92 }}
+                {...deleteDialog.dialogProps}
+                aria-labelledby={deleteDialog.titleProps.id}
+                initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.92 }}
                 transition={{ type: 'spring', duration: 0.3 }}
@@ -473,7 +482,7 @@ export default function UsersPanel() {
                   <Trash2 size={22} color="#f07171" />
                 </div>
 
-                <h3 id="delete-user-title" style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: '#ffffff', marginBottom: 12 }}>
+                <h3 {...deleteDialog.titleProps} style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>
                   Confirm permanent deletion
                 </h3>
                 
@@ -484,7 +493,7 @@ export default function UsersPanel() {
                 {/* أزرار الحذف والإلغاء المخصصة */}
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
                   <button
-                    onClick={confirmDeleteUser}
+                    type="button" onClick={confirmDeleteUser} disabled={deleting}
                     style={{
                       flex: 1,
                       padding: '11px 20px',
@@ -500,10 +509,10 @@ export default function UsersPanel() {
                     onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                     onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                   >
-                    Delete
+                    {deleting ? 'Deleting...' : 'Delete'}
                   </button>
                   <button
-                    onClick={() => setUserToDelete(null)}
+                    type="button" onClick={() => setUserToDelete(null)} disabled={deleting}
                     style={{
                       flex: 1,
                       padding: '11px 20px',

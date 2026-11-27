@@ -385,6 +385,11 @@ console.log('\n[4] coupon per-code lockout');
 {
   state.coupons.clear();
   state.failQuery = false;
+  // Coupon validation is a protected public mutation: it now uses the strict
+  // limiter, so the fake RPC must be healthy here. The both-providers-down
+  // fail-closed path has its own regression test in test-admin-fixes.
+  state.rateLimitRpc = true;
+  rateCounters.clear();
   state.coupons.set('SAVE10', couponRow());
 
   const ip = '198.51.100.77';
@@ -414,6 +419,8 @@ console.log('\n[4] coupon per-code lockout');
   // A different code from the same IP is unaffected.
   r = await validate({ code: 'OTHER1' }, ip);
   eq(r.status, 200, 'a different code from the same IP is not blocked');
+  state.rateLimitRpc = false;
+  rateCounters.clear();
 }
 
 // ─── [5] source scan ────────────────────────────────────────────────────────
@@ -427,10 +434,13 @@ console.log('\n[5] every API handler uses the shared limiter');
   for (const file of files) {
     const src = read(file);
     ok(
-      /await rateLimitShared\(|await Promise\.all\(\[[\s\S]*?rateLimitShared\(/.test(src),
-      `${file} awaits rateLimitShared`
+      /await rateLimitShared(?:Strict)?\(|await Promise\.all\(\[[\s\S]*?rateLimitShared(?:Strict)?\(/.test(src),
+      `${file} awaits a shared limiter`
     );
-    ok(!/[^t]rateLimit\(/.test(src.replace(/rateLimitShared\(/g, '')), `${file} has no synchronous limiter call`);
+    ok(
+      !/[^t]rateLimit\(/.test(src.replace(/rateLimitShared(?:Strict)?\(/g, '')),
+      `${file} has no synchronous limiter call`
+    );
   }
   const libSrc = read('api/_lib.js');
   ok(/UPSTASH_REDIS_REST_URL/.test(libSrc) && /UPSTASH_REDIS_REST_TOKEN/.test(libSrc),

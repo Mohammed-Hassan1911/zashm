@@ -9,6 +9,7 @@ const {
   readBody,
   clientIp,
   rateLimitShared,
+  rateLimitSharedStrict,
   tooMany,
   supabaseAdmin,
   validateOrderPayload,
@@ -83,7 +84,9 @@ async function placeOrder(req, res) {
   // share one public IP during a campaign. The previous 10/hour limit could
   // block genuine buyers; the per-order idempotency key still prevents
   // accidental duplicates, and stock/money remain server-authoritative.
-  const check = await rateLimitShared(`placeorder:${ip}`, 30, 60 * 60 * 1000);
+  // Checkout is a protected mutation: when neither shared provider is up the
+  // strict limiter fails closed instead of trusting one warm instance.
+  const check = await rateLimitSharedStrict(`placeorder:${ip}`, 30, 60 * 60 * 1000);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -692,11 +695,15 @@ async function trackOrder(req, res) {
 
   // SEC-16: an order id alone is NOT a credential. The tracking token is an
   // HMAC of the id with SESSION_SECRET and is only shared through the secure
-  // link. Without a valid token we return exactly the same response as an
-  // unknown id — before any database query, so ids cannot be probed at all.
-  if (!trackId || !ORDER_ID_RE.test(trackId) || !token || !verifyTrackToken(trackId, token)) {
+  // link. Without a valid signature (or v1 expiry) we return exactly the same
+  // response as an unknown id — before any database query, so ids cannot be
+  // probed at all. Legacy links carry no expiry, so their age is checked below
+  // against the stored order's date/timestamp once the signature is proven.
+  if (!trackId || !ORDER_ID_RE.test(trackId) || !token) {
     return json(res, 200, { found: false });
   }
+  const legacyToken = !token.startsWith('v1.');
+  if (!verifyTrackToken(trackId, token)) return json(res, 200, { found: false });
 
   try {
     const sb = supabaseAdmin();
@@ -706,6 +713,9 @@ async function trackOrder(req, res) {
       return json(res, 500, { found: false, error: 'Tracking is temporarily unavailable' });
     }
     if (!data) return json(res, 200, { found: false });
+    if (legacyToken && !verifyTrackToken(trackId, token, data)) {
+      return json(res, 200, { found: false });
+    }
 
     const order = parseOrderRow(data);
     // Keep the STORED tracking_url: minting a fresh token here would change the

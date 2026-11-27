@@ -3161,6 +3161,37 @@ body.size-finder-open .whatsapp-fab {
    clear and a click anywhere on the card toggles selection. */
 .admin-product-card { cursor: pointer; }
 
+/* Wide admin tables and filter chips scroll inside their own panel instead of
+   stretching .admin-main and creating a page-level horizontal scrollbar. */
+.zshm-admin-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.zshm-admin-table-scroll::-webkit-scrollbar { height: 6px; }
+.zshm-admin-table-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}
+.zshm-admin-filter-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Inline styles are the norm in the console, but every keyboard-focusable
+   control still needs one consistent, gold focus ring. */
+.admin-container button:focus-visible,
+.admin-container input:focus-visible,
+.admin-container select:focus-visible,
+.admin-container textarea:focus-visible,
+.admin-container [role="dialog"]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
 .admin-product-card .admin-product-actions {
   position: absolute;
   inset: 0;
@@ -7686,8 +7717,11 @@ main, [role="main"] {
     font-size: 16px !important; /* prevents iOS zoom on focus (overrides inline sizes) */
   }
   .admin-main {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
+  }
+  .zshm-admin-table-scroll,
+  .zshm-admin-filter-scroll {
+    width: 100%;
   }
   .admin-topbar {
     padding: 10px 12px !important;
@@ -7701,6 +7735,12 @@ main, [role="main"] {
   .admin-container h3 { font-size: 13px !important; }
   .admin-container table { font-size: 12px; }
   .admin-container td, .admin-container th { padding: 8px 10px !important; }
+}
+
+@media (max-width: 380px) {
+  /* Keep the degraded state visible as an icon without crowding the top bar. */
+  .zshm-degraded-indicator { padding: 8px !important; }
+  .zshm-degraded-indicator > span { display: none; }
 }
 
 /* ─── Checkout fallback CTA ────────────────────────────────────────────────── */

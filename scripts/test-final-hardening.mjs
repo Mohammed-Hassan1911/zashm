@@ -211,7 +211,8 @@ console.log('\n[4] secure order tracking');
   db.orders = [{
     id: orderId,
     status: 'Shipped',
-    date: '2026-10-30',
+    // Dynamic so the legacy-link TTL checks never depend on the calendar date.
+    date: new Date().toISOString().slice(0, 10),
     customer: 'Alice',
     phone: '01012345678',
     phoneAlt: '',
@@ -270,6 +271,28 @@ console.log('\n[4] secure order tracking');
 
     if (before === undefined) delete process.env.TRACKING_TOKEN_TTL_HOURS;
     else process.env.TRACKING_TOKEN_TTL_HOURS = before;
+  }
+
+  // Legacy links now inherit a bounded age from the ORDER date/timestamp, not
+  // an unlimited lifetime. v1 links above are intentionally unaffected.
+  {
+    const freshDay = new Date().toISOString().slice(0, 10);
+    const staleDay = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    ok(lib.verifyTrackToken(orderId, legacyTk, {
+      date: freshDay, timestamps: { created: new Date().toISOString() },
+    }), 'legacy signature verifies for a fresh order');
+    ok(!lib.verifyTrackToken(orderId, legacyTk, {
+      date: staleDay, timestamps: { created: `${staleDay}T12:00:00.000Z` },
+    }), 'legacy link older than trackingTtlMs is rejected');
+    ok(!lib.verifyTrackToken(orderId, legacyTk, { date: null, timestamps: {} }),
+      'legacy link without a usable order date fails closed');
+
+    db.orders[0].date = staleDay;
+    const staleTracked = await track({ track: orderId, tk: legacyTk });
+    eq(staleTracked.body, { found: false }, 'stale legacy link gets the generic response');
+    db.orders[0].date = freshDay;
+    const freshTracked = await track({ track: orderId, tk: legacyTk });
+    eq(freshTracked.body.found, true, 'fresh legacy link still resolves');
   }
 
   db.queries = [];
@@ -938,8 +961,8 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
     'the skip link stays off-screen until it receives focus');
 
   const ordersApi = read('api/orders.js');
-  ok(/rateLimitShared\(`placeorder:\$\{ip\}`, 30, 60 \* 60 \* 1000\)/.test(ordersApi),
-    'order placement allows 30 attempts per IP per hour for CGNAT customers');
+  ok(/rateLimitSharedStrict\(`placeorder:\$\{ip\}`, 30, 60 \* 60 \* 1000\)/.test(ordersApi),
+    'order placement uses the fail-closed limiter with 30 attempts per IP per hour');
 
   const notFound = read('src/pages/NotFoundPage.js');
   ok(!/<main/.test(notFound),

@@ -182,6 +182,20 @@ function makeDb() {
       if (state.failRpc === name) {
         return { data: null, error: { message: 'simulated database failure' } };
       }
+      // The admin write routes now use the strict shared limiter. Model a
+      // healthy database counter so these tests keep exercising lifecycle
+      // behaviour rather than the deliberate provider-outage fail-closed path.
+      if (name === 'zshm_rate_limit') {
+        return {
+          data: {
+            allowed: true,
+            count: 1,
+            remaining: Math.max(0, Number(args && args.p_max_attempts) - 1),
+            resetIn: Number(args && args.p_window_seconds) || 60,
+          },
+          error: null,
+        };
+      }
       if (name === 'atomic_set_order_status') {
         return {
           data: await withOrderLock(() => {

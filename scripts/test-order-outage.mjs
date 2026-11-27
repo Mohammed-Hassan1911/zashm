@@ -39,6 +39,11 @@ process.env.TELEGRAM_BOT_TOKEN = '123456:TEST_TOKEN';
 process.env.TELEGRAM_CHAT_ID = '99887766';
 process.env.SESSION_SECRET = 'test-session-secret-for-outage-suite';
 process.env.ALLOWED_ORIGINS = 'https://za-shm.vercel.app';
+// Checkout now uses a fail-closed shared limiter. Model a healthy Upstash so
+// this suite still tests the DATABASE outage decision (honest 202) instead of
+// the unrelated "no rate-limit provider at all" denial.
+process.env.UPSTASH_REDIS_REST_URL = 'https://redis.outage-test.local';
+process.env.UPSTASH_REDIS_REST_TOKEN = 'test-upstash-token';
 
 const ORDER = {
   items: [{
@@ -129,8 +134,25 @@ const alerts = [];
 let telegramMode = 'ok';
 let telegramAttempts = 0;
 const realFetch = globalThis.fetch;
+let redisCount = 0;
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === 'string' ? input : String((input && input.url) || input);
+  if (url.includes('redis.outage-test.local')) {
+    let commands = [];
+    try { commands = JSON.parse(String(init.body || '[]')); } catch { commands = []; }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      json: async () => commands.map((command) => {
+        const name = Array.isArray(command) ? String(command[0]) : '';
+        if (name === 'INCR') { redisCount += 1; return { result: redisCount }; }
+        if (name === 'TTL') return { result: 3600 };
+        return { result: 1 };
+      }),
+      text: async () => '[]',
+    };
+  }
   if (url.includes('supabase.co')) throw new TypeError('fetch failed');
   if (url.includes('api.telegram.org')) {
     telegramAttempts += 1;

@@ -23,6 +23,7 @@ const {
   readBody,
   clientIp,
   rateLimitShared,
+  rateLimitSharedStrict,
   rateLimitPeekShared,
   resetRateLimitShared,
   tooMany,
@@ -136,7 +137,7 @@ async function handler(req, res) {
   // checkout so a third-party page cannot probe coupon codes on a visitor.
   if (!enforceMutationOrigin(req, res)) return;
 
-  const check = await rateLimitShared(`couponvalidate:${clientIp(req)}`, RATE_MAX_ATTEMPTS, RATE_WINDOW_MS);
+  const check = await rateLimitSharedStrict(`couponvalidate:${clientIp(req)}`, RATE_MAX_ATTEMPTS, RATE_WINDOW_MS);
   if (!check.allowed) return tooMany(res, check.resetIn);
 
   let body;
@@ -198,7 +199,7 @@ async function handler(req, res) {
 
     const result = evaluateCoupon(data, cairoDateString(), input.code, subtotalInput.subtotal);
     if (!result.valid) {
-      await rateLimitShared(lockKey, CODE_LOCK_ATTEMPTS, CODE_LOCK_WINDOW_MS);
+      await rateLimitSharedStrict(lockKey, CODE_LOCK_ATTEMPTS, CODE_LOCK_WINDOW_MS);
     } else if (lock.count > 0) {
       // Nothing was recorded for this IP+code, so clearing it would only add a
       // write to the happy path. Clear it when failures are still on record.
