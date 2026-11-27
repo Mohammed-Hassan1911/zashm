@@ -400,7 +400,7 @@ console.log('\n[5] store contract and all-time labels');
   globalThis.localStorage = memoryStorage();
   globalThis.sessionStorage = memoryStorage();
 
-  const apiState = { calls: [], mode: 'products', summary: null, failure: null };
+  const apiState = { calls: [], mode: 'products', summary: null, fullOrders: [], failure: null };
   globalThis.__zashmApi = {
     get: async (path) => {
       apiState.calls.push(['get', path]);
@@ -410,7 +410,7 @@ console.log('\n[5] store contract and all-time labels');
       }
       if (path === '/admin/coupons') return { discounts: [{ id: 1, code: 'SAVE10' }] };
       if (path === '/admin/orders?summary=1') return { summary: apiState.summary };
-      if (path === '/admin/orders') return { orders: [{ id: 'ZSH-OLD-1', status: 'Pending', total: 50 }] };
+      if (path === '/admin/orders') return { orders: apiState.fullOrders };
       return {};
     },
     post: async (path, body) => {
@@ -533,7 +533,9 @@ console.log('\n[5] store contract and all-time labels');
       id: 'ZSH-OLD-1', customer: 'Old', status: 'Pending', total: 50,
       items: [], date: today, timestamps: { created: createdAt },
     };
+    localStorage.setItem('zashm_notif_read_at', '0');
     useStore.setState({ orders: [fullOrder], unreadOrderCount: 0, newOrderNotification: null });
+    apiState.fullOrders = [fullOrder];
     apiState.summary = {
       total: 1,
       byStatus: { Pending: 1, Confirmed: 0, Processing: 0, Shipped: 0, Delivered: 0, Cancelled: 0 },
@@ -556,10 +558,26 @@ console.log('\n[5] store contract and all-time labels');
         { id: 'ZSH-NEW-2', status: 'Pending', total: 70, date: today, customer: '' },
       ],
     };
+    const newFullOrder = {
+      id: 'ZSH-NEW-2', customer: 'New', status: 'Pending', total: 70,
+      items: [], date: today, timestamps: { created: new Date().toISOString() },
+    };
+    apiState.fullOrders = [fullOrder, newFullOrder];
+    apiState.calls = [];
     await useStore.getState().refreshOrderSummary(true);
     eq(useStore.getState().newOrderNotification.order.id, 'ZSH-NEW-2',
       'a genuinely new summary id raises a notification');
     eq(useStore.getState().unreadOrderCount, 2, 'unread count grows with the new order');
+
+    // The compact poll must merge the new id into the authoritative snapshot so
+    // the Orders panel, notification dropdown and KPIs do not stay stale.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    ok(apiState.calls.some(([verb, url]) => verb === 'get' && url === '/admin/orders'),
+      'a new summary id triggers one authoritative full refresh');
+    ok(useStore.getState().orders.some((o) => o.id === 'ZSH-NEW-2'),
+      'the new order is merged into the full Orders list');
+    ok(useStore.getState().getNotifications().some((n) => n.orderId === 'ZSH-NEW-2'),
+      'the notification dropdown sees the new order');
 
     const lastGood = useStore.getState().orderSummary;
     apiState.failure = { status: 429, message: 'Too many attempts' };
@@ -603,6 +621,12 @@ console.log('\n[5] store contract and all-time labels');
       'the store calls the compact endpoint');
     ok(/'degraded'[\s\S]{0,200}status === 429/.test(storeSrc),
       'a silent 429 still sets the degraded status');
+    ok(/summaryFullRefreshPending/.test(storeSrc),
+      'a new summary id coalesces a full authoritative refresh');
+    const adminSrc = read('src/pages/AdminApp.js');
+    ok(/const pendingCount = orderSummary && ordersLiveStatus === 'ok'/.test(adminSrc) &&
+      /byStatus\?\.Pending/.test(adminSrc),
+    'the pending badge prefers the fresh summary count');
   } finally {
     if (server) await server.close();
   }

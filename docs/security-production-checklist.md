@@ -574,10 +574,13 @@ Preview as appropriate. Values are not stored in the repo.
 Upstash is the primary shared limiter when configured. The database RPC migration
 is used when Upstash is absent or unavailable. If neither shared provider is
 available, read-only routes keep the bounded per-instance limiter, while login,
-login, coupon validation, checkout and admin writes use `rateLimitSharedStrict()`
-and **fail closed with 429** instead of silently downgrading to a single
-instance. Confirm `zshm_rate_limit` is live before deploying these routes; a
-provider outage otherwise blocks those mutations until it recovers.
+coupon validation, checkout and admin order mutations use
+`rateLimitSharedStrict()` and **fail closed with 429** instead of silently
+downgrading to a single instance. Other admin writes (products, coupons, users,
+uploads, reviews) still use the lenient shared limiter and fall back to the
+per-instance bucket during a total provider outage. Confirm `zshm_rate_limit`
+is live before relying on strict routes; a provider outage otherwise blocks
+those mutations until it recovers.
 
 **Current production state (verified 2026-11-19):** no Upstash variables are set,
 so `zshm_rate_limit` is the active shared limiter. That is durable and correct,

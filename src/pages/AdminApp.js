@@ -212,7 +212,7 @@ export default function AdminApp() {
   const { session, logout, canAccess, loading: authLoading } = useAuth();
   const {
     adminPage, setAdminPage, setPage, orders, unreadOrderCount, markNotificationsRead, getNotifications,
-    newOrderNotification, refreshOrders, refreshDiscounts,
+    newOrderNotification, refreshDiscounts,
     adminProducts, adminProductsLoadStatus, adminProductsError, refreshAdminProducts,
     discountsLoadStatus, discountsError, orderSummary, ordersLiveStatus, refreshOrderSummary,
   } = useStore();
@@ -262,8 +262,10 @@ export default function AdminApp() {
   }, [newOrderNotification, soundEnabled]);
   useEffect(() => () => closeOrderChime(), []);
 
-  // Keep the lightweight summary + coupons fresh without a manual refresh. Full
-  // orders are still loaded for dashboard/analytics and by the Refresh button.
+  // Keep the lightweight summary + coupons fresh without a manual refresh. When
+  // the summary sees a new order it merges a full snapshot into the store so the
+  // Orders panel, dropdown and KPIs stay authoritative; the Refresh button
+  // remains available for an explicit reload.
   useEffect(() => {
     if (!session) {
       useStore.setState({ discounts: [] });
@@ -308,11 +310,11 @@ export default function AdminApp() {
   );
 
   const accessiblePages = SIDEBAR.filter(s => canAccess(s.id));
-  // The full list is authoritative when present; the compact poll still keeps
-  // the badge useful for roles that only receive the live summary.
-  const pendingCount = orders.length
-    ? orders.filter(o => o.status === 'Pending').length
-    : (Number(orderSummary?.byStatus?.Pending) || 0);
+  // Prefer the freshly polled summary count; fall back to the full snapshot
+  // when the compact poll is degraded or has not returned yet.
+  const pendingCount = orderSummary && ordersLiveStatus === 'ok'
+    ? (Number(orderSummary.byStatus?.Pending) || 0)
+    : orders.filter(o => o.status === 'Pending').length;
   const notifications = getNotifications().slice(0, 8);
 
   const sidebarProps = {

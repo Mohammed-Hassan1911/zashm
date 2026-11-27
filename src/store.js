@@ -236,6 +236,7 @@ function computeUnread(orders) {
 // that genuinely just arrived (null = first load → no toast, just baseline).
 let knownOrderIds = null;
 let summarySeeded = false;
+let summaryFullRefreshPending = false;
 // The compact summary only carries the newest five rows. It must never seed the
 // "already seen" baseline before a full snapshot has loaded, otherwise the
 // older backlog would look brand new when the full list arrives.
@@ -848,6 +849,16 @@ export const useStore = create((set, get) => ({
         };
       }
       set(patch);
+      if (fresh.length && !summaryFullRefreshPending) {
+        // The compact poll updates the bell immediately, but tables, KPIs and
+        // notifications read the authoritative snapshot. Merge the new ids into
+        // `orders` once without blocking this poll; refreshOrders() sees the
+        // ids in knownOrderIds already, so it cannot raise a duplicate toast.
+        summaryFullRefreshPending = true;
+        Promise.resolve(get().refreshOrders(true)).finally(() => {
+          summaryFullRefreshPending = false;
+        });
+      }
       return orderSummary;
     } catch (err) {
       const status = err && err.status;
