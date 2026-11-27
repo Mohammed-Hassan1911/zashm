@@ -153,7 +153,7 @@ ON CONFLICT (name) DO NOTHING;
 
 ### 4.4 Supabase Dashboard (لم تُنفَّذ)
 
-**Authentication:** إغلاق signups (أو مراجعة trigger)، تأكيد الإيميل، Site URL/Redirect allow-list، 12+ كلمة مرور، Leaked Password Protection. قرار المالك 2026-11-27: **بدون MFA**؛ الحماية عبر حدود المعدلات الصارمة، جلسات HttpOnly + CSRF، قائمة Origin المسموحة، إلغاء الجلسة فورًا، أقل صلاحيات، وإخفاء بيانات العملاء عن `support`.
+**Authentication:** إغلاق signups (أو مراجعة trigger)، تأكيد الإيميل، Site URL/Redirect allow-list، 12+ كلمة مرور، Leaked Password Protection. المالك أكّد 2026-11-27 إن Site URL والـ redirect الوحيد هما `https://zashm.za-shm.workers.dev` من غير wildcards أو Vercel أو Staging. قرار المالك 2026-11-27: **بدون MFA**؛ الحماية عبر حدود المعدلات الصارمة، جلسات HttpOnly + CSRF، قائمة Origin المسموحة، إلغاء الجلسة فورًا، أقل صلاحيات، وإخفاء بيانات العملاء عن `support`.
 
 **Storage:** bucket `products` = public، 5MB، MIME (JPEG/PNG/WebP/GIF/AVIF). عند ظهور `MANUAL ACTION REQUIRED`: احذف سياسات `products` غير المحمية بالملكية فقط من Dashboard، **لا تغيّر ملكية `storage.objects` ولا تعطّل RLS**، ثم أعد تشغيل `storage_hardening.sql`.
 

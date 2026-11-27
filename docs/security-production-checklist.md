@@ -520,8 +520,9 @@ delivery.
 
 ## 3. SEC-28 — Supabase Auth / dashboard settings (manual)
 
-**Status: not applied — requires dashboard access (no Management API token in
-this environment).**
+**Status: partially applied — owner-confirmed in the Supabase Dashboard on
+2026-11-27. No Management API token exists in this environment, so the agent
+cannot independently re-check the dashboard.**
 
 The store uses its own `users` table + scrypt passwords for admin/staff, so
 Supabase Auth is not the login path. Still, any public signup surface should be
@@ -532,8 +533,9 @@ closed:
    - Require email confirmation (`mailer_autoconfirm = false`) if email auth is
      ever enabled.
 2. **Authentication → URL Configuration**
-   - Site URL: the production storefront origin.
-   - Redirect allow-list: only that origin (no wildcards).
+   - Owner confirmed 2026-11-27: Site URL =
+     `https://zashm.za-shm.workers.dev`; exactly one redirect URL, the same
+     origin, with no wildcards, old Vercel origin or Staging host.
 3. **Authentication → Policies / MFA**
    - Owner decision 2026-11-27: do **not** enable MFA — neither custom TOTP nor
      the Supabase Auth toggle. Admin sign-in relies on the custom login's strict
@@ -697,7 +699,7 @@ appear.
 | ID | Status | Note |
 |----|--------|------|
 | SEC-24 | Fixed locally; production pending | `reservedStock` is intentionally unused — see §2; verify atomic migration Revision 8 on Production. |
-| SEC-28 | Partially applied | Public signups are **closed** (`disable_signup: true`, verified 2026-11-19). Owner decision 2026-11-27: **MFA declined** — no custom TOTP, no `admin_mfa.sql`, no `ZSHM_REQUIRE_MFA`. Admin access is protected by strict shared rate limits, HttpOnly sessions + CSRF, Origin allow-list, session revocation, least privilege and support PII masking. The URL allow-list check is still open — see §3. |
+| SEC-28 | Partially applied | Public signups are **closed** (`disable_signup: true`, verified 2026-11-19). Owner confirmed 2026-11-27: Supabase Site URL and single redirect URL are `https://zashm.za-shm.workers.dev`, no wildcards/Vercel/Staging. Owner decision 2026-11-27: **MFA declined** — no custom TOTP, no `admin_mfa.sql`, no `ZSHM_REQUIRE_MFA`. Admin access is protected by strict shared rate limits, HttpOnly sessions + CSRF, Origin allow-list, session revocation, least privilege and support PII masking. Remaining manual items (email confirmation/password policy) are dashboard-only and cannot be verified from this environment. |
 | SEC-07 | Mitigated | `/api/coupons/validate` still returns the discount value so the cart can show it. It is rate-limited (10/min/IP) and lockout-protected (5 failures/15 min per IP+code), and the server recomputes the discount at checkout. |
 | Public coupon metadata | Accepted | The endpoint reveals whether a code exists and its value. This is required for the cart UX and is bounded by the limits above. |
 | `/api/errors` | Accepted | Unauthenticated by design (the browser reports its own crashes). Served by `api/_errors.js` through an `api/auth` rewrite (Hobby 12-function cap). 30 reports/10 min/IP, 8 KB body cap, every field sanitised and truncated, one log line per report, one Telegram alert per distinct error (6/hour/instance, 30-min dedupe). No storage, no echo, no PII. |
