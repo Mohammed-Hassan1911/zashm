@@ -1,3 +1,4 @@
+import '../styles/shop.css';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { SlidersHorizontal, RotateCcw, ChevronDown } from 'lucide-react';

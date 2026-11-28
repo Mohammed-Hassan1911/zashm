@@ -7,6 +7,7 @@
 //   2. chart — the published chest chart, used when no window exists yet.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { readCss } from './lib/css-source.mjs';
 import {
   BODY_SHAPE_DEFAULT,
   BOTTOM_WAIST_SHAPES,
@@ -326,7 +327,7 @@ const finder = read('src/components/shop/SizeFinder.js');
 const admin = read('src/pages/AdminApp.js');
 const apiLib = read('api/_lib.js');
 const apiProducts = read('api/admin/products.js');
-const css = read('src/index.css');
+const css = readCss();
 ok(productPage.includes("from '../components/shop/SizeFinder'"), 'the product page imports the finder');
 ok(productPage.includes('<SizeFinder'), 'the product page renders the finder');
 ok(productPage.includes('sizeRanges={p.sizeRanges}'), 'the finder receives the owner windows');

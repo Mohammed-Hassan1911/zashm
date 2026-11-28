@@ -1,3 +1,4 @@
+import '../styles/product.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
 import { Heart, ShoppingBag, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, AlertTriangle, X, Ruler, ZoomIn } from 'lucide-react';
@@ -81,7 +82,7 @@ export default function ProductPage() {
   // The plate reads a soft spring fed by the raw drag value: the finger never
   // jerks the photo, and on release it glides back instead of snapping.
   const galleryPlateX = useSpring(galleryDragX, {
-    stiffness: 190, damping: 30, mass: 0.9, restDelta: 0.4,
+    stiffness: 260, damping: 30, mass: 0.75, restDelta: 0.4,
   });
 
   // The strip travels in pixels so its step follows the lit plate at every
@@ -189,10 +190,10 @@ export default function ProductPage() {
     // The gesture still advances the photo on release, but the plate stays put
     // while it is in progress: no drift, no spring to unwind afterwards.
     if (reduceMotion) return;
-    // A gentle share of the drag feeds the spring, so the photo drifts with the
-    // finger instead of racing it. The cap keeps the frame filled throughout.
+    // A responsive share of the drag feeds the spring, so the photo keeps up
+    // with a quick phone flick without racing it. The cap keeps the frame filled.
     const limit = Math.max(80, Math.min(window.innerWidth * 0.35, 140));
-    galleryDragX.set(Math.max(-limit, Math.min(limit, deltaX * 0.62)));
+    galleryDragX.set(Math.max(-limit, Math.min(limit, deltaX * 0.78)));
   };
   const handleImagePointerUp = (event) => {
     const start = imageSwipeStartRef.current;
@@ -206,7 +207,7 @@ export default function ProductPage() {
 
     const deltaX = event.clientX - start.x;
     const deltaY = event.clientY - start.y;
-    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
+    if (Math.abs(deltaX) < 28 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
     // A swipe ends with a click on the photo; suppress that click so changing
     // picture does not open the zoom stage on the way past.
     imageSwipedRef.current = true;
@@ -418,7 +419,7 @@ export default function ProductPage() {
               <div className="product-gallery-track" ref={galleryTrackRef}
                 style={{
                   transform: `translateX(-${imgIdx * galleryFrameWidth}px)`,
-                  transition: reduceMotion ? 'none' : 'transform 550ms cubic-bezier(0.45, 0, 0.2, 1)',
+                  transition: reduceMotion ? 'none' : 'transform 420ms cubic-bezier(0.45, 0, 0.2, 1)',
                 }}>
                 <motion.div className="product-gallery-frames" style={{ x: reduceMotion ? 0 : galleryPlateX }}>
                   {productImages.map((img, i) => (

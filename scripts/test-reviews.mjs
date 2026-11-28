@@ -12,6 +12,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { readCss } from './lib/css-source.mjs';
 
 const require = createRequire(import.meta.url);
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -553,12 +554,12 @@ console.log('\n[8] static wiring');
   ok(reviewsUi.includes("api.post('/reviews'"), 'the form submits to the public endpoint');
   ok(reviewsUi.includes('pending') || reviewsUi.includes('once approved'), 'the form explains moderation');
 
-  const css = read('src/index.css');
-  const reviewCss = css.slice(css.indexOf('.review-form input'));
+  const css = readCss();
+  const reviewCss = css;
   ok(reviewsUi.includes('className="review-form"'), 'the review form is scoped for mobile input sizing');
   ok(!/fontSize:\s*13/.test(reviewsUi.slice(reviewsUi.indexOf('const inputStyle'), reviewsUi.indexOf('function formatDate'))),
     'the field font size comes from CSS, not an inline override');
-  ok(/@media \(max-width: 768px\)[\s\S]{0,120}font-size:\s*16px/.test(reviewCss.slice(0, 320)),
+  ok(/@media \(max-width: 768px\) \{[\s\S]{0,120}\.review-form input[\s\S]{0,160}font-size:\s*16px/.test(reviewCss),
     'review fields use 16px on small screens (no iOS zoom on focus)');
   ok(adminUi.includes("adminPage === 'reviews'"), 'the admin console has a reviews route');
   ok(adminUi.includes("id:'reviews'"), 'the admin sidebar links to reviews');
@@ -636,7 +637,7 @@ console.log('\n[8] static wiring');
     'the dropzone is tall enough to read as a field, not a link');
   ok(/\.review-field:focus-within > label[\s\S]{0,80}color: var\(--gold\)/.test(css),
     'field labels turn gold while the field has focus');
-  const motionCss = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+  const motionCss = (css.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/g) || []).join('\n');
   ok(/\.review-photo-icon,[\s\S]{0,40}\.review-photo-preview \{\s*animation: none/.test(motionCss) &&
      /\.review-photo-drop\.is-busy::before \{\s*animation: none/.test(motionCss),
     'every new animation is disabled in the shared reduced-motion block');

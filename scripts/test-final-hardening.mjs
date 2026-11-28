@@ -17,6 +17,7 @@ import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import Module from 'node:module';
 import crypto from 'node:crypto';
+import { readCss } from './lib/css-source.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -543,7 +544,7 @@ console.log('\n[8] production rollout decisions');
 // ─── [9] floating actions ──────────────────────────────────────────────────
 console.log('\n[9] floating actions stay accessible');
 {
-  const css = read('src/index.css');
+  const css = readCss();
   const app = read('src/App.js');
   const toastModule = read('src/components/ui/BackToTop.js');
   const whatsapp = read('src/components/ui/WhatsAppButton.js');
@@ -610,7 +611,7 @@ console.log('\n[10] public SEO and checkout accessibility');
      /className="order-confirmation-summary"/.test(cartPage),
     'order confirmation uses the redesigned summary layout');
   ok(/className="order-confirmation-page"/.test(cartPage) &&
-     /@media \(max-width: 560px\)[\s\S]*?\.order-confirmation-card/.test(read('src/index.css')),
+     /@media \(max-width: 560px\)[\s\S]*?\.order-confirmation-card/.test(readCss()),
     'order confirmation layout adapts to mobile screens');
   ok(!/تم تسجيل طلبك بنجاح/.test(cartPage) && !/WHAT HAPPENS NEXT/.test(cartPage),
     'order confirmation drops the repeated received-order copy');
@@ -622,7 +623,7 @@ console.log('\n[10] public SEO and checkout accessibility');
     'track, support and continue actions share one identical style');
   const trackPage = read('src/pages/TrackOrder.js');
   ok(/className="track-shipping-grid"/.test(trackPage) &&
-     /\.track-shipping-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.7fr\) minmax\(0, 1fr\)/.test(read('src/index.css')) &&
+     /\.track-shipping-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.7fr\) minmax\(0, 1fr\)/.test(readCss()) &&
      !/gridTemplateColumns: 'repeat\(auto-fit/.test(trackPage),
     'shipping details stay side by side on phones instead of stacking');
 
@@ -658,7 +659,7 @@ console.log('\n[10] public SEO and checkout accessibility');
      !/BRAND_FONTS_HREF/.test(read('src/index.js')) &&
      /rel="preload" as="font" type="font\/woff2" href="\/fonts\/cormorant-garamond-latin-var\.woff2" crossorigin/.test(read('index.html')),
     'brand fonts are self-hosted and preloaded, so no third-party stylesheet can block or delay the paint');
-  ok(/color: 'var\(--red-light\)'/.test(productCard) && /--red-light:\s*#ff786b/.test(read('src/index.css')),
+  ok(/color: 'var\(--red-light\)'/.test(productCard) && /--red-light:\s*#ff786b/.test(readCss()),
     'the small discount badge uses a high-contrast red');
 }
 
@@ -669,7 +670,7 @@ console.log('\n[11] reload resilience and footer polish');
   const entry = read('src/index.js');
   const recovery = read('src/lib/chunkRecovery.js');
   const auth = read('src/lib/auth.js');
-  const css = read('src/index.css');
+  const css = readCss();
 
   ok(!/addEventListener\(\s*['"]vite:preloadError/.test(entry) && !/preventDefault\(\)/.test(entry),
     'the entry never cancels Vite preload errors; cancelling makes lazy imports resolve undefined');
@@ -789,7 +790,7 @@ console.log('\n[12] badge proximity and governorate copy');
   // The badge geometry moved from inline styles into .mobile-nav-badge when the
   // bar was restyled, so the guarantee is asserted on the stylesheet that now
   // owns it: still pinned to the 20px glyph, still a 15px disc.
-  const navCss = read('src/index.css');
+  const navCss = readCss();
   ok(/\.mobile-nav-badge \{[^}]*top: -7px;[^}]*right: -7px;[^}]*min-width: 15px;[^}]*height: 15px;/.test(navCss),
     'the bottom-nav badge sits at the upper-right corner of the glyph too');
   ok(/aria-label=\{badge > 0 \?/.test(mobileNav),
@@ -807,15 +808,15 @@ console.log('\n[12] badge proximity and governorate copy');
   // Product page typography: one editorial scale, and a title that keeps its
   // own size instead of being forced by the global phone heading rule.
   ok(/<h1 className="product-title">/.test(productPage) &&
-     /h1:not\(\.hero-brand\):not\(\.product-title\)/.test(read('src/index.css')),
+     /h1:not\(\.hero-brand\):not\(\.product-title\)/.test(readCss()),
     'the product title opts out of the global phone heading override');
-  ok(/\.product-title \{[\s\S]{0,200}?font-family: var\(--font-display\)/.test(read('src/index.css')) &&
-     /\.product-eyebrow::after \{[\s\S]{0,220}?linear-gradient/.test(read('src/index.css')),
+  ok(/\.product-title \{[\s\S]{0,200}?font-family: var\(--font-display\)/.test(readCss()) &&
+     /\.product-eyebrow::after \{[\s\S]{0,220}?linear-gradient/.test(readCss()),
     'the category eyebrow draws a still gold rule above the serif title');
-  ok(/\.product-details > \.product-detail-block \{\s*opacity: 1;/.test(read('src/index.css')) &&
-     !/product-block-in/.test(read('src/index.css')),
+  ok(/\.product-details > \.product-detail-block \{\s*opacity: 1;/.test(readCss()) &&
+     !/product-block-in/.test(readCss()),
     'the details column is laid out once, with no entrance animation');
-  ok(/\.product-tab-underline \{[\s\S]{0,160}?bottom: -1px/.test(read('src/index.css')) &&
+  ok(/\.product-tab-underline \{[\s\S]{0,160}?bottom: -1px/.test(readCss()) &&
      /layoutId="product-tab-underline"/.test(productPage),
     'the active tab underline slides between labels');
 
@@ -824,7 +825,7 @@ console.log('\n[12] badge proximity and governorate copy');
   // layout: the status side is pushed to the far edge of a flex row and the
   // pill refuses to wrap.
   const track = read('src/pages/TrackOrder.js');
-  const trackCss = read('src/index.css');
+  const trackCss = readCss();
   ok(/className="track-status-head"[\s\S]{0,700}?className="track-status-side"[\s\S]{0,400}?className="track-status-pill"/.test(track) &&
      !/textAlign: 'right'/.test(track),
     'the tracking status sits beside "Current status" instead of under it');
@@ -966,7 +967,7 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
     'the home page exposes a meaningful h1 to assistive tech');
   ok(/<div\s+className="hero-brand"/.test(home) && !/<motion\.h1/.test(home),
     'the decorative wordmark is a plain div, not the page heading');
-  ok(/\.skip-link\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?\.skip-link:focus/.test(read('src/index.css')),
+  ok(/\.skip-link\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?\.skip-link:focus/.test(readCss()),
     'the skip link stays off-screen until it receives focus');
 
   const ordersApi = read('api/orders.js');
@@ -987,7 +988,7 @@ console.log('\n[14] private-page robots meta and accessibility landmarks');
 // ─── [15] footer headings + repeat-customer WhatsApp copy ───────────────────
 console.log('\n[15] footer headings scale on large screens and the VIP message reads correctly');
 {
-  const css = read('src/index.css');
+  const css = readCss();
   const baseTitle = css.slice(css.indexOf('.footer-col-title {'), css.indexOf('@media (max-width: 768px)', css.indexOf('.footer-col-title {')));
   ok(/font-size:\s*11px/.test(baseTitle), 'footer headings keep their 11px desktop base');
 

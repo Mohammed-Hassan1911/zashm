@@ -20,6 +20,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import Module from 'node:module';
+import { readCss } from './lib/css-source.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -345,7 +346,7 @@ console.log('\n[5] admin page navigation and add-product wiring');
 console.log('\n[6] admin product grid: selectable cards, hover-only actions');
 {
   const src = readFileSync(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const css = readCss();
 
   ok(!/className="product-card-actions"/.test(src),
     'the admin grid no longer reuses the always-visible storefront action overlay');

@@ -85,7 +85,11 @@ Key routes: `/`, `/shop`, `/product/:id`, `/cart`, `/checkout`, `/wishlist`,
 ## 3. Coding conventions
 
 - Match the surrounding code. The codebase uses single quotes, 2-space indent,
-  function components, hooks, inline styles + one global `src/index.css`.
+  function components, hooks, inline styles + a generated CSS entry split.
+- `scripts/lib/css-original.css` is the source of truth for the CSS split.
+  Regenerate `src/index.css` and `src/styles/{admin,shop,product}.css` only with
+  `npm run css:split`; do not hand-edit generated sheets. The checksummed
+  `scripts/lib/css-order.json` and the regression suite fail on drift.
 - Components live in `src/components/{shop,ui,admin}`; pages in `src/pages/`.
 - Use `useStore` for shared state and subscribe with selectors in new code
   (`useStore((s) => s.cart)`); preserve existing call sites unless refactoring.

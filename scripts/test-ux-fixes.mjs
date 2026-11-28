@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { JSDOM } from 'jsdom';
+import { readCss } from './lib/css-source.mjs';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const read = (file) => readFileSync(path.join(root, file), 'utf8');
@@ -81,7 +82,7 @@ console.log('\n[1] Cache-Control policy');
 
 console.log('\n[2] home hero reserves height (CLS)');
 {
-  const css = read('src/index.css');
+  const css = readCss();
   await step('.home-hero has a min height', () => {
     assert.ok(/\.home-hero\s*\{[^}]*height:\s*max\(100svh,\s*580px\)/.test(css));
   });
@@ -622,7 +623,7 @@ try {
         'the whole summary is a single card');
     });
 
-    const checkoutCssSource = read('src/index.css');
+    const checkoutCssSource = readCss();
     const checkoutCss = checkoutCssSource.slice(
       checkoutCssSource.indexOf('/* ─── CHECKOUT'),
       checkoutCssSource.indexOf('/* ─── ORDER CONFIRMATION')
@@ -642,7 +643,7 @@ try {
       assert.ok(!/Exchange or return within/.test(cart),
         'checkout no longer restates the return window under PLACE ORDER');
       assert.ok(!/Size not right\?/.test(cart), 'the doubt line is gone too');
-      assert.ok(!/checkout-exchange-note/.test(read('src/index.css')),
+      assert.ok(!/checkout-exchange-note/.test(readCss()),
         'its now-unused responsive rule was removed as well');
     });
 
@@ -655,7 +656,7 @@ try {
     });
 
     const app = read('src/App.js');
-    const css = read('src/index.css');
+    const css = readCss();
     await step('route skeletons reserve the final layout while chunks load', () => {
       assert.ok(/from '\.\/components\/ui\/PageSkeletons'/.test(app), 'App imports the route skeletons');
       assert.ok(/page === 'shop'\) return <ShopPageSkeleton/.test(app), 'shop route uses its skeleton');
@@ -795,7 +796,7 @@ try {
 
   console.log('\n[8] mobile admin zoom, WhatsApp review phone and one-line add to bag');
   {
-    const css = read('src/index.css');
+    const css = readCss();
     const admin = read('src/pages/AdminApp.js');
     const login = read('src/components/admin/AdminLogin.js');
     const product = read('src/pages/ProductPage.js');
@@ -848,7 +849,7 @@ try {
 
   console.log('\n[9] 44px tap targets across the storefront chrome');
   {
-    const css = read('src/index.css');
+    const css = readCss();
     const app = read('src/App.js');
     const product = read('src/pages/ProductPage.js');
     const cart = read('src/pages/CartPage.js');
@@ -908,14 +909,16 @@ try {
         'chip sizing lives in CSS, not an inline style, so phones can override it');
       assert.ok(!/minHeight:\s*44,\s*\n\s*background:\s*'var\(--bg3\)'/.test(shop),
         'the sort select no longer pins its own height inline');
-      const phoneToolbar = (css.match(/@media \(max-width: 767px\) \{[\s\S]*?\n\}/g) || [])
-        .find((block) => /\.shop-chip,/.test(block)) || '';
-      assert.ok(/\.shop-chip,\s*\n\s*\.shop-filter-toggle \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
+      const phoneBlocks = css.match(/@media \(max-width: 767px\) \{[\s\S]*?\n\}/g) || [];
+      const phoneChip = phoneBlocks.find((block) => /\.shop-chip,/.test(block)) || '';
+      const phoneSort = phoneBlocks.find((block) => /\.shop-sort \{/.test(block)) || '';
+      const phoneSortWrap = phoneBlocks.find((block) => /\.shop-sort-wrap \{ width: 148px; \}/.test(block)) || '';
+      assert.ok(/\.shop-chip,\s*\n\s*\.shop-filter-toggle \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneChip),
         'phones shrink the chips and the Filter toggle together (44→32px, 11→9.5px)');
-      assert.ok(/\.shop-sort \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneToolbar),
+      assert.ok(/\.shop-sort \{\s*min-height:\s*32px;[^}]*font-size:\s*9\.5px;/.test(phoneSort),
         'the sort select shrinks with the chips into a compact control');
       assert.ok(/\.shop-sort-wrap \{[^}]*width:\s*clamp\(140px, 11vw, 160px\)/.test(css) &&
-         /\.shop-sort-wrap \{ width: 148px; \}/.test(phoneToolbar),
+         /\.shop-sort-wrap \{ width: 148px; \}/.test(phoneSortWrap),
         'the sort is compact but a little wider than its label on every screen');
       assert.ok(!/shop-result-pill/.test(shop) && !/shop-toolbar-actions/.test(shop),
         'there is no piece-count pill or extra wrapper beside the sort');
@@ -950,10 +953,12 @@ try {
       assert.ok(/isEditable[\s\S]{0,320}?element\.matches\('textarea'\)/.test(nav) &&
          !/isEditable[\s\S]{0,320}?element\.matches\('textarea, select'\)/.test(nav),
         'opening the native sort picker does not count as a keyboard, so the bottom nav stays');
-      assert.ok(/\.shop-filter-toggle\s*\{\s*flex:\s*1 1 auto;[^}]*min-width:\s*96px;[^}]*padding:\s*6px 14px;/.test(phoneToolbar),
+      const phoneFilter = phoneBlocks.find((block) => /\.shop-filter-toggle\s*\{/.test(block)) || '';
+      const phoneLabelRow = phoneBlocks.find((block) => /\.shop-label-chip-row\s*\{/.test(block)) || '';
+      assert.ok(/\.shop-filter-toggle\s*\{\s*flex:\s*1 1 auto;[^}]*min-width:\s*96px;[^}]*padding:\s*6px 14px;/.test(phoneFilter),
         'the Filter toggle fills the remaining space beside the sort on phones');
-      assert.ok(/\.shop-label-chip-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(phoneToolbar) &&
-         /\.shop-label-chip\s*\{\s*min-height:\s*34px;[^}]*font-size:\s*10\.5px;/.test(phoneToolbar),
+      assert.ok(/\.shop-label-chip-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(phoneLabelRow) &&
+         /\.shop-label-chip\s*\{\s*min-height:\s*34px;[^}]*font-size:\s*10\.5px;/.test(phoneLabelRow),
         'label chips arrange in a tidy grid and are slightly smaller on phones');
       assert.ok(/\.price-input \{\s*font-size:\s*16px/.test(css),
         'price inputs are 16px on phones (no iOS zoom)');
@@ -1190,14 +1195,16 @@ try {
 
   console.log('\n[10] performance: only the ZASHM wordmark lights up');
   {
-    const css = read('src/index.css');
+    const css = readCss();
     const header = read('src/components/shop/Header.js');
     const product = read('src/pages/ProductPage.js');
     const home = read('src/pages/HomePage.js');
     const app = read('src/App.js');
     const entry = read('src/index.js');
     const html = read('index.html');
-    const touch = css.slice(css.indexOf('TOUCH SIZES'));
+    // The touch overrides now live in more than one split input; assert the
+    // exact rules across the whole reassembled stylesheet, not one slice.
+    const touch = css;
 
     await step('the ambient room is painted once and never loops', () => {
       assert.ok(!/@keyframes ambient-drift/.test(css) && !/ambient-drift/.test(css),
@@ -1394,7 +1401,7 @@ try {
     await step('brand fonts are self-hosted, preloaded and subset', () => {
       // Strip comments so the note explaining *why* Google Fonts was dropped
       // does not trip the "no third-party font host" assertion.
-      const css = read('src/index.css').replace(/\/\*[\s\S]*?\*\//g, '');
+      const css = readCss().replace(/\/\*[\s\S]*?\*\//g, '');
       const faces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((m) => m[1]);
       assert.equal(faces.length, 6, 'two families x roman/italic x latin/latin-ext');
       const files = faces.map((face) => (face.match(/url\('([^']+)'\)/) || [])[1]);
@@ -1441,7 +1448,7 @@ try {
   console.log('\n[12] product hover crossfade, checkout warmth, filter type scale');
   {
     const card = read('src/components/shop/ProductCard.js');
-    const css = read('src/index.css');
+    const css = readCss();
     const shop = read('src/pages/ShopPage.js');
     const product = read('src/pages/ProductPage.js');
 
@@ -1489,8 +1496,8 @@ try {
       assert.ok(/getBoundingClientRect\(\)\.width/.test(product)
         && /new ResizeObserver\(measure\)/.test(product),
         'the step is measured, not a percentage that would snap');
-      assert.ok(/transition: reduceMotion \? 'none' : 'transform 550ms cubic-bezier\(0\.45, 0, 0\.2, 1\)'/.test(product),
-        'the slide is a 550ms ease-in-out like the reference storefront, or instant with reduced motion');
+      assert.ok(/transition: reduceMotion \? 'none' : 'transform 420ms cubic-bezier\(0\.45, 0, 0\.2, 1\)'/.test(product),
+        'the slide is a quicker 420ms ease-in-out, or instant with reduced motion');
       assert.ok(/\.product-gallery-frame \{[^}]*flex: 0 0 100%/.test(css)
         && /className="product-gallery-frame"/.test(product),
         'each photo owns one full frame, so the incoming print enters from the right');
@@ -1501,11 +1508,11 @@ try {
       assert.ok(/onPointerMove=\{handleImagePointerMove\}/.test(product),
         'the gallery actually listens for the drag, not just the release');
       assert.ok(/useMotionValue\(0\)/.test(product) &&
-         /useSpring\(galleryDragX, \{[\s\S]{0,120}?stiffness: 190, damping: 30, mass: 0\.9, restDelta: 0\.4/.test(product),
-        'a low-stiffness spring smooths every pixel of the drag instead of snapping');
+         /useSpring\(galleryDragX, \{[\s\S]{0,120}?stiffness: 260, damping: 30, mass: 0\.75, restDelta: 0\.4/.test(product),
+        'a quicker spring smooths the drag and settles faster than the old 190/0.9 setup');
       assert.ok(/const limit = Math\.max\(80, Math\.min\(window\.innerWidth \* 0\.35, 140\)\)/.test(product) &&
-         /galleryDragX\.set\(Math\.max\(-limit, Math\.min\(limit, deltaX \* 0\.62\)\)\)/.test(product),
-        'a gentle share of the drag drifts the plate with the finger, capped inside the frame');
+         /galleryDragX\.set\(Math\.max\(-limit, Math\.min\(limit, deltaX \* 0\.78\)\)\)/.test(product),
+        'a responsive share of the drag keeps up with a phone flick, capped inside the frame');
       assert.ok(!/gallerySettleRef|animate\(galleryDragX/.test(product) &&
          /const handleImagePointerDown[\s\S]{0,400}?if \(imageSwipeStartRef\.current\) return;/.test(product),
         'a second finger cannot replace the pointer that owns the drag');
@@ -1518,8 +1525,8 @@ try {
          /\.product-gallery-frames\s*\{[^}]*will-change:\s*transform/.test(css),
         'the drag moves a single composited plate, never the controls or the page');
       assert.ok(/Math\.abs\(deltaX\) < 8 \|\| Math\.abs\(deltaX\) <= Math\.abs\(deltaY\)/.test(product) &&
-         /Math\.abs\(deltaX\) < 40/.test(product),
-        'a vertical scroll still wins until horizontal intent is clear, and a gentle swipe advances');
+         /Math\.abs\(deltaX\) < 28/.test(product),
+        'a vertical scroll still wins until horizontal intent is clear, and a shorter 28px swipe advances');
     });
 
     await step('Delivery details and Order Summary carry a light champagne wash', () => {
@@ -1550,7 +1557,7 @@ try {
     const drawer = read('src/components/shop/CartDrawer.js');
     const cartPage = read('src/pages/CartPage.js');
     const track = read('src/pages/TrackOrder.js');
-    const css = read('src/index.css');
+    const css = readCss();
 
     await step('the bag opens as a side drawer on a phone too', () => {
       // A full-width panel read as a page change, not a drawer. Leaving ~12% of
@@ -1754,7 +1761,7 @@ try {
     const product = read('src/pages/ProductPage.js');
     const card = read('src/components/shop/ProductCard.js');
     const app = read('src/App.js');
-    const css = read('src/index.css');
+    const css = readCss();
 
     const downBody = product.slice(
       product.indexOf('const handleImagePointerDown = (event) => {'),
@@ -1779,15 +1786,15 @@ try {
         'the guard sits before the imperative drift, so no pointer move moves the plate');
       assert.ok(/style=\{\{ x: reduceMotion \? 0 : galleryPlateX \}\}/.test(product),
         'the plate reads a fixed zero instead of the spring when motion is reduced');
-      assert.ok(/transition: reduceMotion \? 'none' : 'transform 550ms cubic-bezier\(0\.45, 0, 0\.2, 1\)'/.test(product),
+      assert.ok(/transition: reduceMotion \? 'none' : 'transform 420ms cubic-bezier\(0\.45, 0, 0\.2, 1\)'/.test(product),
         'the sideways slide is instant when motion is reduced');
       assert.ok(!/reduceMotion/.test(upBody) && /changeImage\(deltaX < 0 \? 1 : -1\)/.test(upBody),
         'swipe-to-advance is decided on release, unaffected by the preference');
       assert.ok(downBody.includes('if (imageSwipeStartRef.current) return;') &&
         /start\.pointerId !== event\.pointerId/.test(upBody),
         'the one-finger ownership fix is untouched');
-      assert.ok(/useSpring\(galleryDragX, \{[\s\S]{0,120}?stiffness: 190, damping: 30, mass: 0\.9, restDelta: 0\.4/.test(product),
-        'the soft spring is still used for everyone else');
+      assert.ok(/useSpring\(galleryDragX, \{[\s\S]{0,120}?stiffness: 260, damping: 30, mass: 0\.75, restDelta: 0\.4/.test(product),
+        'the quicker spring is still used for everyone else');
       const reducedBlock = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{/g)]
         .map((match) => css.slice(match.index, css.indexOf('\n}', match.index) + 2))
         .find((block) => /\.product-gallery-frames/.test(block)) || '';

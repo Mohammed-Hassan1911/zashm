@@ -12,6 +12,7 @@
  *   - plain-stock products can be added without size/colour selections
  */
 import { readFileSync } from 'node:fs';
+import { readCss } from './lib/css-source.mjs';
 
 let pass = 0;
 let fail = 0;
@@ -32,7 +33,7 @@ const root = new URL('..', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
 
 const app = read('src/App.js');
-const css = read('src/index.css');
+const css = readCss();
 const seo = read('src/lib/seo.js');
 const product = read('src/pages/ProductPage.js');
 const cart = read('src/pages/CartPage.js');

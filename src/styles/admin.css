@@ -1,0 +1,177 @@
+/* ZASHM admin styles: loaded only with the admin route chunk. */
+.admin-login-shell {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  /* Auto margins centre the card inside the flex-start container, and resolve
+     to 0 when the card is taller than the viewport, so a phone keyboard can
+     still scroll to its top edge instead of clipping it. */
+  margin-block: auto;
+}
+/* Lit glass, the same language as the cart drawer and the toasts. */
+.admin-login-card {
+  position: relative;
+  border-radius: 14px;
+  padding: 40px 36px;
+  background: linear-gradient(180deg, rgba(30, 24, 18, 0.9) 0%, rgba(13, 11, 10, 0.95) 58%, rgba(9, 8, 7, 0.97) 100%);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 242, 205, 0.1);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+/* A gold hairline along the top edge, brightest in the middle — the footer's
+   motif, reused so the card reads as part of the same frame. */
+.admin-login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(90deg, transparent, rgba(232, 200, 112, 0.6) 30%, rgba(255, 244, 214, 0.8) 50%, rgba(232, 200, 112, 0.6) 70%, transparent);
+  pointer-events: none;
+}
+.admin-login-head {
+  text-align: center;
+  margin-bottom: 34px;
+}
+/* The seal: a minted disc with a warm crown and a deep base, matching the
+   scroll-to-top button. */
+.admin-login-seal {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #f4dc9c 0%, #dcbc63 42%, #b08c3c 100%);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(240, 212, 146, 0.5),
+    0 0 26px rgba(201, 168, 76, 0.3),
+    inset 0 1px 0 rgba(255, 252, 240, 0.6),
+    inset 0 -2px 6px rgba(122, 92, 32, 0.4);
+}
+.admin-login-wordmark {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  margin-bottom: 6px;
+}
+.admin-login-subtitle {
+  color: var(--text3);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+@media (max-width: 480px) {
+.admin-login-card { padding: 30px 22px; border-radius: 12px; }
+.admin-login-wordmark { font-size: 25px; letter-spacing: 3px; }
+}
+/* ─── ADMIN DASHBOARD ───────────────────────────────────────────────────────── */
+.admin-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg3) !important;
+  border-radius: 8px;
+}
+@media (max-width: 900px) {
+.admin-dash-split { grid-template-columns: 1fr !important; }
+}
+/* Wide admin tables and filter chips scroll inside their own panel instead of
+   stretching .admin-main and creating a page-level horizontal scrollbar. */
+.zshm-admin-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.zshm-admin-table-scroll::-webkit-scrollbar { height: 6px; }
+.zshm-admin-table-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}
+.zshm-admin-filter-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media (prefers-reduced-motion: reduce) {
+.zshm-date-pop {
+    animation: none;
+  }
+}
+/* The size-finder motion is switched off in the shared reduced-motion block
+   earlier in this file, together with the rest of the site. */
+/* ─── Admin: branded date field (discount window) ──────────────────────────── */
+.admin-date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.zshm-date { position: relative; }
+.zshm-date-icon { color: var(--gold); flex-shrink: 0; opacity: 0.85; }
+.zshm-date-value {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.zshm-date-placeholder { flex: 1; min-width: 0; color: var(--text3); }
+.zshm-date-pop {
+  position: absolute;
+  z-index: 40;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  padding: 12px;
+  background: linear-gradient(180deg, #151515 0%, #0b0b0b 100%);
+  border: 1px solid rgba(201, 168, 76, 0.34);
+  border-radius: 6px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.zshm-date-pop.is-down { top: calc(100% + 8px); }
+.zshm-date-pop.is-up { bottom: calc(100% + 8px); }
+.zshm-date-pop.is-left { left: 0; }
+.zshm-date-pop.is-right { right: 0; }
+.zshm-date-head { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
+.zshm-date-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+}
+.zshm-date-month { font-family: var(--font-display); font-size: 17px; line-height: 1; color: var(--text); }
+.zshm-date-year { font-size: 10px; letter-spacing: 1.6px; color: var(--gold); }
+.zshm-date-grid { display: grid; gap: 2px; padding-top: 6px; }
+.zshm-date-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.zshm-date-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.zshm-date-foot-note { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); }
+@media (max-width: 380px) {
+.admin-date-range { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+.admin-main {
+    overflow-x: hidden;
+  }
+.zshm-admin-table-scroll,
+  .zshm-admin-filter-scroll {
+    width: 100%;
+  }
+}

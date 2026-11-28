@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { readCss } from './lib/css-source.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -21,7 +22,7 @@ const page = await read('src/pages/ProductPage.js');
 const card = await read('src/components/shop/ProductCard.js');
 const lightbox = await read('src/components/ui/ProductImageLightbox.js');
 const gesture = await read('src/lib/zoomGesture.mjs');
-const css = await read('src/index.css');
+const css = await readCss();
 const pkg = JSON.parse(await read('package.json'));
 const {
   MIN_ZOOM, MAX_ZOOM, clampZoom, clampPan, pointDistance, pointMidpoint, settleZoom,

@@ -1,0 +1,243 @@
+/* ZASHM shop styles: loaded only with the shop route chunk. */
+/* ─── Collection header (shop) ──────────────────────────────────────────────
+   Three tiers, one clear hierarchy: a small tracked eyebrow flanked by drawn
+   gold rules, a large serif title lit by a soft pool of gold, and a quiet
+   counted meta line under a hairline. The title is deliberately several times
+   the size of both lines so it never competes with them - on a phone too. */
+/* The page does not offset itself. The hero's own top padding absorbs the
+   fixed header (70px, 60px on a phone), so the lit glow behind the title runs
+   all the way to the top edge and there is no dark band between the header and
+   the collection plate. */
+.shop-page {
+  padding-top: 0;
+}
+.shop-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  text-align: center;
+  padding: calc(70px + clamp(56px, 8.4vw, 104px)) 20px clamp(48px, 6.6vw, 80px);
+  border-bottom: 1px solid var(--border);
+}
+/* A short gold seam centred on the hero's bottom edge, so the header ends on a
+   drawn line rather than a full-width rule. */
+.shop-hero::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  width: min(320px, 62%);
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.6), transparent);
+  pointer-events: none;
+}
+/* The lit wall behind the title. */
+.shop-hero-glow {
+  position: absolute;
+  left: 50%;
+  top: -46%;
+  z-index: -1;
+  width: min(820px, 126%);
+  aspect-ratio: 2 / 1;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(214, 178, 96, 0.18), rgba(201, 168, 76, 0.055) 56%, transparent 100%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+/* A soft shaft of gallery light falling on the title. */
+.shop-hero-glow::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 46%;
+  height: 150%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(255, 236, 190, 0.1), rgba(255, 236, 190, 0.03) 62%, transparent 100%);
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  filter: blur(10px);
+}
+.shop-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  color: var(--gold-light);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+}
+.shop-hero-eyebrow::before,
+.shop-hero-eyebrow::after {
+  content: '';
+  width: 34px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.75));
+}
+.shop-hero-eyebrow::after {
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.75), transparent);
+}
+.shop-hero-rule {
+  display: block;
+  width: 64px;
+  height: 1px;
+  margin: 20px auto 16px;
+  transform-origin: center;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+.shop-hero-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  /* One step lighter than --text3: the count sits in the lit part of the
+     header, where the quieter tone would fall under 4.5:1. */
+  color: #b6aea1;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 3.2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.shop-hero-count-dot {
+  width: 4px;
+  height: 4px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(201, 168, 76, 0.85);
+}
+@media (max-width: 768px) {
+.shop-hero {
+    padding: calc(60px + 48px) 16px 42px;
+  }
+.shop-hero-eyebrow {
+    gap: 10px;
+    font-size: 10px;
+    letter-spacing: 4px;
+  }
+.shop-hero-eyebrow::before,
+  .shop-hero-eyebrow::after {
+    width: 22px;
+  }
+.shop-hero-rule {
+    width: 46px;
+    margin: 15px auto 13px;
+  }
+.shop-hero-count {
+    gap: 8px;
+    font-size: 10.5px;
+    letter-spacing: 2.6px;
+  }
+}
+.shop-sort {
+  min-height: 44px;
+  width: 100%;
+  padding: 10px 38px 10px 16px;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  /* Paint lives here, not inline, so the pressed surface can brighten in one
+     frame without turning the sort yellow (owner decision 2026-11-24). */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)), var(--bg3);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: var(--text2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  /* No fade or filter on the control itself: the press state must appear and
+     leave with the picker, not trail a second animation after it. */
+  transition: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* The label chips inside the filter panel are the panel's main choice, so they
+   get a larger, calmer type scale than the toolbar strip above them. */
+.shop-label-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.shop-label-chip {
+  min-height: 42px;
+  padding: 10px 16px;
+  font-size: 13px;
+  letter-spacing: 0.9px;
+}
+.shop-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1 1 300px;
+  min-width: 0;
+}
+/* The sort is a compact instrument — a little wider than the label, never a
+   full-width bar, and never a stretched tail. */
+.shop-sort-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: clamp(140px, 11vw, 160px);
+  min-width: 0;
+  max-width: 100%;
+}
+.shop-sort-chevron {
+  position: absolute;
+  right: 15px;
+  color: var(--gold);
+  pointer-events: none;
+}
+/* While the finger is down or the native picker owns the control, keep the
+   smoked-glass surface and brighten only the outline and text. Owner decision
+   2026-11-24: the sort must NOT turn gold when pressed. Blur on change / Escape
+   / the next tap removes the focus styling instantly — no fade, no ring left
+   behind. */
+.shop-sort:active,
+.shop-sort:focus,
+.shop-sort:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.32);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)), var(--bg3);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+/* Keyboard focus still needs a visible ring; keep it neutral, not gold. */
+.shop-sort:focus-visible {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+@media (max-width: 767px) {
+.shop-chip-row { gap: 6px; }
+.shop-label-chip-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+.shop-label-chip {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    white-space: normal;
+    text-align: center;
+    justify-content: center;
+  }
+.shop-sort-wrap { width: 148px; }
+.shop-sort {
+    min-height: 32px;
+    padding: 6px 24px 6px 10px;
+    font-size: 9.5px;
+    letter-spacing: 0.4px;
+  }
+.shop-sort-chevron { right: 7px; width: 10px; height: 10px; }
+}
+/* The neutral press surface is replaced by system colours, so keep a
+     system-coloured focus ring for keyboard users instead. */
+@media (forced-colors: active) {
+.shop-sort:active,
+  .shop-sort:focus,
+  .shop-sort:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

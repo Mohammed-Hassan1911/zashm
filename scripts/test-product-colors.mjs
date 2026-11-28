@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { getColorSwatch, getColorTextInk, getColorTextStyle } from '../src/lib/productColors.mjs';
+import { readCss } from './lib/css-source.mjs';
 
 assert.equal(getColorSwatch('Burgundy'), '#800020');
 assert.equal(getColorSwatch('برجاندي'), '#800020');
@@ -55,7 +56,7 @@ assert.equal(getColorTextStyle('Burgundy').color, getColorTextInk('#800020'));
 
 const adminApp = await readFile(new URL('../src/pages/AdminApp.js', import.meta.url), 'utf8');
 const productPage = await readFile(new URL('../src/pages/ProductPage.js', import.meta.url), 'utf8');
-const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+const css = readCss();
 assert.match(adminApp, /aria-label="Color previews"/);
 assert.match(adminApp, /background:getColorSwatch\(color\)/);
 assert.match(productPage, /aria-pressed=\{isSelected\}/);

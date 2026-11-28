@@ -3,6 +3,7 @@
 // and the wiring checks read the component and the stylesheet as text.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { readCss } from './lib/css-source.mjs';
 import {
   MONTH_NAMES,
   WEEKDAY_LONG,
@@ -180,7 +181,7 @@ ok(!/toISOString/.test(field), 'the field never converts a date through UTC');
 // ─── [6] the calendar is styled by the brand ────────────────────────────────
 section('6 — brand styling');
 
-const css = read('src/index.css');
+const css = readCss();
 ok(css.includes('.zshm-date-trigger') && css.includes('min-height: 44px'), 'the trigger is touch sized');
 ok(css.includes('.zshm-date-pop') && css.includes('border: 1px solid rgba(201, 168, 76, 0.34)'),
   'the popover uses a gold hairline');

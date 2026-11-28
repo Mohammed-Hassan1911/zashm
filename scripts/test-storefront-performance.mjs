@@ -12,6 +12,8 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { importantDeclarations, ruleHeads, sameMultiset } from './lib/css-audit.mjs';
+import { readCss, readOriginalCss } from './lib/css-source.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFileSync(resolve(root, relative), 'utf8');
@@ -29,8 +31,8 @@ function report(condition, message, detail) {
   }
 }
 
-function ok(value, message) {
-  report(Boolean(value), message, `got ${String(value)}`);
+function ok(value, message, detail) {
+  report(Boolean(value), message, detail ?? `got ${String(value)}`);
 }
 
 function section(n, title) {
@@ -82,7 +84,7 @@ ok(!/transition=\{\{[^}]*delay:/.test(hero),
   'no hero transition delays the first text paint');
 
 section(2, 'missing product does not collapse the skeleton');
-const css = read('src/index.css');
+const css = readCss();
 ok(/className="product-not-found-shell"/.test(productPage),
   'the settled not-found view uses the reserved-height shell');
 ok(/<h1[\s\S]{0,200}Product not found\./.test(productPage) &&
@@ -122,6 +124,49 @@ ok(!/React\.useEffect\(\(\) => \{ warmCouponEndpoint\(\); \}, \[\]\)/.test(cartP
 ok(/onFocus=\{warmCouponEndpoint\}/.test(cartPage) &&
    /method: 'OPTIONS'/.test(cartPage),
   'the coupon endpoint is still warmed when the shopper focuses the field');
+
+section(4, 'route CSS split preserves the original cascade');
+const shopCss = read('src/styles/shop.css');
+const adminCss = read('src/styles/admin.css');
+const productCss = read('src/styles/product.css');
+ok(/@media \(max-width: 767px\)[\s\S]*?\.shop-sort \{\s*min-height:\s*32px/.test(shopCss) &&
+   /@media \(max-width: 767px\)[\s\S]*?\.shop-chip,[\s\S]*?min-height:\s*32px/.test(read('src/index.css')),
+  'shop breakpoint overrides stay with their base selectors in one cascade step');
+ok(/@media \(max-width: 480px\)[\s\S]*?\.admin-login-wordmark/.test(adminCss),
+  'the admin login breakpoint override lives in the admin sheet');
+ok(/\.product-gallery-frames/.test(productCss) && /\.review-form/.test(productCss),
+  'product gallery and review styles stay in the product sheet');
+ok(!/!important/.test(shopCss), 'the shop split did not need an !important escape hatch');
+ok(!/styles\/(admin|shop|product)\.css/.test(read('index.html')),
+  'the initial shell only links the base stylesheet');
+ok(/import '\.\.\/styles\/admin\.css'/.test(read('src/pages/AdminApp.js')) &&
+   !/styles\/admin\.css/.test(read('src/pages/ShopPage.js') + read('src/pages/ProductPage.js')),
+  'admin CSS is imported only by the admin route');
+ok(/import '\.\.\/styles\/shop\.css'/.test(read('src/pages/ShopPage.js')) &&
+   /import '\.\.\/styles\/product\.css'/.test(read('src/pages/ProductPage.js')),
+  'shop and product CSS are imported only by their own pages');
+ok(readCss().includes('.shop-sort-wrap'),
+  'the test helper rebuilds the original cascade from the split inputs');
+
+const baseCss = read('src/index.css');
+const originalHeads = ruleHeads(readOriginalCss());
+const outputHeads = [baseCss, adminCss, shopCss, productCss].flatMap(ruleHeads);
+ok(sameMultiset(outputHeads, originalHeads),
+  'every original rule selector remains in exactly one generated sheet',
+  `original ${originalHeads.length}, generated ${outputHeads.length}`);
+
+const baseHeads = new Set(ruleHeads(baseCss));
+for (const [name, css] of [['admin', adminCss], ['shop', shopCss], ['product', productCss]]) {
+  const duplicated = ruleHeads(css).filter((head) => baseHeads.has(head));
+  ok(duplicated.length === 0,
+    `${name} sheet has no selector duplicated in the base cascade`,
+    duplicated.slice(0, 3).join(' | '));
+}
+const importantBefore = importantDeclarations(readOriginalCss());
+const importantAfter = [baseCss, adminCss, shopCss, productCss].flatMap(importantDeclarations);
+ok(sameMultiset(importantBefore, importantAfter),
+  'the split moved the original !important declarations without changing them',
+  `${importantBefore.length} -> ${importantAfter.length}`);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

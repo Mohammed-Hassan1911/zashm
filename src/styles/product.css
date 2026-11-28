@@ -1,0 +1,646 @@
+/* ZASHM product-page styles: loaded only with the product route chunk. */
+/* ─── Size guide ─────────────────────────────────────────────────────────────
+   The measurement sheet is the same object as the size finder: a dark champagne
+   card, a lit headline, one gold hairline. It opens above the finder (z-index
+   9999, still under the floating actions at 30000) so closing it returns to the
+   recommendation behind. */
+.size-guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: clamp(12px, 3vw, 24px);
+  overflow-y: auto;
+  /* A plain scrim, not a live blur: blurring the whole page has to resample
+     every frame while the modal fades, which is what made the exit feel heavy. */
+  background: rgba(0, 0, 0, 0.9);
+}
+.size-guide-modal {
+  position: relative;
+  width: 100%;
+  max-width: 660px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: clamp(24px, 5vw, 40px) clamp(16px, 4vw, 34px) clamp(20px, 4vw, 30px);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 74% at 0% 0%, rgba(232, 200, 112, 0.12) 0%, rgba(201, 168, 76, 0) 56%),
+    radial-gradient(90% 60% at 100% 100%, rgba(201, 168, 76, 0.06) 0%, rgba(201, 168, 76, 0) 62%),
+    linear-gradient(165deg, #17140e 0%, #0e0d0b 48%, #090909 100%);
+  box-shadow:
+    0 34px 80px rgba(0, 0, 0, 0.8),
+    0 0 46px rgba(201, 168, 76, 0.1),
+    inset 0 0 0 1px rgba(255, 240, 200, 0.045),
+    inset 0 1px 0 rgba(255, 244, 214, 0.12);
+  outline: none;
+  scrollbar-color: var(--gold) rgba(255, 255, 255, 0.08);
+  scrollbar-width: thin;
+}
+.size-guide-modal::-webkit-scrollbar { width: 8px; }
+.size-guide-modal::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+.size-guide-modal::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #e8c870, #a98736);
+  border: 2px solid #11100d;
+  border-radius: 999px;
+}
+.size-guide-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text3);
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
+}
+.size-guide-close:hover,
+.size-guide-close:focus-visible {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(201, 168, 76, 0.08);
+  transform: rotate(90deg);
+  outline: none;
+}
+.size-guide-head {
+  margin: 0 0 clamp(18px, 3vw, 26px);
+  text-align: center;
+}
+.size-guide-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.size-guide-eyebrow-rule {
+  width: 26px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.12), rgba(232, 200, 112, 0.9));
+}
+.size-guide-title {
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(25px, 5vw, 34px);
+  line-height: 1.1;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #fff3cf 0%, #e8c870 52%, #b28d3c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.size-guide-sub {
+  margin: 9px 0 0;
+  font-size: 10.5px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+/* One short gold rule closes the masthead without drawing a second border. */
+.size-guide-head::after {
+  content: '';
+  display: block;
+  width: 46px;
+  height: 1px;
+  margin: 15px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(232, 200, 112, 0.9), transparent);
+}
+.size-guide-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(201, 168, 76, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.012);
+}
+.size-guide-image-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(201, 168, 76, 0.16);
+  border-radius: 12px;
+  background:
+    radial-gradient(80% 70% at 50% 40%, rgba(201, 168, 76, 0.06) 0%, rgba(201, 168, 76, 0) 70%),
+    #0a0a0a;
+}
+.size-guide-image {
+  width: 100%;
+  height: auto;
+  max-height: 56vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+@media (max-width: 768px) {
+.size-guide-overlay {
+    align-items: center;
+    padding:
+      calc(12px + env(safe-area-inset-top, 0px))
+      calc(12px + env(safe-area-inset-right, 0px))
+      calc(12px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px)) !important;
+  }
+.size-guide-modal {
+    margin: auto 0;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px) !important;
+  }
+.size-guide-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+  }
+.size-guide-image-frame {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+.size-guide-image {
+    width: auto !important;
+    height: auto !important;
+    max-width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 220px) !important;
+    object-fit: contain;
+  }
+}
+/* ─── Product page breadcrumb ───────────────────────────────────────────────
+   Two tracked links and the current piece, separated by small gold chevrons.
+   The links keep a 44px tap height without drawing a second back row; the
+   current name is set in the display face so it reads as the destination. */
+.product-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  margin: 0 0 18px;
+  padding: 0 2px;
+  font-family: var(--font-body);
+}
+.product-breadcrumb-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 0;
+  background: none;
+  color: var(--text3);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.24s ease;
+}
+.product-breadcrumb-link::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 10px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), rgba(201, 168, 76, 0.18));
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.product-breadcrumb-link:hover,
+.product-breadcrumb-link:focus-visible { color: var(--gold-light); }
+.product-breadcrumb-link:hover::after,
+.product-breadcrumb-link:focus-visible::after { transform: scaleX(1); }
+.product-breadcrumb-link:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+.product-breadcrumb-sep { flex: 0 0 auto; color: rgba(201, 168, 76, 0.45); }
+.product-breadcrumb-current {
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px 4px;
+  color: var(--gold-light);
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0.6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-price-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 26px;
+  min-width: 0;
+}
+.product-price {
+  font-family: var(--font-display);
+  font-size: clamp(26px, 3vw, 32px);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: 0.4px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.product-price-currency {
+  margin-right: 7px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.2px;
+  color: var(--text3);
+  vertical-align: 0.55em;
+}
+.product-price-was {
+  color: var(--text3);
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.product-meta-value {
+  margin-left: 8px;
+  color: var(--text);
+  font-size: 15px;
+  letter-spacing: 0.45px;
+  text-transform: none;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+/* One shared treatment for the swatch label and the selected-value label: the
+   letters themselves are cut from tinted glass, with a narrow champagne light
+   set into the gradient. No stroke, no outer bloom, no white cloud — the ink is
+   the colour, the shine is inside the glyph. The light is painted once: tiny
+   labels do not need another animation loop competing with the wordmark. */
+.product-color-name,
+.product-meta-value {
+  --color-ink: currentColor;
+  font-family: var(--font-body);
+  font-weight: 700;
+  color: var(--color-ink);
+  background-image: linear-gradient(
+    105deg,
+    color-mix(in srgb, var(--color-ink) 88%, #0a0a0a) 0%,
+    var(--color-ink) 32%,
+    color-mix(in srgb, var(--color-ink) 45%, #fff8e6) 50%,
+    var(--color-ink) 68%,
+    color-mix(in srgb, var(--color-ink) 88%, #0a0a0a) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 50% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.product-color-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.product-qty {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.008));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.product-qty-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--text2);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+.product-qty-btn:hover {
+  color: var(--gold-light);
+  background: rgba(201, 168, 76, 0.09);
+}
+.product-qty-value {
+  min-width: 30px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* Tabs: a glass tab bar with an animated gold underline that slides between
+   the labels. The bar and the panel below share one rounded frame, so the
+   information block reads as a single object. */
+.product-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.product-tab {
+  position: relative;
+  flex: 1 1 80px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 6px;
+  border: 0;
+  background: none;
+  color: var(--text2);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.24s ease;
+  overflow-wrap: anywhere;
+}
+.product-tab:hover { color: var(--text); }
+.product-tab[aria-selected='true'] { color: var(--gold-light); }
+.product-tab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -4px;
+  border-radius: 3px;
+}
+.product-tab-underline {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(201, 168, 76, 0.35), var(--gold-light), rgba(201, 168, 76, 0.35));
+  box-shadow: 0 0 10px rgba(201, 168, 76, 0.35);
+}
+/* ─── Product gallery: one framed photo and its strip ───────────────────────
+   The main shot fills the frame edge to edge: one champagne hairline, a warm
+   light from the top and a soft drop shadow. No inner mat, vignette or second
+   border sits between the photo and that outer frame. The thumbnails are small
+   plates from the same family; the one in view carries the gold ring. */
+.product-gallery-main {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 248, 230, 0.1);
+  background:
+    radial-gradient(120% 85% at 50% 0%, rgba(201, 168, 76, 0.12), transparent 60%),
+    linear-gradient(180deg, #16130f 0%, #0b0a09 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 22px 50px rgba(0, 0, 0, 0.48);
+}
+/* The strip slides by one frame width per selection. Only `transform` moves,
+   so the frame and the arrows stay perfectly still. */
+.product-gallery-track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  will-change: transform;
+}
+/* The swipe plate sits under the controls and above the frame. Only `transform`
+   moves during a touch drag, so the photo never repaints under the finger. */
+.product-gallery-frames {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+}
+/* One frame per photo: the strip is exactly as wide as the framed photo, so one
+   measured step lands on the next print at every breakpoint. */
+.product-gallery-frame {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+.product-gallery-main { border-radius: 10px; }
+}
+@media (max-width: 768px) {
+.product-breadcrumb { margin-bottom: 14px; }
+.product-breadcrumb-link { font-size: 9.5px; letter-spacing: 1.6px; padding: 10px 6px; }
+.product-breadcrumb-link::after { left: 6px; right: 6px; }
+.product-breadcrumb-current { font-size: 14px; }
+.product-price-row { gap: 8px; margin-bottom: 22px; }
+.product-color-name { font-size: 10px; letter-spacing: 0.5px; }
+.product-qty-btn { width: 38px; }
+.product-tabs { padding: 0 2px; }
+.product-tab { font-size: 10.5px; letter-spacing: 1.1px; padding: 10px 4px; }
+}
+/* The reduced-motion gallery never drifts, so it needs no composited layer. */
+@media (prefers-reduced-motion: reduce) {
+.product-gallery-frames {
+    will-change: auto;
+  }
+.product-gallery-track {
+    will-change: auto;
+  }
+}
+.review-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.review-field-optional {
+  color: var(--text3);
+  font-weight: 400;
+  letter-spacing: 0.6px;
+  text-transform: none;
+}
+.review-rating {
+  display: flex;
+  gap: 2px;
+  margin-left: -8px;
+}
+.review-counter {
+  display: block;
+  margin-top: 6px;
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  color: var(--text3);
+  font-variant-numeric: tabular-nums;
+}
+.review-success {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.review-note {
+  margin: 0;
+  padding: 11px 14px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.review-note.is-success {
+  color: #93e3b3;
+  border: 1px solid rgba(39, 174, 96, 0.32);
+  background: rgba(39, 174, 96, 0.1);
+}
+.review-note.is-warn {
+  color: #f0c274;
+  border: 1px solid rgba(243, 156, 18, 0.32);
+  background: rgba(243, 156, 18, 0.1);
+}
+.review-actions-note {
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+  color: var(--text3);
+}
+.review-card {
+  position: relative;
+  padding: 18px 20px 18px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.006));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+.review-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(232, 200, 112, 0.75), rgba(201, 168, 76, 0.08));
+}
+.review-card-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.review-card-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--gold-light);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(201, 168, 76, 0.2), rgba(201, 168, 76, 0.04));
+}
+.review-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.review-card-name {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  line-height: 1.2;
+  color: var(--text);
+}
+.review-card-date {
+  margin-left: auto;
+  font-size: 9.5px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--text3);
+  white-space: nowrap;
+}
+.review-card-body {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.85;
+  color: var(--text2);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+.review-card { padding: 16px 16px 16px 18px; }
+}
+.review-photo-lede {
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--text2);
+  margin: 0 0 10px;
+  max-width: 62ch;
+}
+.review-photo-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.review-photo-cta::before,
+.review-photo-cta::after {
+  content: '';
+  width: 18px;
+  height: 1px;
+  background: rgba(201, 168, 76, 0.5);
+}
+.review-photo-drop-hint { font-size: 10px; letter-spacing: 0.3px; color: var(--text3); }
+.review-photo-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+}
+.review-photo-meta {
+  display: block;
+  margin-top: 7px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--text3);
+}
+@media (max-width: 768px) {
+.review-photo-preview-bar { gap: 8px; }
+}
