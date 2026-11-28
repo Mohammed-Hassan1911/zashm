@@ -928,15 +928,15 @@ try {
         'the sort paint lives in CSS, matching the unselected chip surface');
       assert.ok(/\.shop-sort \{[^}]*transition: none;[^}]*touch-action: manipulation;/.test(css),
         'the select has no CSS transition of its own to lag behind the picker');
-      assert.ok(/\.shop-sort:active,\s*\n\.shop-sort:focus,\s*\n\.shop-sort:focus-visible \{[^}]*border-color: rgba\(255, 255, 255, 0\.32\);[^}]*background: linear-gradient\(180deg, rgba\(255, 255, 255, 0\.08\), rgba\(255, 255, 255, 0\.02\)\), var\(--bg3\);[^}]*color: var\(--text\);/.test(css),
-        'pressing or focusing the sort keeps the dark surface instead of a gold fill');
+      assert.ok(/\.shop-sort:active,\s*\n\.shop-sort:focus,\s*\n\.shop-sort:focus-visible \{[^}]*border-color: var\(--gold\);[^}]*background: linear-gradient\(180deg, rgba\(255, 255, 255, 0\.08\), rgba\(255, 255, 255, 0\.02\)\), var\(--bg3\);[^}]*color: var\(--text\);/.test(css),
+        'pressing or focusing the sort paints a gold border over the dark surface');
       const sortActiveBlock = (css.match(/\.shop-sort:active,[\s\S]*?\n\}/) || [''])[0];
       assert.ok(!/linear-gradient\(135deg/.test(sortActiveBlock) &&
          !/#14110b/.test(sortActiveBlock) &&
          !/\.shop-sort-wrap:active \.shop-sort-chevron/.test(css),
         'the old gold fill and its dark-ink chevron swap are gone');
-      assert.ok(/\.shop-sort:focus-visible \{[^}]*box-shadow:[^}]*0 0 0 2px rgba\(255, 255, 255, 0\.35\)/.test(css),
-        'keyboard focus keeps a visible neutral ring');
+      assert.ok(/\.shop-sort:focus-visible \{[^}]*box-shadow:[^}]*0 0 0 2px rgba\(201, 168, 76, 0\.45\)/.test(css),
+        'keyboard focus keeps a visible gold ring');
       const sortRingBlock = (css.match(/\.shop-sort:focus-visible \{[\s\S]*?\n\}/) || [''])[0];
       assert.ok(sortActiveBlock && sortRingBlock &&
          css.indexOf(sortRingBlock) > css.indexOf(sortActiveBlock),

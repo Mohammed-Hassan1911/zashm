@@ -139,7 +139,8 @@
   font-size: 11px;
   letter-spacing: 0.8px;
   /* Paint lives here, not inline, so the pressed surface can brighten in one
-     frame without turning the sort yellow (owner decision 2026-11-24). */
+     frame while the base stays calm; only the outline turns gold when pressed
+     (owner decision 2026-11-28). */
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)), var(--bg3);
   border: 1px solid rgba(255, 255, 255, 0.11);
   color: var(--text2);
@@ -188,23 +189,23 @@
   pointer-events: none;
 }
 /* While the finger is down or the native picker owns the control, keep the
-   smoked-glass surface and brighten only the outline and text. Owner decision
-   2026-11-24: the sort must NOT turn gold when pressed. Blur on change / Escape
-   / the next tap removes the focus styling instantly — no fade, no ring left
-   behind. */
+   smoked-glass surface and turn only the outline gold. Owner decision
+   2026-11-28: the pressed sort border is gold, not grey. Blur on change /
+   Escape / the next tap removes the focus styling instantly — no fade, no ring
+   left behind. */
 .shop-sort:active,
 .shop-sort:focus,
 .shop-sort:focus-visible {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.32);
+  border-color: var(--gold);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)), var(--bg3);
   color: var(--text);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-/* Keyboard focus still needs a visible ring; keep it neutral, not gold. */
+/* Keyboard focus still needs a visible ring; keep it gold with the border. */
 .shop-sort:focus-visible {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 0 0 2px rgba(255, 255, 255, 0.35);
+    0 0 0 2px rgba(201, 168, 76, 0.45);
 }
 @media (max-width: 767px) {
 .shop-chip-row { gap: 6px; }
