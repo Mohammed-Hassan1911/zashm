@@ -1568,6 +1568,27 @@ try {
         'the panel itself is no longer a full-screen page');
     });
 
+    await step('bag photos are wider and show the whole piece without cropping', () => {
+      assert.ok(/\.cart-drawer-thumb \{\s*width: 104px;\s*min-height: 120px;/.test(css),
+        'the drawer photo frame is wider than the old 76px thumbnail');
+      assert.ok(/\.cart-drawer-thumb \{ width: 92px; min-height: 112px; \}/.test(css),
+        'phones also get a wider frame, not the old 70px thumbnail');
+      assert.ok(/\.cart-drawer-thumb \{ width: 72px; min-height: 92px; \}/.test(css),
+        'very small screens keep room for the 44px bag controls');
+      const thumbMarkup = (drawer.match(/className="cart-drawer-thumb"[\s\S]*?\/>/) || [''])[0];
+      assert.ok(/objectFit: 'contain'/.test(thumbMarkup) && !/objectFit: 'cover'/.test(thumbMarkup),
+        'the drawer photo shows the complete image instead of a cropped one');
+      assert.ok(/\.bag-line \{\s*display: grid;\s*grid-template-columns: 112px minmax\(0, 1fr\);/.test(css),
+        'the shopping bag page gives its photo a wider column');
+      assert.ok(/\.bag-line \{ grid-template-columns: 96px minmax\(0, 1fr\); \}/.test(css),
+        'the bag page photo grows on phones too');
+      assert.ok(/\.bag-line-media img \{\s*width: 100%;\s*height: 100%;\s*object-fit: contain;/.test(css),
+        'bag page photos keep their full frame instead of being cropped');
+      assert.ok(!/\.cart-drawer-thumb \{\s*width: 76px;/.test(css) &&
+        !/\.bag-line \{\s*display: grid;\s*grid-template-columns: 92px/.test(css),
+        'the old small thumbnail sizes are gone');
+    });
+
     await step('the bag opens with an opaque scrim and one short transform', () => {
       assert.ok(!/backdropFilter/.test(drawer),
         'the scrim never blurs the live storefront behind the drawer');

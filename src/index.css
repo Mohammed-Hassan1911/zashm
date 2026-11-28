@@ -6262,9 +6262,12 @@ html {
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 10px 24px rgba(0, 0, 0, 0.25);
 }
+/* Owner decision 2026-11-28: the bag photo is the piece the shopper just chose,
+   so give it a wider frame and show the whole image (no crop). The step down on
+   a phone keeps the 44px quantity/remove controls at full size. */
 .cart-drawer-thumb {
-  width: 76px;
-  min-height: 98px;
+  width: 104px;
+  min-height: 120px;
   flex: 0 0 auto;
   align-self: stretch;
   border-radius: 8px;
@@ -6470,9 +6473,12 @@ html {
 .cart-drawer-body { padding: 14px 14px 18px; }
 .cart-drawer-foot { padding-left: 16px; padding-right: 16px; }
 .cart-drawer-item { padding: 10px; gap: 10px; }
-.cart-drawer-thumb { width: 70px; min-height: 92px; }
+.cart-drawer-thumb { width: 92px; min-height: 112px; }
 .cart-drawer-name { font-size: 15px; }
 .cart-drawer-total-value { font-size: 23px; }
+}
+@media (max-width: 360px) {
+.cart-drawer-thumb { width: 72px; min-height: 92px; }
 }
 /* ─── BAG ──────────────────────────────────────────────────────────────────── */
 /* The bag opens on the same lit room as every other route. The page paints no
@@ -6546,7 +6552,7 @@ html {
 }
 .bag-line {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   gap: clamp(12px, 2.4vw, 20px);
   padding: clamp(16px, 2.6vw, 22px) 0;
   border-bottom: 1px solid var(--border);
@@ -6562,7 +6568,7 @@ html {
 .bag-line-media img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 .bag-line-body {
@@ -6933,7 +6939,7 @@ html {
 .bag-summary { position: static; }
 }
 @media (max-width: 768px) {
-.bag-line { grid-template-columns: 78px minmax(0, 1fr); }
+.bag-line { grid-template-columns: 96px minmax(0, 1fr); }
 .bag-line-price { font-size: 13px; }
 .home-promises-inner { grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .home-promise { align-items: center; }

@@ -200,7 +200,7 @@ export default function CartDrawer() {
                     >
                       <div className="cart-drawer-thumb">
                         <SafeImage src={item.product?.images && item.product.images[0]} data-image-width="thumb" fallback={FALLBACK_IMG} alt={item.product?.name || 'Product'}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
                       </div>
 
                       {/* تفاصيل المنتج مع حماية المساحة المتاحة */}

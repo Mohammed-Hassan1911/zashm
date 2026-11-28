@@ -612,6 +612,22 @@ try {
     /E2E Tee/.test(await evaluate(cdp, 'document.querySelector(".cart-drawer").textContent')),
     'the drawer lists the product that was just added'
   );
+  const drawerPhoto = await evaluate(cdp, `
+    (function(){
+      var box = document.querySelector('.cart-drawer-thumb');
+      var img = box && box.querySelector('img');
+      if (!box || !img) return null;
+      return {
+        width: Math.round(box.getBoundingClientRect().width),
+        height: Math.round(box.getBoundingClientRect().height),
+        fit: getComputedStyle(img).objectFit,
+        qtyButton: Math.round(document.querySelector('.cart-drawer-qty-btn').getBoundingClientRect().width)
+      };
+    })()`);
+  ok(drawerPhoto && drawerPhoto.width >= 88 && drawerPhoto.height >= 100,
+    `the drawer photo is a larger frame on a phone, got ${JSON.stringify(drawerPhoto)}`);
+  eq(drawerPhoto.fit, 'contain', 'the drawer shows the whole product photo, not a crop');
+  eq(drawerPhoto.qtyButton, 44, 'the larger photo does not squeeze the bag controls');
 
   console.log('\n[6] the bag survives a reload and totals correctly');
   await goto(cdp, '/cart');
@@ -624,6 +640,19 @@ try {
     /500/.test(await evaluate(cdp, 'document.querySelector(".bag-summary").textContent')),
     'the bag shows the 500 EGP line total'
   );
+  const bagPhoto = await evaluate(cdp, `
+    (function(){
+      var box = document.querySelector('.bag-line-media');
+      var img = box && box.querySelector('img');
+      if (!box || !img) return null;
+      return {
+        width: Math.round(box.getBoundingClientRect().width),
+        fit: getComputedStyle(img).objectFit
+      };
+    })()`);
+  ok(bagPhoto && bagPhoto.width >= 92,
+    `the shopping bag page photo is wider on a phone, got ${JSON.stringify(bagPhoto)}`);
+  eq(bagPhoto.fit, 'contain', 'the shopping bag page shows the full product photo');
 
   console.log('\n[7] checkout validates before it calls the API');
   await goto(cdp, '/checkout');
